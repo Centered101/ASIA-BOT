@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="th">
+
+<head>
+    <title></title>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+    <meta name="keywords"
+        content="asia-lb, asialb, asia-lb.web.app, asia-lb.firebaseapp.com, abac, Student Entry Scanner, Class Track Room, Centered101">
+    <meta name="author" content="Centered101">
+    <meta name="description" content="แบบประเมินความพึงพอใจ">
+
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://asia-lb.web.app/">
+    <meta property="og:title" content="">
+    <meta property="og:description" content="แบบประเมินความพึงพอใจ">
+    <meta property="og:image" content="/favicon.ico">
+
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://asia-lb.web.app/">
+    <meta property="twitter:title" content="">
+    <meta property="twitter:description" content="แบบประเมินความพึงพอใจ">
+    <meta property="twitter:image" content="/favicon.ico">
+
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="stylesheet" href="/style/style.css">
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+
+    <script src="/script/index.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+</head>
+<style>
+    :root {
+        --primary-color: #8BAE66;
+    }
+</style>
+
+<body draggable="false" oncontextmenu="return false;">
+    <div id="root"></div>
+    <script>
+        const welcomeMessage = "เบื่อจัง ไม่มีใครใช้ห้องเลยยย!";
+
+        $(document).ready(function () {
+
+            const title = "Class Track Room";
+            const description =
+                "โปรดให้คะแนนความพึงพอใจของคุณต่อประสบการณ์การใช้งาน Class Track Room ของเรา ความคิดเห็นของคุณมีความสำคัญอย่างยิ่งในการช่วยเราปรับปรุงและพัฒนาแพลตฟอร์มให้ดียิ่งขึ้น ขอบคุณที่สละเวลาในการให้คำติชม!";
+
+            document.title = title;
+
+            $("#project-name").text(title);
+            $("#description").text(description);
+
+            const mascot = "../images/mascot-greens.svg";
+            const preview = "";
+
+            $("#poster").attr("src", "./posters.png");
+
+            window.nameMap = {
+                gender_male: "gender_project-5",
+                gender_female: "gender_project-5",
+                gender_other: "gender_project-5",
+
+                kindergartenSelectBox: "evaluator_project-5",
+
+                name: "name_project-5",
+
+                emoji_3: "emoji_project-5",
+                emoji_2: "emoji_project-5",
+                emoji_1: "emoji_project-5",
+
+                creative_5: "creative_project-5",
+                creative_4: "creative_project-5",
+                creative_3: "creative_project-5",
+                creative_2: "creative_project-5",
+                creative_1: "creative_project-5",
+
+                content_5: "content_project-5",
+                content_4: "content_project-5",
+                content_3: "content_project-5",
+                content_2: "content_project-5",
+                content_1: "content_project-5",
+
+                presentation_5: "presentation_project-5",
+                presentation_4: "presentation_project-5",
+                presentation_3: "presentation_project-5",
+                presentation_2: "presentation_project-5",
+                presentation_1: "presentation_project-5",
+
+                usability_5: "usability_project-5",
+                usability_4: "usability_project-5",
+                usability_3: "usability_project-5",
+                usability_2: "usability_project-5",
+                usability_1: "usability_project-5",
+
+                overall_5: "overall_project-5",
+                overall_4: "overall_project-5",
+                overall_3: "overall_project-5",
+                overall_2: "overall_project-5",
+                overall_1: "overall_project-5",
+
+                comments: "comments_project-5"
+            };
+
+            // meta
+            $('meta[property="og:title"]').attr("content", title);
+            $('meta[name="twitter:title"], meta[property="twitter:title"]').attr("content", title);
+
+            // mascot
+            const $mascot = $("#mascot");
+            if (!mascot) {
+                $mascot.remove();
+            } else {
+                $mascot
+                    .removeClass("hidden")
+                    .attr("src", mascot)
+                    .on("error", function () {
+                        $(this).remove();
+                    });
+            }
+
+            // preview
+            const $preview = $("#preview");
+            if (!preview) {
+                $preview.remove();
+            } else {
+                $preview
+                    .removeClass("hidden")
+                    .attr("src", preview)
+                    .on("error", function () {
+                        $(this).remove();
+                    });
+            }
+
+            // map name attribute
+            $.each(nameMap, function (id, nameValue) {
+                $("#" + id).attr("name", nameValue);
+            });
+
+            message();
+        });
+    </script>
+    <script src="/script/ui-form.js"></script>
+    <script src="/script/script.js"></script>
+</body>
+
+</html>

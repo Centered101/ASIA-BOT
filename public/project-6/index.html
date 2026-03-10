@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="th">
+
+<head>
+    <title></title>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+    <meta name="keywords"
+        content="asia-lb, asialb, asia-lb.web.app, asia-lb.firebaseapp.com, abac, Student Entry Scanner, Class Track Room, Centered101">
+    <meta name="author" content="Centered101">
+    <meta name="description" content="แบบประเมินความพึงพอใจ">
+
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://asia-lb.web.app/">
+    <meta property="og:title" content="">
+    <meta property="og:description" content="แบบประเมินความพึงพอใจ">
+    <meta property="og:image" content="/favicon.ico">
+
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://asia-lb.web.app/">
+    <meta property="twitter:title" content="">
+    <meta property="twitter:description" content="แบบประเมินความพึงพอใจ">
+    <meta property="twitter:image" content="/favicon.ico">
+
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="stylesheet" href="/style/style.css">
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+
+    <script src="/script/index.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+</head>
+<style>
+    :root {
+        --primary-color: #C53031;
+    }
+
+    body {
+        background: linear-gradient(rgba(255, 112, 112, 0.4), rgba(255, 112, 112, 0.4)),
+            url('./background.webp');
+        background-color: var(--primary-color);
+        background-attachment: fixed;
+        background-position: center;
+        background-size: cover;
+        user-select: none;
+    }
+</style>
+
+<body draggable="false" oncontextmenu="return false;">
+    <!-- Preloader -->
+    <div id="preloader"
+        class="bg-stripes-gray visible touch-none min-h-screen fixed inset-0 flex items-center justify-center text-center bg-gray-50 z-50">
+        <span class="spinner animate-spin size-80 fixed border-8" style="animation-duration: 15s;"></span>
+        <div
+            class="size-80 flex flex-col items-center justify-center gap-2 bg-[color:var(--white-smoker)] rounded-full shadow">
+            <img src="/favicon.ico" alt="logo" class="size-16 fa-bounce drop-shadow" draggable="false">
+            <h2 class="text-xl sm:text-2xl">กำลังโหลด</h2>
+            <p class="text-sm sm:text-base text-gray-600">
+                การผจญภัยของคุณกำลังจะเริ่มต้น
+            </p>
+        </div>
+    </div>
+    <main class="w-full min-h-screen flex flex-col justify-center items-center gap-6 p-2 sm:p-4 py-6">
+        <div class="w-full max-w-2xl bg-white rounded-2xl shadow p-4 md:p-6">
+            <div class="text-center space-y-2 mb-6">
+                <div class="size-32 flex items-center justify-center mx-auto">
+                    <img src="LDV2026.png" onerror="this.src='https://asia-lb.firebaseapp.com/favicon.ico'"
+                        draggable="false" />
+                </div>
+                <h1 class="text-xl sm:text-2xl font-bold text-gray-800">แบบประเมินความพึงพอใจ</h1>
+                <p class="text-sm sm:text-base text-gray-600">
+                    กรุณาให้คะแนนและความคิดเห็นของคุณ
+                </p>
+                <div class="text-xs sm:text-sm text-gray-500">
+                    ขั้นตอนที่&#8201;<span id="currentStep"
+                        class="text-[color:var(--primary-color)]">1</span>&#8201;จาก&#8201;2
+                </div>
+                <h2 id="project-name" class="text-lg sm:text-xl text-[color:var(--primary-color)]">ไม่ได้เชื่อมต่อโปรเจค
+                </h2>
+            </div>
+
+            <form id="surveyForm" method="post"
+                action="https://script.google.com/macros/s/AKfycby9PPYFDJI52Sm468HlteAE_EDfxnhnorICYAU48Yhnuk4jZBQjCkqXQioX3RaMj3Y4/exec"
+                class="space-y-6">
+                <!-- Section 1 -->
+                <section id="section1" class="space-y-6">
+                    <!-- Gender Selection -->
+                    <div class="space-y-4">
+                        <label class="block">
+                            <p class="text-sm sm:text-base text-gray-700 font-medium">
+                                เลือกเพศของคุณ&#8201;<span class="text-[color:var(--accent-color)]">*</span>
+                            </p>
+                        </label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <label
+                                class="ripple-effect bg-gray-50 flex items-center justify-evenly gap-1 py-4 border-2 rounded-lg transition-colors hover:border-[color:var(--primary-color)]">
+                                <input id="gender_male" name="gender_project-6" type="radio" value="ชาย"
+                                    class="hidden peer" required>
+                                <div
+                                    class="size-6 flex items-center justify-center bg-white border-2 rounded-full peer-checked:bg-[color:var(--primary-color)] *:peer-checked:opacity-100">
+                                    <i class="fas fa-check text-white text-xs opacity-0"></i>
+                                </div>
+                                <span class="text-sm sm:text-base text-gray-700">ชาย</span>
+                            </label>
+                            <label
+                                class="ripple-effect bg-gray-50 flex items-center justify-evenly gap-1 py-4 border-2 rounded-lg transition-colors hover:border-[color:var(--primary-color)]">
+                                <input id="gender_female" name="gender_project-6" type="radio" value="หญิง"
+                                    class="hidden peer" required>
+                                <div
+                                    class="size-6 flex items-center justify-center bg-white border-2 rounded-full peer-checked:bg-[color:var(--primary-color)] *:peer-checked:opacity-100">
+                                    <i class="fas fa-check text-white text-xs opacity-0"></i>
+                                </div>
+                                <span class="text-sm sm:text-base text-gray-700">หญิง</span>
+                            </label>
+                            <label
+                                class="ripple-effect bg-gray-50 flex items-center justify-evenly gap-1 py-4 border-2 rounded-lg transition-colors hover:border-[color:var(--primary-color)]">
+                                <input id="gender_other" name="gender_project-6" type="radio" value="อื่นๆ"
+                                    class="hidden peer" required>
+                                <div
+                                    class="size-6 flex items-center justify-center bg-white border-2 rounded-full peer-checked:bg-[color:var(--primary-color)] *:peer-checked:opacity-100">
+                                    <i class="fas fa-check text-white text-xs opacity-0"></i>
+                                </div>
+                                <span class="text-sm sm:text-base text-gray-700">อื่นๆ</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Role -->
+                    <div class="space-y-4">
+                        <label class="block text-base text-gray-700 font-medium">
+                            <p class="text-sm sm:text-base text-gray-700 font-medium">
+                                สถานะผู้ประเมิน&#8201;<span class="text-[color:var(--accent-color)]">*</span>
+                            </p>
+                        </label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <label
+                                class="ripple-effect bg-gray-50 flex items-center justify-evenly gap-1 py-4 border-2 rounded-lg transition-colors hover:border-[color:var(--primary-color)]">
+                                <input name="evaluator_project-6" type="radio" value="ครู" class="hidden peer"
+                                    onclick="handleEvaluatorChange('ครู')">
+                                <div
+                                    class="size-6 flex items-center justify-center bg-white border-2 rounded-full peer-checked:bg-[color:var(--primary-color)] *:peer-checked:opacity-100">
+                                    <i class="fas fa-check text-white text-xs opacity-0"></i>
+                                </div>
+                                <span class="text-sm sm:text-base text-gray-700">ครู</span>
+                            </label>
+                            <label
+                                class="ripple-effect bg-gray-50 flex items-center justify-evenly gap-1 py-4 border-2 rounded-lg transition-colors hover:border-[color:var(--primary-color)]">
+                                <input name="" type="radio" value="อนุบาล" class="hidden peer"
+                                    onclick="handleEvaluatorChange('อนุบาล')">
+                                <div
+                                    class="size-6 flex items-center justify-center bg-white border-2 rounded-full peer-checked:bg-[color:var(--primary-color)] *:peer-checked:opacity-100">
+                                    <i class="fas fa-check text-white text-xs opacity-0"></i>
+                                </div>
+                                <span class="text-sm sm:text-base text-gray-700">อนุบาล</span>
+                            </label>
+                            <label
+                                class="ripple-effect bg-gray-50 flex items-center justify-evenly gap-1 py-4 border-2 rounded-lg transition-colors hover:border-[color:var(--primary-color)]">
+                                <input name="" type="radio" value="ประถม" class="hidden peer"
+                                    onclick="handleEvaluatorChange('ประถม')">
+                                <div
+                                    class="size-6 flex items-center justify-center bg-white border-2 rounded-full peer-checked:bg-[color:var(--primary-color)] *:peer-checked:opacity-100">
+                                    <i class="fas fa-check text-white text-xs opacity-0"></i>
+                                </div>
+                                <span class="text-sm sm:text-base text-gray-700">ประถม</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Kindergarten Level Selection (แสดงเมื่อเลือก "อนุบาล") -->
+                    <div id="kindergartenSelectBox" class="space-y-4" style="display: none;">
+                        <label class="block text-sm sm:text-base text-gray-600">เลือกระดับชั้นอนุบาล</label>
+                        <select name="evaluator_project-6"
+                            class="w-full p-4 text-sm sm:text-base border-2 rounded-lg bg-gray-50 focus:outline-none focus:border-[color:var(--primary-color)]">
+                            <option value="" disabled selected>-- เลือก --</option>
+                            <option value="อนุบาล 1">อนุบาล 1</option>
+                            <option value="อนุบาล 2">อนุบาล 2</option>
+                            <option value="อนุบาล 3">อนุบาล 3</option>
+                        </select>
+                    </div>
+
+                    <!-- Primary Level Selection (แสดงเมื่อเลือก "ประถม") -->
+                    <div id="generalSelectBox" class="space-y-4" style="display: none;">
+                        <label class="block text-sm sm:text-base text-gray-600">เลือกระดับชั้นประถม</label>
+                        <select name="evaluator_project-6"
+                            class="w-full p-4 text-sm sm:text-base border-2 rounded-lg bg-gray-50 focus:outline-none focus:border-[color:var(--primary-color)]">
+                            <option value="" disabled selected>-- เลือก --</option>
+                            <option value="ชั้นประถม 1">ชั้นประถม 1</option>
+                            <option value="ชั้นประถม 2">ชั้นประถม 2</option>
+                            <option value="ชั้นประถม 3">ชั้นประถม 3</option>
+                            <option value="ชั้นประถม 4">ชั้นประถม 4</option>
+                            <option value="ชั้นประถม 5">ชั้นประถม 5</option>
+                            <option value="ชั้นประถม 6">ชั้นประถม 6</option>
+                        </select>
+                    </div>
+
+                    <script>
+                        function handleEvaluatorChange(evaluatorType) {
+                            // เคลียข้อมูลทั้งหมด
+                            $('#kindergartenSelectBox select').val('').prop('selectedIndex', 0);
+                            $('#generalSelectBox select').val('').prop('selectedIndex', 0);
+
+                            // ซ่อนทั้งหมดก่อน
+                            $('#kindergartenSelectBox').fadeOut(300);
+                            $('#generalSelectBox').fadeOut(300);
+
+                            // แสดงตามที่เลือก
+                            if (evaluatorType === 'อนุบาล') {
+                                setTimeout(function () {
+                                    $('#kindergartenSelectBox').fadeIn(300);
+                                }, 300);
+                            } else if (evaluatorType === 'ประถม') {
+                                setTimeout(function () {
+                                    $('#generalSelectBox').fadeIn(300);
+                                }, 300);
+                            }
+                        }
+                    </script>
+
+
+                    <!-- Name Input -->
+                    <div class="space-y-4">
+                        <label for="name" class="block">
+                            <p class="text-sm sm:text-base text-gray-700 font-medium">
+                                ชื่อ&#8201;-&#8201;นามสกุล&#8201;<span class="text-[color:var(--accent-color)]">*</span>
+                            </p>
+                        </label>
+                        <input id="name" name="name_project-6" type="text"
+                            placeholder="ระบุ&#8201;ชื่อ&#8201;-&#8201;นามสกุล" maxlength="60" required
+                            oncontextmenu="return true" ;
+                            class="w-full text-sm sm:text-base bg-gray-50 border-2 rounded-lg p-4 transition-colors focus:border-[color:var(--primary-color)] focus:outline-none">
+                    </div>
+
+                    <div class="flex items-center justify-between gap-2 text-xs sm:text-sm text-gray-500">
+                        <p id="ClearForm" class="btn-text text-[color:var(--accent-color)]">
+                            ล้างแบบฟอร์ม
+                        </p>
+                        <p>
+                            <span id="countName" class="charCount">0</span>/60&#8201;ตัวอักษร
+                        </p>
+                    </div>
+
+                    <button type="button" onclick="nextStep()"
+                        class="btn-primary w-full flex items-center justify-center gap-2 text-sm sm:text-base overflow-hidden">
+                        <span class="line-clamp-1">ถัดไป</span>
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                </section>
+
+                <!-- Section 2 -->
+                <section id="section2" class="space-y-6 hidden">
+                    <img id="preview" src="./preview.jpg" class="rounded-xl" draggable="false"
+                        onerror="this.style.display='none'" />
+
+                    <div class="space-y-4">
+                        <p class="text-base text-gray-700 font-medium">
+                            เกี่ยวกับโปรเจค
+                        </p>
+                        <p id="description"
+                            class="text-base text-gray-600 border-l-4 border-[color:var(--primary-color)] pl-2">
+                            โปรดให้คะแนนความพึงพอใจของคุณต่อประสบการณ์การใช้งาน Local Development Vehicle ของเรา
+                        </p>
+                    </div>
+
+                    <!-- Rating Sections (Loop-friendly structure) -->
+                    <div id="ratings" class="space-y-4"></div>
+
+                    <!-- Comments -->
+                    <div class="space-y-4">
+                        <label for="comments" class="block">
+                            <p class="text-sm sm:text-base text-gray-700 font-medium">
+                                ความคิดเห็นเพิ่มเติม
+                            </p>
+                        </label>
+                        <textarea id="comments" name="comments_project-6"
+                            placeholder="แชร์ความคิดเห็นหรือข้อเสนอแนะของคุณ..." rows="4" maxlength="450"
+                            oncontextmenu="return true" ;
+                            class="w-full text-sm sm:text-base bg-gray-50 border-2 rounded-lg p-4 transition-colors resize-none focus:border-[color:var(--primary-color)] focus:outline-none"></textarea>
+                    </div>
+
+                    <div class="flex items-center justify-between gap-2 text-xs sm:text-sm text-gray-500">
+                        <p id="ClearForm" class="btn-text text-[color:var(--accent-color)]">
+                            ล้างแบบฟอร์ม
+                        </p>
+                        <p>
+                            <span id="countComments" class="charCount">0</span>/450&#8201;ตัวอักษร
+                        </p>
+                    </div>
+
+                    <!-- Navigation Buttons -->
+                    <div class="grid grid-cols-2 gap-2">
+                        <button type="button" onclick="previousStep()"
+                            class="btn-outline flex items-center justify-center gap-2 text-sm sm:text-base overflow-hidden">
+                            <i class="fas fa-arrow-left"></i>
+                            <span class="line-clamp-1">ย้อนกลับ</span>
+                        </button>
+                        <button type="submit" id="submitBtn"
+                            class="btn-primary flex items-center justify-center gap-2 text-sm sm:text-base overflow-hidden">
+                            <span id="submitText" class="line-clamp-1">ส่งแบบประเมิน</span>
+                            <i id="submitIcon" class="fa-solid fa-location-arrow"></i>
+                        </button>
+                    </div>
+                </section>
+            </form>
+        </div>
+    </main>
+
+    <script>
+        // Configuration
+        const CONFIG = {
+            projectTitle: "พัฒนาท้องถิ่น",
+            projectDescription: "โปรดให้คะแนนความพึงพอใจของคุณต่อประสบการณ์การใช้งาน Local Development Vehicle ของเรา ความคิดเห็นของคุณมีความสำคัญอย่างยิ่งในการช่วยเราปรับปรุงและพัฒนากิจกรรมให้ดียิ่งขึ้น",
+            ratings: [{
+                id: "creative",
+                label: "1. ความคิดสร้างสรรค์"
+            },
+            {
+                id: "content",
+                label: "2. ความเหมาะสมของเนื้อหา"
+            },
+            {
+                id: "presentation",
+                label: "3. การนำเสนอ"
+            },
+            {
+                id: "usability",
+                label: "4. การนำไปใช้งานจริง"
+            },
+            {
+                id: "overall",
+                label: "5. ระดับความพึงพอใจโดยรวม"
+            }]
+        };
+
+        let currentSection = 1;
+        let isSubmitting = false;
+
+        // Initialize
+        $(document).ready(function () {
+            document.title = CONFIG.projectTitle;
+            $("#project-name").text(CONFIG.projectTitle);
+            $("#description").text(CONFIG.projectDescription);
+
+            renderRatings();
+            initCharCounters();
+        })
+
+        // Render rating sections dynamically
+        function renderRatings() {
+            const icons = [{
+                value: "5 พอใจมาก",
+                icon: "smile-beam",
+                color: "green",
+                label: "พอใจมาก"
+            },
+            {
+                value: "4 พอใจ",
+                icon: "smile",
+                color: "blue",
+                label: "พอใจ"
+            },
+            {
+                value: "3 ปานกลาง",
+                icon: "meh",
+                color: "yellow",
+                label: "ปานกลาง"
+            },
+            {
+                value: "2 ไม่พอใจ",
+                icon: "frown",
+                color: "orange",
+                label: "ไม่พอใจ"
+            },
+            {
+                value: "1 ไม่พอใจมาก",
+                icon: "angry",
+                color: "red",
+                label: "ไม่พอใจมาก"
+            }];
+
+            const html = CONFIG.ratings.map(rating => `
+<div>
+<label class="block text-base text-gray-700 font-medium">
+${rating.label} <span class="text-[color:var(--accent-color)]">*</span>
+</label>
+<div class="grid grid-cols-5 gap-2">
+${icons.map(icon => `
+<label class="bgripple-effect bg-gray-50 flex flex-col items-center gap-1 border-2 rounded-lg p-1 sm:p-2 transition-colors hover:border-[color:var(--primary-color)]">
+<input name="${rating.id}_project-6" type="radio" value="${icon.value}" class="hidden peer" required>
+<i class="fas fa-${icon.icon} text-xl sm:text-2xl text-gray-300 transition-colors peer-checked:text-${icon.color}-500"></i>
+<span class="text-xs text-gray-700 text-center">${icon.label}</span>
+</label>
+`).join('')}
+</div>
+</div>
+`).join('');
+
+            $("#ratings").html(html);
+        }
+    </script>
+    <script src="/script/ui-form.js"></script>
+    <script src="/script/script.js"></script>
+</body>
+
+</html>

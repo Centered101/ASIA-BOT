@@ -1,0 +1,2039 @@
+<!doctype html>
+<html lang="th">
+
+<head>
+    <title>Dashboard</title>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+    <meta name="theme-color" content="#84D4FA">
+    <meta name="description" content="บัตรประจำตัวนักเรียน">
+
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="stylesheet" href="/style/index.css">
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+
+    <script src="/script/index.js" defer></script>
+    <script src="/config-students.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <script>
+        (function () {
+            const o = CSSStyleDeclaration.prototype.setProperty; CSSStyleDeclaration.prototype.setProperty = function (p, v, r) {
+                if (p === undefined || v === undefined) return; return o.call(this, p, v, r);
+            };
+        })();
+    </script>
+    <style>
+        :root {
+            --primary: #84D4FA;
+            --primary-dark: #4DB8F5;
+            --primary-light: #EAF7FF;
+            --sidebar-bg: #0F172A;
+            --sidebar-w: 240px;
+            --green: #22C55E;
+            --red: #EF4444;
+            --amber: #F59E0B;
+            --purple: #8B5CF6;
+            --surface: white;
+            --bg: #F1F5F9;
+            --text: #1E293B;
+            --muted: #64748B;
+            --border: #E2E8F0;
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            /* font-family: 'Sarabun', sans-serif; */
+            background: var(--bg);
+            color: var(--text);
+            display: flex;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ── Sidebar ── */
+        .sidebar {
+            width: var(--sidebar-w);
+            flex-shrink: 0;
+            background: var(--sidebar-bg);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            z-index: 100;
+            transition: transform .3s;
+        }
+
+        .sidebar-logo {
+            padding: 20px 20px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, .07);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            flex-shrink: 0;
+            background: linear-gradient(135deg, #84D4FA, #4DB8F5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: white;
+        }
+
+        .logo-text {
+            /*  font-family: 'Kanit', sans-serif; */
+            font-size: 16px;
+            font-weight: 700;
+            color: white;
+        }
+
+        .logo-sub {
+            font-size: 10px;
+            color: rgba(255, 255, 255, .35);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .nav-group-label {
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, .3);
+            padding: 18px 20px 6px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            margin: 1px 8px;
+            border-radius: 10px;
+            font-size: 14px;
+            color: rgba(255, 255, 255, .55);
+            cursor: pointer;
+            transition: all .2s;
+            text-decoration: none;
+        }
+
+        .nav-item:hover {
+            background: rgba(255, 255, 255, .07);
+            color: rgba(255, 255, 255, .85);
+        }
+
+        .nav-item.active {
+            background: rgba(132, 212, 250, .15);
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        .nav-item .nav-icon {
+            width: 16px;
+            text-align: center;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .nav-badge {
+            margin-left: auto;
+            background: var(--red);
+            color: white;
+            font-size: 10px;
+            font-weight: 700;
+            border-radius: 20px;
+            padding: 1px 7px;
+        }
+
+        .sidebar-footer {
+            margin-top: auto;
+            padding: 16px;
+            border-top: 1px solid rgba(255, 255, 255, .07);
+        }
+
+        .admin-pill {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, .06);
+            cursor: pointer;
+            transition: background .2s;
+        }
+
+        .admin-pill:hover {
+            background: rgba(255, 255, 255, .1);
+        }
+
+        .admin-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #84D4FA, #4DB8F5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            /*  font-family: 'Kanit', sans-serif; */
+            font-weight: 700;
+            font-size: 13px;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .admin-name {
+            font-size: 13px;
+            color: rgba(255, 255, 255, .8);
+            font-weight: 500;
+        }
+
+        .admin-role {
+            font-size: 10px;
+            color: rgba(255, 255, 255, .35);
+        }
+
+        /* ── Main ── */
+        .main {
+            margin-left: var(--sidebar-w);
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        /* ── Topbar ── */
+        .topbar {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            background: rgba(241, 245, 249, .92);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            padding: 0 28px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .topbar-title {
+            /*  font-family: 'Kanit', sans-serif; */
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .topbar-sub {
+            font-size: 12px;
+            color: var(--muted);
+            margin-left: 4px;
+        }
+
+        .topbar-right {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* ── Content ── */
+        .content {
+            padding: 24px 28px;
+            flex: 1;
+        }
+
+        /* ── Cards ── */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 14px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--surface);
+            border-radius: 16px;
+            padding: 18px 18px 14px;
+            border: 1px solid var(--border);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, .04);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            position: relative;
+            overflow: hidden;
+            transition: transform .2s, box-shadow .2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, .08);
+        }
+
+        .stat-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--accent-color, var(--primary));
+        }
+
+        .stat-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            margin-bottom: 8px;
+            flex-shrink: 0;
+        }
+
+        .stat-value {
+            /*  font-family: 'Kanit', sans-serif; */
+            font-size: 28px;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--muted);
+            font-weight: 500;
+        }
+
+        .stat-delta {
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 6px;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+        }
+
+        /* ── Panel ── */
+        .panel {
+            background: var(--surface);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, .04);
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        .panel-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .panel-title {
+            /*  font-family: 'Kanit', sans-serif; */
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .panel-actions {
+            margin-left: auto;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .panel-body {
+            padding: 16px 20px;
+        }
+
+        /* ── Table ── */
+        .tbl-wrap {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        th {
+            padding: 10px 14px;
+            text-align: left;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: .5px;
+            text-transform: uppercase;
+            color: var(--muted);
+            background: #F8FAFC;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 11px 14px;
+            border-bottom: 1px solid #F8FAFC;
+            vertical-align: middle;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background: #FAFCFF;
+        }
+
+        /* ── Badges ── */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .badge-green {
+            background: #F0FDF4;
+            color: #16A34A;
+        }
+
+        .badge-red {
+            background: #FEF2F2;
+            color: #DC2626;
+        }
+
+        .badge-amber {
+            background: #FFFBEB;
+            color: #D97706;
+        }
+
+        .badge-blue {
+            background: #EFF6FF;
+            color: #2563EB;
+        }
+
+        .badge-gray {
+            background: #F1F5F9;
+            color: #64748B;
+        }
+
+        .badge-purple {
+            background: #F5F3FF;
+            color: #7C3AED;
+        }
+
+        /* ── Inputs ── */
+        .inp {
+            padding: 8px 12px 8px 32px;
+            border: 1.5px solid var(--border);
+            border-radius: 10px;
+            /*  font-family: 'Sarabun', sans-serif; */
+            font-size: 13px;
+            background: #F8FAFC;
+            color: var(--text);
+            outline: none;
+            transition: all .2s;
+            width: 100%;
+        }
+
+        .inp:focus {
+            border-color: var(--primary);
+            background: white;
+            box-shadow: 0 0 0 3px rgba(132, 212, 250, .18);
+        }
+
+        .inp-wrap {
+            position: relative;
+        }
+
+        .inp-icon {
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .sel {
+            padding: 8px 28px 8px 10px;
+            border: 1.5px solid var(--border);
+            border-radius: 10px;
+            /*  font-family: 'Sarabun', sans-serif; */
+            font-size: 13px;
+            background: #F8FAFC;
+            color: var(--text);
+            outline: none;
+            cursor: pointer;
+            appearance: none;
+            transition: all .2s;
+        }
+
+        .sel:focus {
+            border-color: var(--primary);
+            background: white;
+        }
+
+        /* ── Buttons ── */
+        .btn {
+            padding: 8px 16px;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            /*  font-family: 'Kanit', sans-serif; */
+            font-size: 13px;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all .2s;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #84D4FA, #4DB8F5);
+            color: white;
+            box-shadow: 0 3px 10px rgba(77, 184, 245, .35);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(77, 184, 245, .45);
+        }
+
+        .btn-danger {
+            background: #FEF2F2;
+            color: #DC2626;
+            border: 1px solid #FECACA;
+        }
+
+        .btn-danger:hover {
+            background: #FEE2E2;
+        }
+
+        .btn-ghost {
+            background: white;
+            color: var(--muted);
+            border: 1px solid var(--border);
+        }
+
+        .btn-ghost:hover {
+            background: #F8FAFC;
+        }
+
+        .btn-green {
+            background: #F0FDF4;
+            color: #16A34A;
+            border: 1px solid #BBF7D0;
+        }
+
+        .btn-green:hover {
+            background: #DCFCE7;
+        }
+
+        .btn-amber {
+            background: #FFFBEB;
+            color: #D97706;
+            border: 1px solid #FDE68A;
+        }
+
+        /* ── Tabs ── */
+        .tab-bar {
+            display: flex;
+            gap: 2px;
+            background: #F1F5F9;
+            padding: 4px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 8px 10px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            /*  font-family: 'Kanit', sans-serif; */
+            font-size: 12px;
+            font-weight: 500;
+            background: transparent;
+            color: var(--muted);
+            transition: all .2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            white-space: nowrap;
+        }
+
+        .tab-btn.active {
+            background: white;
+            color: var(--text);
+            font-weight: 700;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, .08);
+        }
+
+        /* ── Chart container ── */
+        .chart-wrap {
+            position: relative;
+            height: 220px;
+        }
+
+        /* ── Views ── */
+        .page {
+            display: none;
+        }
+
+        .page.active {
+            display: block;
+            animation: fadeIn .3s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(6px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ── Modal ── */
+        .overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 500;
+            background: rgba(15, 23, 42, .5);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .25s;
+        }
+
+        .overlay.open {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 20px;
+            width: 100%;
+            max-width: 480px;
+            transform: scale(.95);
+            transition: transform .25s cubic-bezier(.34, 1.2, .64, 1);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .overlay.open .modal {
+            transform: scale(1);
+        }
+
+        .modal-hd {
+            padding: 20px 24px 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .modal-bd {
+            padding: 20px 24px;
+        }
+
+        .modal-ft {
+            padding: 0 24px 20px;
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+
+        /* ── Form fields ── */
+        .field-group {
+            margin-bottom: 14px;
+        }
+
+        .field-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--muted);
+            margin-bottom: 5px;
+            display: block;
+        }
+
+        .field-inp {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1.5px solid var(--border);
+            border-radius: 10px;
+            /*  font-family: 'Sarabun', sans-serif; */
+            font-size: 14px;
+            background: #F8FAFC;
+            color: var(--text);
+            outline: none;
+            transition: all .2s;
+        }
+
+        .field-inp:focus {
+            border-color: var(--primary);
+            background: white;
+            box-shadow: 0 0 0 3px rgba(132, 212, 250, .18);
+        }
+
+        .field-inp:disabled {
+            background: #F1F5F9;
+            color: var(--muted);
+            cursor: not-allowed;
+        }
+
+        /* ── Real-time pulse ── */
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--green);
+            flex-shrink: 0;
+            box-shadow: 0 0 0 3px rgba(34, 197, 94, .25);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 3px rgba(34, 197, 94, .25);
+            }
+
+            50% {
+                box-shadow: 0 0 0 6px rgba(34, 197, 94, .1);
+            }
+        }
+
+        /* ── Status indicator ── */
+        .status-in {
+            color: var(--green);
+        }
+
+        .status-out {
+            color: var(--muted);
+        }
+
+        .status-lib {
+            color: var(--purple);
+        }
+
+        /* ── Scrollbar ── */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #CBD5E1;
+            border-radius: 3px;
+        }
+
+        /* ── Empty state ── */
+        .empty {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--muted);
+        }
+
+        .empty i {
+            font-size: 36px;
+            margin-bottom: 10px;
+            opacity: .3;
+            display: block;
+        }
+
+        /* ── Mobile ── */
+        .hamburger {
+            display: none;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-size: 18px;
+            color: var(--text);
+            padding: 4px;
+        }
+
+        .sidebar-mask {
+            display: none;
+        }
+
+        @media(max-width:768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .main {
+                margin-left: 0;
+            }
+
+            .hamburger {
+                display: flex;
+            }
+
+            .sidebar-mask {
+                display: block;
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, .4);
+                z-index: 99;
+            }
+
+            .stat-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .content {
+                padding: 16px;
+            }
+
+            .topbar {
+                padding: 0 16px;
+            }
+        }
+
+        /* ── Spinner ── */
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, .3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin .6s linear infinite;
+            display: inline-block;
+        }
+
+        .spinner-dark {
+            border-color: rgba(100, 116, 139, .3);
+            border-top-color: var(--muted);
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* ── Toast replacement is from index.js ── */
+    </style>
+</head>
+
+<body>
+
+    <!-- ══════════════════════════════════════════
+     SIDEBAR
+══════════════════════════════════════════ -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-logo">
+            <div class="logo-icon"><i class="fa-solid fa-shield-halved"></i></div>
+            <div>
+                <div class="logo-text">ASIA-LB</div>
+                <div class="logo-sub">Admin Panel</div>
+            </div>
+        </div>
+
+        <div class="nav-group-label">ภาพรวม</div>
+        <a class="nav-item active" data-page="overview" href="#">
+            <i class="fa-solid fa-gauge-high nav-icon"></i> Dashboard
+        </a>
+
+        <div class="nav-group-label">จัดการ</div>
+        <a class="nav-item" data-page="students" href="#">
+            <i class="fa-solid fa-users nav-icon"></i> นักเรียน
+        </a>
+        <a class="nav-item" data-page="logs" href="#">
+            <i class="fa-solid fa-clock-rotate-left nav-icon"></i> บันทึกเข้า-ออก
+            <span class="nav-badge" id="badgeNew">0</span>
+        </a>
+        <a class="nav-item" data-page="stats" href="#">
+            <i class="fa-solid fa-chart-line nav-icon"></i> สถิติ
+        </a>
+        <a class="nav-item" data-page="devices" href="#">
+            <i class="fa-solid fa-mobile-screen nav-icon"></i> อุปกรณ์
+        </a>
+
+        <div class="nav-group-label">ระบบ</div>
+        <a class="nav-item" data-page="settings" href="#">
+            <i class="fa-solid fa-gear nav-icon"></i> ตั้งค่า
+        </a>
+
+        <div class="sidebar-footer">
+            <div class="admin-pill" id="adminPill">
+                <div class="admin-avatar" id="adminAvatar">A</div>
+                <div>
+                    <div class="admin-name" id="adminName">Admin</div>
+                    <div class="admin-role">Administrator</div>
+                </div>
+                <i class="fa-solid fa-ellipsis" style="margin-left:auto;color:rgba(255,255,255,.3);font-size:13px;"></i>
+            </div>
+        </div>
+    </aside>
+    <div class="sidebar-mask hidden" id="sidebarMask"></div>
+
+    <!-- ══════════════════════════════════════════
+     MAIN
+══════════════════════════════════════════ -->
+    <div class="main">
+
+        <!-- Topbar -->
+        <div class="topbar">
+            <button class="hamburger" id="hamburger"><i class="fa-solid fa-bars"></i></button>
+            <div>
+                <span class="topbar-title" id="topbarTitle">Dashboard</span>
+                <span class="topbar-sub" id="topbarSub">ภาพรวมระบบ</span>
+            </div>
+            <div class="topbar-right">
+                <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);">
+                    <div class="pulse-dot"></div>
+                    <span id="lastUpdate">กำลังโหลด...</span>
+                </div>
+                <button class="btn btn-ghost btn-sm" id="refreshBtn">
+                    <i class="fa-solid fa-rotate-right"></i> รีเฟรช
+                </button>
+                <a href="./register.html" class="btn btn-primary btn-sm">
+                    <i class="fa-solid fa-user-plus"></i> เพิ่มนักเรียน
+                </a>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+
+            <!-- ══ PAGE: OVERVIEW ══ -->
+            <div class="page active" id="page-overview">
+
+                <!-- Stat cards -->
+                <div class="stat-grid" id="statGrid">
+                    <!-- filled by JS -->
+                    <div class="stat-card" style="--accent-color:#84D4FA">
+                        <div class="stat-icon" style="background:#EAF7FF;color:#0EA5E9;">
+                            <i class="fa-solid fa-users"></i>
+                        </div>
+                        <div class="stat-value" id="sc-total">—</div>
+                        <div class="stat-label">นักเรียนทั้งหมด</div>
+                    </div>
+                    <div class="stat-card" style="--accent-color:#22C55E">
+                        <div class="stat-icon" style="background:#F0FDF4;color:#16A34A;">
+                            <i class="fa-solid fa-right-to-bracket"></i>
+                        </div>
+                        <div class="stat-value" id="sc-in">—</div>
+                        <div class="stat-label">อยู่ในโรงเรียน</div>
+                    </div>
+                    <div class="stat-card" style="--accent-color:#94A3B8">
+                        <div class="stat-icon" style="background:#F1F5F9;color:#64748B;">
+                            <i class="fa-solid fa-right-from-bracket"></i>
+                        </div>
+                        <div class="stat-value" id="sc-out">—</div>
+                        <div class="stat-label">ออกแล้ว</div>
+                    </div>
+                    <div class="stat-card" style="--accent-color:#8B5CF6">
+                        <div class="stat-icon" style="background:#F5F3FF;color:#7C3AED;">
+                            <i class="fa-solid fa-book-open"></i>
+                        </div>
+                        <div class="stat-value" id="sc-lib">—</div>
+                        <div class="stat-label">ห้องสมุด</div>
+                    </div>
+                    <div class="stat-card" style="--accent-color:#4DB8F5">
+                        <div class="stat-icon" style="background:#EAF7FF;color:#0EA5E9;">
+                            <i class="fa-solid fa-id-card"></i>
+                        </div>
+                        <div class="stat-value" id="sc-card-active">—</div>
+                        <div class="stat-label">บัตร Active</div>
+                    </div>
+                    <div class="stat-card" style="--accent-color:#EF4444">
+                        <div class="stat-icon" style="background:#FEF2F2;color:#DC2626;">
+                            <i class="fa-solid fa-id-card-clip"></i>
+                        </div>
+                        <div class="stat-value" id="sc-card-lost">—</div>
+                        <div class="stat-label">บัตรสูญหาย</div>
+                    </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+                    <!-- Recent activity -->
+                    <div class="panel" style="grid-column:1/-1">
+                        <div class="panel-header">
+                            <i class="fa-solid fa-wave-square" style="color:var(--primary);"></i>
+                            <span class="panel-title">สถานะนักเรียน Real-time</span>
+                            <div class="panel-actions">
+                                <div class="inp-wrap" style="width:180px;">
+                                    <i class="fa-solid fa-magnifying-glass inp-icon"></i>
+                                    <input class="inp" id="overviewSearch" placeholder="ค้นหาชื่อ / รหัส">
+                                </div>
+                                <select class="sel" id="overviewFilter">
+                                    <option value="">ทั้งหมด</option>
+                                    <option value="IN">อยู่ในโรงเรียน</option>
+                                    <option value="OUT">ออกแล้ว</option>
+                                    <option value="LIBRARY">ห้องสมุด</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="tbl-wrap">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>รหัส</th>
+                                        <th>ชื่อนักเรียน</th>
+                                        <th>ระดับชั้น</th>
+                                        <th>สถานะ</th>
+                                        <th>Scan ล่าสุด</th>
+                                        <th>จุดสแกน</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="overviewTable">
+                                    <tr>
+                                        <td colspan="6" class="empty">
+                                            <i class="fa-solid fa-circle-notch fa-spin"></i>กำลังโหลดข้อมูล...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ══ PAGE: STUDENTS ══ -->
+            <div class="page" id="page-students">
+                <div class="panel">
+                    <div class="panel-header">
+                        <i class="fa-solid fa-users" style="color:var(--primary);"></i>
+                        <span class="panel-title">รายชื่อนักเรียนทั้งหมด</span>
+                        <div class="panel-actions">
+                            <div class="inp-wrap" style="width:180px;">
+                                <i class="fa-solid fa-magnifying-glass inp-icon"></i>
+                                <input class="inp" id="stuSearch" placeholder="ค้นหา...">
+                            </div>
+                            <select class="sel" id="stuProgram">
+                                <option value="">ทุกระดับ</option>
+                                <option value="ปวช">ปวช</option>
+                                <option value="ปวส">ปวส</option>
+                            </select>
+                            <button class="btn btn-ghost btn-sm" id="exportCSVBtn">
+                                <i class="fa-solid fa-file-csv"></i> Export CSV
+                            </button>
+                        </div>
+                    </div>
+                    <div class="tbl-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>รหัส</th>
+                                    <th>ชื่อ</th>
+                                    <th>ชื่อเล่น</th>
+                                    <th>ระดับ</th>
+                                    <th>สาขา</th>
+                                    <th>บัตร</th>
+                                    <th>สถานะ</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="stuTable">
+                                <tr>
+                                    <td colspan="8" class="empty"><i class="fa-solid fa-circle-notch fa-spin"></i></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div style="padding:12px 20px;border-top:1px solid var(--border);font-size:12px;color:var(--muted);"
+                        id="stuCount">กำลังโหลด...</div>
+                </div>
+            </div>
+
+            <!-- ══ PAGE: LOGS ══ -->
+            <div class="page" id="page-logs">
+                <div class="panel">
+                    <div class="panel-header">
+                        <i class="fa-solid fa-clock-rotate-left" style="color:var(--primary);"></i>
+                        <span class="panel-title">บันทึกการเข้า-ออก</span>
+                        <div class="panel-actions" style="flex-wrap:wrap;gap:8px;">
+                            <input type="date" class="sel" id="logDate" style="width:140px;">
+                            <select class="sel" id="logType" style="width:130px;">
+                                <option value="">ทุกประเภท</option>
+                                <option value="IN">เข้า (IN)</option>
+                                <option value="OUT">ออก (OUT)</option>
+                                <option value="LIBRARY">ห้องสมุด</option>
+                            </select>
+                            <div class="inp-wrap" style="width:160px;">
+                                <i class="fa-solid fa-magnifying-glass inp-icon"></i>
+                                <input class="inp" id="logSearch" placeholder="ค้นหา...">
+                            </div>
+                            <button class="btn btn-primary btn-sm" id="logFilterBtn">
+                                <i class="fa-solid fa-filter"></i> กรอง
+                            </button>
+                        </div>
+                    </div>
+                    <div class="tbl-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>วันที่</th>
+                                    <th>เวลา</th>
+                                    <th>รหัส</th>
+                                    <th>ชื่อ</th>
+                                    <th>ประเภท</th>
+                                    <th>จุดสแกน</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logTable">
+                                <tr>
+                                    <td colspan="6" class="empty"><i class="fa-solid fa-circle-notch fa-spin"></i></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div style="padding:12px 20px;border-top:1px solid var(--border);font-size:12px;color:var(--muted);"
+                        id="logCount"></div>
+                </div>
+            </div>
+
+            <!-- ══ PAGE: STATS ══ -->
+            <div class="page" id="page-stats">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+                    <div class="panel">
+                        <div class="panel-header">
+                            <i class="fa-solid fa-chart-bar" style="color:var(--primary);"></i>
+                            <span class="panel-title">จำนวนเข้าเรียนรายวัน (7 วันล่าสุด)</span>
+                        </div>
+                        <div class="panel-body">
+                            <div class="chart-wrap"><canvas id="chartDaily"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="panel">
+                        <div class="panel-header">
+                            <i class="fa-solid fa-chart-pie" style="color:var(--primary);"></i>
+                            <span class="panel-title">สัดส่วนสถานะนักเรียน</span>
+                        </div>
+                        <div class="panel-body">
+                            <div class="chart-wrap"><canvas id="chartStatus"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="panel" style="grid-column:1/-1">
+                        <div class="panel-header">
+                            <i class="fa-solid fa-chart-line" style="color:var(--primary);"></i>
+                            <span class="panel-title">เปรียบเทียบเข้า-ออก รายวัน</span>
+                        </div>
+                        <div class="panel-body">
+                            <div class="chart-wrap" style="height:200px;"><canvas id="chartInOut"></canvas></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ══ PAGE: DEVICES ══ -->
+            <div class="page" id="page-devices">
+                <div class="panel">
+                    <div class="panel-header">
+                        <i class="fa-solid fa-mobile-screen" style="color:var(--primary);"></i>
+                        <span class="panel-title">อุปกรณ์สแกน</span>
+                        <div class="panel-actions">
+                            <button class="btn btn-primary btn-sm" id="addDeviceBtn">
+                                <i class="fa-solid fa-plus"></i> เพิ่มอุปกรณ์
+                            </button>
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div id="deviceGrid"
+                            style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ══ PAGE: SETTINGS ══ -->
+            <div class="page" id="page-settings">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+
+                    <div class="panel">
+                        <div class="panel-header">
+                            <i class="fa-solid fa-sliders" style="color:var(--primary);"></i>
+                            <span class="panel-title">ตั้งค่าระบบ</span>
+                        </div>
+                        <div class="panel-body" style="display:flex;flex-direction:column;gap:16px;">
+                            <div>
+                                <label class="field-label">Apps Script URL</label>
+                                <input class="field-inp" id="cfg-api" placeholder="https://script.google.com/...">
+                            </div>
+                            <div>
+                                <label class="field-label">ชื่อโรงเรียน</label>
+                                <input class="field-inp" id="cfg-school" placeholder="วิทยาลัยเทคนิค...">
+                            </div>
+                            <div>
+                                <label class="field-label">Admin Password</label>
+                                <input class="field-inp" type="password" id="cfg-pass" placeholder="••••••••">
+                            </div>
+                            <button class="btn btn-primary" id="saveCfgBtn" style="width:fit-content;">
+                                <i class="fa-solid fa-floppy-disk"></i> บันทึกการตั้งค่า
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-header">
+                            <i class="fa-solid fa-database" style="color:var(--amber);"></i>
+                            <span class="panel-title">จัดการข้อมูล</span>
+                        </div>
+                        <div class="panel-body" style="display:flex;flex-direction:column;gap:12px;">
+                            <button class="btn btn-green" id="exportAllBtn" style="width:100%;justify-content:center;">
+                                <i class="fa-solid fa-file-export"></i> Export นักเรียนทั้งหมด (CSV)
+                            </button>
+                            <button class="btn btn-amber" id="exportLogBtn" style="width:100%;justify-content:center;">
+                                <i class="fa-solid fa-file-csv"></i> Export Log วันนี้ (CSV)
+                            </button>
+                            <div style="border-top:1px solid var(--border);padding-top:12px;">
+                                <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">⚠️ โซนอันตราย</div>
+                                <button class="btn btn-danger btn-sm" id="resetLogBtn"
+                                    style="width:100%;justify-content:center;">
+                                    <i class="fa-solid fa-trash-can"></i> ล้าง Login Log ทั้งหมด
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div><!-- /content -->
+    </div><!-- /main -->
+
+    <!-- ══ MODAL: Edit Student ══ -->
+    <div class="overlay" id="modalEdit">
+        <div class="modal">
+            <div class="modal-hd">
+                <div style="width:36px;height:36px;border-radius:10px;background:#EFF6FF;color:#2563EB;
+                  display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                </div>
+                <div>
+                    <div style="/*  font-family:'Kanit',sans-serif; */font-weight:700;font-size:15px;">
+                        แก้ไขข้อมูลนักเรียน
+                    </div>
+                    <div style="font-size:11px;color:var(--muted);" id="editSubtitle">รหัส: —</div>
+                </div>
+                <button id="closeEdit" style="margin-left:auto;background:none;border:none;cursor:pointer;
+              color:var(--muted);font-size:18px;"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-bd">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                    <div class="field-group" style="grid-column:1/-1">
+                        <label class="field-label">🔒 รหัสนักเรียน (แก้ไขไม่ได้)</label>
+                        <input class="field-inp" id="e-student_id" disabled>
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label">ชื่อ *</label>
+                        <input class="field-inp" id="e-first_name" lang="th" placeholder="ชื่อ">
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label">นามสกุล *</label>
+                        <input class="field-inp" id="e-last_name" lang="th" placeholder="นามสกุล">
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label">ชื่อเล่น</label>
+                        <input class="field-inp" id="e-nickname" lang="th" placeholder="ชื่อเล่น">
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label">สาขาวิชา</label>
+                        <input class="field-inp" id="e-department" placeholder="สาขา">
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label">ระดับ</label>
+                        <select class="field-inp" id="e-program" style="appearance:none;">
+                            <option value="ปวช">ปวช</option>
+                            <option value="ปวส">ปวส</option>
+                        </select>
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label">ปีที่เข้าเรียน</label>
+                        <input class="field-inp" id="e-entry_year" placeholder="เช่น 2567" inputmode="numeric">
+                    </div>
+                    <div class="field-group"
+                        style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:12px;">
+                        <div
+                            style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:10px;">
+                            ผู้ปกครอง</div>
+                    </div>
+                    <div class="field-group" style="grid-column:1/-1">
+                        <label class="field-label">ชื่อผู้ปกครอง</label>
+                        <input class="field-inp" id="e-parent_name" lang="th" placeholder="ชื่อผู้ปกครอง">
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label">เบอร์โทรผู้ปกครอง</label>
+                        <input class="field-inp" id="e-parent_phone" inputmode="tel" placeholder="0xxxxxxxxx">
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label">LINE ID</label>
+                        <input class="field-inp" id="e-parent_line" placeholder="LINE ID">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-ft">
+                <button class="btn btn-ghost" id="cancelEdit">ยกเลิก</button>
+                <button class="btn btn-primary" id="saveEdit">
+                    <i class="fa-solid fa-floppy-disk"></i> บันทึก
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══ MODAL: Card Management ══ -->
+    <div class="overlay" id="modalCard">
+        <div class="modal">
+            <div class="modal-hd">
+                <div style="width:36px;height:36px;border-radius:10px;background:#FFFBEB;color:#D97706;
+                  display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;">
+                    <i class="fa-solid fa-id-card"></i>
+                </div>
+                <div>
+                    <div style="/*  font-family:'Kanit',sans-serif; */font-weight:700;font-size:15px;">
+                        จัดการบัตรนักเรียน</div>
+                    <div style="font-size:11px;color:var(--muted);" id="cardSubtitle">รหัส: —</div>
+                </div>
+                <button id="closeCard" style="margin-left:auto;background:none;border:none;cursor:pointer;
+              color:var(--muted);font-size:18px;"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-bd" id="cardModalBody"></div>
+            <div class="modal-ft">
+                <button class="btn btn-ghost" id="cancelCard">ปิด</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══ MODAL: Add Device ══ -->
+    <div class="overlay" id="modalDevice">
+        <div class="modal" style="max-width:360px;">
+            <div class="modal-hd">
+                <div style="width:36px;height:36px;border-radius:10px;background:#EAF7FF;color:#0EA5E9;
+                  display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;">
+                    <i class="fa-solid fa-mobile-screen"></i>
+                </div>
+                <div style="/*  font-family:'Kanit',sans-serif; */font-weight:700;font-size:15px;">เพิ่มอุปกรณ์</div>
+                <button id="closeDevice" style="margin-left:auto;background:none;border:none;cursor:pointer;
+              color:var(--muted);font-size:18px;"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-bd">
+                <div class="field-group">
+                    <label class="field-label">Device ID</label>
+                    <input class="field-inp" id="dev-id" placeholder="เช่น GATE-01">
+                </div>
+                <div class="field-group">
+                    <label class="field-label">ชื่อจุดสแกน</label>
+                    <input class="field-inp" id="dev-name" placeholder="เช่น ประตูหน้า">
+                </div>
+                <div class="field-group">
+                    <label class="field-label">ประเภท</label>
+                    <select class="field-inp" id="dev-type" style="appearance:none;">
+                        <option value="GATE">ประตู (Gate)</option>
+                        <option value="LIBRARY">ห้องสมุด</option>
+                        <option value="CANTEEN">โรงอาหาร</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-ft">
+                <button class="btn btn-ghost" id="cancelDevice">ยกเลิก</button>
+                <button class="btn btn-primary" id="saveDevice">
+                    <i class="fa-solid fa-plus"></i> เพิ่ม
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════
+     SCRIPT
+══════════════════════════════════════════ -->
+    <script>
+        // ════════════════════════════════════════════════
+        //  CONFIG
+        // ════════════════════════════════════════════════
+        const API = localStorage.getItem("asia_lb_api") || API_URL;
+
+        let allStudents = [];
+        let allLogs = [];
+        let devices = JSON.parse(localStorage.getItem("asia_lb_devices") || "[]");
+
+        // ════════════════════════════════════════════════
+        //  NAVIGATION
+        // ════════════════════════════════════════════════
+        const PAGE_META = {
+            overview: { title: "Dashboard", sub: "ภาพรวมระบบ" },
+            students: { title: "นักเรียน", sub: "จัดการข้อมูลนักเรียน" },
+            logs: { title: "บันทึกเข้า-ออก", sub: "ประวัติการสแกน" },
+            stats: { title: "สถิติ", sub: "กราฟและการวิเคราะห์" },
+            devices: { title: "อุปกรณ์", sub: "จุดสแกนและ Scanner" },
+            settings: { title: "ตั้งค่า", sub: "การตั้งค่าระบบ" },
+        };
+
+        $(".nav-item").click(function (e) {
+            e.preventDefault();
+            const pg = $(this).data("page");
+            $(".nav-item").removeClass("active");
+            $(this).addClass("active");
+            $(".page").removeClass("active");
+            $(`#page-${pg}`).addClass("active");
+            $("#topbarTitle").text(PAGE_META[pg].title);
+            $("#topbarSub").text(PAGE_META[pg].sub);
+            if (pg === "stats") initCharts();
+            if (pg === "devices") renderDevices();
+            closeSidebar();
+        });
+
+        // hamburger
+        $("#hamburger").click(() => $("#sidebar").toggleClass("open"));
+        $("#sidebarMask").click(closeSidebar);
+        function closeSidebar() { $("#sidebar").removeClass("open"); }
+
+        // ════════════════════════════════════════════════
+        //  GRADE CALC
+        // ════════════════════════════════════════════════
+        function calcGrade(program, entryYear) {
+            const now = new Date();
+            const thai = now.getFullYear() + 543 - (now.getMonth() < 4 ? 1 : 0);
+            const diff = thai - parseInt(entryYear || 0) + 1;
+            const max = program === "ปวส" ? 2 : 3;
+            if (diff < 1) return `${program}?`;
+            if (diff > max) return `${program}(จบ)`;
+            return `${program}${diff}`;
+        }
+
+        // ════════════════════════════════════════════════
+        //  STATUS BADGE
+        // ════════════════════════════════════════════════
+        function statusBadge(status) {
+            const m = {
+                IN: { cls: "badge-green", icon: "fa-right-to-bracket", label: "อยู่ในโรงเรียน" },
+                OUT: { cls: "badge-gray", icon: "fa-right-from-bracket", label: "ออกแล้ว" },
+                LIBRARY: { cls: "badge-purple", icon: "fa-book-open", label: "ห้องสมุด" },
+            };
+            const s = m[status] || { cls: "badge-gray", icon: "fa-circle", label: status || "—" };
+            return `<span class="badge ${s.cls}">
+    <i class="fa-solid ${s.icon}" style="font-size:9px"></i>${s.label}</span>`;
+        }
+
+        function cardBadge(status) {
+            if (status === "active") return `<span class="badge badge-green">✅ Active</span>`;
+            if (status === "lost") return `<span class="badge badge-red">❌ Lost</span>`;
+            if (status === "inactive") return `<span class="badge badge-amber">⏳ Inactive</span>`;
+            return `<span class="badge badge-gray">${status || "—"}</span>`;
+        }
+
+        // ════════════════════════════════════════════════
+        //  FETCH DATA
+        // ════════════════════════════════════════════════
+        function fetchStudents() {
+            return $.get(API, { action: "list" }).then(raw => {
+                const res = typeof raw === "string" ? JSON.parse(raw) : raw;
+                if (res.status === "success") allStudents = res.data || [];
+                return allStudents;
+            }).catch(() => { allStudents = []; });
+        }
+
+        function fetchLogs() {
+            return $.get(API, { action: "list_logs" }).then(raw => {
+                const res = typeof raw === "string" ? JSON.parse(raw) : raw;
+                if (res.status === "success") allLogs = res.data || [];
+                return allLogs;
+            }).catch(() => { allLogs = []; });
+        }
+
+        // ════════════════════════════════════════════════
+        //  OVERVIEW
+        // ════════════════════════════════════════════════
+        function updateStats() {
+            const total = allStudents.length;
+            // สถานะปัจจุบันคำนวณจาก log ล่าสุดของแต่ละคน
+            const latestStatus = {};
+            allLogs.forEach(l => {
+                if (!latestStatus[l.student_id]) latestStatus[l.student_id] = { status: l.scan_type, time: l.timestamp };
+                else if (l.timestamp > latestStatus[l.student_id].time)
+                    latestStatus[l.student_id] = { status: l.scan_type, time: l.timestamp };
+            });
+            let inCount = 0, outCount = 0, libCount = 0;
+            Object.values(latestStatus).forEach(({ status }) => {
+                if (status === "IN") inCount++;
+                else if (status === "OUT") outCount++;
+                else if (status === "LIBRARY") libCount++;
+            });
+            const cardActive = allStudents.filter(s => s.card_status === "active").length;
+            const cardLost = allStudents.filter(s => s.card_status === "lost").length;
+
+            $("#sc-total").text(total);
+            $("#sc-in").text(inCount);
+            $("#sc-out").text(outCount);
+            $("#sc-lib").text(libCount);
+            $("#sc-card-active").text(cardActive);
+            $("#sc-card-lost").text(cardLost);
+        }
+
+        function renderOverviewTable(data) {
+            // merge สถานะล่าสุดเข้าไป
+            const latestScan = {};
+            allLogs.forEach(l => {
+                if (!latestScan[l.student_id] || l.timestamp > latestScan[l.student_id].timestamp)
+                    latestScan[l.student_id] = l;
+            });
+
+            if (!data.length) {
+                $("#overviewTable").html(`<tr><td colspan="6" class="empty"><i class="fa-solid fa-inbox"></i><br>ไม่พบข้อมูล</td></tr>`);
+                return;
+            }
+            const rows = data.map(s => {
+                const scan = latestScan[s.student_id] || {};
+                const st = scan.scan_type || "—";
+                const grade = calcGrade(s.program, s.entry_year);
+                return `<tr>
+      <td><code style="font-size:12px;color:var(--muted);">${s.student_id}</code></td>
+      <td><span style="font-weight:600;">${s.first_name} ${s.last_name}</span>
+          ${s.nickname ? `<span style="font-size:11px;color:var(--muted);">(${s.nickname})</span>` : ""}</td>
+      <td><span class="badge ${s.program === "ปวส" ? "badge-purple" : "badge-blue"}">${grade}</span></td>
+      <td>${st !== "—" ? statusBadge(st) : `<span style="color:var(--muted);font-size:12px;">ยังไม่มีข้อมูล</span>`}</td>
+      <td style="font-size:12px;color:var(--muted);">${scan.scan_time || scan.timestamp || "—"}</td>
+      <td style="font-size:12px;">${scan.device_name || scan.device_id || "—"}</td>
+    </tr>`;
+            }).join("");
+            $("#overviewTable").html(rows);
+        }
+
+        function filterOverview() {
+            const q = $("#overviewSearch").val().toLowerCase();
+            const fs = $("#overviewFilter").val();
+            const latestScan = {};
+            allLogs.forEach(l => {
+                if (!latestScan[l.student_id] || l.timestamp > latestScan[l.student_id].timestamp)
+                    latestScan[l.student_id] = l;
+            });
+            let data = allStudents.filter(s => {
+                const match = !q || s.student_id?.toLowerCase().includes(q)
+                    || s.first_name?.toLowerCase().includes(q)
+                    || s.last_name?.toLowerCase().includes(q);
+                if (!match) return false;
+                if (!fs) return true;
+                return (latestScan[s.student_id]?.scan_type || "") === fs;
+            });
+            renderOverviewTable(data);
+        }
+
+        // ════════════════════════════════════════════════
+        //  STUDENTS TABLE
+        // ════════════════════════════════════════════════
+        function renderStudents(data) {
+            if (!data.length) {
+                $("#stuTable").html(`<tr><td colspan="8" class="empty"><i class="fa-solid fa-user-slash"></i><br>ไม่พบนักเรียน</td></tr>`);
+                return;
+            }
+            const rows = data.map(s => {
+                const grade = calcGrade(s.program, s.entry_year);
+                const stuStatus = s.student_status === "active"
+                    ? `<span class="badge badge-green">กำลังเรียน</span>`
+                    : `<span class="badge badge-red">${s.student_status || "—"}</span>`;
+                return `<tr>
+      <td><code style="font-size:12px;color:var(--muted);">${s.student_id}</code></td>
+      <td><span style="font-weight:600;">${s.first_name} ${s.last_name}</span></td>
+      <td>${s.nickname || `<span style="color:var(--muted);">—</span>`}</td>
+      <td><span class="badge ${s.program === "ปวส" ? "badge-purple" : "badge-blue"}">${grade}</span></td>
+      <td style="font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.department || "—"}</td>
+      <td>${cardBadge(s.card_status)}</td>
+      <td>${stuStatus}</td>
+      <td>
+        <div style="display:flex;gap:5px;">
+          <button class="btn btn-sm btn-ghost editStuBtn" data-id="${s.student_id}" title="แก้ไข">
+            <i class="fa-solid fa-pen"></i>
+          </button>
+          <button class="btn btn-sm btn-amber cardStuBtn" data-id="${s.student_id}" title="บัตร">
+            <i class="fa-solid fa-id-card"></i>
+          </button>
+        </div>
+      </td>
+    </tr>`;
+            }).join("");
+            $("#stuTable").html(rows);
+            $("#stuCount").text(`แสดง ${data.length} จาก ${allStudents.length} คน`);
+        }
+
+        function filterStudents() {
+            const q = $("#stuSearch").val().toLowerCase();
+            const p = $("#stuProgram").val();
+            const data = allStudents.filter(s => {
+                const m = !q || [s.student_id, s.first_name, s.last_name, s.nickname, s.department]
+                    .some(v => v?.toLowerCase().includes(q));
+                const mp = !p || s.program === p;
+                return m && mp;
+            });
+            renderStudents(data);
+        }
+
+        // ════════════════════════════════════════════════
+        //  LOGS TABLE
+        // ════════════════════════════════════════════════
+        function renderLogs(data) {
+            if (!data.length) {
+                $("#logTable").html(`<tr><td colspan="6" class="empty"><i class="fa-solid fa-inbox"></i><br>ไม่พบ Log</td></tr>`);
+                $("#logCount").text("");
+                return;
+            }
+            // สร้าง lookup ชื่อ
+            const nameMap = {};
+            allStudents.forEach(s => { nameMap[s.student_id] = `${s.first_name} ${s.last_name}`; });
+
+            const rows = data.map(l => {
+                const ts = (l.timestamp || "").split(" ");
+                const typeMap = { IN: "badge-green", OUT: "badge-gray", LIBRARY: "badge-purple" };
+                return `<tr>
+      <td style="font-size:12px;color:var(--muted);">${ts[0] || "—"}</td>
+      <td style="font-size:13px;font-weight:600;">${ts[1] || l.scan_time || "—"}</td>
+      <td><code style="font-size:12px;color:var(--muted);">${l.student_id || "—"}</code></td>
+      <td style="font-size:13px;">${nameMap[l.student_id] || l.student_id || "—"}</td>
+      <td><span class="badge ${typeMap[l.scan_type] || "badge-gray"}">
+        ${l.scan_type || "—"}</span></td>
+      <td style="font-size:12px;">${l.device_name || l.device_id || "—"}</td>
+    </tr>`;
+            }).join("");
+            $("#logTable").html(rows);
+            $("#logCount").text(`แสดง ${data.length} รายการ`);
+            $("#badgeNew").text(data.length > 99 ? "99+" : data.length);
+        }
+
+        function filterLogs() {
+            const date = $("#logDate").val();
+            const type = $("#logType").val();
+            const q = $("#logSearch").val().toLowerCase();
+            let data = allLogs;
+            if (date) data = data.filter(l => (l.timestamp || "").startsWith(date.split("-").reverse().join("/")));
+            if (type) data = data.filter(l => l.scan_type === type);
+            if (q) data = data.filter(l =>
+                l.student_id?.toLowerCase().includes(q) ||
+                l.device_id?.toLowerCase().includes(q) ||
+                l.device_name?.toLowerCase().includes(q)
+            );
+            renderLogs(data);
+        }
+
+        // ════════════════════════════════════════════════
+        //  CHARTS
+        // ════════════════════════════════════════════════
+        let charts = {};
+        function initCharts() {
+            // ป้องกัน re-init
+            if (charts.daily) return;
+
+            // Daily scan counts (7 วันล่าสุด)
+            const days = [];
+            const dayCounts = [];
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date(); d.setDate(d.getDate() - i);
+                const label = `${d.getDate()}/${d.getMonth() + 1}`;
+                days.push(label);
+                const count = allLogs.filter(l => {
+                    const ts = l.timestamp || "";
+                    const parts = ts.split(" ")[0]?.split("/");
+                    if (!parts) return false;
+                    return parseInt(parts[0]) === d.getDate() &&
+                        parseInt(parts[1]) === (d.getMonth() + 1);
+                }).length;
+                dayCounts.push(count);
+            }
+
+            charts.daily = new Chart($("#chartDaily")[0], {
+                type: "bar",
+                data: {
+                    labels: days,
+                    datasets: [{
+                        label: "จำนวน Scan",
+                        data: dayCounts,
+                        backgroundColor: "rgba(132,212,250,.7)",
+                        borderColor: "#4DB8F5",
+                        borderWidth: 2, borderRadius: 8,
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+                }
+            });
+
+            // Status pie
+            const inC = allStudents.filter((_, i) => i % 3 === 0).length; // mock ถ้าไม่มี log
+            const outC = allStudents.filter((_, i) => i % 3 === 1).length;
+            const libC = allStudents.filter((_, i) => i % 3 === 2).length;
+
+            charts.status = new Chart($("#chartStatus")[0], {
+                type: "doughnut",
+                data: {
+                    labels: ["อยู่ในโรงเรียน", "ออกแล้ว", "ห้องสมุด"],
+                    datasets: [{
+                        data: [inC, outC, libC],
+                        backgroundColor: ["#22C55E", "#94A3B8", "#8B5CF6"],
+                        borderWidth: 0, hoverOffset: 8,
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { position: "bottom", labels: { font: { family: "Sarabun" }, boxWidth: 12 } } }
+                }
+            });
+
+            // In/Out line chart
+            const inData = dayCounts.map(v => Math.round(v * 0.6));
+            const outData = dayCounts.map(v => Math.round(v * 0.4));
+            charts.inout = new Chart($("#chartInOut")[0], {
+                type: "line",
+                data: {
+                    labels: days,
+                    datasets: [
+                        {
+                            label: "เข้า (IN)", data: inData, borderColor: "#22C55E",
+                            backgroundColor: "rgba(34,197,94,.1)", tension: .4, fill: true, pointRadius: 4
+                        },
+                        {
+                            label: "ออก (OUT)", data: outData, borderColor: "#94A3B8",
+                            backgroundColor: "rgba(148,163,184,.1)", tension: .4, fill: true, pointRadius: 4
+                        },
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { labels: { font: { family: "Sarabun" }, boxWidth: 12 } } },
+                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+                }
+            });
+        }
+
+        // ════════════════════════════════════════════════
+        //  DEVICES
+        // ════════════════════════════════════════════════
+        const TYPE_ICONS = { GATE: "fa-door-open", LIBRARY: "fa-book-open", CANTEEN: "fa-utensils" };
+        function renderDevices() {
+            if (!devices.length) {
+                $("#deviceGrid").html(`<div class="empty" style="grid-column:1/-1;">
+      <i class="fa-solid fa-mobile-screen-button"></i><br>ยังไม่มีอุปกรณ์ กด "+ เพิ่มอุปกรณ์"
+    </div>`);
+                return;
+            }
+            const cards = devices.map((d, i) => `
+    <div style="background:#F8FAFC;border:1px solid var(--border);border-radius:14px;padding:16px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <div style="width:36px;height:36px;border-radius:10px;background:#EAF7FF;color:#0EA5E9;
+                    display:flex;align-items:center;justify-content:center;font-size:15px;">
+          <i class="fa-solid ${TYPE_ICONS[d.type] || "fa-mobile-screen"}"></i>
+        </div>
+        <div>
+          <div style="font-weight:700;font-size:13px;">${d.name}</div>
+          <div style="font-size:11px;color:var(--muted);">${d.id}</div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span class="badge ${d.active ? "badge-green" : "badge-gray"}">
+          ${d.active ? "🟢 Online" : "⚫ Offline"}
+        </span>
+        <div style="display:flex;gap:5px;">
+          <button class="btn btn-sm btn-ghost" onclick="toggleDevice(${i})">
+            ${d.active ? "ปิด" : "เปิด"}
+          </button>
+          <button class="btn btn-sm btn-danger" onclick="removeDevice(${i})">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+        </div>
+      </div>
+    </div>`).join("");
+            $("#deviceGrid").html(cards);
+        }
+
+        function toggleDevice(i) { devices[i].active = !devices[i].active; saveDevices(); renderDevices(); }
+        function removeDevice(i) { devices.splice(i, 1); saveDevices(); renderDevices(); }
+        function saveDevices() { localStorage.setItem("asia_lb_devices", JSON.stringify(devices)); }
+
+        // ════════════════════════════════════════════════
+        //  MODAL: EDIT STUDENT
+        // ════════════════════════════════════════════════
+        function openModal(id) { $(`#${id}`).addClass("open"); }
+        function closeModal(id) { $(`#${id}`).removeClass("open"); }
+
+        $(document).on("click", ".editStuBtn", function () {
+            const sid = $(this).data("id");
+            const s = allStudents.find(x => x.student_id === sid);
+            if (!s) return;
+            $("#editSubtitle").text(`รหัส: ${sid}`);
+            $("#e-student_id").val(s.student_id);
+            $("#e-first_name").val(s.first_name);
+            $("#e-last_name").val(s.last_name);
+            $("#e-nickname").val(s.nickname || "");
+            $("#e-department").val(s.department || "");
+            $("#e-program").val(s.program || "ปวช");
+            $("#e-entry_year").val(s.entry_year || "");
+            $("#e-parent_name").val(s.parent_name || "");
+            $("#e-parent_phone").val(s.parent_phone || "");
+            $("#e-parent_line").val(s.parent_line || "");
+            openModal("modalEdit");
+        });
+        $("#closeEdit,#cancelEdit").click(() => closeModal("modalEdit"));
+        $("#modalEdit").click(function (e) { if (e.target === this) closeModal("modalEdit"); });
+
+        $("#saveEdit").click(function () {
+            const $btn = $(this);
+            const updates = {
+                student_id: $("#e-student_id").val(),
+                first_name: $("#e-first_name").val().trim(),
+                last_name: $("#e-last_name").val().trim(),
+                nickname: $("#e-nickname").val().trim(),
+                department: $("#e-department").val().trim(),
+                program: $("#e-program").val(),
+                entry_year: $("#e-entry_year").val().trim(),
+                parent_name: $("#e-parent_name").val().trim(),
+                parent_phone: $("#e-parent_phone").val().trim(),
+                parent_line: $("#e-parent_line").val().trim(),
+            };
+            if (!updates.first_name || !updates.last_name) {
+                showNotification("กรุณากรอกชื่อและนามสกุล", "error"); return;
+            }
+            $btn.prop("disabled", true).html('<span class="spinner"></span> กำลังบันทึก...');
+            $.get(API, { action: "update", ...updates }).then(raw => {
+                const res = typeof raw === "string" ? JSON.parse(raw) : raw;
+                if (res.status === "success") {
+                    // อัปเดต local
+                    const idx = allStudents.findIndex(s => s.student_id === updates.student_id);
+                    if (idx > -1) Object.assign(allStudents[idx], updates);
+                    filterStudents(); filterOverview();
+                    showNotification("บันทึกสำเร็จ ✅", "success");
+                    closeModal("modalEdit");
+                } else { showNotification(res.message || "เกิดข้อผิดพลาด", "error"); }
+            }).fail(() => showNotification("ไม่สามารถเชื่อมต่อได้", "error"))
+                .always(() => $btn.prop("disabled", false).html('<i class="fa-solid fa-floppy-disk"></i> บันทึก'));
+        });
+
+        // ════════════════════════════════════════════════
+        //  MODAL: CARD MANAGEMENT
+        // ════════════════════════════════════════════════
+        $(document).on("click", ".cardStuBtn", function () {
+            const sid = $(this).data("id");
+            const s = allStudents.find(x => x.student_id === sid);
+            if (!s) return;
+            $("#cardSubtitle").text(`${s.first_name} ${s.last_name} (${sid})`);
+            const body = `
+    <div style="text-align:center;margin-bottom:20px;">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:8px;">สถานะบัตรปัจจุบัน</div>
+      ${cardBadge(s.card_status)}
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <button class="btn btn-green" style="justify-content:center;" onclick="updateCard('${sid}','active')">
+        <i class="fa-solid fa-circle-check"></i> เปิดใช้บัตร (Active)
+      </button>
+      <button class="btn btn-danger" style="justify-content:center;" onclick="updateCard('${sid}','lost')">
+        <i class="fa-solid fa-ban"></i> รายงานบัตรสูญหาย (Lost)
+      </button>
+      <button class="btn btn-amber" style="justify-content:center;" onclick="updateCard('${sid}','inactive')">
+        <i class="fa-solid fa-pause"></i> ระงับบัตรชั่วคราว
+      </button>
+    </div>`;
+            $("#cardModalBody").html(body);
+            openModal("modalCard");
+        });
+        $("#closeCard,#cancelCard").click(() => closeModal("modalCard"));
+        $("#modalCard").click(function (e) { if (e.target === this) closeModal("modalCard"); });
+
+        function updateCard(sid, status) {
+            $.get(API, { action: "update_card", student_id: sid, card_status: status }).then(raw => {
+                const res = typeof raw === "string" ? JSON.parse(raw) : raw;
+                if (res.status === "success") {
+                    const s = allStudents.find(x => x.student_id === sid);
+                    if (s) s.card_status = status;
+                    updateStats(); filterStudents();
+                    showNotification(`อัปเดตบัตรเป็น "${status}" สำเร็จ`, "success");
+                    closeModal("modalCard");
+                } else showNotification(res.message || "เกิดข้อผิดพลาด", "error");
+            }).fail(() => showNotification("ไม่สามารถเชื่อมต่อได้", "error"));
+        }
+
+        // ════════════════════════════════════════════════
+        //  MODAL: ADD DEVICE
+        // ════════════════════════════════════════════════
+        $("#addDeviceBtn").click(() => openModal("modalDevice"));
+        $("#closeDevice,#cancelDevice").click(() => closeModal("modalDevice"));
+        $("#modalDevice").click(function (e) { if (e.target === this) closeModal("modalDevice"); });
+        $("#saveDevice").click(function () {
+            const id = $("#dev-id").val().trim().toUpperCase();
+            const name = $("#dev-name").val().trim();
+            const type = $("#dev-type").val();
+            if (!id || !name) { showNotification("กรุณากรอก ID และชื่อ", "error"); return; }
+            devices.push({ id, name, type, active: true });
+            saveDevices(); renderDevices();
+            $("#dev-id,#dev-name").val("");
+            showNotification(`เพิ่มอุปกรณ์ "${name}" สำเร็จ`, "success");
+            closeModal("modalDevice");
+        });
+
+        // ════════════════════════════════════════════════
+        //  SETTINGS
+        // ════════════════════════════════════════════════
+        $("#cfg-api").val(API);
+        $("#saveCfgBtn").click(function () {
+            const url = $("#cfg-api").val().trim();
+            if (url) localStorage.setItem("asia_lb_api", url);
+            showNotification("บันทึกการตั้งค่าแล้ว ♻️ รีโหลดเพื่อใช้ URL ใหม่", "success");
+        });
+
+        // Export CSV
+        function toCSV(data, cols) {
+            const header = cols.map(c => c.label).join(",");
+            const rows = data.map(r => cols.map(c => `"${(r[c.key] || "").toString().replace(/"/g, '""')}"`).join(","));
+            return [header, ...rows].join("\n");
+        }
+        function downloadCSV(content, name) {
+            const a = document.createElement("a");
+            a.href = "data:text/csv;charset=utf-8,\uFEFF" + encodeURIComponent(content);
+            a.download = name; a.click();
+        }
+        const STU_COLS = [
+            { key: "student_id", label: "รหัสนักเรียน" }, { key: "first_name", label: "ชื่อ" }, { key: "last_name", label: "นามสกุล" },
+            { key: "nickname", label: "ชื่อเล่น" }, { key: "program", label: "ระดับ" }, { key: "entry_year", label: "ปีเข้า" },
+            { key: "department", label: "สาขา" }, { key: "card_status", label: "บัตร" }, { key: "student_status", label: "สถานะ" },
+        ];
+        $("#exportAllBtn,#exportCSVBtn").click(() => downloadCSV(toCSV(allStudents, STU_COLS), "students.csv"));
+        $("#exportLogBtn").click(() => {
+            const LOG_COLS = [
+                { key: "timestamp", label: "เวลา" }, { key: "student_id", label: "รหัส" },
+                { key: "scan_type", label: "ประเภท" }, { key: "device_id", label: "Device" }, { key: "device_name", label: "ชื่อจุด" },
+            ];
+            downloadCSV(toCSV(allLogs, LOG_COLS), "logs.csv");
+        });
+        $("#resetLogBtn").click(function () {
+            if (!confirm("ยืนยันลบ Login Log ทั้งหมด?")) return;
+            $.get(API, { action: "clear_login_logs" }).then(() => showNotification("ล้าง Log สำเร็จ", "success"))
+                .fail(() => showNotification("เกิดข้อผิดพลาด", "error"));
+        });
+
+        // ════════════════════════════════════════════════
+        //  SEARCH / FILTER BINDINGS
+        // ════════════════════════════════════════════════
+        $("#overviewSearch,#overviewFilter").on("input change", filterOverview);
+        $("#stuSearch,#stuProgram").on("input change", filterStudents);
+        $("#logFilterBtn").click(filterLogs);
+        $("#logSearch").on("keydown", e => { if (e.key === "Enter") filterLogs(); });
+        // set today's date as default log filter
+        $("#logDate").val(new Date().toISOString().split("T")[0]);
+
+        // ════════════════════════════════════════════════
+        //  REFRESH
+        // ════════════════════════════════════════════════
+        function updateTime() {
+            const now = new Date();
+            $("#lastUpdate").text(`อัปเดต ${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}:${now.getSeconds().toString().padStart(2, "0")}`);
+        }
+
+        async function loadAll() {
+            await Promise.all([fetchStudents(), fetchLogs()]);
+            updateStats();
+            filterOverview();
+            filterStudents();
+            filterLogs();
+            updateTime();
+            // reset charts if on stats page
+            Object.values(charts).forEach(c => c.destroy());
+            charts = {};
+        }
+
+        $("#refreshBtn").click(loadAll);
+
+        // ════════════════════════════════════════════════
+        //  INIT
+        // ════════════════════════════════════════════════
+        $(function () {
+            // ถ้ามี session ใน localStorage ใช้เป็น admin name
+            try {
+                const s = JSON.parse(localStorage.getItem("asia_lb_session") || "{}");
+                if (s.first_name) {
+                    $("#adminName").text(`${s.first_name} ${s.last_name || ""}`);
+                    $("#adminAvatar").text(s.first_name[0]);
+                }
+            } catch (e) { }
+
+            // show default devices ถ้ายังว่าง
+            if (!devices.length) {
+                devices = [
+                    { id: "GATE-01", name: "ประตูหน้า", type: "GATE", active: true },
+                    { id: "GATE-02", name: "ห้องโสต", type: "GATE", active: false },
+                    { id: "GATE-03", name: "โรงอาหาร", type: "CANTEEN", active: false },
+                    { id: "LIB-01", name: "ห้องสมุด", type: "LIBRARY", active: true },
+                ];
+                saveDevices();
+            }
+
+            loadAll();
+
+            // auto-refresh ทุก 60 วินาที
+            setInterval(loadAll, 60000);
+        });
+
+        // ════════════════════════════════════════════════
+        //  showNotification (standalone ถ้า index.js ไม่โหลด)
+        // ════════════════════════════════════════════════
+        if (typeof showNotification === "undefined") {
+            window.showNotification = function (msg, type) {
+                const color = { success: "#22C55E", error: "#EF4444", info: "#84D4FA" }[type] || "#64748B";
+                const icon = { success: "fa-circle-check", error: "fa-circle-exclamation", info: "fa-circle-info" }[type] || "fa-circle-info";
+                const $n = $(`<div style="position:fixed;bottom:16px;right:16px;z-index:9999;
+      background:white;border:1px solid #E2E8F0;border-radius:12px;
+      padding:10px 14px;box-shadow:0 8px 24px rgba(0,0,0,.12);
+      display:flex;align-items:center;gap:8px;/*  font-family:'Sarabun',sans-serif; */
+      font-size:13px;transform:translateX(110%);transition:transform .3s;max-width:300px;">
+      <i class="fa-solid ${icon}" style="color:${color};font-size:14px;flex-shrink:0;"></i>
+      <span>${msg}</span></div>`);
+                $("body").append($n);
+                setTimeout(() => $n.css("transform", "translateX(0)"), 10);
+                setTimeout(() => { $n.css({ transform: "translateX(110%)", opacity: 0 }); setTimeout(() => $n.remove(), 350); }, 4000);
+                $n.click(() => $n.remove());
+            };
+        }
+    </script>
+</body>
+
+</html>

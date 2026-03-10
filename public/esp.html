@@ -1,0 +1,496 @@
+<!doctype html><html lang=th><head>
+<meta charset=UTF-8>
+<meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>WEB SERVER V8</title>
+<meta name=theme-color content=#1ED760>
+<link rel="shortcut icon" href=https://asia-lb.firebaseapp.com/images/rfid.ico type=image/x-icon>
+<link rel=stylesheet href=https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css>
+<link rel=stylesheet href=https://asia-lb.firebaseapp.com/style/index.css>
+<script defer src=https://asia-lb.firebaseapp.com/script/index.js></script>
+<style>
+:root{
+  --bg:#0d0d0d;--surface:#161616;--card:#1a1a1a;--border:#2a2a2a;
+  --green:#1ED760;--green2:#17a84a;--red:#f87171;--yellow:#fbbf24;
+  --blue:#60a5fa;--orange:#fb923c;--muted:#555;--text:#e8e8e8;
+  --mono:'JetBrains Mono',monospace;--r:12px
+}
+*,::after,::before{box-sizing:border-box;margin:0;padding:0}
+body,html{width:100%;height:100%;overflow:hidden}
+body{font-family:Kanit,Sarabun,sans-serif;font-weight:600;
+     background:var(--bg);color:var(--text);display:flex;flex-direction:column}
+
+/* ── Header ── */
+.header{display:flex;flex-direction:column;gap:6px;
+        padding:8px 14px 10px;background:var(--surface);
+        border-bottom:1px solid var(--border);flex-shrink:0}
+.header-top{display:flex;align-items:center;justify-content:space-between}
+.header h1{font-size:14px;letter-spacing:.5px}
+.header h1 span{color:var(--green)}
+.badge{display:inline-flex;align-items:center;gap:6px;background:#111;
+       border:1px solid var(--border);border-radius:99px;padding:3px 10px;
+       font-size:11px;color:var(--green)}
+.badge-dot{width:6px;height:6px;border-radius:50%;background:var(--green);
+           animation:blink 1.8s infinite}
+@keyframes blink{0%,100%{opacity:1;box-shadow:0 0 5px var(--green)}50%{opacity:.2;box-shadow:none}}
+
+/* ── GAS URL Bar ── */
+.url-bar{display:flex;gap:6px;align-items:center}
+.url-input{flex:1;background:#111;border:1px solid var(--border);border-radius:8px;
+           padding:5px 10px;font-size:10px;color:var(--muted);font-family:var(--mono);outline:0}
+.url-input:focus{border-color:var(--green);color:var(--text)}
+.url-save{background:var(--surface);border:1px solid var(--border);color:var(--text);
+          border-radius:7px;padding:4px 10px;font-size:10px;cursor:pointer;
+          font-family:Kanit,sans-serif;transition:all .2s;white-space:nowrap}
+.url-save:hover{border-color:var(--green);color:var(--green)}
+
+/* ── Layout ── */
+.main{flex:1;display:flex;flex-direction:column;gap:8px;
+      padding:10px 12px 6px;overflow-y:auto;min-height:0}
+
+/* ── Mode Grid ── */
+.mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mode-grid label{display:contents}
+.radio-input{position:absolute;clip:rect(0 0 0 0);width:1px;height:1px;overflow:hidden}
+.radio-tile{position:relative;display:flex;flex-direction:column;align-items:flex-start;
+            justify-content:flex-end;padding:11px 12px;background:var(--card);
+            border:1px solid var(--border);border-radius:var(--r);cursor:pointer;
+            transition:border-color .2s,box-shadow .2s;min-height:72px}
+.radio-tile .ico{font-size:15px;margin-bottom:4px;color:var(--muted);transition:color .2s}
+.radio-input:checked+.radio-tile .ico,.radio-tile:hover .ico{color:var(--green)}
+.radio-label{font-size:12px;color:var(--text)}
+.radio-sub{font-size:10px;color:var(--muted);font-weight:400}
+.radio-input:checked+.radio-tile,.radio-tile:hover{border-color:var(--green);box-shadow:0 0 0 1px var(--green)}
+.radio-input:checked+.radio-tile .radio-label{color:var(--green)}
+.radio-tile.wide{grid-column:1/-1}
+
+/* ── Tool Bar ── */
+.tool-bar{display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap}
+.tool-btn{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:5px;
+          background:var(--card);border:1px solid var(--border);border-radius:var(--r);
+          padding:8px 6px;font-size:11px;font-family:Kanit,sans-serif;font-weight:600;
+          color:var(--text);cursor:pointer;transition:all .2s}
+.tool-btn:hover{border-color:var(--green);color:var(--green)}
+.tool-btn i{font-size:13px}
+.tool-btn.loading i{animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Cache Bar ── */
+.cache-bar{display:flex;align-items:center;justify-content:space-between;
+           background:var(--card);border:1px solid var(--border);
+           border-radius:var(--r);padding:8px 13px;flex-shrink:0}
+.cache-info{font-size:12px;color:var(--muted)}
+.cache-info b{color:var(--green)}
+.icon-btn{background:var(--surface);border:1px solid var(--border);color:var(--text);
+          border-radius:8px;padding:4px 11px;font-size:11px;cursor:pointer;
+          font-family:Kanit,sans-serif;display:inline-flex;align-items:center;gap:5px;transition:all .2s}
+.icon-btn:hover{border-color:var(--green);color:var(--green)}
+.icon-btn.loading i{animation:spin .7s linear infinite}
+
+/* ── Form Card ── */
+.form-card{background:var(--card);border-radius:var(--r);padding:12px;
+           display:none;flex-shrink:0;animation:fadeIn .2s ease}
+.form-card.green-border{border:1px solid rgba(30,215,96,.3)}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
+.form-title{font-size:11px;margin-bottom:9px;text-transform:uppercase;letter-spacing:.05em;
+            display:flex;align-items:center;gap:6px;color:var(--green)}
+.form-card input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;
+                 padding:9px 12px;font-size:14px;color:var(--text);outline:0;margin-bottom:8px;
+                 transition:border-color .2s;font-family:var(--mono)}
+.form-card input:focus{border-color:var(--green)}
+.form-card input::placeholder{color:var(--muted)}
+.form-btn{width:100%;border:none;border-radius:8px;padding:9px;font-size:13px;
+          font-family:Kanit,sans-serif;font-weight:700;cursor:pointer;transition:opacity .2s;
+          display:flex;align-items:center;justify-content:center;gap:6px;
+          background:linear-gradient(135deg,var(--green),var(--green2));color:#000}
+.form-btn:hover{opacity:.85}
+.form-hint{font-size:10px;color:var(--muted);margin-top:5px;display:flex;gap:10px;flex-wrap:wrap}
+.form-hint span{display:flex;align-items:center;gap:4px}
+.form-hint .dot{width:6px;height:6px;border-radius:50%}
+
+/* ── Confirm Box ── */
+.confirm-box{display:none;background:#1f1209;border:1px solid rgba(251,146,60,.4);
+             border-radius:var(--r);padding:12px;flex-shrink:0;animation:fadeIn .2s ease}
+.confirm-msg{font-size:12px;color:var(--orange);margin-bottom:10px;
+             display:flex;align-items:center;gap:7px}
+.confirm-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.c-btn{border:none;border-radius:8px;padding:9px;font-size:12px;
+       font-family:Kanit,sans-serif;font-weight:700;cursor:pointer}
+.c-btn.ok{background:var(--red);color:#fff}
+.c-btn.cancel{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+
+/* ── Result Card ── */
+.result-card{background:var(--card);border:1px solid var(--border);
+             border-radius:var(--r);overflow:hidden;flex-shrink:0}
+.result-head{display:flex;align-items:center;justify-content:space-between;
+             padding:8px 12px;border-bottom:1px solid var(--border)}
+.scan-indicator{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted)}
+.scan-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);transition:background .3s}
+.scan-dot.live{background:var(--green);box-shadow:0 0 8px var(--green)}
+.result-body{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.r-item{padding:8px 12px}
+.r-item:first-child{border-right:1px solid var(--border)}
+.r-label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
+.r-val{font-size:12px;color:var(--text);word-break:break-all}
+.r-val.ok{color:var(--green)}
+.r-val.err{color:var(--red)}
+.r-val.warn{color:var(--yellow)}
+
+/* ── List/History Section ── */
+.lh-section{height:100%;max-height:contrnt;background:var(--card);border:1px solid var(--border);
+            border-radius:var(--r);display:flex;flex-direction:column;min-height:0;flex-shrink:0}
+.lh-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+.lh-tab{flex:1;padding:8px;font-size:11px;text-align:center;cursor:pointer;
+        color:var(--muted);transition:color .2s;position:relative}
+.lh-tab.active{color:var(--green)}
+.lh-tab.active::after{content:'';position:absolute;bottom:0;left:20%;right:20%;
+                       height:2px;background:var(--green);border-radius:2px}
+.lh-badge{display:inline-block;background:#222;border-radius:99px;
+          padding:1px 6px;font-size:9px;margin-left:4px;color:var(--muted)}
+.lh-badge.has{background:rgba(251,191,36,.15);color:var(--yellow)}
+.lh-badge.sent{background:rgba(52,211,153,.15);color:#34d399}
+.lh-panel{display:none;flex:1;overflow-y:auto;min-height:60px;max-height:140px}
+.lh-panel.active{display:block}
+.si{display:flex;align-items:center;gap:8px;padding:7px 12px;
+    border-bottom:1px solid var(--border)}
+.si:last-child{border-bottom:0}
+.si-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.si-body{flex:1;min-width:0}
+.si-name{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.si-name.ok{color:var(--green)}
+.si-name.err{color:var(--red)}
+.si-uid{font-size:9px;color:var(--muted);font-family:var(--mono)}
+.si-right{text-align:right;flex-shrink:0}
+.si-time{font-size:9px;color:var(--muted)}
+.si-status{font-size:10px}
+.si-status.ok{color:var(--green)}
+.si-status.err{color:var(--red)}
+.si-status.warn{color:var(--yellow)}
+.empty-log{padding:16px;text-align:center;font-size:11px;color:var(--muted)}
+</style></head>
+
+<body>
+<!-- ── Header ── -->
+<div class=header>
+  <div class=header-top>
+    <h1>RFID <span>V8</span> · <span id=modeLabel>School</span></h1>
+    <div class=badge><div class=badge-dot></div><span id=scanStatus>รอสแกน</span></div>
+  </div>
+  <div class=url-bar>
+    <input class=url-input id=urlInput placeholder="GAS URL...">
+    <button class=url-save onclick=saveUrl()><i class="fa-solid fa-floppy-disk"></i> Save</button>
+  </div>
+</div>
+
+<!-- ── Main Content ── -->
+<div class=main>
+
+  <!-- Mode Selector -->
+  <div class=mode-grid>
+    <label><input class=radio-input type=radio name=mode id=btn2 value=2 onchange="setMode(2)">
+      <div class=radio-tile><div class=ico><i class="fa-solid fa-school"></i></div>
+        <div class=radio-label>โรงเรียน</div><div class=radio-sub>School</div></div></label>
+
+    <label><input class=radio-input type=radio name=mode id=btn3 value=3 onchange="setMode(3)">
+      <div class=radio-tile><div class=ico><i class="fa-solid fa-book"></i></div>
+        <div class=radio-label>ห้องสมุด</div><div class=radio-sub>Library</div></div></label>
+
+    <label><input class=radio-input type=radio name=mode id=btn4 value=4 onchange="setMode(4)">
+      <div class=radio-tile><div class=ico><i class="fa-solid fa-people-group"></i></div>
+        <div class=radio-label>ห้องประชุม</div><div class=radio-sub>Meeting</div></div></label>
+
+    <label><input class=radio-input type=radio name=mode id=btn1 value=1 onchange="setMode(1)">
+      <div class=radio-tile><div class=ico><i class="fa-solid fa-id-card"></i></div>
+        <div class=radio-label>อัพบัตร</div><div class=radio-sub>Bind UID</div></div></label>
+
+    <label><input class=radio-input type=radio name=mode id=btn5 value=5 onchange="onResetMode()">
+      <div class="radio-tile wide"><div class=ico><i class="fa-solid fa-trash"></i></div>
+        <div class=radio-label>รีเซ็ตบัตร</div><div class=radio-sub>Reset Card</div></div></label>
+  </div>
+
+  <!-- Bind Form (Mode 1) -->
+  <div class="form-card green-border" id=bindForm>
+    <div class=form-title><i class="fa-solid fa-id-card"></i> อัพบัตรนักเรียน</div>
+    <input id=bindStudentId type=text placeholder="รหัสนักเรียน (เช่น 12345)" maxlength=10>
+    <button class=form-btn onclick=submitBind()>
+      <i class="fa-solid fa-upload"></i> พร้อม! รอแตะบัตร
+    </button>
+    <div class=form-hint>
+      <span><div class="dot" style=background:#34d399></div>เขียนลงบัตร MIFARE</span>
+      <span><div class="dot" style=background:var(--yellow)></div>บัตรทั่วไป → เก็บ HW-UID</span>
+    </div>
+  </div>
+
+  <!-- Reset Confirm Box (Mode 5) -->
+  <div class=confirm-box id=confirmBox>
+    <div class=confirm-msg>
+      <i class="fa-solid fa-triangle-exclamation"></i>
+      ยืนยันรีเซ็ตบัตร? ข้อมูลใน Block 1 และ DB จะถูกลบ
+    </div>
+    <div class=confirm-actions>
+      <button class="c-btn ok" onclick=confirmReset()>✓ ยืนยัน</button>
+      <button class="c-btn cancel" onclick=cancelReset()>✕ ยกเลิก</button>
+    </div>
+  </div>
+
+  <!-- Tool Buttons -->
+  <div class=tool-bar>
+    <button class="tool-btn" id=testLedBtn onclick=testLED()>
+      <i class="fa-solid fa-lightbulb"></i>LED</button>
+    <button class="tool-btn" id=testSpkBtn onclick=testSpeaker()>
+      <i class="fa-solid fa-volume-high"></i>Speaker</button>
+    <button class="tool-btn" id=testOledBtn onclick=testOLED()>
+      <i class="fa-solid fa-tv"></i>OLED</button>
+  </div>
+
+  <!-- Cache Bar -->
+  <div class=cache-bar>
+    <div class=cache-info>
+      Cache: <b id=cacheCount>—</b> UID
+      <span id=cacheTime style="font-size:10px;margin-left:4px"></span>
+    </div>
+    <button class=icon-btn id=reloadBtn onclick=reloadCache()>
+      <i class="fa-solid fa-rotate-right"></i> Reload
+    </button>
+  </div>
+
+  <!-- Result Card -->
+  <div class=result-card>
+    <div class=result-head>
+      <div class=scan-indicator>
+        <div class=scan-dot id=scanDot></div>
+        <span id=scanStatus2>รอสแกน</span>
+      </div>
+      <div style="font-size:10px;color:var(--muted)">Cache: <b id=cacheCount2 style=color:var(--green)>—</b></div>
+    </div>
+    <div class=result-body>
+      <div class=r-item>
+        <div class=r-label>UID</div>
+        <div class=r-val id=rUID>—</div>
+      </div>
+      <div class=r-item>
+        <div class=r-label>เวลา</div>
+        <div class=r-val id=rTime>—</div>
+      </div>
+      <div class=r-item>
+        <div class=r-label>ผลลัพธ์</div>
+        <div class="r-val warn" id=rResult>รอสแกน...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pending / Log Tabs -->
+  <div class=lh-section>
+    <div class=lh-tabs>
+      <div class="lh-tab active" onclick="switchTab('pending',this)">
+        Pending <span class=lh-badge id=pendingBadge>0</span>
+      </div>
+      <div class=lh-tab onclick="switchTab('log',this)">
+        ส่งแล้ว <span class=lh-badge id=logBadge>—</span>
+      </div>
+    </div>
+    <div class="lh-panel active" id=panelPending>
+      <div id=pendingList><div class=empty-log>ยังไม่มีรายการ</div></div>
+    </div>
+    <div class=lh-panel id=panelLog>
+      <div id=logList><div class=empty-log>ยังไม่มีรายการ</div></div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<!-- Toast Container -->
+<div class=toast-wrap id=toastWrap></div>
+
+<script>
+// ── Utility ──────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+
+// สลับ Tab (Pending / Log)
+function switchTab(name, el) {
+  document.querySelectorAll('.lh-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.lh-panel').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  $('panel' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
+}
+
+// ── GAS URL ────────────────────────────────────────────────────────────
+// โหลด URL ปัจจุบันจาก /get_url และแสดงในช่อง input
+fetch('/get_url').then(r => r.json()).then(d => {
+  if (d.url) $('urlInput').value = d.url;
+});
+
+// บันทึก GAS URL ใหม่ไปยัง /set_url
+function saveUrl() {
+  const url = $('urlInput').value.trim();
+  if (!url.startsWith('https://')) {
+    showNotification('URL ต้องเริ่มต้นด้วย https://','error'); return;
+  }
+  fetch('/set_url?url=' + encodeURIComponent(url))
+    .then(r => r.json())
+    .then(d => showNotification(d.msg || 'Saved','success'))
+    .catch(() => showNotification('Save ล้มเหลว','error'));
+}
+
+// ── Mode ──────────────────────────────────────────────────────────────
+// เปลี่ยนโหมดการทำงาน ส่งไปยัง /mode?set=N
+function setMode(m) {
+  fetch('/mode?set=' + m)
+    .then(r => r.json())
+    .then(d => { syncUI(d); });
+}
+
+// ── Sync UI จาก /status ───────────────────────────────────────────────
+let lastUID = '';
+function syncUI(d) {
+  if (!d) return;
+  const m = d.mode || 2;
+  $('modeLabel').textContent = ['Idle','Bind','School','Library','Meeting','Reset'][m] || '';
+  [1,2,3,4,5].forEach(i => {
+    const b = $('btn'+i); if(b) b.checked = (i === m);
+  });
+  $('bindForm').style.display   = m === 1 ? 'block' : 'none';
+  $('confirmBox').style.display = m === 5 ? 'block' : 'none';
+
+  if (d.cacheCount !== undefined) {
+    $('cacheCount').textContent  = d.cacheCount;
+    $('cacheCount2').textContent = d.cacheCount;
+    $('cacheTime').textContent   = d.cacheTime ? '· '+d.cacheTime : '';
+  }
+  if (d.uid && d.uid !== '—') {
+    $('rUID').textContent  = d.uid;
+    $('rTime').textContent = d.time;
+    const el  = $('rResult');
+    const ok  = d.result && (d.result.includes('✅') || d.result.includes('เช็ค') || d.result.includes('สำเร็จ'));
+    const err = d.result && (d.result.includes('❌') || d.result.includes('ไม่รู้จัก') || d.result.includes('ไม่พบ'));
+    el.textContent = d.result || '—';
+    el.className   = 'r-val' + (ok?' ok': err?' err':' warn');
+    if (d.uid !== lastUID) {
+      lastUID = d.uid;
+      $('scanDot').classList.add('live');
+      $('scanStatus').textContent  = 'ตรวจพบบัตร';
+      $('scanStatus2').textContent = 'ตรวจพบบัตร';
+      setTimeout(() => {
+        $('scanDot').classList.remove('live');
+        $('scanStatus').textContent  = 'รอสแกน';
+        $('scanStatus2').textContent = 'รอสแกน';
+      }, 2500);
+      if (ok)        showNotification(d.result || 'สำเร็จ','success');
+      else if (err)  showNotification(d.result || 'ไม่รู้จักบัตร','error');
+      else           showNotification(d.result, 'info');
+    }
+  }
+  const pb = $('pendingBadge');
+  if (d.unsent > 0)       { pb.textContent = d.unsent+' รอ'; pb.className = 'lh-badge has'; }
+  else if (d.pending > 0) { pb.textContent = 'ส่งหมด';       pb.className = 'lh-badge sent'; }
+  else                    { pb.textContent = '0';             pb.className = 'lh-badge'; }
+}
+
+// ── Reset flow ──────────────────────────────────────────────────────────
+function onResetMode()  { fetch('/mode?set=5').then(r=>r.json()).then(syncUI); }
+function confirmReset() {
+  fetch('/confirm_reset').then(r=>r.json()).then(() => {
+    showNotification('แตะบัตรภายใน 30 วินาทีเพื่อรีเซ็ต','info');
+    $('confirmBox').style.display = 'none';
+  });
+}
+function cancelReset() {
+  fetch('/mode?set=2').then(r=>r.json()).then(syncUI);
+  showNotification('ยกเลิกรีเซ็ตแล้ว','info');
+}
+
+// ── Bind ───────────────────────────────────────────────────────────────
+function submitBind() {
+  const id = $('bindStudentId').value.trim();
+  if (!id) { showNotification('กรุณากรอกรหัสนักเรียน','error'); return; }
+  fetch('/set_student?id='+encodeURIComponent(id))
+    .then(r=>r.json())
+    .then(d=>showNotification(d.msg||'พร้อม! แตะบัตรเพื่ออัพ','info'));
+}
+
+// ── Test Buttons ────────────────────────────────────────────────────────
+function testBtnAction(id, route, msg) {
+  const btn = $(id); btn.classList.add('loading');
+  fetch(route).then(r=>r.json()).then(() => {
+    btn.classList.remove('loading');
+    showNotification(msg, 'info');
+  }).catch(() => btn.classList.remove('loading'));
+}
+function testLED()     { testBtnAction('testLedBtn', '/test_led',     'LED กระพริบ 3 ครั้ง'); }
+function testSpeaker() { testBtnAction('testSpkBtn', '/test_speaker', 'Pass → Fail'); }
+function testOLED()    { testBtnAction('testOledBtn','/test_oled',    'OLED แสดงข้อมูล'); }
+
+// ── Reload Cache ─────────────────────────────────────────────────────────
+function reloadCache() {
+  const btn = $('reloadBtn'); btn.classList.add('loading');
+  $('cacheCount').textContent = '…';
+  fetch('/reload').then(r=>r.json()).then(d => {
+    btn.classList.remove('loading');
+    if (d.ok) {
+      $('cacheCount').textContent  = d.count;
+      $('cacheCount2').textContent = d.count;
+      showNotification('โหลด cache สำเร็จ '+d.count+' บัตร','success');
+    } else {
+      $('cacheCount').textContent = '!';
+      showNotification('Reload ล้มเหลว','error');
+    }
+  }).catch(() => btn.classList.remove('loading'));
+}
+
+// ── Pending / Log Lists ───────────────────────────────────────────────────
+function refreshPending() {
+  fetch('/pending').then(r=>r.json()).then(items => {
+    const el = $('pendingList');
+    if (!items.length) { el.innerHTML='<div class=empty-log>ยังไม่มีรายการ</div>'; return; }
+    el.innerHTML = [...items].reverse().map(t => {
+      const col = t.sent?'#34d399':t.proc?'#60a5fa':'#fbbf24';
+      const lbl = t.sent?t.result||'ส่งแล้ว':t.proc?'กำลังส่ง...':'รอส่ง';
+      const ico = t.sent?'fa-circle-check':t.proc?'fa-spinner fa-spin':'fa-clock';
+      const cls = t.sent?'ok':t.proc?'':'warn';
+      return `<div class=si>
+        <div class=si-dot style="background:${col}"></div>
+        <div class=si-body>
+          <div class=si-name>${t.name||t.uid}</div>
+          <div class=si-uid><i class="fa-solid fa-fingerprint" style="margin-right:3px"></i>${t.uid}</div>
+        </div>
+        <div class=si-right>
+          <div class=si-time>${t.time}</div>
+          <div class="si-status ${cls}"><i class="fa-solid ${ico}" style="margin-right:3px"></i>${lbl.substring(0,22)}</div>
+        </div></div>`;
+    }).join('');
+  }).catch(()=>{});
+}
+
+function refreshLog() {
+  fetch('/log').then(r=>r.json()).then(items => {
+    $('logBadge').textContent = items.length||'—';
+    const el = $('logList');
+    if (!items.length) { el.innerHTML='<div class=empty-log>ยังไม่มีรายการ</div>'; return; }
+    el.innerHTML = items.map(t => {
+      const ok  = t.result?.includes('✅')||t.result?.includes('เช็ค')||t.result?.includes('สำเร็จ');
+      const err = t.result?.includes('❌');
+      const cls = ok?'ok':err?'err':'warn';
+      return `<div class=si>
+        <div class=si-dot style="background:${ok?'#34d399':err?'#f87171':'#fbbf24'}"></div>
+        <div class=si-body>
+          <div class="si-name ${cls}">${t.name||t.uid}</div>
+          <div class=si-uid><i class="fa-solid fa-fingerprint" style="margin-right:3px"></i>${t.uid}</div>
+        </div>
+        <div class=si-right>
+          <div class=si-time>${t.time}</div>
+          <div class="si-status ${cls}">${(t.result||'').substring(0,22)}</div>
+        </div></div>`;
+    }).join('');
+  }).catch(()=>{});
+}
+
+// ── Polling ───────────────────────────────────────────────────────────────
+// อัพเดต UI ทุก 1.2 วินาที
+setInterval(() => {
+  fetch('/status').then(r=>r.json()).then(syncUI)
+    .catch(() => $('scanStatus').textContent = 'ออฟไลน์');
+}, 1200);
+// รีเฟรช pending+log ทุก 1.5 วินาที
+setInterval(() => { refreshPending(); refreshLog(); }, 1500);
+refreshPending(); refreshLog();
+</script>
+</body></html>

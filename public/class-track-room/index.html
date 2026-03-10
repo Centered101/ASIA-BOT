@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="th">
+
+<head>
+    <title>Class Track Room</title>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+    <meta name="theme-color" content="#84D4FA">
+    <meta name="keywords"
+        content="HTML, CSS, XML, JavaScript, TailwindCSS, jQuery, แบบประเมิน, โครงงาน, Student-Entry-Scanner, Class-Track-Room, Centered101">
+    <meta name="author" content="Centered101">
+    <meta name="description"
+        content="ระบบ Class-Track-Room สำหรับเช็กสถานะห้องแบบเรียลไทม์ ดูได้ทันทีว่าห้องว่าง ไม่ว่าง หรือปิดให้บริการ พร้อมมาสคอตแสดงสถานะแบบเข้าใจง่าย ใช้งานรวดเร็วและแม่นยำ.">
+
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://asia-lb.web.app">
+    <meta property="og:title" content="Class Track Room">
+    <meta property="og:description"
+        content="ระบบ Class-Track-Room สำหรับเช็กสถานะห้องแบบเรียลไทม์ ดูได้ทันทีว่าห้องว่าง ไม่ว่าง หรือปิดให้บริการ พร้อมมาสคอตแสดงสถานะแบบเข้าใจง่าย ใช้งานรวดเร็วและแม่นยำ.">
+    <meta property="og:image" content="/favicon.ico">
+
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://asia-lb.web.app">
+    <meta property="twitter:title" content="Class Track Room">
+    <meta property="twitter:description"
+        content="ระบบ Class-Track-Room สำหรับเช็กสถานะห้องแบบเรียลไทม์ ดูได้ทันทีว่าห้องว่าง ไม่ว่าง หรือปิดให้บริการ พร้อมมาสคอตแสดงสถานะแบบเข้าใจง่าย ใช้งานรวดเร็วและแม่นยำ.">
+    <meta property="twitter:image" content="/favicon.ico">
+
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="stylesheet" href="/style/index.css">
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+</head>
+
+<body class="min-h-screen bg-gray-50 text-gray-800 antialiased" draggable="false" oncontextmenu="return false">
+
+    <!-- Preloader -->
+    <div id="preloader"
+        class="bg-stripes-gray visible touch-none min-h-screen fixed inset-0 flex items-center justify-center text-center bg-gray-50 z-50">
+        <span class="spinner animate-spin size-80 fixed border-8" style="animation-duration: 1s;"></span>
+        <div
+            class="size-80 flex flex-col items-center justify-center gap-2 bg-[color:var(--white-smoker)] rounded-full shadow">
+            <img src="/favicon.ico" onerror="this.src='https://asia-lb.firebaseapp.com/images/favicon.svg'" alt="logo"
+                class="size-16 fa-bounce drop-shadow" draggable="false">
+            <h2 class="text-xl sm:text-2xl">กำลังโหลด</h2>
+            <p class="text-sm sm:text-base text-gray-600">
+                การผจญภัยของคุณกำลังจะเริ่มต้น
+            </p>
+        </div>
+        <div class="bg-blob" style="width:520px;height:520px;background:var(--primary-color);top:-120px;right:-170px;">
+        </div>
+        <div class="bg-blob" style="width:420px;height:420px;background:var(--primary-dark);bottom:-110px;left:-130px;">
+        </div>
+    </div>
+
+    <!-- Decorative blobs -->
+    <div class="bg-blob" style="width:520px;height:520px;background:var(--primary-color);top:-120px;right:-170px;">
+    </div>
+    <div class="bg-blob" style="width:420px;height:420px;background:var(--primary-dark);bottom:-110px;left:-130px;">
+    </div>
+
+    <!-- Top Navigation -->
+    <header data-aos="fade-down" class="sticky top-0 bg-white-smoker border shadow z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="h-16 flex justify-between items-center">
+                <a href="/" onclick="window.scrollTo({ top: 0, behavior: 'smooth' })"
+                    class="ripple-effect flex flex items-center gap-2 rounded">
+                    <div
+                        class="size-10 sm:size-12 flex items-center justify-center bg-primary rounded-md text-white font-bold">
+                        <img class="size-8" src="/favicon.ico"
+                            onerror="this.src='https://asia-lb.firebaseapp.com/images/favicon.svg'" alt="logo">
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="font-bold text-base sm:text-lg pr-2">ASIA-LB</span>
+                        <span class="text-xs text-gray-600">Class-Track-Room</span>
+                    </div>
+                </a>
+                <nav id="main-nav" class="hidden md:flex items-center gap-4 text-sm sm:text-base">
+                </nav>
+                <button class="ripple-effect md:hidden bg-gray-50 border rounded-md shadow-inner p-2 focus:outline-none"
+                    aria-label="open menu">
+                    <svg class="size-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 6h16M4 12h16M4 18h16"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero -->
+    <main class="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 pt-12 overflow-x-hidden">
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+            <div class="lg:col-span-2">
+                <div data-aos="fade-right" class="block bg-white-smoker border rounded-2xl shadow p-4 md:p-6">
+
+                    <!-- โลโก้โรงเรียน -->
+                    <div class="mb-4">
+                        <h1 class="text-3xl sm:text-4xl font-extrabold leading-tight">
+                            ระบบ <span class="text-[color:var(--green)]">Class</span> <span
+                                class="text-[color:var(--red)]">Track</span> <span
+                                class="text-[color:var(--brue)]">Room</span>
+                        </h1>
+                        <p class="text-base sm:text-lg text-gray-600">
+                            ระบบเช็กสถานะห้องเรียนแบบเรียลไทม์
+                        </p>
+                    </div>
+
+                    <!-- อธิบายระบบ -->
+                    <p class="text-sm sm:text-base text-gray-600 mt-4">
+                        ระบบนี้ถูกสร้างขึ้นเพื่อช่วยให้ครู นักศึกษา และเจ้าหน้าที่ สามารถตรวจสอบ
+                        <span class="font-medium text-gray-800">สถานะการใช้งานของห้องเรียนแบบเรียลไทม์</span>
+                        ว่าห้องไหนกำลังใช้งาน ว่าง อยู่ระหว่างการเรียน หรือถูกจองไว้สำหรับกิจกรรมต่าง ๆ
+                        โดยข้อมูลทั้งหมดจะอัปเดตอัตโนมัติผ่านระบบหลังบ้าน
+                        เพื่อความแม่นยำและสะดวกในการจัดการห้องเรียนในทุกช่วงเวลา.
+                    </p>
+
+                    <!-- ปุ่มเรียกดูโครงงาน / เกี่ยวกับเว็บไซต์ -->
+                    <div class="flex flex-col sm:flex-row gap-2 text-sm sm:text-base mt-6">
+                        <button onclick="window.location.href='/project-5/'"
+                            class="btn-primary flex items-center justify-center gap-2 overflow-hidden">
+                            ทำแบบประเมินความพึงพอใจ Class Track Room
+                        </button>
+                        <button onclick="document.querySelector('#docs').scrollIntoView()"
+                            class="btn-outline flex items-center justify-center gap-2 overflow-hidden">
+                            เกี่ยวกับเว็บไซต์
+                        </button>
+                    </div>
+
+                    <!-- วัตถุประสงค์ / เป้าหมาย -->
+                    <div class="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="bg-gray-50 border rounded-lg shadow-inner p-2 sm:p-4">
+                            <h3 class="text-sm sm:text-base font-bold">วัตถุประสงค์</h3>
+                            <p class="text-xs sm:text-sm text-gray-600 mt-2">
+                                เพื่อให้ผู้ใช้สามารถตรวจสอบห้องเรียนที่กำลังใช้งานหรือว่างได้ทันที ลดปัญหาการจองซ้ำซ้อน
+                                และช่วยให้การวางแผนใช้ห้องเรียนเป็นไปอย่างมีประสิทธิภาพมากขึ้น.
+                            </p>
+                        </div>
+
+                        <div class="bg-gray-50 border rounded-lg shadow-inner p-2 sm:p-4">
+                            <h3 class="text-sm sm:text-base font-bold">ฟีเจอร์หลัก</h3>
+                            <p class="text-xs sm:text-sm text-gray-600 mt-2">
+                                แสดงสถานะห้องแบบเรียลไทม์, อัปเดตอัตโนมัติ, รองรับหลายอาคาร,
+                                ดูประวัติการใช้งาน, ระบบแจ้งเตือนการเปลี่ยนแปลงสถานะ,
+                                และรองรับการขยายสู่การใช้งานโรงเรียนอื่นในอนาคต.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white-smoker flex items-center justify-between gap-2 pt-4">
+                        <div class="min-w-max flex items-center gap-1 text-sm sm:text-base">
+                            <span class="bg-[color:var(--green)] border rounded p-2"></span>
+                            <p>
+                                ห้องว่าง
+                            </p>
+                        </div>
+                        <span class="w-full border border-b"></span>
+                        <div class="min-w-max flex items-center gap-1 text-sm sm:text-base">
+                            <span class="bg-[color:var(--red)] border rounded p-2"></span>
+                            <p>
+                                ห้องไม่ว่าง
+                            </p>
+                        </div>
+                        <span class="w-full border border-b"></span>
+                        <div class="min-w-max flex items-center gap-1 text-sm sm:text-base">
+                            <span class="bg-[color:var(--brue)] border rounded p-2"></span>
+                            <p>
+                                ปิดให้บริการแล้ว
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Status Overview -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8">
+                        <div class="bg-gray-50 border rounded-lg shadow-inner overflow-hidden">
+                            <h3 class="text-sm sm:text-base font-bold border-b p-2 sm:p-4">สถานะห้องเรียน</h3>
+                            <div id="statusOverview"
+                                class="flex flex-col items-center space-y-2 p-2 sm:p-4 select-none">
+                                <div class="w-full flex items-center justify-between">
+                                    <span class="text-xs sm:text-sm">กำลังโหลดข้อมูล...</span>
+                                    <span class="spinner animate-spin size-4 border-2 rounded-full"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-gray-50 border rounded-lg shadow-inner overflow-hidden">
+                            <h3 class="text-sm sm:text-base font-bold border-b p-2 sm:p-4">สถานะอาจารย์</h3>
+                            <div id="teacherStatus" class="flex flex-col items-center space-y-2 p-2 sm:p-4 select-none">
+                                <div class="w-full flex items-center justify-between">
+                                    <span class="text-xs sm:text-sm">กำลังโหลดข้อมูล...</span>
+                                    <span class="spinner animate-spin size-4 border-2 rounded-full"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <aside data-aos="fade-left" class="block">
+                <div class="sticky top-24 bg-white-smoker border rounded-2xl shadow p-4 md:p-6 overflow-hidden">
+                    <h5 class="text-sm sm:text-base font-bold">ลิงก์ด่วน</h5>
+
+                    <!-- JS จะ render ตรงนี้ -->
+                    <ul id="quick-links" class="text-xs sm:text-sm pt-2 sm:mt-4"></ul>
+                </div>
+            </aside>
+        </section>
+
+        <!-- Projects -->
+        <div id="roomContainer" data-aos="zoom-in-up"
+            class="bg-white-smoker border rounded-2xl shadow my-12 sm:my-24 p-4 md:p-6">
+            <span class="flex flex-wrap items-center justify-between gap-2 mb-4">
+                <h2 class="text-3xl sm:text-4xl font-extrabold leading-tight">
+                    ห้องเรียน
+                </h2>
+                <p id="bate-time" class="text-xs sm:text-sm"></p>
+            </span>
+            <div id="roomCardsContainer" class="grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-4 md:gap-6">
+                <!-- Room cards will be inserted here -->
+                <div class="col-span-full text-center space-y-4 py-24">
+                    <span class="spinner animate-spin size-16 border-8 mx-auto"></span>
+                    <p class="text-gray-600">
+                        กำลังโหลดข้อมูลห้องเรียน...
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Docs -->
+        <section id="docs" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-2">
+                <div data-aos="fade-right" class="bg-white-smoker border rounded-2xl shadow p-4 md:p-6">
+
+                    <h2 class="text-3xl sm:text-4xl font-extrabold leading-tight">
+                        เกี่ยวกับระบบเช็กสถานะห้องเรียนแบบเรียลไทม์
+                    </h2>
+
+                    <p class="text-sm sm:text-base text-gray-600 leading-relaxed pt-4">
+                        ระบบเช็กสถานะห้องเรียนแบบเรียลไทม์ถูกพัฒนาเพื่อช่วยให้ครูและนักศึกษาตรวจสอบ
+                        <span class="font-bold">สถานะการใช้งานของห้องเรียน</span> ได้ทันทีทั้งห้องว่าง
+                        ห้องกำลังเรียน หรือห้องถูกจองไว้
+                        โดยข้อมูลจะอัปเดตแบบ <span class="font-bold">Real-Time</span> ผ่าน Dashboard กลาง.
+                    </p>
+
+                    <p class="text-sm sm:text-base text-gray-600 leading-relaxed">
+                        ระบบนี้ถูกสร้างด้วย
+                        <span class="font-bold">HTML</span>,
+                        <span class="font-bold">CSS</span>,
+                        <span class="font-bold">Tailwind CSS</span>,
+                        <span class="font-bold">JavaScript</span> และ
+                        <span class="font-bold">jQuery</span>
+                        เพื่อให้ใช้งานง่าย ลื่น และรองรับทุกอุปกรณ์ทั้งมือถือ แท็บเล็ต และคอมพิวเตอร์.
+                    </p>
+
+                    <p class="text-sm sm:text-base text-gray-600 leading-relaxed">
+                        สถานะห้องทั้งหมดดึงข้อมูลจาก
+                        <span class="font-bold">Google Sheets</span>
+                        ที่ทำหน้าที่เป็นฐานข้อมูลกลาง
+                        ระบบจะอ่านข้อมูลสถานะห้อง เช่น "ใช้งานอยู่" "ว่าง" หรือ "ไม่พร้อมใช้งาน"
+                        และนำมาแสดงผลบนหน้าเว็บแบบอัตโนมัติทันทีที่มีการอัปเดต.
+                    </p>
+
+                    <p class="text-sm sm:text-base text-gray-600 leading-relaxed mt-4">
+                        ระบบสามารถนำไปประยุกต์ใช้กับโรงเรียนหรือสถาบันอื่นได้
+                        โดยผู้พัฒนาจะดูแลระบบต้นฉบับและจัดการการตั้งค่าหลักให้ทั้งหมด
+                        เพื่อให้การใช้งานมีความถูกต้องและเสถียรเหมือนเวอร์ชันหลักที่ใช้ในวิทยาลัยเทคโนโลยีเอเชียลพบุรี.
+                    </p>
+
+                </div>
+            </div>
+
+            <aside data-aos="fade-left" class="block">
+                <div class="bg-white-smoker border rounded-2xl shadow space-y-2 p-4 md:p-6">
+                    <h3 class="text-sm sm:text-base font-bold">ทีมผู้พัฒนา</h3>
+                    <div id="team"
+                        class="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] lg:flex lg:flex-col gap-4">
+                        <div id="loadingTeam"
+                            class="col-span-full w-full flex flex-col items-center justify-center space-y-2">
+                            <span class="spinner animate-spin size-16 border-8 mb-4">
+                            </span>
+                            <p class="text-sm sm:text-base text-gray-600">
+                                กำลังตามล่าทีมผู้พัฒนา... แม่งหายไปไหนอีกละ
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </section>
+        <!-- Footer -->
+        <footer></footer>
+    </main>
+
+    <!-- Modal -->
+    <div id="roomModal" class="hidden fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 p-4 z-50"
+        onclick="closeModal(event)">
+        <div class="bg-white-smoker border rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-y-auto"
+            onclick="event.stopPropagation()">
+            <div class="sticky top-0 bg-white-smoker border-b flex items-center justify-between p-6 z-10">
+                <h3 id="modalTitle" class="text-xl sm:text-2xl font-bold"></h3>
+                <button onclick="closeModal()"
+                    class="text-gray-500 hover:text-gray-700 text-3xl leading-none">&times;</button>
+            </div>
+            <div id="modalContent" class="p-4 sm:p-6">
+                <!-- Content will be inserted here -->
+            </div>
+        </div>
+    </div>
+    <script>
+        // ════════════════════════════════════════════════════════════════════════════════
+        // Date/Time Functions
+        // ════════════════════════════════════════════════════════════════════════════════
+
+        function updateDateTime() {
+            const now = new Date();
+
+            const THAI_DAYS = [
+                "วันอาทิตย์",
+                "วันจันทร์",
+                "วันอังคาร",
+                "วันพุธ",
+                "วันพฤหัสบดี",
+                "วันศุกร์",
+                "วันเสาร์"
+            ];
+
+            const THAI_MONTHS = [
+                "มกราคม",
+                "กุมภาพันธ์",
+                "มีนาคม",
+                "เมษายน",
+                "พฤษภาคม",
+                "มิถุนายน",
+                "กรกฎาคม",
+                "สิงหาคม",
+                "กันยายน",
+                "ตุลาคม",
+                "พฤศจิกายน",
+                "ธันวาคม"
+            ];
+
+            const dayName = THAI_DAYS[now.getDay()];
+            const day = now.getDate();
+            const month = THAI_MONTHS[now.getMonth()];
+            const year = now.getFullYear();
+
+            const hour = now.getHours().toString().padStart(2, '0');
+            const minute = now.getMinutes().toString().padStart(2, '0');
+            const second = now.getSeconds().toString().padStart(2, '0');
+
+            $('#bate-time').text(`${dayName} ที่ ${day} ${month} ${year}, ${hour}:${minute}:${second} น.`);
+        }
+
+        // ════════════════════════════════════════════════════════════════════════════════
+        // Initialize
+        // ════════════════════════════════════════════════════════════════════════════════
+
+        $(document).ready(function () {
+            // อัพเดทเวลาทันทีและทุกๆ 1 วินาที
+            updateDateTime();
+            setInterval(updateDateTime, 1000);
+
+            // อัพเดทสถานะห้อง
+            updateRoomStatus();
+            setInterval(updateRoomStatus, REFRESH_INTERVAL);
+
+            // Close modal with ESC key
+            $(document).on('keydown', function (e) {
+                if (e.key === 'Escape') {
+                    closeModal();
+                }
+            });
+        });
+
+        // ════════════════════════════════════════════════════════════════════════════════
+        // Configuration
+        // ════════════════════════════════════════════════════════════════════════════════
+
+        const API_URL = 'https://script.google.com/macros/s/AKfycbyNkETx-13-U8LnXGxoS2ReJsaZki9ce-kfYm2Q0ThRCzQEk6qIe0eDHPovydZdMzwhUg/exec';
+        const REFRESH_INTERVAL = 10000; // 10 seconds
+
+        const MASCOT_CONFIG = {
+            'ว่าง': '../images/mascot-greens.svg',
+            'ไม่ว่าง': '../images/mascot-reds.svg',
+            'ปิดให้บริการ': '../images/mascot-blues.svg'
+        };
+
+        let currentData = null;
+
+        // ════════════════════════════════════════════════════════════════════════════════
+        // API Functions
+        // ════════════════════════════════════════════════════════════════════════════════
+
+        function updateRoomStatus() {
+            $.ajax({
+                url: API_URL + '?action=getStatus',
+                method: 'GET',
+                dataType: 'json',
+                success: function (data) {
+                    currentData = data;
+                    updateStatusOverview(data);
+                    updateTeacherStatus(data);
+                    renderRoomCards(data);
+                },
+                error: function (error) {
+                    console.error('Error fetching room status:',
+                        error);
+                    showError();
+                }
+            });
+        }
+
+        // ════════════════════════════════════════════════════════════════════════════════
+        // Render Functions
+        // ════════════════════════════════════════════════════════════════════════════════
+
+        function updateStatusOverview(data) {
+            const $container = $('#statusOverview');
+            $container.empty();
+
+            if (!data.rooms) return;
+
+            data.rooms.forEach(room => {
+                const statusColor = getStatusColor(room.status);
+                const html = `
+            <div class="w-full flex items-center justify-between gap-2">
+            <span class="bg-[${statusColor}] border rounded p-2 px-4"></span>
+            <span class="w-full border border-b"></span>
+            <span class="min-w-max text-sm sm:text-base">${room.name}</span>
+            </div>
+            `;
+                $container.append(html);
+            });
+        }
+
+        function updateTeacherStatus(data) {
+            const $container = $('#teacherStatus');
+            $container.empty();
+
+            if (!data.rooms) return;
+
+            data.rooms.forEach(room => {
+                let teacherText = 'ห้องว่าง';
+
+                if (room.status === 'ปิดให้บริการ') {
+                    teacherText = 'ปิดให้บริการ';
+                } else if (room.teacher && room.teacher !== 'ว่าง') {
+                    teacherText = room.teacher;
+                }
+
+                const html = `
+            <div class="flex flex-row items-center justify-between gap-2 w-full">
+            <span class="text-sm sm:text-base">${room.name}</span>
+            <span class="text-xs sm:text-sm text-gray-600">${teacherText}</span>
+            </div>
+            `;
+                $container.append(html);
+            });
+        }
+
+        function renderRoomCards(data) {
+            const $container = $('#roomCardsContainer');
+            $container.empty();
+
+            if (!data.rooms) {
+                $container.html('<div class="col-span-full text-center text-red-600">ไม่สามารถโหลดข้อมูลได้</div>');
+                return;
+            }
+
+            data.rooms.forEach(room => {
+                const statusColor = getStatusColor(room.status);
+                const mascotImg = MASCOT_CONFIG[room.status] || '../images/mascot-green.svg';
+
+                let teacherHtml = '<span class="text-xs sm:text-sm font-bold">ห้องว่าง</span>';
+                if (room.status === 'ปิดให้บริการ') {
+                    teacherHtml = '<span class="text-xs sm:text-sm font-bold">ปิดให้บริการ</span>';
+                } else if (room.teacher && room.teacher !== 'ว่าง') {
+                    teacherHtml = `<span class="text-xs sm:text-sm font-bold" style="color: var(--red)">${room.teacher}</span>`;
+                }
+
+                const card = `
+            <div class="bg-gray-50 border rounded-2xl shadow-inner overflow-hidden">
+            <div class="w-full flex items-center justify-between gap-2 border-b p-4">
+            <span class="text-base sm:text-lg font-bold">${room.name}</span>
+            <span class="bg-[${statusColor}] border rounded p-2 px-4"></span>
+            </div>
+            <div class="space-y-4 p-2 sm:p-4">
+            <div class="grid grid-cols-2 gap-4">
+            <div class="flex flex-col gap-2">
+            ${teacherHtml}
+            ${room.extra ? `<p class="text-xs sm:text-sm text-gray-600">${room.extra}</p>` : ''}
+            ${room.description ? `<p class="text-xs text-gray-600">${room.description}</p>` : ''}
+            <button onclick="openRoomModal('${room.name}')" class="btn-text w-full text-xs text-primary flex items-center gap-2 mt-auto">
+            <span>ดูภาพรวมการใช้งาน</span>
+            </button>
+            </div>
+            <img src="${mascotImg}" onerror="this.style.display='none'" draggable="false" class="w-56 object-contain" alt="${room.status}">
+            </div>
+            </div>
+            </div>
+            `;
+
+                $container.append(card);
+            });
+        }
+
+        // ════════════════════════════════════════════════════════════════════════════════
+        // Modal Functions
+        // ════════════════════════════════════════════════════════════════════════════════
+
+        function openRoomModal(roomName) {
+            const room = currentData?.rooms.find(r => r.name === roomName);
+            if (!room) return;
+
+            const statusColor = getStatusColor(room.status);
+            const mascotImg = MASCOT_CONFIG[room.status] || '../favicon.ico';
+
+            let teacherInfo = 'ห้องว่าง';
+            if (room.status === 'ปิดให้บริการ') {
+                teacherInfo = 'ปิดให้บริการ';
+            } else if (room.teacher && room.teacher !== 'ว่าง') {
+                teacherInfo = room.teacher;
+            }
+
+            $('#modalTitle').text(roomName);
+            $('#modalContent').html(`
+            <div class="space-y-6">
+            <div class="flex items-center justify-center">
+            <img src="${mascotImg}" class="size-64 object-contain" alt="${room.status}">
+            </div>
+
+            <div class="bg-gray-50 border rounded-lg shadow-inner space-y-2 p-4">
+            <div class="flex items-center justify-between">
+            <span class="text-sm sm:text-base text-gray-600">สถานะ:</span>
+            <div class="flex items-center gap-2">
+            <span class="bg-[${statusColor}] border rounded p-2 px-4"></span>
+            <span class="font-bold">${room.status}</span>
+            </div>
+            </div>
+
+            <div class="flex items-center justify-between">
+            <span class="text-sm sm:text-base text-gray-600">อาจารย์:</span>
+            <span class="text-sm sm:text-base font-bold">${teacherInfo}</span>
+            </div>
+
+            ${room.extra ? `
+            <div class="flex items-center justify-between">
+            <span class="text-sm sm:text-base text-gray-600">ข้อมูลเพิ่มเติม:</span>
+            <span class="text-sm sm:text-base font-bold">${room.extra}</span>
+            </div>
+            `: ''}
+
+            ${room.description ? `
+            <div class="border-t pt-3">
+            <span class="text-sm sm:text-base text-gray-600">รายละเอียด:</span>
+            <p class="mt-2 text-xs sm:text-sm">${room.description}</p>
+            </div>
+            `: ''}
+            </div>
+            </div>
+            `);
+
+            $('#roomModal').fadeIn(300);
+        }
+
+        function closeModal(event) {
+            if (!event || event.target.id === 'roomModal' || event.type === 'click') {
+                $('#roomModal').fadeOut(300);
+            }
+        }
+
+        // ════════════════════════════════════════════════════════════════════════════════
+        // Helper Functions
+        // ════════════════════════════════════════════════════════════════════════════════
+
+        function getStatusColor(status) {
+            if (status === 'ว่าง') return 'var(--green)';
+            if (status === 'ไม่ว่าง') return 'var(--red)';
+            if (status === 'ปิดให้บริการ') return 'var(--blue)';
+            return 'var(--default)';
+        }
+
+        function showError() {
+            $('#statusOverview, #teacherStatus').html(`
+            <div class="w-full flex items-center justify-between text-xs sm:text-sm text-red-500">
+            <span>ไม่สามารถโหลดข้อมูลได้</span>
+            <i class="fas fa-exclamation-triangle fa-beat"></i>
+            </div>
+            `);
+            $('#roomCardsContainer').html(`
+            <div class="col-span-full text-center text-sm sm:text-base text-red-500 space-y-4 py-24">
+            <i class="fas fa-exclamation-triangle fa-beat text-6xl"></i>
+            <p>เกิดข้อผิดพลาดในการโหลดข้อมูล</p>
+            </div>
+            `);
+        }
+    </script>
+    <script defer src=../script/index.js></script>
+</body>
+
+</html>

@@ -1,0 +1,1459 @@
+<!doctype html>
+<html lang="th">
+
+<head>
+    <title>บัตรนักเรียน</title>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+    <meta name="theme-color" content="#84D4FA">
+    <meta name="description" content="บัตรประจำตัวนักเรียน">
+
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="stylesheet" href="/style/index.css">
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+
+    <script src="/script/index.js" defer></script>
+    <script src="/config-students.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script>
+        (function () {
+            const o = CSSStyleDeclaration.prototype.setProperty; CSSStyleDeclaration.prototype.setProperty = function (p, v, r) {
+                if (p === undefined || v === undefined) return; return o.call(this, p, v, r);
+            };
+        })();
+    </script>
+    <style>
+        @import url(./style/index.css);
+
+        :root {
+            --primary-color: #84D4FA;
+            --primary-dark: #4DB8F5;
+            --primary-light: #EAF7FF;
+            --accent: #FE4040;
+            --success: #22c55e;
+            --gray-soft: #F8FAFC;
+            --secondary-color: #FF7070;
+            --white-smoker: #F5F5F5;
+            --default: #B2B2B2;
+            --green: #1ED760;
+            --red: #FF7070;
+            --brue: #3B82F6;
+        }
+
+        body {
+            position: relative;
+            font-family: "Kanit", "Bai Jamjuree", monospace;
+            font-weight: 600;
+            background: linear-gradient(135deg, #EAF7FF 0%, #F0F9FF 40%, #E0F2FE 100%);
+            transition: background 0.3s ease;
+            overflow: auto;
+            min-height: 100vh;
+        }
+
+        /* ── Background blobs ── */
+        .bg-blob {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: .18;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .bg-stripes-gray {
+            background-size: 10px 10px;
+            background-image: repeating-linear-gradient(45deg, var(--primary-color) 0, var(--primary-color) 1px, transparent 0, transparent 50%);
+        }
+
+        /* ══════════════════════════════════════════════
+   STUDENT ID CARD
+   ปวช → #84D4FA (ฟ้า)
+   ปวส → #FF7070 (แดง/ส้ม)
+══════════════════════════════════════════════ */
+        .id-card {
+            box-shadow: 0 16px 40px rgba(14, 165, 233, .35);
+            /* ปวช default */
+            background: linear-gradient(135deg, #0EA5E9 0%, #38BDF8 50%, #84D4FA 100%);
+            user-select: none;
+        }
+
+        .id-card.pvch {
+            background: linear-gradient(135deg, #38BDF8 0%, #7DD3FC 50%, #84D4FA 100%);
+            box-shadow: 0 16px 40px rgba(14, 165, 233, .35);
+        }
+
+        .id-card.pvs {
+            background: linear-gradient(135deg, #EF4444 0%, #F87171 50%, #FF7070 100%);
+            box-shadow: 0 16px 40px rgba(239, 68, 68, .40);
+        }
+
+        /* ── Decorative circles inside card ── */
+        .id-card::before {
+            content: '';
+            position: absolute;
+            top: -50px;
+            right: -50px;
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, .1);
+        }
+
+        .id-card::after {
+            content: '';
+            position: absolute;
+            bottom: -60px;
+            left: -30px;
+            width: 160px;
+            height: 160px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, .07);
+        }
+
+        .card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            position: relative;
+            z-index: 1;
+            margin-bottom: 14px;
+        }
+
+        .card-school {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 2.5px;
+            opacity: .8;
+            text-transform: uppercase;
+        }
+
+        .card-title {
+            font-size: 13px;
+            font-weight: 600;
+            margin-top: 2px;
+        }
+
+        .chip {
+            width: 40px;
+            height: 40px;
+        }
+
+        /* avatar */
+        .card-body {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            position: relative;
+            z-index: 1;
+            margin-bottom: 16px;
+        }
+
+        .avatar {
+            width: 58px;
+            height: 58px;
+            flex-shrink: 0;
+            background: rgba(255, 255, 255, .22);
+            border: 2.5px solid rgba(255, 255, 255, .5);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .card-name {
+            font-size: 18px;
+            font-weight: 700;
+            line-height: 1.1;
+        }
+
+        .card-nick {
+            font-size: 12px;
+            opacity: .8;
+            margin-top: 2px;
+        }
+
+        .card-id-num {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            letter-spacing: 3px;
+            font-weight: 700;
+            opacity: .9;
+            margin-top: 5px;
+        }
+
+        .card-footer {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            position: relative;
+            z-index: 1;
+        }
+
+        .grade-badge {
+            background: rgba(255, 255, 255, .2);
+            border: 1px solid rgba(255, 255, 255, .35);
+            border-radius: 20px;
+            padding: 3px 10px;
+            font-size: 13px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            backdrop-filter: blur(4px);
+        }
+
+        .card-dept {
+            font-size: 11px;
+            opacity: .75;
+            margin-top: 4px;
+        }
+
+        .status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #4ADE80;
+            box-shadow: 0 0 0 3px rgba(74, 222, 128, .3);
+            flex-shrink: 0;
+        }
+
+        .status-dot.inactive {
+            background: #F87171;
+            box-shadow: 0 0 0 3px rgba(248, 113, 113, .3);
+        }
+
+        /* ── QR Code ── */
+        .card-qr-wrap {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+
+        .card-qr-wrap #cardQR {
+            background: white;
+            border-radius: 6px;
+            padding: 4px;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, .2);
+            line-height: 0;
+        }
+
+        .card-qr-wrap #cardQR img,
+        .card-qr-wrap #cardQR canvas {
+            display: block;
+            border-radius: 3px;
+        }
+
+        .card-qr-label {
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: .5px;
+            opacity: .75;
+            text-transform: uppercase;
+        }
+
+        /* ══════════════════════════════════════════════
+   SESSION BANNER
+══════════════════════════════════════════════ */
+        .session-banner {
+            position: sticky;
+            top: 64px;
+            background: linear-gradient(90deg, #F0FDF4, #EFF6FF);
+            border-bottom: 1px solid #DCFCE7;
+            padding: 9px 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #166534;
+            z-index: 20;
+        }
+
+        .session-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #22C55E;
+            box-shadow: 0 0 0 3px rgba(34, 197, 94, .25);
+            flex-shrink: 0;
+        }
+
+        /* ══════════════════════════════════════════════
+   PROFILE LAYOUT (2-column)
+══════════════════════════════════════════════ */
+        .profile-layout {
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
+        }
+
+        @media (min-width: 768px) {
+            .profile-layout {
+                flex-direction: row;
+                align-items: flex-start;
+                gap: 16px;
+            }
+
+            .profile-col-card {
+                flex: 0 0 440px;
+            }
+
+            .profile-col-info {
+                flex: 1;
+            }
+        }
+
+        .profile-section-label {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: .8px;
+            color: #64748B;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .profile-section-label i {
+            color: var(--primary-dark);
+        }
+
+        .card-hint {
+            margin-top: 10px;
+            font-size: 11px;
+            color: #94A3B8;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            justify-content: center;
+        }
+
+        .card-hint i {
+            color: #84D4FA;
+        }
+
+        /* ══════════════════════════════════════════════
+   INFO ROWS
+══════════════════════════════════════════════ */
+        .info-section {
+            background: var(--gray-soft);
+            border-radius: 16px;
+            padding: 14px;
+            border: 1px solid #F1F5F9;
+        }
+
+        .info-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 0;
+            border-bottom: 1px solid #F1F5F9;
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-icon {
+            color: #CBD5E1;
+            font-size: 12px;
+            width: 16px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .info-label {
+            font-size: 12px;
+            color: #94A3B8;
+            font-weight: 500;
+            min-width: 95px;
+        }
+
+        .info-value {
+            font-family: 'Sarabun', 'Bai Jamjuree', monospace;
+            font-size: 14px;
+            color: #1E293B;
+            font-weight: 600;
+            flex: 1;
+        }
+
+        .info-value.hl {
+            color: #0EA5E9;
+        }
+
+        /* ปวช */
+        .info-value.hl-v {
+            color: #EF4444;
+        }
+
+        /* ปวส */
+
+        /* ══════════════════════════════════════════════
+   MODAL
+══════════════════════════════════════════════ */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 999;
+            background: rgba(15, 23, 42, .45);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .25s;
+        }
+
+        .modal-overlay.open {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .modal-sheet {
+            background: white;
+            border-radius: 24px 24px 0 0;
+            width: 100%;
+            max-width: 480px;
+            padding: 0 0 28px;
+            transform: translateY(100%);
+            transition: transform .35s cubic-bezier(.34, 1.1, .64, 1);
+            max-height: 92vh;
+            overflow-y: auto;
+        }
+
+        .modal-overlay.open .modal-sheet {
+            transform: translateY(0);
+        }
+
+        .modal-handle {
+            width: 40px;
+            height: 4px;
+            background: #E2E8F0;
+            border-radius: 2px;
+            margin: 12px auto 0;
+        }
+
+        .modal-header {
+            gap: 10px;
+            align-items: center;
+            display: flex;
+            background: #FFF;
+            border-bottom: 1px solid #F1F5F9;
+            padding: 16px 16px 14px;
+        }
+
+        .modal-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            flex-shrink: 0;
+        }
+
+        .modal-body {
+            padding: 20px 16px 0;
+        }
+
+        /* mini inputs */
+        .mini-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: #64748B;
+            margin-bottom: 5px;
+            display: block;
+        }
+
+        .mini-input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1.5px solid #E2E8F0;
+            border-radius: 10px;
+            font-family: 'Sarabun', 'Bai Jamjuree', monospace;
+            font-size: 14px;
+            background: var(--gray-soft);
+            color: #1E293B;
+            outline: none;
+            transition: all .2s;
+        }
+
+        .mini-input:focus {
+            border-color: var(--primary-color);
+            background: white;
+            box-shadow: 0 0 0 3px rgba(132, 212, 250, .18);
+        }
+
+        .mini-input:disabled {
+            background: #F8FAFC;
+            color: #94A3B8;
+            cursor: not-allowed;
+        }
+
+        .mini-input.error {
+            border-color: #FCA5A5;
+            background: #FFF5F5;
+        }
+
+        /* parent modal rows */
+        .parent-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 0;
+            border-bottom: 1px solid #F8FAFC;
+        }
+
+        .parent-row:last-child {
+            border-bottom: none;
+        }
+
+        .parent-icon {
+            color: #CBD5E1;
+            font-size: 13px;
+            width: 18px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .parent-label {
+            font-size: 12px;
+            color: #94A3B8;
+            font-weight: 500;
+            min-width: 80px;
+        }
+
+        .parent-value {
+            font-family: 'Sarabun', 'Bai Jamjuree', monospace;
+            font-size: 14px;
+            color: #1E293B;
+            font-weight: 600;
+        }
+
+        .parent-empty {
+            color: #CBD5E1;
+            font-style: italic;
+            font-size: 13px;
+        }
+
+        /* save btn */
+        .btn-save {
+            border: none;
+            padding: 12px 20px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 500;
+            background: linear-gradient(135deg, #84D4FA, #4DB8F5);
+            color: white;
+            box-shadow: 0 4px 14px rgba(77, 184, 245, .38);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            width: 100%;
+            transition: all .2s;
+        }
+
+        .btn-save:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(77, 184, 245, .48);
+        }
+
+        .btn-save:disabled {
+            opacity: .65;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* ── Animations ── */
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes shake {
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            20% {
+                transform: translateX(-7px);
+            }
+
+            40% {
+                transform: translateX(7px);
+            }
+
+            60% {
+                transform: translateX(-4px);
+            }
+
+            80% {
+                transform: translateX(4px);
+            }
+        }
+
+        .shake {
+            animation: shake .38s ease;
+        }
+
+        /* ══════════════════════════════════════════════
+   RESPONSIVE FONT UTILITIES  (ใช้ได้ทุกหน้า)
+   แทน class แบบยาว เช่น "text-xs sm:text-sm"
+   ด้วย class เดียว เช่น "fs-sm"
+   ชื่อ class = ขนาดที่แสดงบน sm+ ขึ้นไป
+══════════════════════════════════════════════ */
+        .fs-xs {
+            font-size: 0.5rem;
+        }
+
+        /* 8px  → 10px */
+        .fs-sm {
+            font-size: 0.75rem;
+        }
+
+        /* 12px → 14px */
+        .fs-base {
+            font-size: 0.875rem;
+        }
+
+        /* 14px → 16px */
+        .fs-lg {
+            font-size: 1rem;
+        }
+
+        /* 16px → 18px */
+        .fs-xl {
+            font-size: 1.125rem;
+        }
+
+        /* 18px → 20px */
+        .fs-2xl {
+            font-size: 1.25rem;
+        }
+
+        /* 20px → 24px */
+        .fs-3xl {
+            font-size: 1.5rem;
+        }
+
+        /* 24px → 30px */
+
+        @media (min-width: 640px) {
+            .fs-xs {
+                font-size: 0.625rem;
+            }
+
+            .fs-sm {
+                font-size: 0.875rem;
+            }
+
+            .fs-base {
+                font-size: 1rem;
+            }
+
+            .fs-lg {
+                font-size: 1.125rem;
+            }
+
+            .fs-xl {
+                font-size: 1.25rem;
+            }
+
+            .fs-2xl {
+                font-size: 1.5rem;
+            }
+
+            .fs-3xl {
+                font-size: 1.875rem;
+            }
+        }
+    </style>
+</head>
+
+<body draggable="false" oncontextmenu="return false">
+    <!-- Preloader -->
+    <div id="preloader"
+        class="bg-stripes-gray visible touch-none min-h-screen fixed inset-0 flex items-center justify-center text-center bg-gray-50 z-50">
+        <span class="spinner animate-spin size-80 fixed border-8" style="animation-duration: 1s;"></span>
+        <div
+            class="size-80 flex flex-col items-center justify-center gap-2 bg-[color:var(--white-smoker)] rounded-full shadow">
+            <img src="/favicon.ico" onerror="this.src='https://asia-lb.firebaseapp.com/images/favicon.svg'" alt="logo"
+                class="size-16 fa-bounce drop-shadow" draggable="false">
+            <h2 class="text-xl sm:text-2xl">กำลังโหลด</h2>
+            <p class="text-sm sm:text-base text-gray-600">
+                การผจญภัยของคุณกำลังจะเริ่มต้น
+            </p>
+        </div>
+        <div class="bg-blob" style="width:520px;height:520px;background:var(--primary-color);top:-120px;right:-170px;">
+        </div>
+        <div class="bg-blob" style="width:420px;height:420px;background:var(--primary-dark);bottom:-110px;left:-130px;">
+        </div>
+    </div>
+
+    <!-- Decorative blobs -->
+    <div class="bg-blob" style="width:520px;height:520px;background:var(--primary-color);top:-120px;right:-170px;">
+    </div>
+    <div class="bg-blob" style="width:420px;height:420px;background:var(--primary-dark);bottom:-110px;left:-130px;">
+    </div>
+
+    <!-- Top Navigation -->
+    <header data-aos="fade-down" class="sticky top-0 bg-white-smoker border shadow z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="h-16 flex justify-between items-center">
+                <a href="/" onclick="window.scrollTo({ top: 0, behavior: 'smooth' })"
+                    class="ripple-effect flex flex items-center gap-2 rounded">
+                    <div
+                        class="size-10 sm:size-12 flex items-center justify-center bg-primary rounded-md text-white font-bold">
+                        <img class="size-8" src="/favicon.ico"
+                            onerror="this.src='https://asia-lb.firebaseapp.com/images/favicon.svg'" alt="logo">
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="font-bold fs-base pr-2">ASIA-LB</span>
+                        <span class="text-xs text-gray-600">ระบบนักเรียน</span>
+                    </div>
+                </a>
+                <nav id="main-nav" class="hidden md:flex items-center gap-4 fs-base">
+                </nav>
+                <button class="ripple-effect md:hidden bg-gray-50 border rounded-md shadow-inner p-2 focus:outline-none"
+                    aria-label="open menu">
+                    <svg class="size-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 6h16M4 12h16M4 18h16">
+                        </path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
+    <!-- Session Banner -->
+    <div data-aos="fade-down" data-aos-delay="3000" class="session-banner">
+        <div class="session-dot"></div>
+        <span>เข้าสู่ระบบในชื่อ</span>
+        <span id="sessionName" class="font-semibold"></span>
+        <span id="sessionTime" class="ml-auto text-green-600" style="font-size:11px;opacity:.7;"></span>
+    </div>
+
+    <!-- Main: 2-column layout -->
+    <main class="max-w-5xl mx-auto px-2 py-8 pb-16">
+        <div class="profile-layout">
+
+            <!-- ── LEFT: ID Card ── -->
+            <div class="profile-col-card">
+                <p data-aos="fade-up" data-aos-delay="700" class="profile-section-label">
+                    <i class="fa-solid fa-id-card"></i> บัตรประจำตัวนักเรียน
+                </p>
+
+                <!-- ID Card -->
+                <div data-aos="fade-up" data-aos-delay="1000"
+                    class="id-card relative w-full text-white rounded-2xl p-5 pb-10 overflow-hidden" id="idCard">
+                    <div class="card-top">
+                        <div>
+                            <div class="card-school">
+                                ASIA-LB
+                            </div>
+                            <div class="card-title">
+                                บัตรประจำตัวนักเรียน
+                            </div>
+                        </div>
+                        <!-- Chip SVG -->
+                        <svg class="chip size-10" version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50">
+                            <image width="50" height="50" x="0" y="0"
+                                href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAMAAAAp4XiDAAAABGdBTUEAALGPC/xhBQAAACBjSFJNAAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAB6VBMVEUAAACNcTiVeUKVeUOYfEaafEeUeUSYfEWZfEaykleyklaXe0SWekSZZjOYfEWYe0WXfUWXe0WcgEicfkiXe0SVekSXekSWekKYe0a9nF67m12ZfUWUeEaXfESVekOdgEmVeUWWekSniU+VeUKVeUOrjFKYfEWliE6WeESZe0GS e0WYfES7ml2Xe0WXeESUeEOWfEWcf0eWfESXe0SXfEWYekSVeUKXfEWxklawkVaZfEWWekOUekOWekSYfESZe0eXekWYfEWZe0WZe0eVeUSWeETAnmDCoWLJpmbxy4P1zoXwyoLIpWbjvXjivnjgu3bfu3beunWvkFWxkle/nmDivXiWekTnwXvkwHrCoWOuj1SXe0TEo2TDo2PlwHratnKZfEbQrWvPrWuafUfbt3PJp2agg0v0zYX0zYSfgkvKp2frxX7mwHrlv3rsxn/yzIPgvHfduXWXe0XuyIDzzISsjVO1lVm0lFitjVPzzIPqxX7duna0lVncuHTLqGjvyIHeuXXxyYGZfUayk1iyk1e2lln1zYTEomO2llrb tnOafkjFpGSbfkfZtXLhvHfkv3nqxH3mwXujhU3KqWizlFilh06khk2fgkqsjlPHpWXJp2erjVOhg0yWe0SliE+XekShhEvAn2D///+gx8TWAAAARnRSTlMACVCTtsRl7Pv7+vxkBab7pZv5+ZlL/UnU/f3SJCVe+Fx39naA9/75XSMh0/3SSkia+pil/KRj7Pr662JPkrbP7OLQ0JFOijI1MwAAAAFiS0dEorDd34wAAAAJcEhZcwAACxMAAAsTAQCanBgAAAAHdElNRQfnAg0IDx2lsiuJAAACLElEQVRIx2NgGAXkAUYmZhZWPICFmYkRVQcbOwenmzse4MbFzc6DpIGXj8PD04sA8PbhF+CFaxEU8iWkAQT8hEVgOkTF/InR4eUVICYO1SIhCRMLDAoKDvFDVhUaEhwUFAjjSUlDdMiEhcOEItzdI6OiYxA6YqODIt3dI2DcuDBZsBY5eVTr4xMSYcyk5BRUOXkFsBZFJTQnp6alQxgZmVloUkrKYC0qqmji2WE5EEZuWB6alKoKdi35YQUQRkFYPpFaCouKIYzi6EDitJSUlsGY5RWVRGjJLyxNy4ZxqtIqqvOxaVELQwZFZdkIJVU1RSiSalAt6rUwUBdWG1CP6pT6gNqwOrgCdQyHNYR5YQFhDXj8MiK1IAeyN6aORiyBjByVTc0FqBoKWpqwRCVSgilOaY2OaUPw29qjOzqLvTAchpos47u6EZyYnngUSRwpuTe6D+6qaFQdOPNLRzOMVdzhRZyW+CZouHk3dWLXglFcFIflQhj9YWjJGlZcaKAVSvjyPrRQ0oQVKDAQHlYFYUwIm4gqExGmBSkutaVQJeomwViTJqPK6OhCy2Q9sQBk8cY0DxjTJw0lAQWK6cOKfgNhpKK7ZMpUeF3jPa28BCET amiEqJKM+X1gxvWXpoUjVIVPnwErw71nmpgiqiQGBjNzbgs3j1nus+fMndc+Cwm0T52/oNR9lsdCS24ra7Tq1cbWjpXV3sHRCb1idXZ0sGdltXNxRateRwHRAACYHutzk/2I5QAAACV0RVh0ZGF0ZTpjcmVhdGUAMjAyMy0wMi0xM1QwODoxNToyOSswMDowMEUnN7UAAAAldEVYdGRhdGU6bW9kaWZ5ADIwMjMtMDItMTNUMDg6MTU6MjkrMDA6MDA0eo8JAAAAKHRFWHRkYXRlOnRpbWVzdGFtcAAyMDIzLTAyLTEzVDA4OjE1OjI5KzAwOjAwY2+u1gAAAABJRU5ErkJggg==">
+                            </image>
+                        </svg>
+                    </div>
+
+                    <div class="card-body">
+                        <div class="avatar" id="cardAvatar"></div>
+                        <div>
+                            <div class="card-name" id="cardName"></div>
+                            <div class="card-nick" id="cardNick"></div>
+                            <div class="card-id-num" id="cardIdNum"></div>
+                        </div>
+                    </div>
+
+                    <div class="card-footer">
+                        <div>
+                            <div class="grade-badge" id="cardGradeBadge">
+                                <i class="fa-solid fa-graduation-cap" style="font-size:10px"></i>
+                                <span id="cardGradeText"></span>
+                            </div>
+                            <div class="card-dept" id="cardDept"></div>
+                            <div style="display:flex;align-items:center;gap:5px;margin-top:8px;">
+                                <div class="status-dot" id="cardDot"></div>
+                                <span id="cardStatusText" style="font-size:11px;opacity:.85;"></span>
+                            </div>
+                            <div id="cardEntryYear" style="font-size:10px;opacity:.65;margin-top:3px;"></div>
+                        </div>
+                        <div class="card-qr-wrap">
+                            <div id="cardQR"></div>
+                            <div class="card-qr-label">
+                                สแกน QR Code
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mag strip -->
+                    <div id="cardUidStrip"
+                        class="absolute bottom-0 left-0 right-0 h-8 flex items-center bg-black/20 px-4 opacity-70"
+                        style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:1px;">
+                    </div>
+                </div>
+
+                <p data-aos="fade-up" data-aos-delay="1200" class="card-hint">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    บัตรนี้ใช้เป็นหลักฐานยืนยันตัวตนในระบบ
+                </p>
+            </div>
+
+            <!-- ── RIGHT: Info + Actions ── -->
+            <div data-aos="fade-up" data-aos-delay="1500" class="profile-col-info">
+                <p class="profile-section-label">
+                    <i class="fa-solid fa-circle-info"></i> ข้อมูลนักเรียน
+                </p>
+
+                <div data-aos="fade-up" data-aos-delay="1700" class="info-section mb-4" id="infoSection"></div>
+
+                <div data-aos="fade-up" data-aos-delay="2000" class="flex gap-2 mb-3">
+                    <button class="btn-ghost flex-1 text-green-500 bg-green-50 border-green-500/50 overflow-hidden"
+                        id="parentBtn">
+                        <i class="fa-solid fa-users" style="font-size:13px"></i>
+                        ผู้ปกครอง
+                    </button>
+                    <button class="btn-ghost flex-1 text-blue-500 bg-blue-50 border-blue-500/50 overflow-hidden"
+                        id="editBtn">
+                        <i class="fa-solid fa-pen-to-square" style="font-size:13px"></i>
+                        แก้ไขข้อมูล
+                    </button>
+                </div>
+
+                <button id="logoutBtnCard" data-aos="fade-up" data-aos-delay="2500"
+                    class="btn-ghost w-full text-red-500 bg-red-50 border-red-500/50 overflow-hidden">
+                    <i class="fa-solid fa-right-from-bracket" style="font-size:13px"></i>
+                    ออกจากระบบ
+                </button>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- ══ MODAL: ผู้ปกครอง ══ -->
+    <div class="modal-overlay" id="modalParent">
+        <div class="modal-sheet">
+            <div class="modal-handle"></div>
+            <div class="modal-header">
+                <div class="modal-icon" style="background:#F0FDF4;color:#16A34A;">
+                    <i class="fa-solid fa-users"></i>
+                </div>
+                <div>
+                    <div style="font-weight:600;font-size:15px;color:#1E293B;">
+                        ข้อมูลผู้ปกครอง
+                    </div>
+                    <div style="font-size:11px;color:#94A3B8;margin-top:1px;">
+                        เฉพาะนักเรียนและผู้ปกครองเท่านั้น
+                    </div>
+                </div>
+                <button id="closeParent"
+                    style="margin-left:auto;background:none;border:none;cursor:pointer;color:#94A3B8;font-size:18px;padding:4px;">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="modal-body" id="parentContent"></div>
+        </div>
+    </div>
+
+    <!-- ══ MODAL: แก้ไขข้อมูล ══ -->
+    <div class="modal-overlay" id="modalEdit">
+        <div class="modal-sheet">
+            <div class="modal-handle"></div>
+            <div class="modal-header">
+                <div class="modal-icon" style="background:#EFF6FF;color:#2563EB;">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                </div>
+                <div>
+                    <div style="font-weight:600;font-size:15px;color:#1E293B;">
+                        แก้ไขข้อมูล
+                    </div>
+                    <div style="font-size:11px;color:#94A3B8;margin-top:1px;">
+                        รหัสนักเรียนและ UID ไม่สามารถเปลี่ยนได้
+                    </div>
+                </div>
+                <button id="closeEdit"
+                    style="margin-left:auto;background:none;border:none;cursor:pointer;color:#94A3B8;font-size:18px;padding:4px;">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="space-y-3" style="margin-bottom:20px;">
+                    <div>
+                        <label class="mini-label">
+                            <i class="fa" style="font-size:9px;">🔒</i>
+                            <span>รหัสนักเรียน (เปลี่ยนไม่ได้)</span></label>
+                        <input class="mini-input" id="edit_student_id" disabled>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="mini-label">ชื่อ *</label>
+                            <input class="mini-input" id="edit_first_name" placeholder="ชื่อ" lang="th"
+                                inputmode="text">
+                        </div>
+                        <div>
+                            <label class="mini-label">นามสกุล *</label>
+                            <input class="mini-input" id="edit_last_name" placeholder="นามสกุล" lang="th"
+                                inputmode="text">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="mini-label">ชื่อเล่น</label>
+                        <input class="mini-input" id="edit_nickname" placeholder="ชื่อเล่น (ถ้ามี)" lang="th"
+                            inputmode="text">
+                    </div>
+                    <div style="position:relative;">
+                        <label class="mini-label">สาขาวิชา *</label>
+                        <input id="edit_department" class="mini-input" placeholder="พิมพ์ค้นหา หรือเลือกสาขาวิชา"
+                            maxlength="55" autocomplete="off" style="padding-right:36px;">
+                        <i class="fa-solid fa-chevron-down" id="deptChevron"
+                            style="position:absolute;right:14px;top:50%;transform:translateY(-50%);color:#94A3B8;font-size:12px;cursor:pointer;transition:transform 0.25s;z-index:2;"></i>
+                        <div id="deptDropdown" style="display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:white;
+                            border:1.5px solid #E2E8F0;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.1);
+                            z-index:100;overflow:hidden;max-height:220px;overflow-y:auto;">
+                        </div>
+                    </div>
+
+                    <!-- เบอร์โทรตัวเอง -->
+                    <div style="font-size:11px;font-weight:600;color:#94A3B8;margin-bottom:10px;letter-spacing:.5px;">
+                        ข้อมูลการติดต่อ
+                    </div>
+                    <div>
+                        <label class="mini-label">
+                            <i class="fa fa-phone" style="font-size:9px;"></i>
+                            <span>เบอร์โทรของตัวเอง *</span>
+                            <span style="font-weight:400;color:#CBD5E1;margin-left:4px;">(ใช้เป็นรหัสผ่าน)</span>
+                        </label>
+                        <div style="position:relative;">
+                            <input class="mini-input" id="edit_student_phone" placeholder="กรอกเบอร์โทรของตัวเอง"
+                                inputmode="tel" pattern="[0-9]*" maxlength="10" style="padding-right:40px;">
+                            <button type="button" id="eyeBtnPhone"
+                                style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:#94A3B8;cursor:pointer;font-size:13px;padding:4px;">
+                                <i class="fa-solid fa-eye" id="eyeIconPhone"></i>
+                            </button>
+                        </div>
+                        <div style="font-size:10px;color:#94A3B8;margin-top:4px;">
+                            <i class="fa-solid fa-circle-info" style="font-size:9px;"></i>
+                            เบอร์นี้ใช้สำหรับเข้าสู่ระบบครั้งต่อไป
+                        </div>
+                    </div>
+                    <div style="border-top:1px solid #F1F5F9;padding-top:14px;">
+                        <div
+                            style="font-size:11px;font-weight:600;color:#94A3B8;margin-bottom:10px;letter-spacing:.5px;">
+                            ข้อมูลผู้ปกครอง
+                        </div>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="mini-label">ชื่อผู้ปกครอง</label>
+                                <input class="mini-input" id="edit_parent_name" placeholder="ชื่อ-นามสกุลผู้ปกครอง"
+                                    lang="th" inputmode="text">
+                            </div>
+                            <div>
+                                <label class="mini-label">เบอร์โทรผู้ปกครอง</label>
+                                <input class="mini-input" id="edit_parent_phone" placeholder="เบอร์โทร" type="tel"
+                                    pattern="[0-9]*" maxlength="10">
+                            </div>
+                            <div>
+                                <label class="mini-label">LINE ID ผู้ปกครอง</label>
+                                <input class="mini-input" id="edit_parent_line" placeholder="LINE ID">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <button class="btn-save overflow-hidden" id="saveBtn">
+                    <i class="fa-solid fa-floppy-disk" style="font-size:14px"></i>
+                    บันทึกการเปลี่ยนแปลง
+                </button>
+                <div style="height:12px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentData = null;
+
+        // ══════════════════════════════════════════════
+        //  ตรวจ session — ถ้าไม่มี → กลับไป login.html
+        // ══════════════════════════════════════════════
+        function loadSession() {
+            try {
+                const raw = localStorage.getItem(LS_DATA);
+                const time = localStorage.getItem(LS_TIME);
+                if (!raw || !time) return null;
+                if (Date.now() - new Date(time).getTime() > SESSION_TTL) {
+                    clearSession(); return null;
+                }
+                return {
+                    data: JSON.parse(raw),
+                    time
+                };
+            } catch (e) {
+                return null;
+            }
+        }
+        function saveSession(data) {
+            try {
+                localStorage.setItem(LS_DATA, JSON.stringify(data));
+                localStorage.setItem(LS_TIME, new Date().toISOString());
+            } catch (e) { }
+        }
+        function clearSession() {
+            try {
+                localStorage.removeItem(LS_DATA); localStorage.removeItem(LS_TIME);
+            } catch (e) { }
+        }
+        function doLogout() {
+            clearSession();
+            window.location.replace("./login.html");
+        }
+
+        // ══════════════════════════════════════════════
+        //  Render profile
+        // ══════════════════════════════════════════════
+        function renderProfile(d, loginTime) {
+            currentData = d;
+            const grade = calcGrade(d.program || "ปวช", d.entry_year);
+            const initials = ((d.first_name || "?")[0] + (d.last_name || "?")[0]).toUpperCase();
+            const isActive = (d.student_status || "active") === "active";
+            const isPvs = (d.program || "") === "ปวส";
+
+            // ── Card color: ปวช=#84D4FA  ปวส=#FF7070 ──
+            $("#idCard")
+                .toggleClass("pvs", isPvs)
+                .toggleClass("pvch", !isPvs);
+
+            // Avatar
+            $("#cardAvatar").text(initials);
+
+            // Texts
+            $("#cardName").text(`${d.first_name} ${d.last_name}`);
+            $("#cardNick").text(d.nickname ? `"${d.nickname}"` : "");
+            $("#cardIdNum").text(d.student_id || "");
+            $("#cardGradeText").text(grade);
+            $("#cardDept").text(d.department || "ไม่ระบุสาขา");
+            $("#cardEntryYear").text(`เข้าเรียน พ.ศ. ${d.entry_year || "—"}`);
+            $("#cardUidStrip").text(d.uid || d.student_id || "");
+
+            // Status
+            $("#cardDot").toggleClass("inactive", !isActive);
+            $("#cardStatusText").text(isActive ? "กำลังศึกษา" : (d.student_status || "—"));
+
+            // QR Code — ใช้ String() เพื่อแน่ใจว่าไม่ใช่ number
+            const qrEl = document.getElementById("cardQR");
+            qrEl.innerHTML = "";
+            const qrText = String(d.student_id || "ASIA-LB").trim();
+            const qrColor = isPvs ? "#FF7070" : "#0EA5E9";
+            new QRCode(qrEl, {
+                text: qrText,
+                width: 56,
+                height: 56,
+                colorDark: qrColor,
+                colorLight: "#FFFFFF",
+                correctLevel: QRCode.CorrectLevel.M
+            });
+
+            // Session banner
+            const dispName = d.nickname ? `${d.first_name} (${d.nickname})` : d.first_name;
+            $("#sessionName").text(dispName);
+            if (loginTime) {
+                const t = new Date(loginTime);
+                const hh = t.getHours().toString().padStart(2, "0");
+                const mm = t.getMinutes().toString().padStart(2, "0");
+                $("#sessionTime").text(`${hh}:${mm}`);
+            }
+
+            // Info rows
+            const hlClass = isPvs ? "hl-v" : "hl";
+            const rows = [{
+                icon: "fa-hashtag",
+                label: "รหัสนักเรียน",
+                val: d.student_id,
+                cls: ""
+            },
+            {
+                icon: "fa-graduation-cap",
+                label: "ระดับชั้น",
+                val: grade,
+                cls: hlClass
+            },
+            {
+                icon: "fa-calendar-days",
+                label: "ปีที่เข้าเรียน",
+                val: `พ.ศ. ${d.entry_year || "—"}`,
+                cls: ""
+            },
+            {
+                icon: "fa-building-columns",
+                label: "สาขาวิชา",
+                val: d.department || "—",
+                cls: ""
+            },
+            {
+                icon: "fa-id-card",
+                label: "บัตรนักเรียน",
+                val: d.card_status === "active" ? "ใช้งานได้" : "รอเปิดใช้",
+                cls: ""
+            },
+            ];
+            $("#infoSection").html(rows.map(r => `
+                <div class="info-row">
+                <i class="fa-solid ${r.icon} info-icon"></i>
+                <span class="info-label">${r.label}</span>
+                <span class="info-value ${r.cls}">${r.val}</span>
+                </div>`).join(""));
+        }
+
+        // ══════════════════════════════════════════════
+        //  Modal helpers
+        // ══════════════════════════════════════════════
+        function openModal(id) {
+            $(`#${id}`).addClass("open"); $("body").css("overflow", "hidden");
+        }
+        function closeModal(id) {
+            $(`#${id}`).removeClass("open"); $("body").css("overflow", "");
+        }
+
+        // ══════════════════════════════════════════════
+        //  Bootstrap — ตรวจ session ก่อนทุกอย่าง
+        // ══════════════════════════════════════════════
+        $(function () {
+            const session = loadSession();
+            if (!session) {
+                window.location.replace("./login.html");
+                return;
+            }
+            renderProfile(session.data, session.time);
+            const name = session.data.nickname || session.data.first_name || "นักเรียน";
+            showNotification && showNotification(`ยินดีต้อนรับ ${name} 👋`, "success");
+        });
+
+        // ══════════════════════════════════════════════
+        //  Logout buttons (header + card)
+        // ══════════════════════════════════════════════
+        $("#logoutBtn, #logoutBtnCard").click(function () {
+            showNotification && showNotification("ออกจากระบบแล้ว", "info");
+            setTimeout(doLogout, 600);
+        });
+
+        // ══════════════════════════════════════════════
+        //  Parent Modal
+        // ══════════════════════════════════════════════
+        $("#parentBtn").click(function () {
+            const d = currentData;
+            if (!d) return;
+            const rows = [{
+                icon: "fa-solid fa-person",
+                label: "ชื่อผู้ปกครอง",
+                val: d.parent_name
+            },
+            {
+                icon: "fa-solid fa-phone",
+                label: "เบอร์โทร",
+                val: d.parent_phone
+            },
+            {
+                icon: "fa-brands fa-line",
+                label: "LINE ID",
+                val: d.parent_line
+            },
+            ];
+            const html = `<div style="background:#F8FAFC;border-radius:14px;padding:14px;margin-bottom:20px;">` +
+                rows.map(r => `
+                <div class="parent-row">
+                <i class="${r.icon} parent-icon"></i>
+                <span class="parent-label">${r.label}</span>
+                ${r.val ? `<span class="parent-value">${r.val}</span>` : `<span class="parent-empty">ไม่ได้ระบุ</span>`}
+                </div>`).join("") + `</div>`;
+            $("#parentContent").html(html);
+            openModal("modalParent");
+        });
+        $("#closeParent").click(() => closeModal("modalParent"));
+        $("#modalParent").click(function (e) {
+            if (e.target === this) closeModal("modalParent");
+        });
+
+        // ══════════════════════════════════════════════
+        //  Edit Modal
+        // ══════════════════════════════════════════════
+        // ── Categorized department list ──
+        const deptCategories = [
+            {
+                icon: "fa-solid fa-gears",
+                color: "#0EA5E9", bg: "#EFF6FF",
+                label: "ช่างอุตสาหกรรม",
+                items: ["ช่างยนต์", "ช่างกลโรงงาน", "ช่างเชื่อมโลหะ", "ช่างไฟฟ้ากำลัง",
+                    "ช่างอิเล็กทรอนิกส์", "ช่างก่อสร้าง", "ช่างเมคคาทรอนิกส์",
+                    "ช่างแมคคาทรอนิกส์และหุ่นยนต์", "ช่างโยธา", "ช่างแอร์และเครื่องทำความเย็น"]
+            },
+            {
+                icon: "fa-solid fa-computer",
+                color: "#7C3AED", bg: "#F5F3FF",
+                label: "เทคโนโลยีสารสนเทศ",
+                items: ["เทคนิคคอมพิวเตอร์", "เทคโนโลยีสารสนเทศ", "เทคโนโลยีธุรกิจดิจิทัล",
+                    "คอมพิวเตอร์กราฟิก", "ระบบเครือข่ายและความมั่นคง"]
+            },
+            {
+                icon: "fa-solid fa-briefcase",
+                color: "#D97706", bg: "#FFFBEB",
+                label: "พาณิชยกรรม",
+                items: ["การบัญชี", "การตลาด", "การจัดการธุรกิจค้าปลีก", "การเลขานุการ",
+                    "การจัดการโลจิสติกส์", "ธุรกิจค้าปลีก", "การประกันภัย"]
+            },
+            {
+                icon: "fa-solid fa-plane",
+                color: "#059669", bg: "#ECFDF5",
+                label: "การท่องเที่ยวและโรงแรม",
+                items: ["การโรงแรม", "การท่องเที่ยว", "การบริการและการท่องเที่ยว"]
+            },
+            {
+                icon: "fa-solid fa-utensils",
+                color: "#DB2777", bg: "#FDF2F8",
+                label: "คหกรรม",
+                items: ["คหกรรมศาสตร์", "ผ้าและเครื่องแต่งกาย", "อาหารและโภชนาการ",
+                    "การออกแบบแฟชั่นและสิ่งทอ"]
+            },
+        ];
+
+        function highlight(text, query) {
+            if (!query) return text;
+            const re = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
+            return text.replace(re, `<span style="color:var(--primary-dark);font-weight:700;">$1</span>`);
+        }
+
+        function renderDeptOptions(filter = "") {
+            const $dd = $("#deptDropdown");
+            let html = "";
+            let totalFound = 0;
+
+            deptCategories.forEach(cat => {
+                const matched = filter
+                    ? cat.items.filter(d => d.toLowerCase().includes(filter.toLowerCase()))
+                    : cat.items;
+                if (!matched.length) return;
+                totalFound += matched.length;
+
+                html += `
+                    <div class="dept-cat-header" style="
+                        display:flex;align-items:center;gap:6px;
+                        padding:6px 14px 5px;
+                        background:${cat.bg};
+                        border-bottom:1px solid #F1F5F9;
+                        position:sticky;top:0;z-index:1;">
+                        <i class="${cat.icon}" style="font-size:9px;color:${cat.color};width:13px;text-align:center;"></i>
+                        <span style="font-size:10px;font-weight:700;color:${cat.color};letter-spacing:.4px;text-transform:uppercase;">${cat.label}</span>
+                    </div>`;
+
+                matched.forEach(d => {
+                    html += `
+                        <div class="dept-option"
+                             style="padding:10px 14px 10px 33px;font-size:12px;
+                                    cursor:pointer;transition:background 0.13s;
+                                    color:#1E293B;border-bottom:1px solid #F8FAFC;"
+                             data-val="${d}">${highlight(d, filter)}</div>`;
+                });
+            });
+
+            $dd.html(totalFound ? html : `
+                <div style="padding:16px 14px;color:#94A3B8;font-size:12px;text-align:center;">
+                    <i class="fa-solid fa-magnifying-glass" style="margin-right:6px;opacity:.5;"></i>ไม่พบสาขาที่ตรงกัน
+                </div>`);
+        }
+
+        function openDept() {
+            renderDeptOptions($("#edit_department").val());
+            $("#deptDropdown").show();
+            $("#deptChevron").css("transform", "translateY(-50%) rotate(180deg)");
+        }
+        function closeDept() {
+            $("#deptDropdown").hide();
+            $("#deptChevron").css("transform", "translateY(-50%) rotate(0deg)");
+        }
+
+        // Event delegation — hover + select (เหมือน register.html)
+        $(document).on("mouseenter", ".dept-option", function () {
+            $(this).css("background", "var(--primary-light)");
+        }).on("mouseleave", ".dept-option", function () {
+            $(this).css("background", "white");
+        }).on("mousedown", ".dept-option", function (e) {
+            e.preventDefault();
+            const val = $(this).data("val");
+            $("#edit_department").val(val).removeClass("error");
+            closeDept();
+        });
+
+        $("#edit_department").on("focus", openDept)
+            .on("blur", function () { setTimeout(closeDept, 150); })
+            .on("input", function () { renderDeptOptions($(this).val()); });
+
+        $("#deptChevron").on("mousedown", function (e) {
+            e.preventDefault();
+            $("#deptDropdown").is(":visible") ? closeDept() : ($("#edit_department").focus(), openDept());
+        });
+
+        const THAI_RE = /^[\u0E00-\u0E7F\s]+$/;
+        const PHONE_RE = /^[0-9\-+\s()]{9,15}$/;
+
+        function bindThaiFilter(id) {
+            $(`#${id}`).on("input.thai",
+                function () {
+                    const pos = this.selectionStart;
+                    const cleaned = $(this).val().replace(/[^\u0E00-\u0E7F\s]/g, "");
+                    if (cleaned !== $(this).val()) {
+                        $(this).val(cleaned);
+                        this.setSelectionRange(Math.max(0, pos - 1), Math.max(0, pos - 1));
+                        showNotification && showNotification("กรุณากรอกภาษาไทยเท่านั้น", "error");
+                    }
+                });
+        }
+        ["edit_first_name", "edit_last_name", "edit_nickname", "edit_parent_name"].forEach(bindThaiFilter);
+
+        $("#editBtn").click(function () {
+            const d = currentData; if (!d) return;
+            $("#edit_student_id").val(d.student_id || "");
+            $("#edit_first_name").val(d.first_name || "");
+            $("#edit_last_name").val(d.last_name || "");
+            $("#edit_nickname").val(d.nickname || "");
+            $("#edit_department").val(d.department || "");
+            // student_phone แสดงเป็น password โดยค่าเริ่มต้น
+            $("#edit_student_phone").attr({ type: "password", inputmode: "numeric", pattern: "[0-9]*" }).val(d.student_phone || "");
+            $("#eyeIconPhone").removeClass("fa-eye-slash").addClass("fa-eye");
+            $("#edit_parent_name").val(d.parent_name || "");
+            $("#edit_parent_phone").val(d.parent_phone || "");
+            $("#edit_parent_line").val(d.parent_line || "");
+            $(".mini-input").removeClass("error");
+            openModal("modalEdit");
+        });
+
+        // Toggle แสดง/ซ่อนเบอร์ตัวเอง
+        $("#eyeBtnPhone").click(function () {
+            const isPass = $("#edit_student_phone").attr("type") === "password";
+            $("#edit_student_phone").attr("type", isPass ? "text" : "password");
+            $("#eyeIconPhone").toggleClass("fa-eye fa-eye-slash");
+        });
+        $("#closeEdit").click(() => closeModal("modalEdit"));
+        $("#modalEdit").click(function (e) {
+            if (e.target === this) closeModal("modalEdit");
+        });
+
+        // ── Save ──
+        $("#saveBtn").click(function () {
+            const $btn = $(this);
+            const fn = $("#edit_first_name").val().trim();
+            const ln = $("#edit_last_name").val().trim();
+            const nn = $("#edit_nickname").val().trim();
+            const department = $("#edit_department").val().trim();
+            const sp = $("#edit_student_phone").val().trim(); // เบอร์ตัวเอง
+            const pp = $("#edit_parent_phone").val().trim(); // เบอร์ผู้ปกครอง
+
+            let ok = true;
+
+            if (!fn || !THAI_RE.test(fn)) {
+                $("#edit_first_name").addClass("error"); ok = false;
+            } else $("#edit_first_name").removeClass("error");
+
+            if (!ln || !THAI_RE.test(ln)) {
+                $("#edit_last_name").addClass("error"); ok = false;
+            } else $("#edit_last_name").removeClass("error");
+
+            if (nn && !THAI_RE.test(nn)) {
+                $("#edit_nickname").addClass("error"); ok = false;
+            } else $("#edit_nickname").removeClass("error");
+
+            const allDepts = deptCategories.flatMap(c => c.items);
+            if (!department || !allDepts.includes(department)) {
+                $("#edit_department").addClass("error"); ok = false;
+            } else $("#edit_department").removeClass("error");
+
+            // เบอร์ตัวเอง: ต้องมีและ 9-10 หลักตัวเลข
+            if (!sp || !/^[0-9]{9,10}$/.test(sp)) {
+                $("#edit_student_phone").addClass("error");
+                ok = false;
+            } else {
+                $("#edit_student_phone").removeClass("error");
+            }
+
+            if (pp && !PHONE_RE.test(pp)) {
+                $("#edit_parent_phone").addClass("error"); ok = false;
+            } else $("#edit_parent_phone").removeClass("error");
+
+            if (!ok) {
+                showNotification && showNotification("กรุณาตรวจสอบข้อมูลอีกครั้ง", "error");
+                return;
+            }
+
+            $btn.prop("disabled", true).html('<span class="spinner"></span>&nbsp;กำลังบันทึก...');
+
+            const updates = {
+                student_id: currentData.student_id,
+                first_name: fn,
+                last_name: ln,
+                nickname: nn,
+                department: department,
+                student_phone: sp,
+                // ← เบอร์ตัวเอง
+                parent_name: $("#edit_parent_name").val().trim(),
+                parent_phone: pp,
+                parent_line: $("#edit_parent_line").val().trim(),
+            };
+
+            $.ajax({
+                url: API_URL, method: "GET",
+                data: {
+                    action: "update", ...updates
+                },
+                success(raw) {
+                    const res = typeof raw === "string" ? JSON.parse(raw) : raw;
+                    if (res.status === "success") {
+                        Object.assign(currentData, updates);
+                        saveSession(currentData);
+                        renderProfile(currentData, localStorage.getItem(LS_TIME));
+                        showNotification && showNotification("บันทึกข้อมูลสำเร็จ!", "success");
+                        closeModal("modalEdit");
+                    } else {
+                        showNotification && showNotification(res.message || "เกิดข้อผิดพลาด", "error");
+                    }
+                },
+                error() {
+                    showNotification && showNotification("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้", "error");
+                },
+                complete() {
+                    $btn.prop("disabled", false).html(
+                        '<i class="fa-solid fa-floppy-disk" style="font-size:14px"></i> บันทึกการเปลี่ยนแปลง'
+                    );
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>

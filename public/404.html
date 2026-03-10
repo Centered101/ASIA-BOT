@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="th">
+
+<head>
+    <title>404 NOT FOUND</title>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+    <meta name="theme-color" content="#84D4FA">
+    <meta name="keywords"
+        content="HTML, CSS, XML, JavaScript, TailwindCSS, jQuery, error, 404, 404 not found, Centered101">
+    <meta name="author" content="Centered101">
+    <meta name="description" content="ดูเหมือนคุณจะหลงทางแล้ว">
+
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://asia-lb.web.app">
+    <meta property="og:title" content="404 NOT FOUND">
+    <meta property="og:description" content="ดูเหมือนคุณจะหลงทางแล้ว">
+    <meta property="og:image" content="/favicon.ico">
+
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://asia-lb.web.app">
+    <meta property="twitter:title" content="404 NOT FOUND">
+    <meta property="twitter:description" content="ดูเหมือนคุณจะหลงทางแล้ว">
+    <meta property="twitter:image" content="/favicon.ico">
+
+    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="/style/index.css">
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+    <script defer src="/script/index.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+</head>
+
+<style>
+    body {
+        height: 100vh;
+        overflow: hidden;
+        user-select: none;
+        z-index: -1;
+    }
+
+    .container_background_items {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden
+    }
+
+    .container_background_items li {
+        position: absolute;
+        bottom: -150px;
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--white-smoker);
+        list-style: none;
+        border-width: 1px;
+        border-radius: 1.5rem;
+        /* 24px */
+        animation: 25s linear infinite animate;
+        overflow: hidden;
+        z-index: -50;
+    }
+
+    @keyframes animate {
+        0% {
+            transform: translateY(0) rotate(0);
+            opacity: 1;
+        }
+
+        100% {
+            transform: translateY(-1000px) rotate(720deg);
+            opacity: 0;
+        }
+    }
+</style>
+
+<body oncontextmenu="return false">
+    <!-- Decorative blobs -->
+    <div class="bg-blob" style="width:520px;height:520px;background:var(--primary-color);top:-120px;right:-170px;">
+    </div>
+    <div class="bg-blob" style="width:420px;height:420px;background:var(--primary-dark);bottom:-110px;left:-130px;">
+    </div>
+    <ul class="container_background_items">
+        <li><img src="/favicon.ico" draggable="false"></li>
+        <li><img src="/images/favicon.svg" draggable="false"></li>
+        <li><img src="/images/mascot-blue.svg" draggable="false"></li>
+        <li><img src="/images/mascot-blues.svg" draggable="false"></li>
+        <li><img src="/images/mascot-green.svg" draggable="false"></li>
+        <li><img src="/images/mascot-greens.svg" draggable="false"></li>
+        <li><img src="/images/mascot-red.svg" draggable="false"></li>
+        <li><img src="/images/mascot-reds.svg" draggable="false"></li>
+        <li><img src="/images/favicon.png" draggable="false"></li>
+        <li><img src="/images/favicon.png" draggable="false"></li>
+        <li><img src="/project-1/mascot.png" draggable="false"></li>
+        <li><img src="/project-2/mascot.png" draggable="false"></li>
+        <li><img src="/project-3/mascot.png" draggable="false"></li>
+    </ul>
+
+    <!-- Audio with Mute button -->
+    <audio id="bgAudio" autoplay loop>
+        <source src="https://project-test-submission.netlify.app/Audio/Music/Spaceflight%20Simulator%20Soundtrack.mp3"
+            type="audio/mp3">
+    </audio>
+
+    <!-- Main content -->
+    <main class="max-w-7xl min-h-screen flex flex-col items-center md:justify-center mx-auto p-8">
+        <span class="space-y-2">
+            <p class="text-6xl sm:text-7xl text-[color:var(--secondary-color)]">Error
+            </p>
+            <p class="text-9xl text-end" style="font-family:'Press Start 2P',system-ui">404</p>
+            <p class="text-4xl sm:text-7xl text-center">NOT FOUND</p>
+            <p class="text-base sm:text-xl text-gray-600">เอ้า… เส้นทางนี้ไม่มีอะไรนะ<span
+                    class="text-[color:var(--secondary-color)]">!</span></p>
+            <p class="text-base sm:text-xl text-gray-600">เหมือนคุณเทเลพอร์ตผิดจุดอะ
+                ลองกลับหน้าหลักดูก่อนมั้ย</p>
+            <p class="text-base sm:text-xl text-gray-600"> หรือถ้ากลับไม่ถูก… ก็เดินตามไฟนำทางไปโลด</p>
+            <!-- Back button -->
+            <button id="goBack"
+                class="btn-outline fixed sm:relative bottom-32 sm:bottom-0 left-1/2 transform -translate-x-1/2 flex items-center justify-center gap-2 text-sm sm:text-base !mt-6 px-8 z-10">
+                <i class="fa-solid fa-arrow-left"></i><span>กลับไป</span>
+            </button>
+        </span>
+    </main>
+
+
+    <script>
+        document.querySelectorAll('.container_background_items li').forEach((item) => {
+            // สุ่มค่า
+            const left = Math.random() * 100; // %
+            const size = Math.floor(Math.random() * 120) + 20; // 20 - 140px
+            const delay = Math.random() * 10; // 0 - 10s
+            const duration = Math.floor(Math.random() * 30) + 10; // 10 - 40s
+
+            // ใส่ style
+            item.style.left = `${left}%`;
+            item.style.width = `${size}px`;
+            item.style.height = `${size}px`;
+            item.style.animationDelay = `${delay}s`;
+            item.style.animationDuration = `${duration}s`;
+        });
+
+        // Go back button
+        document.getElementById("goBack").addEventListener("click", function () {
+            if (document.referrer && document.referrer !== window.location.href) {
+                window.history.back();
+            } else {
+                window.location.href = "/";
+            }
+        });
+    </script>
+
+</body>
+
+</html>

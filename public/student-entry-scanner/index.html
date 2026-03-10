@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="th">
+
+<head>
+    <title>Student Entry Scanner</title>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+    <meta name="theme-color" content="#84D4FA">
+    <meta name="keywords"
+        content="HTML, CSS, XML, JavaScript, TailwindCSS, jQuery, แบบประเมิน, โครงงาน, Student-Entry-Scanner, Class-Track-Room, Centered101">
+    <meta name="author" content="Centered101">
+    <meta name="description"
+        content="ระบบสแกนบัตร NFC สำหรับตรวจสอบรหัสนักศึกษาแบบเรียลไทม์ พร้อมบันทึกข้อมูลเข้า–ออกและแสดงผลผ่านฐานข้อมูลออนไลน์">
+
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://asia-lb.web.app">
+    <meta property="og:title" content="Student Entry Scanner">
+    <meta property="og:description"
+        content="ระบบสแกนบัตร NFC สำหรับตรวจสอบรหัสนักศึกษาแบบเรียลไทม์ พร้อมบันทึกข้อมูลเข้า–ออกและแสดงผลผ่านฐานข้อมูลออนไลน์">
+    <meta property="og:image" content="/favicon.ico">
+
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://asia-lb.web.app">
+    <meta property="twitter:title" content="Student Entry Scanner">
+    <meta property="twitter:description"
+        content="ระบบสแกนบัตร NFC สำหรับตรวจสอบรหัสนักศึกษาแบบเรียลไทม์ พร้อมบันทึกข้อมูลเข้า–ออกและแสดงผลผ่านฐานข้อมูลออนไลน์">
+    <meta property="twitter:image" content="/favicon.ico">
+
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="stylesheet" href="/style/index.css">
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+</head>
+
+<body class="min-h-screen bg-gray-50 text-gray-800 antialiased" draggable="false" oncontextmenu="return false">
+
+    <!-- Preloader -->
+    <div id="preloader"
+        class="bg-stripes-gray visible touch-none min-h-screen fixed inset-0 flex items-center justify-center text-center bg-gray-50 z-50">
+        <span class="spinner animate-spin size-80 fixed border-8" style="animation-duration: 1s;"></span>
+        <div
+            class="size-80 flex flex-col items-center justify-center gap-2 bg-[color:var(--white-smoker)] rounded-full shadow">
+            <img src="/favicon.ico" onerror="this.src='https://asia-lb.firebaseapp.com/images/favicon.svg'" alt="logo"
+                class="size-16 fa-bounce drop-shadow" draggable="false">
+            <h2 class="text-xl sm:text-2xl">กำลังโหลด</h2>
+            <p class="text-sm sm:text-base text-gray-600">
+                การผจญภัยของคุณกำลังจะเริ่มต้น
+            </p>
+        </div>
+        <div class="bg-blob" style="width:520px;height:520px;background:var(--primary-color);top:-120px;right:-170px;">
+        </div>
+        <div class="bg-blob" style="width:420px;height:420px;background:var(--primary-dark);bottom:-110px;left:-130px;">
+        </div>
+    </div>
+
+    <!-- Decorative blobs -->
+    <div class="bg-blob" style="width:520px;height:520px;background:var(--primary-color);top:-120px;right:-170px;">
+    </div>
+    <div class="bg-blob" style="width:420px;height:420px;background:var(--primary-dark);bottom:-110px;left:-130px;">
+    </div>
+
+    <!-- Top Navigation -->
+    <header data-aos="fade-down" class="sticky top-0 bg-white-smoker border shadow z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="h-16 flex justify-between items-center">
+                <a href="/" onclick="window.scrollTo({ top: 0, behavior: 'smooth' })"
+                    class="ripple-effect flex flex items-center gap-2 rounded">
+                    <div
+                        class="size-10 sm:size-12 flex items-center justify-center bg-primary rounded-md text-white font-bold">
+                        <img class="size-8" src="/favicon.ico"
+                            onerror="this.src='https://asia-lb.firebaseapp.com/favicon.ico'" alt="logo">
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="font-bold text-base sm:text-lg pr-2">ASIA-LB</span>
+                        <span class="text-xs text-gray-600">Student-Entry-Scanner</span>
+                    </div>
+                </a>
+                <nav id="main-nav" class="hidden md:flex items-center gap-4 text-sm sm:text-base">
+                </nav>
+                <button class="ripple-effect md:hidden bg-gray-50 border rounded-md shadow-inner p-2 focus:outline-none"
+                    aria-label="open menu">
+                    <svg class="size-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 6h16M4 12h16M4 18h16"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero -->
+    <main class="max-w-7xl space-y-6 mx-auto px-2 sm:px-4 lg:px-6 pt-12 overflow-x-hidden">
+        <section data-aos="fade-up" class="bg-white-smoker border rounded-2xl shadow p-4 md:p-6">
+
+            <!-- Title -->
+            <div class="flex items-center gap-2 mb-6">
+                <div class="size-10 sm:size-12 rounded-md bg-primary flex items-center justify-center">
+                    <i class="fa-solid fa-id-card text-white text-xl"></i>
+                </div>
+                <h1 class="text-3xl sm:text-4xl font-extrabold leading-tight">Student Entry Scanner</h1>
+            </div>
+
+            <p class="text-gray-600 mb-8">
+                ระบบแสดงผลการสแกนบัตรของนักศึกษาแบบเรียลไทม์
+                ใช้รหัสนักศึกษาเป็น <span class="font-bold">Primary Key</span>
+                เมื่อมีการสแกนใหม่ ข้อมูลจะอัปเดตทันที
+            </p>
+
+            <!-- Summary Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+                <div class="p-4 bg-gray-50 border rounded-xl shadow-inner">
+                    <p class="text-sm text-gray-500">
+                        นักศึกษาที่มาแล้ว
+                    </p>
+                    <h2 id="count-present" class="text-3xl font-bold">0</h2>
+                </div>
+
+                <div class="p-4 bg-gray-50 border rounded-xl shadow-inner">
+                    <p class="text-sm text-gray-500">
+                        ยังไม่มา
+                    </p>
+                    <h2 id="count-absent" class="text-3xl font-bold">0</h2>
+                </div>
+
+                <div class="p-4 bg-gray-50 border rounded-xl shadow-inner">
+                    <p class="text-sm text-gray-500">
+                        อัปเดตล่าสุด
+                    </p>
+                    <h2 id="last-update" class="text-xl font-bold">-- : -- : --</h2>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="bg-gray-50 border rounded-xl shadow-inner overflow-x-auto">
+                <table class="min-w-full rounded-xl overflow-hidden">
+                    <thead class="bg-gray-100 text-gray-700">
+                        <tr class="text-left">
+                            <th class="px-4 py-3">รหัสนักศึกษา</th>
+                            <th class="px-4 py-3">ชื่อ - นามสกุล</th>
+                            <th class="px-4 py-3">เวลาเข้า</th>
+                            <th class="px-4 py-3">สถานะ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="student-table" class="text-sm">
+                        <tr>
+                            <td colspan="4" class="col-span-full text-center space-y-4 py-24">
+                                <!-- Room cards will be inserted here -->
+                                <span class="spinner animate-spin size-16 border-8 mx-auto"></span>
+                                <p class="text-gray-600">
+                                    กำลังโหลดข้อมูล...
+                                </p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <tbody id="table-body"></tbody>
+        </section>
+
+        <!-- Docs -->
+        <section id="docs" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-2">
+                <div data-aos="fade-right" class="bg-white-smoker border rounded-2xl shadow p-4 md:p-6">
+
+                    <h2 class="text-3xl sm:text-4xl font-extrabold leading-tight">
+                        เกี่ยวกับระบบ Student Entry Scanner
+                    </h2>
+
+                    <p class="text-sm sm:text-base text-gray-600 leading-relaxed pt-4">
+                        ระบบ <span class="font-bold">Student Entry Scanner</span> เป็นระบบสำหรับ
+                        <span class="font-bold">สแกนและบันทึกการเข้า–ออกของนักเรียน</span>
+                        โดยเน้นความรวดเร็ว แม่นยำ และลดภาระงานของครูหรือเจ้าหน้าที่
+                    </p>
+
+                    <p class="text-sm sm:text-base text-gray-600 leading-relaxed">
+                        ระบบใช้ <span class="font-bold">เครื่องรับสัญญาณ NFC</span>
+                        คู่กับ <span class="font-bold">บัตรนักเรียน NFC</span>
+                        ในการยืนยันตัวตนแบบรวดเร็ว
+                        และมี <span class="font-bold">QR Code</span>
+                        เป็นทางเลือกเสริมสำหรับกรณีฉุกเฉินหรืออุปกรณ์สำรอง
+                    </p>
+
+                    <p class="text-sm sm:text-base text-gray-600 leading-relaxed">
+                        ระบบถูกออกแบบมาให้ใช้งานง่าย รองรับการใช้งานจริงในโรงเรียน
+                        ช่วยลดปัญหาการเช็กชื่อผิดพลาด และเพิ่มความโปร่งใสในการตรวจสอบย้อนหลัง
+                    </p>
+
+                    <p class="text-sm sm:text-base text-gray-600 leading-relaxed mt-4">
+                        เหมาะสำหรับโรงเรียน วิทยาลัย หรือสถาบันการศึกษา
+                        ที่ต้องการระบบบันทึกการเข้าเรียนที่
+                        <span class="font-bold">ทันสมัย ปลอดภัย และขยายต่อได้ในอนาคต</span>
+                    </p>
+
+                </div>
+            </div>
+
+            <aside data-aos="fade-left" class="block">
+                <div class="bg-white-smoker border rounded-2xl shadow space-y-2 p-4 md:p-6">
+                    <h3 class="text-sm sm:text-base font-bold">ทีมผู้พัฒนา</h3>
+                    <div id="team"
+                        class="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] lg:flex lg:flex-col gap-4">
+                        <div id="loadingTeam"
+                            class="col-span-full w-full flex flex-col items-center justify-center space-y-2">
+                            <span class="spinner animate-spin size-16 border-8 mb-4">
+                            </span>
+                            <p class="text-sm sm:text-base text-gray-600">
+                                กำลังตามล่าทีมผู้พัฒนา... แม่งหายไปไหนอีกละ
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </section>
+        <!-- Footer -->
+        <footer></footer>
+    </main>
+    <script>
+        const URL_API = "https://script.google.com/macros/s/AKfycbwBhN1lMRSlmm_2tmU-aTOtZ-76H18E6l4-OYqVvubHocPqRhCcPGTExGCUHUqa6-i0/exec"; // ← ใส่ URL doGet() ตรงนี้
+
+        function getStatusByTime(timestamp) {
+            const date = new Date(timestamp);
+            const hours = date.getHours();
+            const minutes = date.getMinutes();
+            const current = hours * 60 + minutes;
+
+            const inStart = 0; // 00:00
+            const inEnd = 15 * 60 + 15; // 15:15
+
+            if (current >= inStart && current <= inEnd) return "IN";
+            return "OUT";
+        }
+
+        async function loadData() {
+            try {
+                const res = await fetch(URL_API);
+                const data = await res.json();
+
+                const table = document.getElementById("student-table");
+                table.innerHTML = "";
+
+                let countIN = 0;
+                let countOUT = 0;
+
+                data.forEach(row => {
+                    const realStatus = getStatusByTime(row.timestamp);
+                    if (realStatus === "IN") countIN++;
+                    else countOUT++;
+
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+                    <td class="px-4 py-2">${row.student_id}</td>
+                    <td class="px-4 py-2">-</td>
+                    <td class="px-4 py-2">${new Date(row.timestamp).toLocaleTimeString()}</td>
+                    <td class="px-4 py-2">
+                    <span class="font-bold ${realStatus === "IN" ? "text-green-600" : "text-red-600"
+                        }">${realStatus}</span>
+                    </td>
+                    `;
+                    table.appendChild(tr);
+                });
+
+                // update summary
+                document.getElementById("count-present").textContent = countIN;
+                document.getElementById("count-absent").textContent = countOUT;
+
+                document.getElementById("last-update").textContent =
+                    new Date().toLocaleTimeString();
+
+            } catch (err) {
+                console.error(err);
+                document.getElementById("student-table").innerHTML = `
+                <tr>
+                <td colspan="4" class="col-span-full text-center text-red-500 space-y-4 py-24">
+                <i class="fas fa-exclamation-triangle fa-beat text-6xl"></i>
+                <p>เกิดข้อผิดพลาดในการโหลดข้อมูล</p>
+                </td>
+                </tr>
+                `;
+            }
+        }
+
+        setInterval(loadData, 3000);
+        loadData();
+    </script>
+    <script defer src=../script/index.js></script>
+</body>
+
+</html>

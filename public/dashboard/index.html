@@ -1,0 +1,1172 @@
+<!doctype html>
+<html lang=th>
+
+<head>
+    <title>Auto-Scalable Project Dashboard</title>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+    <meta name="theme-color" content="#84D4FA">
+    <meta name="keywords" content="asia-lb,asialb,abac, Centered101">
+    <meta name="author" content="Centered101">
+    <meta name="description" content="ผลการรวบรวมแบบประเมินความพึงพอใจ">
+
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://asia-lb.web.app">
+    <meta property="og:title" content="Auto-Scalable Project Dashboard">
+    <meta property="og:description" content="ผลการรวบรวมแบบประเมินความพึงพอใจ">
+    <meta property="og:image" content="/favicon.ico">
+
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://asia-lb.web.app">
+    <meta property="twitter:title" content="Auto-Scalable Project Dashboard">
+    <meta property="twitter:description" content="ผลการรวบรวมแบบประเมินความพึงพอใจ">
+    <meta property="twitter:image" content="/favicon.ico">
+
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="stylesheet" href="/style/index.css">
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+
+    <script src="/script/index.js" defer></script>
+    <script src=https://cdn.tailwindcss.com></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<style>
+    /* Chart container sizing */
+    canvas {
+        max-height: 300px !important;
+    }
+
+    #comparisonChart {
+        max-height: 400px !important;
+    }
+
+    /* Enhanced table styling */
+    tbody tr:hover {
+        background: linear-gradient(90deg, rgba(59, 130, 246, 0.05), rgba(59, 130, 246, 0.02));
+    }
+
+    /* Filter animations */
+    select {
+        transition: all 0.2s ease;
+    }
+
+    select:focus {
+        ring: 2px;
+        ring-color: #3B82F6;
+        ring-opacity: 0.5;
+    }
+
+    .slide-up {
+        animation: slideUp ease;
+    }
+
+    @keyframes slideUp {
+        from {
+            transform: translateY(100px);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+</style>
+
+<body class="min-h-screen overflow-x-hidden">
+
+    <!-- preloaders -->
+    <div id="preloaders" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="flex items-center gap-4 bg-[color:var(--white-smoker)] border rounded-lg shadow-xl p-4">
+            <span class="spinner animate-spin size-8 border-4">
+            </span>
+            <span class="text-base sm:text-lg">กำลังโหลดข้อมูล</span>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <header data-aos="fade-down" class="sticky top-0 bg-white-smoker border shadow z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="h-16 flex justify-between items-center">
+                <a href="/" onclick="window.scrollTo({ top: 0, behavior: 'smooth' })"
+                    class="ripple-effect flex flex items-center gap-2 rounded">
+                    <div
+                        class="size-10 sm:size-12 flex items-center justify-center bg-primary rounded-md text-white font-bold">
+                        <img class="size-8" src="/favicon.ico"
+                            onerror="this.src='https://asia-lb.firebaseapp.com/images/favicon.svg'" alt="logo">
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="font-bold text-base sm:text-lg pr-2">ASIA-LB</span>
+                        <span class="text-xs text-gray-600">Analytics-Dashboard</span>
+                    </div>
+                </a>
+                <div class="flex items-center space-x-4">
+                    <button id="refreshBtn" title="รีเฟรชข้อมูล"
+                        class="btn-primary flex items-center gap-2 py-2 px-3 overflow-hidden">
+                        <i class="fas fa-sync-alt"></i>
+                        <span class="hidden lg:block">รีเฟรชข้อมูล</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <section data-aos="fade-down" data-aos-duration="1500"
+        class="max-w-screen-2xl grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mx-auto p-4 px-2 sm:p-4">
+        <div class="flex-1 bg-white-smoker border rounded-2xl shadow space-y-2 p-4 md:p-6">
+            <h3 class="text-sm sm:text-base font-bold">ทีมผู้พัฒนา</h3>
+            <div id="team" class="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] lg:flex lg:flex-col gap-4">
+                <div id="loadingTeam" class="col-span-full w-full flex flex-col items-center justify-center space-y-2">
+                    <span class="spinner animate-spin size-16 border-8 mb-4">
+                    </span>
+                    <p class="text-sm sm:text-base text-gray-600">
+                        กำลังตามล่าทีมผู้พัฒนา... แม่งหายไปไหนอีกละ
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="w-full flex flex-col gap-4 bg-white-smoker border rounded-2xl shadow p-4 md:p-6">
+            <div class="flex items-center justify-between gap-2">
+                <span id="projectCount"
+                    class="text-xs sm:text-sm font-medium text-green-800 bg-green-100 border rounded-md space-x-1 p-2">
+                    <i class="fa-regular fa-compass fa-spin"></i>
+                    <span>กำลังโหลดข้อมูล</span>
+                </span>
+                <span id="lastUpdate"
+                    class="animate-pulse flex-1 text-xs sm:text-sm text-gray-600 bg-gray-50 border rounded-md shadow-inner p-2">กำลังโหลดข้อมูล</span>
+            </div>
+            <!-- Project Detection Alert -->
+            <div id="projectAlert" class="hidden bg-green-100 border border-l-4 border-green-500 rounded-lg p-4">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-info-circle text-lg sm:text-xl text-green-500"></i>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-xs sm:text-sm text-green-700">
+                            <span>ตรวจพบโปรเจคใหม่!</span>
+                            <span id="newProjectNames"></span>
+                        </p>
+                    </div>
+                    <div class="ml-auto">
+                        <button id="dismissAlert" class="text-green-500 hover:text-green-600">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <!-- No Data Message -->
+            <div id="serviceUnavailableMessage"
+                class="hidden bg-blue-500 text-white text-center border rounded-2xl space-y-2 py-6">
+                <i class="fa-solid fa-compass fa-spin text-2xl sm:text-3xl"></i>
+                <h3 class="text-base sm:text-lg font-medium">ยังไม่เปิดให้บริการ</h3>
+                <p class="text-sm sm:text-base font-normal">
+                    ระบบกำลังอยู่ระหว่างการตั้งค่าหรือปิดปรับปรุงชั่วคราว
+                </p>
+            </div>
+            <!-- No Data Message -->
+            <div id="noDataMessage"
+                class="hidden bg-secondary text-white text-center border rounded-2xl space-y-2 py-6">
+                <i class="fa-solid fa-compass fa-spin text-2xl sm:text-3xl"></i>
+                <h3 class="text-base sm:text-lg font-medium">ไม่พบข้อมูล</h3>
+                <p class="text-sm sm:text-base font-normal">
+                    กรุณาตรวจสอบการเชื่อมต่อ Google Sheets
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Main Content -->
+    <main class="max-w-screen-2xl space-y-4 sm:space-y-6 mx-auto p-4 px-2 sm:p-4 pt-0">
+
+        <!-- Dynamic Summary Cards Container -->
+        <div id="summaryCards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+            <!-- Cards will be generated dynamically -->
+        </div>
+
+        <div data-aos="fade-up" class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            <!-- Additional Charts Row -->
+            <div class="bg-white-smoker border rounded-2xl shadow p-4 sm:p-6">
+                <h3 class="flex items-center gap-2 text-lg sm:text-xl font-bold text-gray-800 mb-4">
+                    <i class="fas fa-venus-mars text-pink-500"></i><span>การกระจายเพศในแต่ละโปรเจค</span>
+                </h3>
+                <canvas id="genderChart" width="400" height="300"></canvas>
+            </div>
+            <!-- Satisfaction Distribution Chart -->
+            <div class="bg-white-smoker border rounded-2xl shadow p-4 sm:p-6">
+                <h3 class="flex items-center gap-2 text-lg sm:text-xl font-bold text-gray-800 mb-4">
+                    <i class="fas fa-users text-blue-500"></i><span>สถิติผู้ประเมินตามบทบาท</span>
+                </h3>
+                <canvas id="evaluatorChart" width="400" height="300"></canvas>
+            </div>
+        </div>
+
+        <!-- emoj Distribution Chart -->
+        <div data-aos="fade-up" class="bg-white-smoker border rounded-2xl shadow p-4 sm:p-6">
+            <h3 class="flex items-center gap-2 text-lg sm:text-xl font-bold text-gray-800 mb-4">
+                <i class="fas fa-smile text-yellow-500"></i><span>การให้คะแนน
+                    Emoji</span>
+            </h3>
+            <canvas id="emojiChart" width="400" height="300"></canvas>
+        </div>
+
+        <div data-aos="fade-up" class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            <!-- Project Comparison Chart -->
+            <div class="bg-white-smoker border rounded-2xl shadow p-4 sm:p-6">
+                <h3 class="flex items-center gap-2 text-lg sm:text-xl font-bold text-gray-800 mb-4">
+                    <i class="fas fa-chart-bar text-purple-500"></i><span>คะแนนเฉลี่ยแต่ละด้าน</span>
+                </h3>
+                <canvas id="criteriaChart" width="400" height="300"></canvas>
+            </div>
+            <!-- Project Comparison Chart -->
+            <div class="bg-white-smoker border rounded-2xl shadow p-4 sm:p-6">
+                <h3 class="flex items-center gap-2 text-lg sm:text-xl font-bold text-gray-800 mb-4">
+                    <i class="fas fa-star text-yellow-500"></i><span>ความพึงพอใจโดยรวม</span>
+                </h3>
+                <canvas id="overallChart" width="400" height="300"></canvas>
+            </div>
+        </div>
+
+        <!-- Project Comparison Chart -->
+        <div data-aos="fade-up" class="bg-white-smoker border rounded-2xl shadow p-4 sm:p-6">
+            <h3 class="flex items-center gap-2 text-lg sm:text-xl font-bold text-gray-800 mb-4">
+                <i class="fas fa-chart-line text-green-500"></i><span>แนวโน้มคะแนนตามเวลา</span>
+            </h3>
+            <canvas id="timelineChart" width="800" height="400"></canvas>
+        </div>
+
+        <!-- Detailed Data Table -->
+        <div data-aos="fade-up" class="bg-white-smoker border rounded-2xl shadow p-4 sm:p-6">
+            <div class="flex flex-col mb-4">
+                <h3 class="flex items-center gap-2 text-lg sm:text-xl font-bold text-gray-800 mb-4">
+                    <i class="fas fa-table text-gray-600"></i><span>ข้อมูลการประเมินทั้งหมด</span>
+                </h3>
+                <div class="flex items-center gap-2">
+                    <div class="flex-1 space-y-2">
+                        <label for="projectFilter"
+                            class="flex flex-col text-xs sm:text-sm text-gray-600 whitespace-nowrap">สถาณผู้ประเมิณ</label>
+                        <select id="projectFilter"
+                            class="w-full text-xs bg-gray-50 border rounded-lg shadow-inner px-3 py-2">
+                            <option value="all">โปรเจค: ทั้งหมด</option>
+                        </select>
+                    </div>
+                    <div class="flex-1 space-y-2">
+                        <label for="evaluatorFilter"
+                            class="flex flex-col text-xs sm:text-sm text-gray-600 whitespace-nowrap">สถาณผู้ประเมิณ</label>
+                        <select id="evaluatorFilter"
+                            class="w-full text-xs bg-gray-50 border rounded-lg shadow-inner px-3 py-2">
+                            <option value="all">บทบาท: ทั้งหมด</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-100 border rounded-lg shadow-inner overflow-scroll">
+                <table class="min-w-full table-auto">
+                    <thead>
+                        <tr class="text-left text-xs font-medium text-gray-500 uppercase text-nowrap *:px-4 *:py-2">
+                            <th>วันที่, เวลา</th>
+                            <th>โปรเจค</th>
+                            <th>เพศ</th>
+                            <th>บทบาท</th>
+                            <th>ชื่อ</th>
+                            <th>Emoji</th>
+                            <th>สร้างสรรค์</th>
+                            <th>เนื้อหา</th>
+                            <th>นำเสนอ</th>
+                            <th>ใช้งาน</th>
+                            <th>โดยรวม</th>
+                            <th>ความคิดเห็น</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dataTableBody" class="bg-gray-50 divide-y"></tbody>
+                </table>
+            </div>
+        </div>
+        <!-- Footer -->
+        <footer></footer>
+    </main>
+    <script>
+        class AutoScalableDashboard {
+            constructor() {
+                this.sheetId = "1n4r8YQD5iH6k9-g4uc8STTLbQXGe5NkW0TsFbOM_ONk";
+                this.sheetName = "form_asia-lb_v2";
+                this.url = `https://docs.google.com/spreadsheets/d/${this.sheetId}/gviz/tq?sheet=${this.sheetName}`;
+
+                this.rawData = [];
+                this.processedData = [];
+                this.detectedProjects = new Set();
+                this.previousProjects = new Set();
+                this.charts = {};
+                this.projectColors = {};
+                this.colorPalette = [
+                    '#0056B3',
+                    '#E2AA20',
+                    '#F37F24',
+                    '#FF7070',
+                    '#8BAE66',
+                    '#C53031',
+                    '#B2B2B2',
+                    '#B2B2B2',
+                ];
+
+                this.emojiMap = {
+                    1: '😞',
+                    2: '😐',
+                    3: '😊'
+                };
+
+                this.genderMap = {
+                    'ชาย': 'ชาย',
+                    'หญิง': 'หญิง',
+                    'อื่นๆ': 'อื่นๆ'
+                };
+
+                this.evaluatorTypes = [
+                    'ผู้ปกครอง',
+                    'ครู',
+                    'นักเรียน',
+                    'บุคคลทั่วไป',
+                    '',
+                ];
+
+                this.bootstrap();
+            }
+
+            async bootstrap() {
+                const isPublic = await this.checkSheetPublic();
+
+                if (!isPublic) {
+                    console.warn("Sheet is not public — init aborted");
+                    return;
+                }
+
+                this.init();
+            }
+            async checkSheetPublic() {
+                try {
+                    const testUrl = `https://docs.google.com/spreadsheets/d/${this.sheetId}/gviz/tq?tqx=out:json`;
+                    const res = await fetch(testUrl);
+
+                    if (!res.ok) return false;
+
+                    const text = await res.text();
+                    const isPublic = text.includes("google.visualization.Query.setResponse");
+
+                    if (!isPublic && !this.hasNotifiedSheetError) {
+                        this.hasNotifiedSheetError = true;
+
+                        $("#serviceUnavailableMessage").fadeIn(200);
+                        showNotification("Google Sheet ยังไม่ได้เปิดเป็น Public", "error");
+                    }
+
+                    return isPublic;
+                } catch (e) {
+                    if (!this.hasNotifiedSheetError) {
+                        this.hasNotifiedSheetError = true;
+
+                        $("#serviceUnavailableMessage").fadeIn(200);
+                        showNotification("ไม่สามารถเชื่อมต่อ ฐานข้อมูลได้", "error");
+                    }
+                    return false;
+                }
+            }
+
+            init() {
+                this.bindEvents();
+                this.loadData();
+                this.setupAutoRefresh();
+            }
+
+            bindEvents() {
+                $('#refreshBtn').on('click', () => this.loadData());
+                $('#projectFilter, #evaluatorFilter').on('change', () => this.filterTable());
+                $('#dismissAlert').on('click', () => this.dismissAlert());
+                $('#exportBtn').on('click', () => this.exportData());
+            }
+
+            setupAutoRefresh() {
+                setInterval(() => this.loadData(), 120000);
+            }
+
+            async loadData() {
+                // $('#preloaders').fadeIn(200);
+                $('#refreshBtn i').addClass('fa-spin');
+                try {
+
+                    const response = await $.get(this.url);
+                    const jsonData = JSON.parse(response.substring(47).slice(0, -2));
+
+                    if (jsonData.table && jsonData.table.rows && jsonData.table.rows.length > 0) {
+                        this.rawData = jsonData.table.rows;
+                        this.detectProjects();
+                        this.processData();
+                        this.updateUI();
+                        $('#noDataMessage').hide();
+                        $('#summaryCards, .grid').show();
+                        this.updateSummaryCards();
+                    } else {
+                        this.showNoData();
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    $('#refreshBtn i').removeClass('fa-spin');
+                } finally {
+                    $('#refreshBtn i').removeClass('fa-spin');
+                    $('#preloaders').fadeOut(200);
+                }
+            }
+
+            showNoData() {
+                $('#noDataMessage').show();
+                $('#summaryCards, .card canvas').closest('.card').hide();
+                $('#projectCount').text('0 โปรเจค');
+            }
+
+            detectProjects() {
+                const currentProjects = new Set();
+
+                if (this.rawData.length > 0) {
+                    const firstRow = this.rawData[0];
+                    const cells = firstRow.c || [];
+
+                    // ข้าม column Date (index 0), แล้วตรวจทุก 10 columns
+                    for (let i = 1; i < cells.length; i += 10) {
+                        if (i + 9 < cells.length) {
+                            const projectIndex = Math.floor((i - 1) / 10);
+                            const projectName = `project-${projectIndex + 1}`;
+
+                            // ตรวจว่ามีข้อมูลจริงหรือไม่
+                            let hasData = false;
+                            for (let row of this.rawData) {
+                                const rowCells = row.c || [];
+                                for (let col = i; col < i + 10; col++) {
+                                    if (rowCells[col] && rowCells[col].v) {
+                                        hasData = true;
+                                        break;
+                                    }
+                                }
+                                if (hasData) break;
+                            }
+
+                            if (hasData) currentProjects.add(projectName);
+                        }
+                    }
+                }
+
+                const newProjects = [...currentProjects].filter(p => !this.previousProjects.has(p));
+                if (newProjects.length > 0 && this.previousProjects.size > 0) {
+                    this.showAlert(newProjects);
+                }
+
+                this.previousProjects = new Set(this.detectedProjects);
+                this.detectedProjects = currentProjects;
+                this.assignColors();
+            }
+
+            assignColors() {
+                Array.from(this.detectedProjects).forEach((project, index) => {
+                    if (!this.projectColors[project]) {
+                        this.projectColors[project] = this.colorPalette[index % this.colorPalette.length];
+                    }
+                });
+            }
+
+            processData() {
+                this.processedData = [];
+                const projects = Array.from(this.detectedProjects);
+
+                this.rawData.forEach(row => {
+                    const cells = row.c || [];
+                    const date = cells[0]?.f || cells[0]?.v || '';
+
+                    projects.forEach((project, projectIndex) => {
+                        const startCol = 1 + (projectIndex * 10);
+
+                        const gender = cells[startCol]?.v || '';
+                        const evaluator = cells[startCol + 1]?.v || '';
+                        const name = cells[startCol + 2]?.v || '';
+                        const emoji = parseInt(cells[startCol + 3]?.v) || 0;
+                        const creative = parseFloat(cells[startCol + 4]?.v) || 0;
+                        const content = parseFloat(cells[startCol + 5]?.v) || 0;
+                        const presentation = parseFloat(cells[startCol + 6]?.v) || 0;
+                        const usability = parseFloat(cells[startCol + 7]?.v) || 0;
+                        const overall = parseFloat(cells[startCol + 8]?.v) || 0;
+                        const comments = cells[startCol + 9]?.v || '';
+
+                        if (name || emoji || creative) {
+                            this.processedData.push({
+                                date, project, gender, evaluator, name,
+                                emoji, creative, content, presentation,
+                                usability, overall, comments
+                            });
+                        }
+                    });
+                });
+            }
+
+            updateUI() {
+                this.updateFilters();
+                this.createCharts();
+                this.populateTable();
+                $('#lastUpdate').text(`อัปเดตล่าสุด: ${new Date().toLocaleString('en')}`).removeClass("animate-pulse");
+            }
+
+            updateSummaryCards() {
+                const container = $('#summaryCards');
+                container.empty();
+
+                // อัปเดตจำนวนโปรเจค
+                $('#projectCount').html(`
+                    <i class="fa-regular fa-compass fa-spin"></i>
+                    <span>พบ ${this.detectedProjects.size} โปรเจค</span>
+                    `);
+
+                Array.from(this.detectedProjects).forEach(project => {
+                    const data = this.processedData.filter(d => d.project === project);
+                    const avgOverall = data.length > 0
+                        ? (data.reduce((sum, d) => sum + d.overall, 0) / data.length).toFixed(1) : '0.0';
+
+                    const color = this.projectColors[project];
+
+                    container.append(`
+                        <div data-aos="flip-up" title="${project}" class="bg-white-smoker border-[${color}] border-l-4 rounded-2xl shadow p-4">
+                        <div class="flex items-center justify-between gap-4">
+                        <div class="flex-1 bg-[${color}20] border rounded-lg shadow-inner p-4">
+                        <p class="text-xs sm:text-sm font-medium text-gray-600">${project}</p>
+                        <p class="text-2xl sm:text-3xl font-bold text-gray-900"">${data.length}</p>
+                        <p class="text-xs sm:text-sm text-gray-500 mt-1">ผู้ประเมิน</p>
+                        <div class="mt-2">
+                        <p class="text-xs text-gray-600">คะแนนเฉลี่ย</p>
+                        <p class="text-xl sm:text-2xl text-[${color}] font-bold">${avgOverall}/5</p>
+                        </div>
+                        </div>
+                        <a href="/${project}/" class="flex-shrink-0 flex flex-col items-center gap-2 group">
+                        <i class="fa-solid fa-compact-disc fa-spin text-4xl text-[${color}]"></i>
+                        <p class="btn-text text-xs underline group-hover:text-primary group-hover:bg-[#E3F2FD]">ไปยังโปรเจค</p>
+                        </a>
+                        </div>
+                        </div>
+                        `);
+                });
+            }
+
+            updateFilters() {
+                const projectFilter = $('#projectFilter');
+                const evaluatorFilter = $('#evaluatorFilter');
+
+                projectFilter.empty().append('<option value="all">โปรเจค: ทั้งหมด</option>');
+                Array.from(this.detectedProjects).forEach(project => {
+                    projectFilter.append(`<option value="${project}">${project}</option>`);
+                });
+
+                evaluatorFilter.empty().append('<option value="all">บทบาท: ทั้งหมด</option>');
+                this.evaluatorTypes.forEach(type => {
+                    evaluatorFilter.append(`<option value="${type}">${type}</option>`);
+                });
+            }
+
+            createCharts() {
+                this.createGenderChart();
+                this.createEvaluatorChart();
+                this.createEmojiChart();
+                this.createCriteriaChart();
+                this.createOverallChart();
+                this.createTimelineChart();
+            }
+
+            createGenderChart() {
+                const ctx = document.getElementById('genderChart').getContext('2d');
+                if (this.charts.gender) this.charts.gender.destroy();
+
+                const projects = Array.from(this.detectedProjects);
+
+                const genders = {
+                    'ชาย': '#60A5FA',
+                    'หญิง': '#F472B6',
+                    'อื่นๆ': '#B2B2B2'
+                };
+
+                const genderLabels = Object.keys(genders);
+
+                const datasets = genderLabels.map(gender => {
+                    const data = projects.map(project => {
+                        return this.processedData.filter(item => {
+                            if (!item.gender || !item.gender.trim()) return false;
+                            return item.project === project && item.gender.trim() === gender;
+                        }).length;
+                    });
+
+                    return {
+                        label: gender,
+                        data,
+                        backgroundColor: genders[gender],
+                        borderRadius: 6
+                    };
+                });
+
+                this.charts.gender = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: projects,
+                        datasets
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top'
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label(ctx) {
+                                        return `${ctx.dataset.label}: ${ctx.parsed.y} คน`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    stepSize: 1
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            createEvaluatorChart() {
+                const ctx = document.getElementById('evaluatorChart').getContext('2d');
+                if (this.charts.evaluator) this.charts.evaluator.destroy();
+
+                const evaluatorTypes = {
+                    'ผู้ปกครอง': '#FF7070',
+                    'ครู': '#84D4FA',
+                    'นักเรียน': '#1ED760',
+                    'บุคคลทั่วไป': '#B2B2B2',
+                };
+
+                const counts = this.processedData.reduce((acc, item) => {
+                    const label = item.evaluator?.trim() || 'บุคคลทั่วไป';
+                    acc[label] = (acc[label] || 0) + 1;
+                    return acc;
+                }, {});
+
+                const labels = Object.keys(counts);
+                const data = Object.values(counts);
+
+                const backgroundColor = labels.map(
+                    label => evaluatorTypes[label] || '#B2B2B2'
+                );
+
+                this.charts.evaluator = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels,
+                        datasets: [{
+                            data,
+                            backgroundColor,
+                            borderWidth: 1,
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom'
+                            }
+                        }
+                    }
+                });
+            }
+
+            createEmojiChart() {
+                const ctx = document.getElementById('emojiChart').getContext('2d');
+                if (this.charts.emoji) this.charts.emoji.destroy();
+
+                const projects = Array.from(this.detectedProjects);
+                const datasets = projects.map(project => {
+                    const data = [1, 2, 3].map(emoji =>
+                        this.processedData.filter(d => d.project === project && d.emoji === emoji).length
+                    );
+                    return {
+                        label: project,
+                        data: data,
+                        backgroundColor: this.projectColors[project],
+                        borderRadius: 4
+                    };
+                });
+
+                this.charts.emoji = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['😣 เสียใจนะ', '😐 ปานกลาง', '😀 ยิ้มแย้ม'],
+                        datasets: datasets
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true, ticks: {
+                                    stepSize: 1
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            createCriteriaChart() {
+                const ctx = document.getElementById('criteriaChart').getContext('2d');
+                if (this.charts.criteria) this.charts.criteria.destroy();
+
+                const projects = Array.from(this.detectedProjects);
+                const criteria = [
+                    'creative',
+                    'content',
+                    'presentation',
+                    'usability',
+                ];
+                const labels = [
+                    'ความคิดสร้างสรรค์',
+                    'เนื้อหา',
+                    'การนำเสนอ',
+                    'การใช้งาน',
+                ];
+
+                const datasets = projects.map(project => {
+                    const projectData = this.processedData.filter(d => d.project === project);
+                    const data = criteria.map(c => {
+                        const values = projectData.filter(d => d[c] > 0);
+                        return values.length > 0
+                            ? (values.reduce((sum, d) => sum + d[c], 0) / values.length).toFixed(2) : 0;
+                    });
+
+                    return {
+                        label: project,
+                        data: data,
+                        backgroundColor: this.projectColors[project] + '20',
+                        borderColor: this.projectColors[project],
+                        borderWidth: 1
+                    };
+                });
+
+                this.charts.criteria = new Chart(ctx, {
+                    type: 'radar',
+                    data: {
+                        labels: labels, datasets: datasets
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top'
+                            }
+                        },
+                        scales: {
+                            r: {
+                                beginAtZero: true, max: 5
+                            }
+                        }
+                    }
+                });
+            }
+
+            createOverallChart() {
+                const ctx = document.getElementById('overallChart').getContext('2d');
+                if (this.charts.overall) this.charts.overall.destroy();
+
+                const projects = Array.from(this.detectedProjects);
+                const data = projects.map(project => {
+                    const projectData = this.processedData.filter(d => d.project === project && d.overall > 0);
+                    return projectData.length > 0
+                        ? (projectData.reduce((sum, d) => sum + d.overall, 0) / projectData.length).toFixed(2) : 0;
+                });
+
+                this.charts.overall = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: projects,
+                        datasets: [{
+                            label: 'คะแนนเฉลี่ย',
+                            data: data,
+                            backgroundColor: projects.map(p => this.projectColors[p]),
+                            borderRadius: 16
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true, max: 5
+                            }
+                        }
+                    }
+                });
+            }
+
+            createTimelineChart() {
+                const ctx = document.getElementById('timelineChart').getContext('2d');
+                if (this.charts.timeline) this.charts.timeline.destroy();
+
+                const dateGroups = {};
+                this.processedData.forEach(item => {
+                    if (!dateGroups[item.date]) dateGroups[item.date] = {};
+                    if (!dateGroups[item.date][item.project]) dateGroups[item.date][item.project] = [];
+                    if (item.overall > 0) dateGroups[item.date][item.project].push(item.overall);
+                });
+
+                const dates = Object.keys(dateGroups).sort();
+                const projects = Array.from(this.detectedProjects);
+
+                const datasets = projects.map(project => {
+                    const data = dates.map(date => {
+                        const scores = dateGroups[date]?.[project] || [];
+                        return scores.length > 0
+                            ? scores.reduce((sum, s) => sum + s, 0) / scores.length : null;
+                    });
+
+                    return {
+                        label: project,
+                        data: data,
+                        borderColor: this.projectColors[project],
+                        backgroundColor: this.projectColors[project] + '20',
+                        tension: 0.4,
+                        fill: true,
+                        borderWidth: 1
+                    };
+                });
+
+                this.charts.timeline = new Chart(ctx,
+                    {
+                        type: 'line',
+                        data: {
+                            labels: dates,
+                            datasets: datasets
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'top'
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    max: 5
+                                }
+                            }
+                        }
+                    });
+            }
+
+            populateTable() {
+                const tbody = $('#dataTableBody');
+                tbody.empty();
+
+                const parseDate = (dateStr) => {
+                    if (!dateStr) return null;
+
+                    const direct = new Date(dateStr).getTime();
+                    if (!isNaN(direct)) return direct;
+
+                    const match = dateStr.match(/(\d+)\/(\d+)\/(\d+),?\s+(\d+):(\d+):(\d+)/);
+                    if (match) {
+                        const [,
+                            day,
+                            month,
+                            year,
+                            hour,
+                            minute,
+                            second] = match;
+                        return new Date(year, month - 1, day, hour, minute, second).getTime();
+                    }
+
+                    return null;
+                };
+
+                const sortedData = [...this.processedData].sort((a, b) => {
+                    const timeA = parseDate(a.date);
+                    const timeB = parseDate(b.date);
+
+                    if (!timeA && !timeB) return 0;
+                    if (!timeA) return 1;
+                    if (!timeB) return -1;
+
+                    return timeB - timeA;
+                });
+
+                sortedData.forEach(item => {
+                    const row = $(`
+                        <tr title="${item.group}" data-project="${item.project}" data-evaluator="${item.evaluator}" class="text-nowrap text-sm transition-colors duration-300 hover:bg-gray-50 cursor-pointer">
+                        <td title="${item.date}" class="px-4 py-3 text-gray-900">${item.date}</td>
+                        <td title="${item.group}" class="px-4 py-3"><span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" style="background: ${this.projectColors[item.project]}20; color: ${this.projectColors[item.project]}">${item.project}</span></td>
+                        <td title="${item.gender}" class="px-4 py-3 text-gray-900">${item.gender}</td>
+                        <td title="${item.evaluator}" class="px-4 py-3 text-gray-900">${item.evaluator}</td>
+                        <td title="${item.name}" class="px-4 py-3 text-gray-900 font-medium">${this.convertUrlsToLinks(item.name)}</td>
+                        <td title="${this.emojiMap[item.emoji] || '-'}" class="px-4 py-3 text-center">${this.emojiMap[item.emoji] || '-'}</td>
+                        <td title="${item.creative || '-'}" class="px-4 py-3 text-center">${item.creative || '-'}</td>
+                        <td title="${item.content || '-'}" class="px-4 py-3 text-center">${item.content || '-'}</td>
+                        <td title="${item.presentation || '-'}" class="px-4 py-3 text-center">${item.presentation || '-'}</td>
+                        <td title="${item.usability || '-'}" class="px-4 py-3 text-center">${item.usability || '-'}</td>
+                        <td title="${item.overall || '-'}" class="px-4 py-3 text-center"><span class="font-bold" style="color: ${this.projectColors[item.project]}">${item.overall || '-'}</span></td>
+                        <td title="${item.comments}" class="px-4 py-3 text-gray-600">${this.convertUrlsToLinks(item.comments)}</td>
+                        </tr>
+                        `);
+
+                    row.on('click', () => this.showDetailCard(item));
+                    tbody.append(row);
+                });
+            }
+
+            convertUrlsToLinks(text) {
+                if (!text) return '-';
+
+                const urlRegex = /(https?:\/\/[^\s]+)/g;
+                const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
+
+                // explicit platform
+                const socialExplicit = /@(line|ig|instagram|fb|facebook):([a-zA-Z0-9._]+)/gi;
+
+                // plain @username (ไม่อยู่ใน email)
+                const socialPlain = /(^|[\s(])@([a-zA-Z0-9._]{3,30})\b/g;
+
+                return text
+                    // URL
+                    .replace(urlRegex, url => `
+                    <a href="${url}" target="_blank"
+                    class="btn-text text-primary underline p-0"
+                    onclick="event.stopPropagation();">
+                    ${url}
+                    </a>
+                    `)
+
+                    // Email
+                    .replace(emailRegex, email => `
+                    <a href="mailto:${email}"
+                    class="btn-text text-primary underline p-0"
+                    onclick="event.stopPropagation();">
+                    ${email}
+                    </a>
+                    `)
+
+                    // @platform:username
+                    .replace(socialExplicit, (_, platform, username) => {
+                        const map = {
+                            line: `https://line.me/ti/p/~${username}`,
+                            ig: `https://instagram.com/${username}`,
+                            instagram: `https://instagram.com/${username}`,
+                            fb: `https://facebook.com/${username}`,
+                            facebook: `https://facebook.com/${username}`,
+                        };
+                        return `
+                    <a href="${map[platform.toLowerCase()]}" target="_blank"
+                    class="btn-text text-primary underline p-0"
+                    onclick="event.stopPropagation();">
+                    @${platform}:${username}
+                    </a>
+                    `;
+                    })
+
+                    // @username → IG (default)
+                    .replace(socialPlain, (match, prefix, username) => `
+                    ${prefix}<a href="https://instagram.com/${username}" target="_blank"
+                    class="btn-text text-primary underline p-0"
+                    onclick="event.stopPropagation();">
+                    @${username}
+                    </a>
+                    `);
+            }
+
+            showDetailCard(item) {
+                const existingCard = $('#detailCard');
+                if (existingCard.length) {
+                    existingCard.remove();
+                }
+
+                const card = $(`
+                    <div id="detailCard" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-50" style="animation: fadeIn 200ms;">
+                    <div class="w-full max-w-2xl max-h-[80vh] bg-white-smoker rounded-2xl shadow-xl overflow-auto" style="animation: slideUp 500ms;">
+                    <div class="sticky top-0 text-white-smoker bg-primary rounded-t-lg shadow p-4 sm:p-6">
+                    <div class="flex items-center justify-between">
+                    <div>
+                    <h2 class="text-xl sm:text-2xl font-bold mb-2">${item.project}</h2>
+                    </div>
+                    
+                    </div>
+                    </div>
+
+                    <div class="space-y-4 p-4 sm:p-6">
+                    <div class="flex flex-col">
+                    <span class="text-xs sm:text-sm">${item.gender}</span>
+                    <span class="text-xl sm:text-2xl font-bold">${item.name}</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-gray-50 border rounded-lg shadow-inner p-2 sm:p-4">
+                    <p class="text-xs sm:text-sm text-gray-600 mb-1">วันที่ประเมิน</p>
+                    <p class="text-sm sm:text-base font-bold text-gray-900">${item.date || '-'}</p>
+                    </div>
+                    <div class="bg-gray-50 border rounded-lg shadow-inner p-2 sm:p-4">
+                    <p class="text-xs sm:text-sm text-gray-600 mb-1">ผู้ประเมิน</p>
+                    <p class="text-sm sm:text-base font-bold text-gray-900">${item.evaluator || '-'}</p>
+                    </div>
+                    </div>
+
+                    <div class="">
+                    <h3 class="flex items-center gap-2 text-base sm:text-lg pb-2">
+                    <span>${this.emojiMap[item.emoji] || `<i class="fas fa-chart-bar text-[${this.projectColors[item.project]}]"></i>`}</span>
+                    คะแนนการประเมิน
+                    </h3>
+                    <div class="bg-gray-50 border rounded-lg shadow-inner space-y-2 p-2 sm:p-4">
+                    ${this.createScoreBar('ความคิดสร้างสรรค์', item.creative, this.projectColors[item.project])}
+                    ${this.createScoreBar('เนื้อหา', item.content, this.projectColors[item.project])}
+                    ${this.createScoreBar('การนำเสนอ', item.presentation, this.projectColors[item.project])}
+                    ${this.createScoreBar('ความใช้งานได้', item.usability, this.projectColors[item.project])}
+                    ${this.createScoreBar('ภาพรวม', item.overall, this.projectColors[item.project], true)}
+                    </div>
+                    </div>
+
+                    ${item.comments ? `
+                    <div class="">
+                    <h3 class="flex items-center gap-2 text-base sm:text-lg pb-2"><i class="fa-regular fa-comment text-[${this.projectColors[item.project]}]"></i> ความคิดเห็น</h3>
+                    <div class="bg-gray-50 border rounded-lg shadow-inner p-2 sm:p-4">
+                    <p class="leading-relaxed text-sm sm:text-base text-gray-700">${this.convertUrlsToLinks(item.comments)}</p>
+                    </div>
+                    </div>
+                    `: ''}
+                    </div>
+                    </div>
+                    </div>
+                    `);
+
+                $('body').append(card.hide().fadeIn(200));
+
+                card.on('click', function (e) {
+                    if (e.target === this) {
+                        $(this).fadeOut(200, function () {
+                            $(this).remove();
+                        });
+                    }
+                });
+            }
+
+            createScoreBar(label,
+                score,
+                color,
+                isOverall = false) {
+                const numScore = parseFloat(score) || 0;
+                const maxScore = 5;
+                const percentage = (numScore / maxScore) * 100;
+
+                return `
+                <div class="${isOverall ? 'bg-white-smoker border rounded-lg shadow-sm p-2 !pt-4 sm:!pt-6' : ''}">
+                <div class="flex justify-between text-sm sm:text-base mb-2">
+                <span class="${isOverall ? 'font-bold' : 'text-gray-700 font-medium'}">${label}</span>
+                <span class="${isOverall ? 'font-bold' : 'font-bold'}" style="color: ${color}">${score || '-'}</span>
+                </div>
+                <div class="w-full bg-white border rounded-full shadow-inner h-${isOverall ? '3' : '2'}">
+                <div class="h-full rounded-full transition-all duration-500"
+                style="width: ${percentage}%; background: ${color}75;"></div>
+                </div>
+                </div>
+                `;
+            }
+
+            filterTable() {
+                const project = $('#projectFilter').val();
+                const evaluator = $('#evaluatorFilter').val();
+
+                $('#dataTableBody tr').each(function () {
+                    const $row = $(this);
+                    const rowProject = $row.data('project');
+                    const rowEvaluator = $row.data('evaluator');
+
+                    const matchProject = project === 'all' || rowProject === project;
+                    const matchEvaluator = evaluator === 'all' || rowEvaluator === evaluator;
+
+                    (matchProject && matchEvaluator) ? $row.show() : $row.hide();
+                });
+            }
+
+            showAlert(projects) {
+                $('#newProjectNames').text(`: ${projects.join(', ')}`);
+                $('#projectAlert').removeClass('hidden');
+                showNotification(`ตรวจพบ: ${projects.join(', ')} โปรเจคใหม่!`,
+                    "success");
+            }
+
+            dismissAlert() {
+                $('#projectAlert').remove();
+            }
+
+            exportData() {
+                const data = {
+                    timestamp: new Date().toISOString(),
+                    projects: Array.from(this.detectedProjects),
+                    totalRecords: this.processedData.length,
+                    data: this.processedData
+                };
+
+                const blob = new Blob([JSON.stringify(data, null, 2)],
+                    {
+                        type: 'application/json'
+                    });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `evaluation_export_${new Date().toISOString().split('T')[0]}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            }
+        }
+
+        // Global instance for external access
+        let dashboardManager;
+
+        // Initialize dashboard when document is ready
+        $(document).ready(() => {
+            dashboardManager = new AutoScalableDashboard();
+
+            // Make it globally accessible
+            window.dashboardManager = dashboardManager;
+
+            $('header .flex.items-center.space-x-4').prepend(`
+                <button id="exportBtn" data-aos="fade-down" data-aos-duration="1500" title="ส่งออกข้อมูล" class="btn-secondary flex items-center gap-2 py-2 px-3 overflow-hidden">
+                <i class="fas fa-download"></i>
+                <span class="hidden lg:block">ส่งออกข้อมูล</span>
+                </button>
+                `);
+
+            $('#exportBtn').on('click', () => {
+                dashboardManager.exportData('json');
+            });
+        });
+
+        $(document).ready(() => {
+            window.dashboard = new AutoScalableDashboard();
+        });
+    </script>
+
+</html>

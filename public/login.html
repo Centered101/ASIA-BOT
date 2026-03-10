@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="th">
+
+<head>
+    <title>เข้าสู่ระบบ</title>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+    <meta name="theme-color" content="#84D4FA">
+    <meta name="description" content="เข้าสู่ระบบนักเรียน">
+
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="stylesheet" href="/style/index.css">
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+
+    <script src="/script/index.js" defer></script>
+    <script src="/config-students.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script>(function () { const o = CSSStyleDeclaration.prototype.setProperty; CSSStyleDeclaration.prototype.setProperty = function (p, v, r) { if (p === undefined || v === undefined) return; return o.call(this, p, v, r); }; })();</script>
+</head>
+
+<body draggable="false" oncontextmenu="return false">
+    <!-- Preloader -->
+    <div id="preloader"
+        class="bg-stripes-gray visible touch-none min-h-screen fixed inset-0 flex items-center justify-center text-center bg-gray-50 z-50">
+        <span class="spinner animate-spin size-80 fixed border-8" style="animation-duration: 1s;"></span>
+        <div
+            class="size-80 flex flex-col items-center justify-center gap-2 bg-[color:var(--white-smoker)] rounded-full shadow">
+            <img src="/favicon.ico" onerror="this.src='https://asia-lb.firebaseapp.com/images/favicon.svg'" alt="logo"
+                class="size-16 fa-bounce drop-shadow" draggable="false">
+            <h2 class="text-xl sm:text-2xl">กำลังโหลด</h2>
+            <p class="text-sm sm:text-base text-gray-600">
+                การผจญภัยของคุณกำลังจะเริ่มต้น
+            </p>
+        </div>
+        <div class="bg-blob" style="width:520px;height:520px;background:var(--primary-color);top:-120px;right:-170px;">
+        </div>
+        <div class="bg-blob" style="width:420px;height:420px;background:var(--primary-dark);bottom:-110px;left:-130px;">
+        </div>
+    </div>
+
+    <!-- Decorative blobs -->
+    <div class="bg-blob" style="width:520px;height:520px;background:var(--primary-color);top:-120px;right:-170px;">
+    </div>
+    <div class="bg-blob" style="width:420px;height:420px;background:var(--primary-dark);bottom:-110px;left:-130px;">
+    </div>
+
+    <!-- Main -->
+    <main class="min-h-screen flex items-center justify-center p-2 sm:p-4">
+        <!-- Login Card -->
+        <div data-aos="zoom-in-up"
+            class="w-full max-w-lg relative bg-white-smoker border rounded-2xl shadow p-4 sm:p-6 md:p-8 z-10">
+
+            <div class="text-center mb-8">
+                <div data-aos="zoom-in" data-aos-delay="500"
+                    class="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4"
+                    style="background:linear-gradient(135deg,#84D4FA,#4DB8F5);box-shadow:0 8px 24px rgba(77,184,245,0.38);">
+                    <i class="fa-solid fa-id-card text-white-smoker text-2xl"></i>
+                </div>
+                <h1 data-aos="zoom-in" data-aos-delay="550" class="text-2xl font-bold text-slate-800 mb-1">เข้าสู่ระบบ
+                </h1>
+                <p data-aos="zoom-in" data-aos-delay="600" class="text-sm text-slate-400">
+                    ใช้รหัสนักเรียนและเบอร์โทรของคุณ</p>
+            </div>
+
+            <div class="space-y-4 mb-6">
+                <div data-aos="fade-up" data-aos-delay="700">
+                    <label class="block text-xs font-semibold text-slate-500 mb-1.5">รหัสนักเรียน</label>
+                    <div class="field-wrap" id="wrap_login_id">
+                        <i class="fa-solid fa-id-badge field-icon"></i>
+                        <input id="login_id" class="form-input" placeholder="กรอกรหัสนักเรียน" autocomplete="username"
+                            maxlength="255" inputmode="numeric">
+                    </div>
+                </div>
+                <div data-aos="fade-up" data-aos-delay="800">
+                    <label class="block text-xs font-semibold text-slate-500 mb-1.5">
+                        เบอร์โทรนักเรียน
+                        <span class="text-slate-400 font-normal ml-1">(รหัสผ่าน)</span>
+                    </label>
+                    <div id="wrap_login_pass" class="field-wrap">
+                        <i class="fa-solid fa-lock field-icon"></i>
+                        <input id="login_pass" type="password" class="form-input" placeholder="กรอกเบอร์โทรนักเรียน"
+                            inputmode="tel" maxlength="255" autocomplete="current-password">
+                        <button id="eyeBtn" type="button" class="eye-btn">
+                            <i class="fa-solid fa-eye" id="eyeIcon"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <button id="loginBtn" data-aos="fade-up" data-aos-delay="900"
+                class="btn-primary w-full mb-4 overflow-hidden">
+                <i class="fa-solid fa-right-to-bracket" style="font-size:14px"></i>
+                เข้าสู่ระบบ
+            </button>
+
+            <p data-aos="fade-up" data-aos-delay="1000" class="text-center text-xs text-slate-400">
+                ยังไม่มีบัญชี?
+                <a href="./register.html" class="font-semibold text-sky-500 hover:text-sky-600 transition-colors">
+                    ลงทะเบียนที่นี่
+                </a>
+            </p>
+        </div>
+    </main>
+
+    <script>
+        // ══════════════════════════════════════════════
+        //  ถ้ามี session ที่ยังไม่หมดอายุ → ไป student.html
+        // ══════════════════════════════════════════════
+        (function () {
+            try {
+                const raw = localStorage.getItem(LS_DATA);
+                const time = localStorage.getItem(LS_TIME);
+                if (raw && time && Date.now() - new Date(time).getTime() < SESSION_TTL) {
+                    window.location.replace("/student.html");
+                }
+            } catch (e) { }
+        })();
+
+        // ══════════════════════════════════════════════
+        //  เก็บข้อมูล Device / Environment
+        // ══════════════════════════════════════════════
+        function getDeviceInfo() {
+            const nav = window.navigator;
+            return {
+                user_agent: nav.userAgent || "",
+                platform: nav.platform || "",
+                language: nav.language || "",
+                screen: screen.width + "x" + screen.height,
+                color_depth: screen.colorDepth + "bit",
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
+                referrer: document.referrer || "(direct)",
+                page_url: window.location.href,
+                touch_device: ("ontouchstart" in window) ? "yes" : "no",
+                online: navigator.onLine ? "yes" : "no",
+                cookie_enabled: navigator.cookieEnabled ? "yes" : "no",
+            };
+        }
+
+        // ══════════════════════════════════════════════
+        //  ดึง Public IP ของ client
+        // ══════════════════════════════════════════════
+        async function getClientIP() {
+            try {
+                const res = await fetch("https://api.ipify.org?format=json");
+                const data = await res.json();
+                return data.ip;
+            } catch {
+                return "unknown";
+            }
+        }
+
+        // ══════════════════════════════════════════════
+        //  Log attempt → Google Sheet (fire & forget)
+        //  บันทึก: student_id ที่พิมพ์, status, device info ทั้งหมด
+        // ══════════════════════════════════════════════
+        async function logLoginAttempt(student_id_attempt, status, reason) {
+            const dev = getDeviceInfo();
+            const ip = await getClientIP();
+            $.get(API_URL, {
+                action: "log_login",
+                student_id_attempt: student_id_attempt,
+                status: status,
+                reason: reason,
+                ip_address: ip,
+                user_agent: dev.user_agent,
+                platform: dev.platform,
+                language: dev.language,
+                screen: dev.screen,
+                color_depth: dev.color_depth,
+                timezone: dev.timezone,
+                referrer: dev.referrer,
+                page_url: dev.page_url,
+                touch_device: dev.touch_device,
+            });
+        }
+
+        // ══════════════════════════════════════════════
+        //  UI Helpers
+        // ══════════════════════════════════════════════
+        function showLoginError(msg) {
+            $("#login_id, #login_pass").addClass("error");
+            $("#wrap_login_id, #wrap_login_pass").addClass("has-error shake");
+            setTimeout(() => $("#wrap_login_id, #wrap_login_pass").removeClass("shake"), 400);
+        }
+        function clearLoginError() {
+            $("#login_id, #login_pass").removeClass("error");
+            $("#wrap_login_id, #wrap_login_pass").removeClass("has-error");
+        }
+
+        // ══════════════════════════════════════════════
+        //  Events
+        // ══════════════════════════════════════════════
+        $("#eyeBtn").click(function () {
+            const isPass = $("#login_pass").attr("type") === "password";
+            $("#login_pass").attr("type", isPass ? "text" : "password");
+            $("#eyeIcon").toggleClass("fa-eye fa-eye-slash");
+        });
+
+        $("#login_id, #login_pass").on("input", clearLoginError);
+        $("#login_id, #login_pass").on("keydown", function (e) {
+            if (e.key === "Enter") $("#loginBtn").click();
+        });
+
+        // ══════════════════════════════════════════════
+        //  Normalize phone: ตัด 0 นำหน้าออก
+        //  เพราะ Sheets เก็บ 0987654321 → 987654321 (number)
+        //  ส่งทั้ง 2 รูปแบบ ให้ฝั่ง server เลือก match
+        // ══════════════════════════════════════════════
+        function normalizePhone(p) {
+            return String(p).trim().replace(/^0+/, "");
+        }
+
+        // ══════════════════════════════════════════════
+        //  LOGIN
+        // ══════════════════════════════════════════════
+        $("#loginBtn").click(function () {
+            const id = $("#login_id").val().trim();
+            const phone = $("#login_pass").val().trim();
+
+            if (!id) {
+                $("#wrap_login_id").addClass("has-error shake");
+                setTimeout(() => $("#wrap_login_id").removeClass("shake"), 400);
+                showNotification && showNotification("กรุณากรอกรหัสนักเรียน", "error");
+                logLoginAttempt("(ว่าง)", "failed", "student_id empty");
+                return;
+            }
+            if (!phone) {
+                $("#wrap_login_pass").addClass("has-error shake");
+                setTimeout(() => $("#wrap_login_pass").removeClass("shake"), 400);
+                showNotification && showNotification("กรุณากรอกเบอร์โทรนักเรียน", "error");
+                logLoginAttempt(id, "failed", "phone empty");
+                return;
+            }
+
+            const $btn = $(this);
+            $btn.prop("disabled", true).html('<span class="spinner"></span>&nbsp;กำลังตรวจสอบ...');
+
+            $.ajax({
+                url: API_URL, method: "GET",
+                data: { action: "login", student_id: id, student_phone: normalizePhone(phone) },
+                success(raw) {
+                    const res = typeof raw === "string" ? JSON.parse(raw) : raw;
+
+                    if (res.status === "success") {
+                        // บันทึก session ลง localStorage
+                        try {
+                            localStorage.setItem(LS_DATA, JSON.stringify(res.data));
+                            localStorage.setItem(LS_TIME, new Date().toISOString());
+                        } catch (e) { console.warn("localStorage error", e); }
+
+                        // บันทึก log: success
+                        logLoginAttempt(id, "success", "login ok");
+                        showNotification && showNotification("เข้าสู่ระบบสำเร็จ! 🎉", "success");
+
+                        // → ไปหน้า student.html
+                        setTimeout(() => { window.location.href = "/student.html"; }, 700);
+
+                    } else {
+                        // บันทึก log: failed (รหัสที่พิมพ์ + เหตุผล)
+                        logLoginAttempt(id, "failed", res.message || "invalid credentials");
+                        showLoginError(res.message || "รหัสหรือเบอร์โทรไม่ถูกต้อง");
+                        showNotification && showNotification(res.message || "ข้อมูลไม่ถูกต้อง", "error");
+                        $btn.prop("disabled", false).html(
+                            '<i class="fa-solid fa-right-to-bracket" style="font-size:14px"></i> เข้าสู่ระบบ'
+                        );
+                    }
+                },
+                error() {
+                    logLoginAttempt(id, "error", "network error");
+                    showLoginError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาลองอีกครั้ง");
+                    showNotification && showNotification("เกิดข้อผิดพลาด กรุณาลองอีกครั้ง", "error");
+                    $btn.prop("disabled", false).html(
+                        '<i class="fa-solid fa-right-to-bracket" style="font-size:14px"></i> เข้าสู่ระบบ'
+                    );
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="th">
+
+<head>
+    <title>ระบบเว็บไซต์โครงงานนักศึกษา ASIA-LB</title>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+    <meta name="theme-color" content="#84D4FA">
+    <meta name="keywords"
+        content="asia-lb, asialb, asia-lb.web.app, asia-lb.firebaseapp.com, abac, Student Entry Scanner, Class Track Room, Centered101">
+    <meta name="author" content="Centered101">
+    <meta name="description" content="เว็บไซต์สำหรับประเมินความพึงพอใจต่อโครงงานนักศึกษา">
+
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://asia-lb.web.app">
+    <meta property="og:title" content="ระบบเว็บไซต์โครงงานนักศึกษา">
+    <meta property="og:description" content="เว็บไซต์สำหรับประเมินความพึงพอใจต่อผลงานโครงงานของนักศึกษา">
+    <meta property="og:image" content="/favicon.ico">
+
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://asia-lb.web.app">
+    <meta property="twitter:title" content="ระบบเว็บไซต์โครงงานนักศึกษา">
+    <meta property="twitter:description" content="เว็บไซต์สำหรับประเมินความพึงพอใจต่อโครงงานของนักศึกษา">
+    <meta property="twitter:image" content="/favicon.ico">
+
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="stylesheet" href="/style/index.css">
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+</head>
+
+<body draggable="false" oncontextmenu="return false">
+    <!-- Preloader -->
+    <div id="preloader"
+        class="bg-stripes-gray visible touch-none min-h-screen fixed inset-0 flex items-center justify-center text-center bg-gray-50 z-50">
+        <span class="spinner animate-spin size-80 fixed border-8" style="animation-duration: 1s;"></span>
+        <div
+            class="size-80 flex flex-col items-center justify-center gap-2 bg-[color:var(--white-smoker)] rounded-full shadow">
+            <img src="/favicon.ico" onerror="this.src='https://asia-lb.firebaseapp.com/images/favicon.svg'" alt="logo"
+                class="size-16 fa-bounce drop-shadow" draggable="false">
+            <h2 class="text-xl sm:text-2xl">กำลังโหลด</h2>
+            <p class="text-sm sm:text-base text-gray-600">
+                การผจญภัยของคุณกำลังจะเริ่มต้น
+            </p>
+        </div>
+        <div class="bg-blob" style="width:520px;height:520px;background:var(--primary-color);top:-120px;right:-170px;">
+        </div>
+        <div class="bg-blob" style="width:420px;height:420px;background:var(--primary-dark);bottom:-110px;left:-130px;">
+        </div>
+    </div>
+
+    <!-- Decorative blobs -->
+    <div class="bg-blob" style="width:520px;height:520px;background:var(--primary-color);top:-120px;right:-170px;">
+    </div>
+    <div class="bg-blob" style="width:420px;height:420px;background:var(--primary-dark);bottom:-110px;left:-130px;">
+    </div>
+
+    <!-- Top Navigation -->
+    <header data-aos="fade-down" class="sticky top-0 bg-white-smoker border shadow z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="h-16 flex justify-between items-center">
+                <a href="/" onclick="window.scrollTo({ top: 0, behavior: 'smooth' })"
+                    class="ripple-effect flex flex items-center gap-2 rounded">
+                    <div
+                        class="size-10 sm:size-12 flex items-center justify-center bg-primary rounded-md text-white font-bold">
+                        <img class="size-8" src="/favicon.ico"
+                            onerror="this.src='https://asia-lb.firebaseapp.com/images/favicon.svg'" alt="logo">
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="font-bold text-base sm:text-lg pr-2">ASIA-LB</span>
+                        <span class="text-xs text-gray-600">Overview</span>
+                    </div>
+                </a>
+                <nav id="main-nav" class="hidden md:flex items-center gap-4 text-sm sm:text-base">
+                </nav>
+                <button class="ripple-effect md:hidden bg-gray-50 border rounded-md shadow-inner p-2 focus:outline-none"
+                    aria-label="open menu">
+                    <svg class="size-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 6h16M4 12h16M4 18h16"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero -->
+    <main class="max-w-7xl mx-auto p-2 sm:px-6 lg:px-8 pt-12 overflow-x-hidden">
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+            <div class="lg:col-span-2">
+                <div data-aos="fade-right" class="block bg-white-smoker border rounded-2xl shadow p-4 md:p-6">
+
+                    <!-- โลโก้โรงเรียน -->
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-3xl sm:text-4xl font-extrabold leading-tight">
+                            ระบบเว็บไซต์โครงงานนักศึกษา
+                        </h1>
+                    </div>
+
+                    <!-- คำอธิบาย Hero -->
+                    <p class="text-sm sm:text-base text-gray-600 mt-4">
+                        แพลตฟอร์มนี้รวบรวมและแสดงผลโปรเจกต์นักศึกษา วิทยาลัยเทคโนโลยีเอเชียลพบุรี
+                        มี 3 ระบบหลัก:
+                        <span class="font-medium text-gray-800">ระบบประเมินโครงงาน</span>,
+                        <span class="font-medium text-gray-800">ระบบเช็กสถานะห้องเรียนแบบเรียลไทม์</span>,
+                        และ <span class="font-medium text-gray-800">ระบบสแกนบัตรเข้าโรงเรียน</span>.
+                        เว็บไซต์นี้สามารถนำไปใช้กับโรงเรียนหรือสถาบันอื่นได้ตามความเหมาะสม
+                        โดยทีมผู้พัฒนายังคงควบคุมและดูแลระบบต้นฉบับ
+                    </p>
+
+                    <!-- ปุ่มเรียกดูโครงงาน / เกี่ยวกับเว็บไซต์ -->
+                    <div class="flex flex-col sm:flex-row gap-2 text-sm sm:text-base my-4 sm:my-6">
+                        <button onclick="document.querySelector('#projects').scrollIntoView()"
+                            class="btn-primary flex items-center justify-center gap-2 overflow-hidden">
+                            เริ่มต้นดูโครงงาน
+                        </button>
+                        <button onclick="document.querySelector('#docs').scrollIntoView()"
+                            class="btn-outline flex items-center justify-center gap-2 overflow-hidden">
+                            เกี่ยวกับเว็บไซต์
+                        </button>
+                    </div>
+
+                    <!-- วัตถุประสงค์ / เป้าหมาย -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="bg-gray-50 border rounded-lg shadow-inner p-2 sm:p-4">
+                            <h3 class="text-sm sm:text-base font-bold">วัตถุประสงค์</h3>
+                            <p class="text-xs sm:text-sm text-gray-600 pt-2 sm:mt-4">
+                                เพื่อสร้างแพลตฟอร์มที่ช่วยให้การประเมินโครงงานเป็นไปอย่างสะดวก รวดเร็ว และแม่นยำ
+                                รวมทั้งช่วยติดตามสถานะห้องเรียนแบบเรียลไทม์ และจัดการการเข้าออกโรงเรียนผ่านระบบสแกนบัตร
+                                ทั้งหมดนี้ถูกนำเสนอในรูปแบบดิจิทัลที่เข้าใจง่าย.
+                            </p>
+                        </div>
+
+                        <div class="bg-gray-50 border rounded-lg shadow-inner p-2 sm:p-4">
+                            <h3 class="text-sm sm:text-base font-bold">เป้าหมาย</h3>
+                            <p class="text-xs sm:text-sm text-gray-600 pt-2 sm:mt-4">
+                                เพื่อเพิ่มประสิทธิภาพในการประเมินโครงงาน ลดข้อผิดพลาดในการจัดเก็บข้อมูล
+                                และสร้างความสะดวกในการติดตามผลการเรียนและการเข้าออกโรงเรียน
+                                ทำให้กระบวนการทั้งหมดโปร่งใสและง่ายต่อการจัดการ.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <aside data-aos="fade-left" class="block">
+                <div class="sticky top-24 bg-white-smoker border rounded-2xl shadow p-4 md:p-6 overflow-hidden">
+                    <h5 class="text-sm sm:text-base font-bold">ลิงก์ด่วน</h5>
+
+                    <!-- JS จะ render ตรงนี้ -->
+                    <ul id="quick-links" class="text-xs sm:text-sm pt-2 sm:mt-4"></ul>
+                </div>
+            </aside>
+        </section>
+
+        <!-- Projects -->
+        <div id="projects" class="flex flex-col-reverse gap-4 sm:gap-8 pt-12 sm:pt-24">
+            <article id="project-2024"
+                class="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-2 sm:gap-4 lg:gap-8">
+            </article>
+            <article id="project-2025"
+                class="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-2 sm:gap-4 lg:gap-8">
+            </article>
+            <article id="project-2026"
+                class="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-2 sm:gap-4 lg:gap-8">
+            </article>
+        </div>
+        <!-- Docs -->
+        <section id="docs" class="grid grid-cols-1 lg:grid-cols-3 gap-8 pt-24">
+            <div class="lg:col-span-2">
+                <div data-aos="fade-right" class="bg-white-smoker border rounded-2xl shadow p-4 md:p-6">
+
+                    <h2 class="text-3xl sm:text-4xl font-extrabold leading-tight">
+                        เกี่ยวกับเว็บไซต์
+                    </h2>
+
+                    <p class="text-sm sm:text-base text-gray-600 leading-relaxed pt-4">
+                        เว็บไซต์ <span class="font-medium text-black">Asia-LB Project System</span>
+                        ถูกสร้างขึ้นเพื่อจัดการ 3
+                        ระบบหลักของนักศึกษา ได้แก่
+                        <span class="font-bold">ระบบประเมินโครงงาน</span>,
+                        <span class="font-bold">ระบบเช็กสถานะห้องเรียนแบบเรียลไทม์</span>
+                        และ <span class="font-bold">ระบบสแกนบัตรเข้าโรงเรียน</span>.
+                        ระบบถูกพัฒนาด้วย <span class="font-bold">HTML</span>,
+                        <span class="font-bold">CSS</span>,
+                        <span class="font-bold">Tailwind CSS</span>,
+                        <span class="font-bold">JavaScript</span> และ <span class="font-bold">jQuery</span>
+                        เพื่อให้ใช้งานง่ายและรองรับทุกอุปกรณ์.
+                    </p>
+
+                    <p class="text-sm sm:text-base text-gray-600 leading-relaxed">
+                        ข้อมูลทั้งหมดเชื่อมต่อกับ <span class="font-bold">Google Sheets</span> เป็นฐานข้อมูลกลาง
+                        สำหรับรับและส่งข้อมูล
+                        เช่น รายการโครงงาน ผลการประเมิน หรือสถานะต่าง ๆ ของนักศึกษาและคณะกรรมการ
+                        จากนั้นนำข้อมูลมาแสดงผลแบบ
+                        <span class="font-medium">เรียลไทม์บน Dashboard</span> ช่วยให้ติดตามความคืบหน้าได้สะดวก.
+                    </p>
+
+                    <p class="text-sm sm:text-base text-gray-600 leading-relaxed">
+                        เว็บไซต์ยังใช้ <span class="font-bold">AOS (Animate On Scroll)</span>
+                        สำหรับสร้างแอนิเมชันระหว่างเลื่อนหน้า
+                        และ <span class="font-bold">Font Awesome</span> สำหรับไอคอน
+                        ทำให้หน้าเว็บทันสมัยและเป็นมิตรต่อผู้ใช้.
+                    </p>
+
+                    <p class="text-sm sm:text-base text-gray-600 leading-relaxed mt-4">
+                        แม้เว็บไซต์จะพัฒนาขึ้นเพื่อใช้กับวิทยาลัยเทคโนโลยีเอเชียลพบุรีเป็นหลัก
+                        แต่โรงเรียนหรือสถาบันอื่นก็สามารถนำระบบไปใช้งานได้ตามความเหมาะสม
+                        โดยการจัดการ ควบคุม และดูแลระบบต้นฉบับยังอยู่ภายใต้ความรับผิดชอบของทีมผู้พัฒนาเว็บ
+                    </p>
+
+                </div>
+            </div>
+
+            <aside data-aos="fade-left" class="block">
+                <div class="bg-white-smoker border rounded-2xl shadow space-y-2 p-4 md:p-6">
+                    <h3 class="text-sm sm:text-base font-bold">ทีมผู้พัฒนา</h3>
+                    <div id="team"
+                        class="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] lg:flex lg:flex-col gap-4">
+                        <div id="loadingTeam"
+                            class="col-span-full w-full flex flex-col items-center justify-center space-y-2">
+                            <span class="spinner animate-spin size-16 border-8 mb-4">
+                            </span>
+                            <p class="text-sm sm:text-base text-gray-600">
+                                กำลังตามล่าทีมผู้พัฒนา... แม่งหายไปไหนอีกละ
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </section>
+        <!-- Footer -->
+        <footer></footer>
+    </main>
+
+    <script>
+        // —[ projects ]———————————————————————————————————————————————————————————————————————————————————————————————————
+        const project = [{
+            name: 'ตู้กดอเนกประสงค์',
+            link: './project-1/index.html',
+            date: '2024-09-01',
+            img: './project-1/posters.jpg'
+        },
+        {
+            name: 'คุกกี้โปรตีนจิ้งหรีด',
+            link: './project-2/index.html',
+            date: '2024-09-01',
+            img: './project-2/posters.jpg'
+        },
+        {
+            name: 'ไม้เท้าเลเซอร์สตาฟ์',
+            link: './project-3/index.html',
+            date: '2024-09-01',
+            img: './project-3/posters.jpg'
+        },
+        {
+            name: 'รีวิวผู้พิทักษ์',
+            link: './project-4/index.html',
+            date: '2025-02-14',
+            img: './project-4/posters.jpg'
+        },
+        {
+            name: 'ระบบเช็กสถานะห้องเรียนแบบเรียลไทม์',
+            link: './project-5/index.html',
+            demo: './class-track-room/',
+            date: '2026-01-01',
+            img: './project-5/posters.png'
+        },
+        {
+            name: 'พัฒนาท้องถิ่น',
+            link: './project-6/index.html',
+            date: '2026-01-09',
+            img: './project-6/background.webp'
+        },];
+
+        // Mapping เดือนไทย
+        const thaiMonths = {
+            "01": "มกราคม",
+            "02": "กุมภาพันธ์",
+            "03": "มีนาคม",
+            "04": "เมษายน",
+            "05": "พฤษภาคม",
+            "06": "มิถุนายน",
+            "07": "กรกฎาคม",
+            "08": "สิงหาคม",
+            "09": "กันยายน",
+            "10": "ตุลาคม",
+            "11": "พฤศจิกายน",
+            "12": "ธันวาคม"
+        };
+
+        // Mapping วันไทย
+        const thaiDays = {
+            "Sunday": "อาทิตย์",
+            "Monday": "จันทร์",
+            "Tuesday": "อังคาร",
+            "Wednesday": "พุธ",
+            "Thursday": "พฤหัสบดี",
+            "Friday": "ศุกร์",
+            "Saturday": "เสาร์"
+        };
+
+        // ฟังก์ชันแปลงวันที่เป็นรูปแบบ USA (Month Day, Year) แต่ใช้เดือนไทย
+        function formatDateUSAStyleThai(dateStr) {
+            const dateObj = new Date(dateStr);
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = dateObj.getDate();
+            const dayName = thaiDays[dateObj.toLocaleDateString('en-US', { weekday: 'long' })];
+
+            const thaiMonth = thaiMonths[month];
+
+            return `${dayName} ${day} ${thaiMonth} ${year}`;
+        }
+
+        const noImages = "https://project-test-submission.netlify.app/images/img/noitems.svg";
+
+        // เรียงลำดับโปรเจคจากใหม่ไปเก่า (reverse)
+        const sortedProjects = [...project].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        sortedProjects.forEach(({ name, link, demo, date, img }, index) => {
+
+            const formattedDate = formatDateUSAStyleThai(date);
+            const year = new Date(date).getFullYear();
+            const $container = $(`#project-${year}`);
+            const demoButton = demo
+                ? `<button data-popup-content="ดูโปรเจค" onclick="window.location.href='${demo}'" class="btn-primary w-1/2 flex items-center justify-center gap-2 text-xs rounded-xl mt-4 overflow-hidden">
+                <i class="fa-solid fa-eye"></i>
+                </button>`: '';
+
+            if ($container.length) {
+                const listItem = $(`
+                <div
+                    data-aos="zoom-in-up"
+                    data-aos-delay="${index * 100}"
+                    data-aos-easing="ease-out-cubic"
+                    class="bg-white-smoker border rounded-2xl shadow overflow-hidden">
+                            
+                    <div class="h-full flex flex-col justify-between">
+                        <img
+                            src="${img}"
+                            alt="${name}"
+                            onerror="this.src='${noImages}'"
+                            draggable="false"
+                            class="w-full h-full object-cover">
+                    
+                        <div class="space-y-1 p-2 md:p-4">
+                            <p class="text-xs sm:text-sm text-gray-600 space-x-1">
+                                <i class="fa-regular fa-calendar"></i>
+                                <span>${formattedDate}</span>
+                            </p>
+                        
+                            <p class="text-base sm:text-lg font-bold">${name}</p>
+                        
+                            <div class="flex flex-row gap-2">
+                                <button
+                                    data-popup-content="เริ่มต้นใช้งาน"
+                                    onclick="window.location.href='${link}'"
+                                    class="btn-outline w-full flex items-center justify-center text-xs rounded-xl mt-4 overflow-hidden">
+                                    เริ่มต้นใช้งาน
+                                </button>
+                                ${demoButton}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                `);
+                $container.append(listItem);
+            }
+        });
+
+        $('div > article').each(function () {
+            const $article = $(this);
+            const $projects = $article.find('div[data-aos]');
+            if ($projects.length === 1) {
+                $projects.addClass('!col-span-2');
+                const $dummy = $('<div></div>');
+                $article.append($dummy);
+            }
+        });
+
+
+        (function ($) {
+            'use strict';
+
+            let $popup;
+            let offsetX = 14;
+            let offsetY = -24;
+
+            function initPopup() {
+                if ($popup) return;
+
+                $popup = $(`
+            <div id="hover-popup-container"
+                class="hidden fixed pointer-events-auto max-w-xs text-xs bg-white border rounded-lg shadow-lg py-1 px-2 transition-opacity duration-150 opacity-0 z-50">
+            </div>
+        `).appendTo('body');
+
+                $popup
+                    .on('mouseenter', () => show())
+                    .on('mouseleave', () => hide());
+            }
+
+            function show() {
+                $popup.fadeIn(300);
+            }
+
+            function hide() {
+                $popup.fadeOut(300);
+            }
+
+            function movePopup(e) {
+                const popupWidth = $popup.outerWidth();
+                const popupHeight = $popup.outerHeight();
+                const winWidth = $(window).width();
+                const winHeight = $(window).height();
+
+                let x = e.clientX + offsetX;
+                let y = e.clientY + offsetY;
+
+                // กัน popup ล้นจอ
+                if (x + popupWidth > winWidth) {
+                    x = e.clientX - popupWidth - offsetX;
+                }
+                if (y + popupHeight > winHeight) {
+                    y = e.clientY - popupHeight - offsetY;
+                }
+
+                $popup.css({ left: x, top: y });
+            }
+
+            $(document).ready(() => {
+                initPopup();
+
+                $(document)
+                    .on('mouseenter', '[data-popup-content]', function (e) {
+                        const content = $(this).attr('data-popup-content');
+                        if (!content) return;
+
+                        $popup.html(content);
+                        movePopup(e);
+                        show();
+                    })
+                    .on('mousemove', '[data-popup-content]', function (e) {
+                        movePopup(e);
+                    })
+                    .on('mouseleave', '[data-popup-content]', function () {
+                        hide();
+                    });
+            });
+
+        })(jQuery);
+    </script>
+    <script defer src="./script/index.js"></script>
+</body>
+
+</html>

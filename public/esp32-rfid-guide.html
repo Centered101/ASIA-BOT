@@ -1,0 +1,1567 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ESP32 RFID System — Complete Build Guide</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:       #080c0e;
+  --surface:  #0e1418;
+  --card:     #111820;
+  --border:   #1e2d35;
+  --border2:  #263540;
+  --green:    #00ff9d;
+  --green2:   #00cc7a;
+  --green3:   #003d26;
+  --cyan:     #00cfff;
+  --yellow:   #ffd060;
+  --red:      #ff5f6d;
+  --orange:   #ff9a3c;
+  --muted:    #4a6070;
+  --text:     #cce0ea;
+  --text2:    #8aa0ac;
+  --mono:     'JetBrains Mono', monospace;
+  --sans:     'Kanit', sans-serif;
+  --r:        10px;
+}
+
+*,::before,::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+/* ─── Scanline overlay ──────────────────────────────────────── */
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 999; pointer-events: none;
+  background: repeating-linear-gradient(0deg,
+    transparent, transparent 2px,
+    rgba(0,255,157,.012) 2px, rgba(0,255,157,.012) 4px);
+}
+
+/* ─── Sidebar ───────────────────────────────────────────────── */
+.sidebar {
+  position: fixed; top: 0; left: 0; bottom: 0;
+  width: 240px; background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow-y: auto; z-index: 100;
+}
+.sidebar-logo {
+  padding: 20px 18px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.logo-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--green3); border: 1px solid var(--green2);
+  border-radius: 6px; padding: 5px 10px; margin-bottom: 8px;
+}
+.logo-chip i { color: var(--green); font-size: 13px; }
+.logo-chip span { font-family: var(--mono); font-size: 11px; color: var(--green); letter-spacing: .05em; }
+.sidebar-logo h2 { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.4; }
+.sidebar-logo p { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+.nav-section { padding: 14px 12px 4px; }
+.nav-label { font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-family: var(--mono); padding: 0 6px; margin-bottom: 6px; }
+.nav-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 10px; border-radius: 7px; cursor: pointer;
+  font-size: 11.5px; color: var(--text2); text-decoration: none;
+  transition: all .15s; border: 1px solid transparent;
+  margin-bottom: 2px;
+}
+.nav-item:hover { background: rgba(0,255,157,.07); color: var(--green); border-color: rgba(0,255,157,.2); }
+.nav-item.active { background: rgba(0,255,157,.1); color: var(--green); border-color: rgba(0,255,157,.3); }
+.nav-item i { width: 14px; text-align: center; font-size: 11px; opacity: .8; }
+.nav-num { margin-left: auto; font-family: var(--mono); font-size: 9px; color: var(--muted); }
+
+/* ─── Main content ──────────────────────────────────────────── */
+.main {
+  margin-left: 240px;
+  min-height: 100vh;
+}
+
+/* ─── Top bar ───────────────────────────────────────────────── */
+.topbar {
+  position: sticky; top: 0; z-index: 90;
+  background: rgba(8,12,14,.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 28px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.topbar-title { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+.topbar-title span { color: var(--green); }
+.status-pills { display: flex; gap: 8px; }
+.pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 99px;
+  font-size: 10px; font-family: var(--mono); border: 1px solid;
+}
+.pill-green { color: var(--green); border-color: var(--green3); background: rgba(0,255,157,.07); }
+.pill-cyan { color: var(--cyan); border-color: rgba(0,207,255,.2); background: rgba(0,207,255,.05); }
+.pill-dot { width: 5px; height: 5px; border-radius: 50%; animation: blink 2s infinite; }
+.pill-green .pill-dot { background: var(--green); }
+.pill-cyan .pill-dot { background: var(--cyan); }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+/* ─── Hero ──────────────────────────────────────────────────── */
+.hero {
+  padding: 50px 28px 40px;
+  border-bottom: 1px solid var(--border);
+  background: radial-gradient(ellipse 60% 50% at 80% 50%, rgba(0,255,157,.04), transparent);
+  position: relative; overflow: hidden;
+}
+.hero::after {
+  content: 'ESP32'; position: absolute;
+  right: -20px; top: 50%; transform: translateY(-50%);
+  font-size: 180px; font-family: var(--mono); font-weight: 700;
+  color: rgba(0,255,157,.025); letter-spacing: -10px; pointer-events: none;
+}
+.hero-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 12px; border-radius: 99px;
+  border: 1px solid rgba(0,255,157,.3); background: rgba(0,255,157,.07);
+  font-size: 10px; font-family: var(--mono); color: var(--green);
+  margin-bottom: 16px; letter-spacing: .05em;
+}
+.hero h1 { font-size: 36px; font-weight: 700; line-height: 1.1; margin-bottom: 12px; }
+.hero h1 .accent { color: var(--green); }
+.hero p { font-size: 14px; color: var(--text2); max-width: 540px; line-height: 1.7; }
+.hero-tags { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
+.tag {
+  padding: 4px 10px; border-radius: 6px; font-size: 10.5px;
+  border: 1px solid var(--border2); color: var(--text2); background: var(--card);
+  font-family: var(--mono);
+}
+
+/* ─── Content area ──────────────────────────────────────────── */
+.content { padding: 0 28px 60px; }
+
+/* ─── Section ───────────────────────────────────────────────── */
+.section {
+  padding: 36px 0 0;
+  border-bottom: 1px solid var(--border);
+}
+.section:last-child { border-bottom: none; }
+.section-header {
+  display: flex; align-items: flex-start; gap: 14px; margin-bottom: 22px;
+}
+.section-num {
+  flex-shrink: 0;
+  width: 36px; height: 36px; border-radius: 8px;
+  background: var(--green3); border: 1px solid var(--green2);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--green);
+}
+.section-title { font-size: 20px; font-weight: 700; color: var(--text); line-height: 1.2; }
+.section-sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+/* ─── Cards ─────────────────────────────────────────────────── */
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 16px; margin-bottom: 12px;
+}
+.card-title {
+  font-size: 11px; font-family: var(--mono); color: var(--green);
+  letter-spacing: .08em; text-transform: uppercase; margin-bottom: 10px;
+  display: flex; align-items: center; gap: 6px;
+}
+.card-title i { font-size: 10px; }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+
+/* ─── Component table ───────────────────────────────────────── */
+.comp-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.comp-table th {
+  text-align: left; padding: 8px 12px;
+  background: rgba(0,255,157,.05); color: var(--green);
+  font-family: var(--mono); font-size: 10px; letter-spacing: .06em;
+  border-bottom: 1px solid var(--border2);
+}
+.comp-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); color: var(--text2); }
+.comp-table tr:last-child td { border-bottom: none; }
+.comp-table tr:hover td { background: rgba(255,255,255,.02); }
+.comp-name { color: var(--text); font-weight: 600; }
+.comp-qty { font-family: var(--mono); color: var(--cyan); }
+.comp-price { font-family: var(--mono); color: var(--yellow); }
+.comp-note { font-size: 11px; color: var(--muted); }
+
+/* ─── Wiring diagram ────────────────────────────────────────── */
+.wire-diagram {
+  background: #060d0a; border: 1px solid var(--border);
+  border-radius: var(--r); padding: 20px;
+  font-family: var(--mono); font-size: 12px; overflow-x: auto;
+}
+.wire-title {
+  font-size: 10px; letter-spacing: .1em; color: var(--green);
+  text-transform: uppercase; margin-bottom: 14px;
+  border-bottom: 1px solid var(--border); padding-bottom: 8px;
+}
+.wire-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.wire-block { background: rgba(0,255,157,.03); border: 1px solid rgba(0,255,157,.1); border-radius: 8px; padding: 12px; }
+.wire-block-title { font-size: 11px; color: var(--cyan); margin-bottom: 8px; text-align: center; }
+.wire-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,.04); }
+.wire-row:last-child { border-bottom: none; }
+.wire-pin-a { color: var(--yellow); font-size: 11px; }
+.wire-arrow { color: var(--muted); font-size: 10px; }
+.wire-pin-b { color: var(--orange); font-size: 11px; }
+.wire-color { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+
+/* ─── Architecture diagram ──────────────────────────────────── */
+.arch-diagram {
+  background: #060d0a; border: 1px solid var(--border);
+  border-radius: var(--r); padding: 20px;
+  overflow-x: auto;
+}
+.arch-row { display: flex; align-items: center; justify-content: center; gap: 0; flex-wrap: wrap; }
+.arch-box {
+  background: var(--card); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 10px 14px; text-align: center;
+  min-width: 100px;
+}
+.arch-box.primary { border-color: var(--green2); background: rgba(0,255,157,.07); }
+.arch-box.secondary { border-color: rgba(0,207,255,.3); background: rgba(0,207,255,.05); }
+.arch-box.tertiary { border-color: rgba(255,208,96,.3); background: rgba(255,208,96,.05); }
+.arch-box-icon { font-size: 20px; margin-bottom: 5px; }
+.arch-box-title { font-size: 11px; font-weight: 700; }
+.arch-box-sub { font-size: 9.5px; color: var(--muted); margin-top: 2px; font-family: var(--mono); }
+.arch-arrow { display: flex; align-items: center; gap: 0; padding: 0 8px; }
+.arch-arrow-line {
+  height: 2px; width: 40px;
+  background: linear-gradient(90deg, var(--border2), var(--green2));
+}
+.arch-arrow-head { color: var(--green2); font-size: 14px; margin-left: -3px; }
+.arch-arrow-label { font-size: 9px; color: var(--muted); font-family: var(--mono); position: absolute; margin-top: 18px; white-space: nowrap; }
+
+/* ─── Flow chart ────────────────────────────────────────────── */
+.flow { display: flex; flex-direction: column; align-items: flex-start; gap: 0; }
+.flow-step {
+  display: flex; gap: 12px; align-items: flex-start;
+  position: relative;
+}
+.flow-step::before {
+  content: ''; position: absolute;
+  left: 16px; top: 36px; bottom: -20px; width: 1px;
+  background: var(--border2);
+}
+.flow-step:last-child::before { display: none; }
+.flow-icon {
+  flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; border: 2px solid; z-index: 1;
+  background: var(--bg);
+}
+.flow-icon.start { border-color: var(--green); color: var(--green); }
+.flow-icon.process { border-color: var(--cyan); color: var(--cyan); }
+.flow-icon.decision { border-color: var(--yellow); color: var(--yellow); }
+.flow-icon.end { border-color: var(--red); color: var(--red); }
+.flow-icon.success { border-color: var(--green); color: var(--green); }
+.flow-content { padding: 4px 0 20px; }
+.flow-title { font-size: 13px; font-weight: 600; color: var(--text); }
+.flow-desc { font-size: 11px; color: var(--text2); margin-top: 3px; line-height: 1.5; }
+.flow-code { font-family: var(--mono); font-size: 10px; color: var(--cyan); background: rgba(0,207,255,.06); padding: 2px 6px; border-radius: 4px; margin-top: 4px; display: inline-block; }
+
+/* ─── Code block ────────────────────────────────────────────── */
+.code-block {
+  background: #04080a; border: 1px solid var(--border);
+  border-radius: var(--r); overflow: hidden; margin-bottom: 12px;
+}
+.code-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px; background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.code-lang { font-size: 10px; font-family: var(--mono); color: var(--green); letter-spacing: .06em; }
+.code-dots { display: flex; gap: 5px; }
+.code-dot { width: 9px; height: 9px; border-radius: 50%; }
+.code-dot:nth-child(1) { background: var(--red); }
+.code-dot:nth-child(2) { background: var(--yellow); }
+.code-dot:nth-child(3) { background: var(--green); }
+pre {
+  padding: 16px; overflow-x: auto; font-family: var(--mono);
+  font-size: 12px; line-height: 1.7; color: #a8c7d4;
+}
+.kw { color: #c792ea; }
+.fn { color: #82aaff; }
+.str { color: #c3e88d; }
+.num { color: #f78c6c; }
+.cm { color: #546e7a; font-style: italic; }
+.type { color: #ffcb6b; }
+.var { color: #f07178; }
+.op { color: var(--green); }
+
+/* ─── Alert boxes ───────────────────────────────────────────── */
+.alert {
+  display: flex; gap: 10px; padding: 12px 14px;
+  border-radius: 8px; margin-bottom: 10px; font-size: 12.5px;
+}
+.alert i { flex-shrink: 0; margin-top: 1px; }
+.alert-warn { background: rgba(255,208,96,.07); border: 1px solid rgba(255,208,96,.3); color: var(--text2); }
+.alert-warn i { color: var(--yellow); }
+.alert-info { background: rgba(0,207,255,.06); border: 1px solid rgba(0,207,255,.25); color: var(--text2); }
+.alert-info i { color: var(--cyan); }
+.alert-danger { background: rgba(255,95,109,.07); border: 1px solid rgba(255,95,109,.3); color: var(--text2); }
+.alert-danger i { color: var(--red); }
+.alert-success { background: rgba(0,255,157,.06); border: 1px solid rgba(0,255,157,.25); color: var(--text2); }
+.alert-success i { color: var(--green); }
+
+/* ─── OLED screen mockup ────────────────────────────────────── */
+.oled-wrap { display: flex; justify-content: center; padding: 20px 0; }
+.oled-device {
+  background: #1a1a1a; border: 3px solid #333; border-radius: 6px;
+  padding: 8px; box-shadow: 0 0 30px rgba(0,0,0,.8), inset 0 0 20px rgba(0,0,0,.5);
+  position: relative;
+}
+.oled-screen {
+  width: 256px; height: 128px; background: #000;
+  border-radius: 3px; overflow: hidden; position: relative;
+  font-family: var(--mono); color: #fff;
+}
+.oled-screen::before {
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(ellipse 80% 60% at 50% 30%, rgba(255,255,255,.04), transparent);
+  pointer-events: none;
+}
+.oled-content { padding: 6px 8px; }
+.oled-line { font-size: 11px; line-height: 1.5; }
+.oled-big { font-size: 18px; font-weight: 700; line-height: 1.2; }
+.oled-g { color: #00ff9d; }
+.oled-w { color: #ffffff; }
+.oled-d { color: #888; }
+.oled-y { color: #ffd060; }
+.oled-r { color: #ff5f6d; }
+.oled-c { color: #00cfff; }
+.oled-sep { border-top: 1px solid #222; margin: 3px 0; }
+.oled-tabs { display: flex; gap: 20px; margin-top: 16px; flex-wrap: wrap; justify-content: center; }
+.oled-tab { cursor: pointer; font-size: 11.5px; color: var(--muted); padding: 4px 12px; border-radius: 99px; border: 1px solid var(--border); transition: all .2s; }
+.oled-tab.active { color: var(--green); border-color: var(--green2); background: rgba(0,255,157,.08); }
+
+/* ─── Problem cards ─────────────────────────────────────────── */
+.problem-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 16px; margin-bottom: 12px;
+  border-left: 3px solid;
+}
+.problem-card.danger { border-left-color: var(--red); }
+.problem-card.warn { border-left-color: var(--yellow); }
+.problem-card.info { border-left-color: var(--cyan); }
+.problem-title { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+.problem-card.danger .problem-title { color: var(--red); }
+.problem-card.warn .problem-title { color: var(--yellow); }
+.problem-card.info .problem-title { color: var(--cyan); }
+.problem-cause { font-size: 11.5px; color: var(--muted); margin-bottom: 8px; }
+.problem-fix { font-size: 12px; color: var(--text2); }
+.problem-fix li { margin-bottom: 4px; margin-left: 16px; }
+
+/* ─── Spec badge ────────────────────────────────────────────── */
+.spec-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.spec-badge {
+  padding: 4px 10px; border-radius: 6px;
+  font-size: 10.5px; font-family: var(--mono);
+  border: 1px solid var(--border2); background: var(--card); color: var(--text2);
+}
+.spec-badge b { color: var(--cyan); }
+
+/* ─── API endpoint ──────────────────────────────────────────── */
+.endpoint {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 14px; margin-bottom: 8px;
+  display: flex; align-items: flex-start; gap: 10px;
+}
+.method {
+  flex-shrink: 0; padding: 2px 8px; border-radius: 4px;
+  font-family: var(--mono); font-size: 10px; font-weight: 700;
+}
+.method-get { background: rgba(0,255,157,.15); color: var(--green); border: 1px solid var(--green3); }
+.method-post { background: rgba(0,207,255,.15); color: var(--cyan); border: 1px solid rgba(0,207,255,.3); }
+.method-put { background: rgba(255,208,96,.15); color: var(--yellow); border: 1px solid rgba(255,208,96,.3); }
+.endpoint-path { font-family: var(--mono); font-size: 12px; color: var(--text); font-weight: 600; }
+.endpoint-desc { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+
+/* ─── Scrollbar ─────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
+
+/* ─── Responsive ────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .sidebar { display: none; }
+  .main { margin-left: 0; }
+  .grid-2, .wire-grid, .grid-3 { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── SIDEBAR ───────────────────────────────────────── -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-chip"><i class="fas fa-microchip"></i><span>ESP32-RFID</span></div>
+    <h2>Complete Build Guide</h2>
+    <p>ระบบสแกนบัตร RFID ครบวงจร</p>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-label">Hardware</div>
+    <a href="#s1" class="nav-item"><i class="fas fa-puzzle-piece"></i> อุปกรณ์ที่ต้องใช้ <span class="nav-num">01</span></a>
+    <a href="#s2" class="nav-item"><i class="fas fa-diagram-project"></i> ผังการต่อสาย <span class="nav-num">02</span></a>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-label">Architecture</div>
+    <a href="#s3" class="nav-item"><i class="fas fa-sitemap"></i> System Architecture <span class="nav-num">03</span></a>
+    <a href="#s4" class="nav-item"><i class="fas fa-power-off"></i> Boot Flow <span class="nav-num">04</span></a>
+    <a href="#s5" class="nav-item"><i class="fas fa-credit-card"></i> Scan Flow <span class="nav-num">05</span></a>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-label">Firmware</div>
+    <a href="#s6" class="nav-item"><i class="fas fa-download"></i> โหลด UID จาก Server <span class="nav-num">06</span></a>
+    <a href="#s7" class="nav-item"><i class="fas fa-bolt"></i> Cache System <span class="nav-num">07</span></a>
+    <a href="#s8" class="nav-item"><i class="fas fa-wifi"></i> AP Mode / WiFi Setup <span class="nav-num">08</span></a>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-label">Backend & UI</div>
+    <a href="#s9" class="nav-item"><i class="fas fa-server"></i> API Structure <span class="nav-num">09</span></a>
+    <a href="#s10" class="nav-item"><i class="fas fa-code"></i> โครงสร้างโค้ด <span class="nav-num">10</span></a>
+    <a href="#s11" class="nav-item"><i class="fas fa-tv"></i> OLED Design <span class="nav-num">11</span></a>
+    <a href="#s12" class="nav-item"><i class="fas fa-triangle-exclamation"></i> Troubleshooting <span class="nav-num">12</span></a>
+  </div>
+</nav>
+
+<!-- ── MAIN ──────────────────────────────────────────── -->
+<div class="main">
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="topbar-title">ESP32 RFID SYSTEM / <span>Complete Engineering Guide</span></div>
+    <div class="status-pills">
+      <div class="pill pill-green"><div class="pill-dot"></div> v6.0 Production</div>
+      <div class="pill pill-cyan"><div class="pill-dot"></div> ASIA-LB Ready</div>
+    </div>
+  </div>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-badge"><i class="fas fa-microchip"></i> Hardware + Firmware + Backend Guide</div>
+    <h1>ESP32 <span class="accent">RFID</span><br>Attendance System</h1>
+    <p>คู่มือครบวงจรสำหรับสร้างระบบสแกนบัตร RFID ตั้งแต่การต่อสาย จนถึงการ deploy จริงในโรงเรียน — ออกแบบมาให้เสถียร ไม่ใช่แค่ทดลอง</p>
+    <div class="hero-tags">
+      <span class="tag">ESP32-S3</span>
+      <span class="tag">MFRC522</span>
+      <span class="tag">SSD1306 OLED</span>
+      <span class="tag">Google Sheets</span>
+      <span class="tag">Google Apps Script</span>
+      <span class="tag">Local Cache</span>
+      <span class="tag">AP Mode WiFi</span>
+      <span class="tag">FreeRTOS Tasks</span>
+    </div>
+  </div>
+
+  <div class="content">
+
+  <!-- ═══════ 01 อุปกรณ์ ═══════ -->
+  <div class="section" id="s1">
+    <div class="section-header">
+      <div class="section-num">01</div>
+      <div>
+        <div class="section-title">อุปกรณ์ที่ต้องใช้ทั้งหมด</div>
+        <div class="section-sub">Hardware BOM (Bill of Materials) พร้อมราคาอ้างอิงตลาดไทย</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><i class="fas fa-microchip"></i> Core Components</div>
+      <table class="comp-table">
+        <thead>
+          <tr><th>อุปกรณ์</th><th>รุ่นแนะนำ</th><th>จำนวน</th><th>ราคา (บาท)</th><th>หมายเหตุ</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="comp-name">ESP32 Development Board</td>
+            <td>ESP32-WROOM-32 / ESP32-S3</td>
+            <td class="comp-qty">1</td>
+            <td class="comp-price">150–280</td>
+            <td class="comp-note">S3 มี RAM มากกว่า แนะนำสำหรับ production</td>
+          </tr>
+          <tr>
+            <td class="comp-name">RFID Reader Module</td>
+            <td>MFRC522 (SPI)</td>
+            <td class="comp-qty">1</td>
+            <td class="comp-price">80–120</td>
+            <td class="comp-note">ใช้งานกับการ์ด ISO/IEC 14443 Type A</td>
+          </tr>
+          <tr>
+            <td class="comp-name">OLED Display</td>
+            <td>SSD1306 128×64 I2C (0.96")</td>
+            <td class="comp-qty">1</td>
+            <td class="comp-price">60–100</td>
+            <td class="comp-note">I2C ประหยัด pin / SPI เร็วกว่า</td>
+          </tr>
+          <tr>
+            <td class="comp-name">Active Buzzer</td>
+            <td>5V Active Buzzer Module</td>
+            <td class="comp-qty">1</td>
+            <td class="comp-price">15–30</td>
+            <td class="comp-note">Active = เสียงติดทันทีเมื่อให้ไฟ</td>
+          </tr>
+          <tr>
+            <td class="comp-name">LED (ไฟสถานะ)</td>
+            <td>LED 5mm สีเขียว+แดง</td>
+            <td class="comp-qty">2</td>
+            <td class="comp-price">5–10</td>
+            <td class="comp-note">ต่อกับ resistor 220Ω</td>
+          </tr>
+          <tr>
+            <td class="comp-name">RFID Card / Fob</td>
+            <td>MIFARE Classic 1K (13.56 MHz)</td>
+            <td class="comp-qty">10+</td>
+            <td class="comp-price">10–20/ใบ</td>
+            <td class="comp-note">สั่งทำการ์ดพิมพ์ชื่อนักเรียนได้</td>
+          </tr>
+          <tr>
+            <td class="comp-name">Power Supply</td>
+            <td>5V 2A USB Adapter</td>
+            <td class="comp-qty">1</td>
+            <td class="comp-price">80–150</td>
+            <td class="comp-note">ควรใช้ adapter คุณภาพดี ไม่ใช่มือถือ</td>
+          </tr>
+          <tr>
+            <td class="comp-name">Project Box</td>
+            <td>กล่องพลาสติก ABS 100×60×25mm</td>
+            <td class="comp-qty">1</td>
+            <td class="comp-price">50–120</td>
+            <td class="comp-note">เจาะรูสำหรับ OLED / RFID reader</td>
+          </tr>
+          <tr>
+            <td class="comp-name">PCB Prototype Board</td>
+            <td>Perfboard 5×7cm</td>
+            <td class="comp-qty">1</td>
+            <td class="comp-price">20–40</td>
+            <td class="comp-note">หรือสั่ง PCB custom ที่ JLCPCB</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="alert alert-warn">
+      <i class="fas fa-triangle-exclamation"></i>
+      <div><strong>สำคัญ:</strong> ESP32 ทำงานที่ 3.3V — MFRC522 รองรับ 3.3V แต่ buzzer และ LED อาจต้องการ 5V → ใช้ transistor NPN (2N2222) เป็น driver หรือ module ที่มี level shifter built-in</div>
+    </div>
+
+    <div class="spec-row">
+      <div class="spec-badge">Flash: <b>4MB+</b></div>
+      <div class="spec-badge">PSRAM: <b>4MB (S3)</b></div>
+      <div class="spec-badge">WiFi: <b>2.4GHz 802.11n</b></div>
+      <div class="spec-badge">CPU: <b>Xtensa LX7 240MHz</b></div>
+      <div class="spec-badge">Cache: <b>UID ≤ 500 รายการ</b></div>
+    </div>
+  </div>
+
+  <!-- ═══════ 02 ผังการต่อสาย ═══════ -->
+  <div class="section" id="s2">
+    <div class="section-header">
+      <div class="section-num">02</div>
+      <div>
+        <div class="section-title">ผังการต่อสาย</div>
+        <div class="section-sub">ESP32 ↔ MFRC522 ↔ SSD1306 ↔ Buzzer ↔ LED</div>
+      </div>
+    </div>
+
+    <div class="wire-diagram">
+      <div class="wire-title"><i class="fas fa-diagram-project"></i> Pin Connection Table — ESP32 WROOM-32</div>
+      <div class="wire-grid">
+        <div class="wire-block">
+          <div class="wire-block-title">🔵 MFRC522 (SPI)</div>
+          <div class="wire-row"><span class="wire-pin-a">VCC (3.3V)</span><span class="wire-arrow">──→</span><span class="wire-pin-b">3V3 pin</span></div>
+          <div class="wire-row"><span class="wire-pin-a">GND</span><span class="wire-arrow">──→</span><span class="wire-pin-b">GND</span></div>
+          <div class="wire-row"><span class="wire-pin-a">RST</span><span class="wire-arrow">──→</span><span class="wire-pin-b">GPIO 22</span></div>
+          <div class="wire-row"><span class="wire-pin-a">SDA (SS/CS)</span><span class="wire-arrow">──→</span><span class="wire-pin-b">GPIO 21</span></div>
+          <div class="wire-row"><span class="wire-pin-a">MOSI</span><span class="wire-arrow">──→</span><span class="wire-pin-b">GPIO 23</span></div>
+          <div class="wire-row"><span class="wire-pin-a">MISO</span><span class="wire-arrow">──→</span><span class="wire-pin-b">GPIO 19</span></div>
+          <div class="wire-row"><span class="wire-pin-a">SCK</span><span class="wire-arrow">──→</span><span class="wire-pin-b">GPIO 18</span></div>
+        </div>
+        <div class="wire-block">
+          <div class="wire-block-title">🟡 SSD1306 OLED (I2C)</div>
+          <div class="wire-row"><span class="wire-pin-a">VCC (3.3V)</span><span class="wire-arrow">──→</span><span class="wire-pin-b">3V3 pin</span></div>
+          <div class="wire-row"><span class="wire-pin-a">GND</span><span class="wire-arrow">──→</span><span class="wire-pin-b">GND</span></div>
+          <div class="wire-row"><span class="wire-pin-a">SDA</span><span class="wire-arrow">──→</span><span class="wire-pin-b">GPIO 14</span></div>
+          <div class="wire-row"><span class="wire-pin-a">SCL</span><span class="wire-arrow">──→</span><span class="wire-pin-b">GPIO 13</span></div>
+        </div>
+        <div class="wire-block">
+          <div class="wire-block-title">🔴 Buzzer & LED</div>
+          <div class="wire-row"><span class="wire-pin-a">Buzzer (+)</span><span class="wire-arrow">──→</span><span class="wire-pin-b">GPIO 25 → 2N2222 Base</span></div>
+          <div class="wire-row"><span class="wire-pin-a">Buzzer (−)</span><span class="wire-arrow">──→</span><span class="wire-pin-b">GND</span></div>
+          <div class="wire-row"><span class="wire-pin-a">LED Green (+)</span><span class="wire-arrow">──→</span><span class="wire-pin-b">GPIO 26 → 220Ω → LED</span></div>
+          <div class="wire-row"><span class="wire-pin-a">LED Red (+)</span><span class="wire-arrow">──→</span><span class="wire-pin-b">GPIO 27 → 220Ω → LED</span></div>
+          <div class="wire-row"><span class="wire-pin-a">LED (−) ทั้งคู่</span><span class="wire-arrow">──→</span><span class="wire-pin-b">GND</span></div>
+        </div>
+        <div class="wire-block">
+          <div class="wire-block-title">⚡ Power / Decoupling</div>
+          <div class="wire-row"><span class="wire-pin-a">5V Input</span><span class="wire-arrow">──→</span><span class="wire-pin-b">VIN pin (AMS1117 reg)</span></div>
+          <div class="wire-row"><span class="wire-pin-a">100µF cap</span><span class="wire-arrow">──→</span><span class="wire-pin-b">3V3 to GND (bypass)</span></div>
+          <div class="wire-row"><span class="wire-pin-a">100nF cap</span><span class="wire-arrow">──→</span><span class="wire-pin-b">ใกล้ MFRC522 VCC</span></div>
+          <div class="wire-row"><span class="wire-pin-a">EN → RST btn</span><span class="wire-arrow">──→</span><span class="wire-pin-b">Momentary switch</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="alert alert-info" style="margin-top:12px">
+      <i class="fas fa-circle-info"></i>
+      <div>ใช้ <strong>Custom I2C pins (GPIO 13/14)</strong> แทน default (21/22) เพราะ GPIO 21 ถูกใช้เป็น SS ของ MFRC522 แล้ว — ตั้งค่าด้วย <code style="font-family:var(--mono);font-size:11px;color:var(--cyan)">Wire.begin(14, 13)</code></div>
+    </div>
+  </div>
+
+  <!-- ═══════ 03 Architecture ═══════ -->
+  <div class="section" id="s3">
+    <div class="section-header">
+      <div class="section-num">03</div>
+      <div>
+        <div class="section-title">โครงสร้างสถาปัตยกรรมระบบ</div>
+        <div class="section-sub">ESP32 ↔ Google Apps Script ↔ Google Sheets</div>
+      </div>
+    </div>
+
+    <div class="arch-diagram">
+      <!-- Layer 1: Hardware -->
+      <div style="text-align:center;font-size:9px;color:var(--muted);font-family:var(--mono);letter-spacing:.1em;margin-bottom:8px">LAYER 1 — HARDWARE</div>
+      <div class="arch-row" style="gap:8px;margin-bottom:4px">
+        <div class="arch-box">
+          <div class="arch-box-icon">🪪</div>
+          <div class="arch-box-title">RFID Card</div>
+          <div class="arch-box-sub">MIFARE 1K / UID</div>
+        </div>
+        <div class="arch-arrow"><div class="arch-arrow-line"></div><div class="arch-arrow-head">▶</div></div>
+        <div class="arch-box primary">
+          <div class="arch-box-icon">📡</div>
+          <div class="arch-box-title">MFRC522</div>
+          <div class="arch-box-sub">SPI 10MHz</div>
+        </div>
+        <div class="arch-arrow"><div class="arch-arrow-line"></div><div class="arch-arrow-head">▶</div></div>
+        <div class="arch-box primary" style="border-color:var(--green);box-shadow:0 0 12px rgba(0,255,157,.15)">
+          <div class="arch-box-icon">🔧</div>
+          <div class="arch-box-title">ESP32</div>
+          <div class="arch-box-sub">FreeRTOS / WiFi</div>
+        </div>
+        <div class="arch-arrow"><div class="arch-arrow-line"></div><div class="arch-arrow-head">▶</div></div>
+        <div class="arch-box">
+          <div class="arch-box-icon">📟</div>
+          <div class="arch-box-title">OLED + Buzzer</div>
+          <div class="arch-box-sub">I2C / GPIO</div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:center;margin:8px 0">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:0">
+          <div style="width:1px;height:20px;background:var(--border2)"></div>
+          <div style="font-size:9px;color:var(--muted);font-family:var(--mono)">HTTPS POST</div>
+          <div style="width:1px;height:20px;background:var(--border2)"></div>
+          <div style="color:var(--green2);font-size:12px">▼</div>
+        </div>
+      </div>
+      <div style="text-align:center;font-size:9px;color:var(--muted);font-family:var(--mono);letter-spacing:.1em;margin-bottom:8px">LAYER 2 — CLOUD</div>
+      <div class="arch-row" style="gap:8px;margin-bottom:4px">
+        <div class="arch-box secondary">
+          <div class="arch-box-icon">⚙️</div>
+          <div class="arch-box-title">Google Apps Script</div>
+          <div class="arch-box-sub">Web App / REST API</div>
+        </div>
+        <div class="arch-arrow"><div class="arch-arrow-line"></div><div class="arch-arrow-head">▶</div></div>
+        <div class="arch-box tertiary">
+          <div class="arch-box-icon">📊</div>
+          <div class="arch-box-title">Google Sheets</div>
+          <div class="arch-box-sub">Attendance DB</div>
+        </div>
+        <div class="arch-arrow"><div class="arch-arrow-line"></div><div class="arch-arrow-head">▶</div></div>
+        <div class="arch-box secondary">
+          <div class="arch-box-icon">📱</div>
+          <div class="arch-box-title">Admin Dashboard</div>
+          <div class="arch-box-sub">Web UI (Firebase)</div>
+        </div>
+      </div>
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);font-family:var(--mono);text-align:center">
+        ESP32 Local SPIFFS → uid_cache.json / config.json / wifi.json
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-top:12px">
+      <div class="card">
+        <div class="card-title"><i class="fas fa-memory"></i> ESP32 Internal Storage</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.7">
+          <div>📁 <code style="font-family:var(--mono);font-size:11px;color:var(--cyan)">/config.json</code> — ตั้งค่าระบบ (Server URL, Timeout)</div>
+          <div>📁 <code style="font-family:var(--mono);font-size:11px;color:var(--cyan)">/wifi.json</code> — SSID + Password ที่บันทึกไว้</div>
+          <div>📁 <code style="font-family:var(--mono);font-size:11px;color:var(--cyan)">/uid_cache.json</code> — UID whitelist (Cache)</div>
+          <div>📁 <code style="font-family:var(--mono);font-size:11px;color:var(--cyan)">/scan_queue.json</code> — Queue offline scans</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fas fa-cloud"></i> Google Sheets Structure</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.7">
+          <div>📋 Sheet <code style="font-family:var(--mono);font-size:11px;color:var(--cyan)">students</code> — uid, name, class, status</div>
+          <div>📋 Sheet <code style="font-family:var(--mono);font-size:11px;color:var(--cyan)">attendance</code> — timestamp, uid, name, result</div>
+          <div>📋 Sheet <code style="font-family:var(--mono);font-size:11px;color:var(--cyan)">devices</code> — device_id, location, last_seen</div>
+          <div>📋 Sheet <code style="font-family:var(--mono);font-size:11px;color:var(--cyan)">config</code> — global settings สำหรับ device</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ 04 Boot Flow ═══════ -->
+  <div class="section" id="s4">
+    <div class="section-header">
+      <div class="section-num">04</div>
+      <div>
+        <div class="section-title">Flow การทำงานตั้งแต่เปิดเครื่อง</div>
+        <div class="section-sub">Boot sequence ตั้งแต่กด power จนพร้อมสแกน</div>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="flow-step">
+        <div class="flow-icon start"><i class="fas fa-power-off"></i></div>
+        <div class="flow-content">
+          <div class="flow-title">Power On — Hardware Init</div>
+          <div class="flow-desc">ESP32 บูต, init SPI (MFRC522), I2C (OLED), GPIO (LED/Buzzer)</div>
+          <div class="flow-code">OLED: "BOOTING..." | LED Red ON</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-icon process"><i class="fas fa-file-code"></i></div>
+        <div class="flow-content">
+          <div class="flow-title">Load SPIFFS — อ่าน config.json + wifi.json</div>
+          <div class="flow-desc">โหลดค่าตั้งต่างๆ จาก Flash Storage หากไฟล์ไม่มี → ใช้ default values</div>
+          <div class="flow-code">SPIFFS.begin() → readFile("/config.json")</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-icon decision"><i class="fas fa-wifi"></i></div>
+        <div class="flow-content">
+          <div class="flow-title">Connect WiFi — พยายาม 3 ครั้ง (15 วินาที)</div>
+          <div class="flow-desc">ถ้าต่อสำเร็จ → ไป Sync Cache | ถ้าล้มเหลว → ตรวจว่ามี uid_cache.json ไหม</div>
+          <div class="flow-code">WiFi.begin(ssid, pass) → timeout 15s</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-icon decision"><i class="fas fa-triangle-exclamation"></i></div>
+        <div class="flow-content">
+          <div class="flow-title">WiFi Failed? → ตรวจ Cache</div>
+          <div class="flow-desc">มี uid_cache.json → เข้า <strong style="color:var(--yellow)">Offline Mode</strong> (สแกนได้ แต่ไม่บันทึก server)<br>ไม่มี cache เลย → เข้า <strong style="color:var(--red)">AP Mode</strong> เพื่อตั้ง WiFi ใหม่</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-icon process"><i class="fas fa-sync"></i></div>
+        <div class="flow-content">
+          <div class="flow-title">WiFi OK → Sync UID Cache จาก Server</div>
+          <div class="flow-desc">GET /api/uids → บันทึกลง uid_cache.json | โหลด cache เข้า HashMap ใน RAM</div>
+          <div class="flow-code">fetchUIDs() → saveToSPIFFS() → loadToHashMap()</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-icon process"><i class="fas fa-clock"></i></div>
+        <div class="flow-content">
+          <div class="flow-title">Sync Time (NTP) + Start Tasks</div>
+          <div class="flow-desc">ดึงเวลาจาก pool.ntp.org → เริ่ม FreeRTOS Task: scanTask, serverTask, displayTask</div>
+          <div class="flow-code">configTime(7*3600, 0, "pool.ntp.org")</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-icon success"><i class="fas fa-check"></i></div>
+        <div class="flow-content">
+          <div class="flow-title">Ready — แสดง Standby Screen</div>
+          <div class="flow-desc">OLED แสดงหน้า Standby, LED Green ON, ระบบพร้อมสแกน</div>
+          <div class="flow-code">OLED: "READY" | LED Green ON | Buzzer short beep</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ 05 Scan Flow ═══════ -->
+  <div class="section" id="s5">
+    <div class="section-header">
+      <div class="section-num">05</div>
+      <div>
+        <div class="section-title">Flow การทำงานตอนสแกนบัตร</div>
+        <div class="section-sub">ตั้งแต่เอาการ์ดเข้าใกล้ จนระบบตอบสนอง</div>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="flow-step">
+        <div class="flow-icon start"><i class="fas fa-credit-card"></i></div>
+        <div class="flow-content">
+          <div class="flow-title">Card Detected (PICC_IsNewCardPresent)</div>
+          <div class="flow-desc">MFRC522 detect signal → อ่าน UID 4 bytes</div>
+          <div class="flow-code">mfrc522.PICC_ReadCardSerial() → uid string</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-icon process"><i class="fas fa-bolt"></i></div>
+        <div class="flow-content">
+          <div class="flow-title">ตรวจ Duplicate Scan (Debounce)</div>
+          <div class="flow-desc">ถ้า UID เหมือนกับ lastUID และเวลาห่างน้อยกว่า 3 วินาที → ข้ามทันที (ป้องกันสแกนซ้ำ)</div>
+          <div class="flow-code">if (uid == lastUID && millis()-lastScanTime &lt; 3000) return;</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-icon process"><i class="fas fa-database"></i></div>
+        <div class="flow-content">
+          <div class="flow-title">ตรวจ Cache (HashMap ใน RAM) — &lt;1ms</div>
+          <div class="flow-desc">lookup UID ใน unordered_map → ได้ชื่อนักเรียน, ชั้น, สถานะ</div>
+          <div class="flow-code">auto it = uidCache.find(uid); // O(1) lookup</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-icon decision"><i class="fas fa-question"></i></div>
+        <div class="flow-content">
+          <div class="flow-title">Cache Hit หรือ Miss?</div>
+          <div class="flow-desc">
+            <strong style="color:var(--green)">Hit</strong> → แสดงชื่อทันที, ส่ง log ไป Server ผ่าน Queue (background)<br>
+            <strong style="color:var(--red)">Miss</strong> → ถ้า online: ถาม Server → ถ้า offline: แจ้ง "UID ไม่รู้จัก"
+          </div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-icon process"><i class="fas fa-display"></i></div>
+        <div class="flow-content">
+          <div class="flow-title">แสดงผล OLED + เสียง + LED</div>
+          <div class="flow-desc">
+            ✅ อนุญาต: LED Green, Buzzer beep สั้น 1 ครั้ง, OLED แสดงชื่อ<br>
+            ❌ ปฏิเสธ: LED Red, Buzzer beep ยาว, OLED แสดง "UID Unknown"
+          </div>
+          <div class="flow-code">showResult(name, class, time, APPROVED/DENIED)</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-icon process"><i class="fas fa-paper-plane"></i></div>
+        <div class="flow-content">
+          <div class="flow-title">Push ไป Queue → ส่ง Server ใน background</div>
+          <div class="flow-desc">ใส่ scan record เข้า FreeRTOS Queue → serverTask รับและ POST ไป Apps Script</div>
+          <div class="flow-code">xQueueSend(scanQueue, &record, 0);</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-icon success"><i class="fas fa-rotate-left"></i></div>
+        <div class="flow-content">
+          <div class="flow-title">กลับสู่ Standby Screen (3 วินาที)</div>
+          <div class="flow-desc">แสดงผลลัพธ์ 3 วิ → กลับหน้า Standby พร้อมรับการสแกนถัดไป</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ 06 โหลด UID ═══════ -->
+  <div class="section" id="s6">
+    <div class="section-header">
+      <div class="section-num">06</div>
+      <div>
+        <div class="section-title">วิธีโหลด UID จาก Server</div>
+        <div class="section-sub">ดึงรายชื่อนักเรียนทั้งหมดมาเก็บใน ESP32</div>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">C++ / Arduino</span><div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div></div>
+<pre><span class="cm">// ── โครงสร้างข้อมูลนักเรียนใน RAM ──────────────────</span>
+<span class="kw">struct</span> <span class="type">Student</span> {
+  <span class="type">String</span> name;
+  <span class="type">String</span> className;
+  <span class="kw">bool</span>   active;
+};
+
+<span class="cm">// UID → Student map (O(1) lookup)</span>
+std::unordered_map&lt;<span class="type">std::string</span>, <span class="type">Student</span>&gt; uidCache;
+
+<span class="cm">// ── ดึง UID list จาก Google Apps Script ─────────────</span>
+<span class="kw">bool</span> <span class="fn">fetchAndCacheUIDs</span>() {
+  <span class="type">HTTPClient</span> http;
+  http.<span class="fn">begin</span>(SERVER_URL + <span class="str">"/api/uids"</span>);
+  http.<span class="fn">addHeader</span>(<span class="str">"X-Device-Key"</span>, DEVICE_KEY);
+  
+  <span class="kw">int</span> code = http.<span class="fn">GET</span>();
+  <span class="kw">if</span> (code != <span class="num">200</span>) <span class="kw">return false</span>;
+  
+  <span class="type">String</span> payload = http.<span class="fn">getString</span>();
+  http.<span class="fn">end</span>();
+
+  <span class="cm">// ── Parse JSON → HashMap ──────────────────────────</span>
+  <span class="type">DynamicJsonDocument</span> doc(<span class="num">32768</span>); <span class="cm">// 32KB สำหรับ 500 รายการ</span>
+  <span class="fn">deserializeJson</span>(doc, payload);
+  
+  uidCache.<span class="fn">clear</span>();
+  <span class="kw">for</span> (<span class="kw">auto</span> entry : doc[<span class="str">"students"</span>].as&lt;<span class="type">JsonArray</span>&gt;()) {
+    <span class="type">Student</span> s;
+    s.name      = entry[<span class="str">"name"</span>].<span class="fn">as</span>&lt;<span class="type">String</span>&gt;();
+    s.className = entry[<span class="str">"class"</span>].<span class="fn">as</span>&lt;<span class="type">String</span>&gt;();
+    s.active    = entry[<span class="str">"active"</span>].<span class="fn">as</span>&lt;<span class="kw">bool</span>&gt;();
+    uidCache[entry[<span class="str">"uid"</span>].<span class="fn">as</span>&lt;<span class="type">std::string</span>&gt;()] = s;
+  }
+  
+  <span class="cm">// ── บันทึกลง SPIFFS สำหรับ offline ──────────────</span>
+  <span class="fn">writeFile</span>(<span class="str">"/uid_cache.json"</span>, payload);
+  lastSyncTime = <span class="fn">millis</span>();
+  
+  <span class="type">Serial</span>.<span class="fn">printf</span>(<span class="str">"Cache: %d UIDs loaded\n"</span>, uidCache.<span class="fn">size</span>());
+  <span class="kw">return true</span>;
+}
+
+<span class="cm">// ── Periodic re-sync ทุก 6 ชั่วโมง ──────────────────</span>
+<span class="kw">void</span> <span class="fn">checkCacheExpiry</span>() {
+  <span class="kw">if</span> (<span class="fn">millis</span>() - lastSyncTime > <span class="num">21600000UL</span>) { <span class="cm">// 6h</span>
+    <span class="fn">fetchAndCacheUIDs</span>();
+  }
+}</pre>
+    </div>
+
+    <div class="alert alert-success">
+      <i class="fas fa-circle-check"></i>
+      <div><strong>Response JSON Format</strong> จาก Apps Script ควรมีโครงสร้าง: <code style="font-family:var(--mono);font-size:11px;color:var(--cyan)">{"students":[{"uid":"A1B2C3D4","name":"สมชาย ใจดี","class":"ปวช.1/1","active":true}...],"updated":"2025-01-01T00:00:00"}</code></div>
+    </div>
+  </div>
+
+  <!-- ═══════ 07 Cache System ═══════ -->
+  <div class="section" id="s7">
+    <div class="section-header">
+      <div class="section-num">07</div>
+      <div>
+        <div class="section-title">ระบบ Cache เพื่อลดความหน่วง</div>
+        <div class="section-sub">ตอบสนองภายใน 50ms แม้ไม่มี internet</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title"><i class="fas fa-layer-group"></i> Cache Architecture (3 ชั้น)</div>
+        <div style="font-size:12.5px;line-height:2">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="background:var(--green3);border:1px solid var(--green2);border-radius:4px;padding:2px 8px;font-family:var(--mono);font-size:10px;color:var(--green)">L1</div>
+            <span style="color:var(--text)">RAM HashMap</span>
+            <span style="color:var(--muted);font-size:11px">— &lt;1ms, หายเมื่อ reboot</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="background:rgba(0,207,255,.1);border:1px solid rgba(0,207,255,.3);border-radius:4px;padding:2px 8px;font-family:var(--mono);font-size:10px;color:var(--cyan)">L2</div>
+            <span style="color:var(--text)">SPIFFS File</span>
+            <span style="color:var(--muted);font-size:11px">— ~20ms, คงอยู่หลัง reboot</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="background:rgba(255,208,96,.1);border:1px solid rgba(255,208,96,.3);border-radius:4px;padding:2px 8px;font-family:var(--mono);font-size:10px;color:var(--yellow)">L3</div>
+            <span style="color:var(--text)">Google Sheets</span>
+            <span style="color:var(--muted);font-size:11px">— 500-2000ms, source of truth</span>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fas fa-stopwatch"></i> Response Time เปรียบเทียบ</div>
+        <div style="font-size:12px;line-height:1.8;color:var(--text2)">
+          <div>🟢 Cache Hit (RAM): <strong style="color:var(--green)">&lt; 1 ms</strong></div>
+          <div>🔵 Cache Hit (SPIFFS): <strong style="color:var(--cyan)">10–30 ms</strong></div>
+          <div>🌐 API Call (WiFi): <strong style="color:var(--yellow)">300–800 ms</strong></div>
+          <div>❌ API Timeout: <strong style="color:var(--red)">5000 ms</strong></div>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+            🎯 เป้าหมาย: <strong style="color:var(--green)">95%+ ของการสแกน &lt; 50ms</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">C++ / Cache Lookup Logic</span><div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div></div>
+<pre><span class="cm">// ── ค้นหาแบบ cascading cache ──────────────────────────</span>
+<span class="type">ScanResult</span> <span class="fn">lookupUID</span>(<span class="kw">const</span> <span class="type">String</span>&amp; uid) {
+  <span class="type">ScanResult</span> result;
+  
+  <span class="cm">// L1: Check RAM HashMap first (fastest)</span>
+  <span class="kw">auto</span> it = uidCache.<span class="fn">find</span>(uid.<span class="fn">c_str</span>());
+  <span class="kw">if</span> (it != uidCache.<span class="fn">end</span>()) {
+    result.found  = <span class="kw">true</span>;
+    result.name   = it-&gt;second.name;
+    result.klass  = it-&gt;second.className;
+    result.active = it-&gt;second.active;
+    result.source = <span class="str">"RAM"</span>;
+    <span class="kw">return</span> result;
+  }
+  
+  <span class="cm">// L3: Online fallback (only if WiFi connected)</span>
+  <span class="kw">if</span> (<span class="type">WiFi</span>.<span class="fn">status</span>() == WL_CONNECTED) {
+    result = <span class="fn">queryServerForUID</span>(uid); <span class="cm">// HTTP GET</span>
+    <span class="kw">if</span> (result.found) {
+      <span class="cm">// Add to L1 cache dynamically</span>
+      uidCache[uid.<span class="fn">c_str</span>()] = {result.name, result.klass, <span class="kw">true</span>};
+    }
+  }
+  
+  <span class="kw">return</span> result;
+}
+
+<span class="cm">// ── FreeRTOS Task: ส่ง log ไป server ใน background ──</span>
+<span class="kw">void</span> <span class="fn">serverTask</span>(<span class="kw">void</span>* param) {
+  <span class="type">ScanRecord</span> rec;
+  <span class="kw">while</span>(<span class="kw">true</span>) {
+    <span class="kw">if</span> (<span class="fn">xQueueReceive</span>(scanQueue, &amp;rec, <span class="fn">portMAX_DELAY</span>)) {
+      <span class="kw">if</span> (<span class="type">WiFi</span>.<span class="fn">status</span>() == WL_CONNECTED) {
+        <span class="fn">postAttendance</span>(rec);     <span class="cm">// POST ไป Apps Script</span>
+      } <span class="kw">else</span> {
+        <span class="fn">saveOfflineQueue</span>(rec);  <span class="cm">// เก็บใน SPIFFS</span>
+      }
+    }
+  }
+}</pre>
+    </div>
+  </div>
+
+  <!-- ═══════ 08 AP Mode ═══════ -->
+  <div class="section" id="s8">
+    <div class="section-header">
+      <div class="section-num">08</div>
+      <div>
+        <div class="section-title">AP Mode สำหรับตั้งค่า WiFi</div>
+        <div class="section-sub">ไม่ต้องแก้โค้ด — ตั้งค่า WiFi ผ่าน Browser</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title"><i class="fas fa-wifi"></i> เงื่อนไขเข้า AP Mode</div>
+        <div style="font-size:12.5px;color:var(--text2);line-height:1.8">
+          <div>1. WiFi fail เกิน 3 ครั้ง + ไม่มี cache</div>
+          <div>2. กด Config Button (GPIO 0) ค้าง 5 วินาที</div>
+          <div>3. ส่ง POST /reset-wifi จาก Web UI</div>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+            OLED: <span style="color:var(--yellow)">📡 AP MODE<br>192.168.4.1</span>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fas fa-globe"></i> Web Config Portal</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.8">
+          <div>🔗 เชื่อม WiFi: <code style="font-family:var(--mono);color:var(--cyan)">ESP32-RFID-XXXX</code></div>
+          <div>🌐 เปิด: <code style="font-family:var(--mono);color:var(--cyan)">192.168.4.1</code></div>
+          <div>📝 กรอก SSID + Password</div>
+          <div>💾 กด Save → ESP32 reboot</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">C++ / AP Mode + Web Server</span><div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div></div>
+<pre><span class="cm">// ── เปิด AP + Web Server ──────────────────────────────</span>
+<span class="kw">void</span> <span class="fn">startAPMode</span>() {
+  <span class="type">String</span> apName = <span class="str">"ESP32-RFID-"</span> + <span class="fn">getMacSuffix</span>();
+  <span class="type">WiFi</span>.<span class="fn">softAP</span>(apName, <span class="str">"12345678"</span>);  <span class="cm">// รหัสเริ่มต้น</span>
+  
+  <span class="fn">displayAPScreen</span>(<span class="type">WiFi</span>.<span class="fn">softAPIP</span>().<span class="fn">toString</span>());
+  
+  <span class="cm">// ── Routes ────────────────────────────────────────</span>
+  server.<span class="fn">on</span>(<span class="str">"/"</span>, HTTP_GET, [](AsyncWebServerRequest* req) {
+    req-&gt;<span class="fn">send_P</span>(<span class="num">200</span>, <span class="str">"text/html"</span>, WIFI_CONFIG_HTML);
+  });
+  
+  server.<span class="fn">on</span>(<span class="str">"/save"</span>, HTTP_POST, [](AsyncWebServerRequest* req) {
+    <span class="type">String</span> ssid = req-&gt;<span class="fn">getParam</span>(<span class="str">"ssid"</span>, <span class="kw">true</span>)-&gt;<span class="fn">value</span>();
+    <span class="type">String</span> pass = req-&gt;<span class="fn">getParam</span>(<span class="str">"pass"</span>, <span class="kw">true</span>)-&gt;<span class="fn">value</span>();
+    
+    <span class="cm">// บันทึกลง SPIFFS</span>
+    <span class="type">DynamicJsonDocument</span> doc(<span class="num">256</span>);
+    doc[<span class="str">"ssid"</span>] = ssid; doc[<span class="str">"pass"</span>] = pass;
+    <span class="fn">writeJsonFile</span>(<span class="str">"/wifi.json"</span>, doc);
+    
+    req-&gt;<span class="fn">send</span>(<span class="num">200</span>, <span class="str">"text/plain"</span>, <span class="str">"Saved! Rebooting..."</span>);
+    <span class="fn">delay</span>(<span class="num">1000</span>);
+    <span class="type">ESP</span>.<span class="fn">restart</span>();
+  });
+  
+  server.<span class="fn">on</span>(<span class="str">"/status"</span>, HTTP_GET, [](AsyncWebServerRequest* req) {
+    <span class="type">DynamicJsonDocument</span> doc(<span class="num">512</span>);
+    doc[<span class="str">"ip"</span>]         = <span class="type">WiFi</span>.<span class="fn">localIP</span>().<span class="fn">toString</span>();
+    doc[<span class="str">"rssi"</span>]       = <span class="type">WiFi</span>.<span class="fn">RSSI</span>();
+    doc[<span class="str">"cacheCount"</span>] = (<span class="kw">int</span>)uidCache.<span class="fn">size</span>();
+    doc[<span class="str">"freeHeap"</span>]   = <span class="type">ESP</span>.<span class="fn">getFreeHeap</span>();
+    <span class="type">String</span> out; <span class="fn">serializeJson</span>(doc, out);
+    req-&gt;<span class="fn">send</span>(<span class="num">200</span>, <span class="str">"application/json"</span>, out);
+  });
+  
+  server.<span class="fn">begin</span>();
+  apModeActive = <span class="kw">true</span>;
+}</pre>
+    </div>
+  </div>
+
+  <!-- ═══════ 09 API ═══════ -->
+  <div class="section" id="s9">
+    <div class="section-header">
+      <div class="section-num">09</div>
+      <div>
+        <div class="section-title">โครงสร้าง API (Google Apps Script)</div>
+        <div class="section-sub">REST endpoints ที่ ESP32 และ Web Admin ใช้งาน</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><i class="fas fa-download"></i> ESP32 → Server</div>
+      <div class="endpoint">
+        <span class="method method-get">GET</span>
+        <div>
+          <div class="endpoint-path">/api/uids?device=ESP32-001</div>
+          <div class="endpoint-desc">ดึงรายชื่อ UID ทั้งหมด → ใช้ sync cache | Response: {"students":[...], "updated":"..."}</div>
+        </div>
+      </div>
+      <div class="endpoint">
+        <span class="method method-post">POST</span>
+        <div>
+          <div class="endpoint-path">/api/attendance</div>
+          <div class="endpoint-desc">บันทึกการสแกน | Body: {"uid","name","class","timestamp","device","result"}</div>
+        </div>
+      </div>
+      <div class="endpoint">
+        <span class="method method-post">POST</span>
+        <div>
+          <div class="endpoint-path">/api/batch-attendance</div>
+          <div class="endpoint-desc">ส่ง offline queue ทีเดียวหลายรายการ | Body: {"records":[...]}</div>
+        </div>
+      </div>
+      <div class="endpoint">
+        <span class="method method-get">GET</span>
+        <div>
+          <div class="endpoint-path">/api/config?device=ESP32-001</div>
+          <div class="endpoint-desc">ดึงค่า config สำหรับ device (sync interval, timeout, allowed hours)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><i class="fas fa-gauge"></i> Web Admin → Server</div>
+      <div class="endpoint">
+        <span class="method method-post">POST</span>
+        <div>
+          <div class="endpoint-path">/api/students (add/update)</div>
+          <div class="endpoint-desc">เพิ่ม/แก้ไขข้อมูลนักเรียน | ระบบ auto-push ให้ device sync cache ใหม่</div>
+        </div>
+      </div>
+      <div class="endpoint">
+        <span class="method method-get">GET</span>
+        <div>
+          <div class="endpoint-path">/api/report?date=2025-01-01&class=ปวช.1/1</div>
+          <div class="endpoint-desc">รายงานการเข้าเรียนตามวัน/ชั้น</div>
+        </div>
+      </div>
+      <div class="endpoint">
+        <span class="method method-put">PUT</span>
+        <div>
+          <div class="endpoint-path">/api/force-sync?device=ESP32-001</div>
+          <div class="endpoint-desc">บังคับให้ device sync cache ในการ poll ถัดไป</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">Google Apps Script — doPost()</span><div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div></div>
+<pre><span class="kw">function</span> <span class="fn">doPost</span>(e) {
+  <span class="kw">const</span> <span class="var">data</span>   = <span class="type">JSON</span>.<span class="fn">parse</span>(e.postData.contents);
+  <span class="kw">const</span> <span class="var">action</span> = e.parameter.action || data.action;
+  
+  <span class="kw">if</span> (action === <span class="str">'attendance'</span>) {
+    <span class="kw">const</span> <span class="var">ss</span>    = <span class="type">SpreadsheetApp</span>.<span class="fn">openById</span>(<span class="type">SHEET_ID</span>);
+    <span class="kw">const</span> <span class="var">sheet</span> = ss.<span class="fn">getSheetByName</span>(<span class="str">'attendance'</span>);
+    sheet.<span class="fn">appendRow</span>([
+      data.timestamp, data.uid, data.name,
+      data.class, data.device, data.result
+    ]);
+    <span class="kw">return</span> <span class="fn">jsonResponse</span>({ok: <span class="kw">true</span>});
+  }
+  
+  <span class="kw">if</span> (action === <span class="str">'batch'</span>) {
+    <span class="kw">const</span> <span class="var">rows</span> = data.records.<span class="fn">map</span>(r =&gt; [
+      r.timestamp, r.uid, r.name, r.class, r.device, r.result
+    ]);
+    sheet.<span class="fn">getRange</span>(sheet.<span class="fn">getLastRow</span>()+<span class="num">1</span>, <span class="num">1</span>, rows.length, <span class="num">6</span>)
+         .<span class="fn">setValues</span>(rows);
+    <span class="kw">return</span> <span class="fn">jsonResponse</span>({ok: <span class="kw">true</span>, count: rows.length});
+  }
+}
+
+<span class="kw">function</span> <span class="fn">doGet</span>(e) {
+  <span class="kw">if</span> (e.parameter.action === <span class="str">'uids'</span>) {
+    <span class="kw">const</span> <span class="var">data</span> = ss.<span class="fn">getSheetByName</span>(<span class="str">'students'</span>)
+                    .<span class="fn">getDataRange</span>().<span class="fn">getValues</span>();
+    <span class="kw">const</span> <span class="var">students</span> = data.<span class="fn">slice</span>(<span class="num">1</span>).<span class="fn">map</span>(row =&gt; ({
+      uid: row[<span class="num">0</span>], name: row[<span class="num">1</span>], class: row[<span class="num">2</span>], active: row[<span class="num">3</span>]
+    }));
+    <span class="kw">return</span> <span class="fn">jsonResponse</span>({students, updated: <span class="kw">new</span> <span class="type">Date</span>().<span class="fn">toISOString</span>()});
+  }
+}</pre>
+    </div>
+  </div>
+
+  <!-- ═══════ 10 โครงสร้างโค้ด ═══════ -->
+  <div class="section" id="s10">
+    <div class="section-header">
+      <div class="section-num">10</div>
+      <div>
+        <div class="section-title">โครงสร้างโค้ดหลัก</div>
+        <div class="section-sub">setup(), loop(), FreeRTOS Tasks แยกกัน</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><i class="fas fa-folder-tree"></i> File Structure</div>
+      <div style="font-family:var(--mono);font-size:12px;color:var(--text2);line-height:2">
+        <div><span style="color:var(--yellow)">📁 rfid-system/</span></div>
+        <div style="padding-left:20px"><span style="color:var(--cyan)">📄 main.ino</span> <span style="color:var(--muted)">— setup() + loop() + globals</span></div>
+        <div style="padding-left:20px"><span style="color:var(--cyan)">📄 wifi_manager.h</span> <span style="color:var(--muted)">— WiFi connect + AP mode</span></div>
+        <div style="padding-left:20px"><span style="color:var(--cyan)">📄 rfid_reader.h</span> <span style="color:var(--muted)">— MFRC522 scan + debounce</span></div>
+        <div style="padding-left:20px"><span style="color:var(--cyan)">📄 cache_manager.h</span> <span style="color:var(--muted)">— HashMap + SPIFFS R/W</span></div>
+        <div style="padding-left:20px"><span style="color:var(--cyan)">📄 display_manager.h</span> <span style="color:var(--muted)">— OLED screens</span></div>
+        <div style="padding-left:20px"><span style="color:var(--cyan)">📄 server_client.h</span> <span style="color:var(--muted)">— HTTPClient + Queue</span></div>
+        <div style="padding-left:20px"><span style="color:var(--cyan)">📄 config.h</span> <span style="color:var(--muted)">— pins, constants, defaults</span></div>
+        <div style="padding-left:20px"><span style="color:var(--yellow)">📁 data/</span> <span style="color:var(--muted)">— (อัปโหลดด้วย SPIFFS uploader)</span></div>
+        <div style="padding-left:40px"><span style="color:var(--muted)">config.json, wifi.json, uid_cache.json</span></div>
+      </div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header"><span class="code-lang">C++ / main.ino — setup() + Tasks</span><div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div></div>
+<pre><span class="cm">// ── Task Handles ──────────────────────────────────────</span>
+<span class="type">TaskHandle_t</span> hScan, hServer, hDisplay;
+<span class="type">QueueHandle_t</span> scanQueue;
+<span class="type">SemaphoreHandle_t</span> displayMutex;
+
+<span class="kw">void</span> <span class="fn">setup</span>() {
+  <span class="fn">initHardware</span>();      <span class="cm">// SPI, I2C, GPIO, Serial</span>
+  <span class="fn">initSPIFFS</span>();        <span class="cm">// Mount filesystem</span>
+  <span class="fn">loadConfig</span>();        <span class="cm">// config.json</span>
+  <span class="fn">showBootScreen</span>();    <span class="cm">// "BOOTING..."</span>
+  
+  <span class="cm">// ── WiFi ─────────────────────────────────────────</span>
+  <span class="kw">if</span> (!<span class="fn">connectWiFi</span>()) {
+    <span class="kw">if</span> (<span class="fn">hasCacheFile</span>()) {
+      <span class="fn">loadCacheFromSPIFFS</span>();
+      mode = OFFLINE_MODE;
+    } <span class="kw">else</span> {
+      <span class="fn">startAPMode</span>();
+      <span class="kw">return</span>;  <span class="cm">// loop() จะ handle AP mode</span>
+    }
+  } <span class="kw">else</span> {
+    <span class="fn">syncNTP</span>();
+    <span class="fn">fetchAndCacheUIDs</span>();
+    mode = ONLINE_MODE;
+  }
+  
+  <span class="cm">// ── FreeRTOS Queues & Mutexes ──────────────────</span>
+  scanQueue    = <span class="fn">xQueueCreate</span>(<span class="num">20</span>, <span class="kw">sizeof</span>(<span class="type">ScanRecord</span>));
+  displayMutex = <span class="fn">xSemaphoreCreateMutex</span>();
+  
+  <span class="cm">// ── Start Tasks (Core assignments) ─────────────</span>
+  <span class="fn">xTaskCreatePinnedToCore</span>(scanTask,    <span class="str">"scan"</span>,    <span class="num">4096</span>, <span class="kw">nullptr</span>, <span class="num">3</span>, &amp;hScan,    <span class="num">1</span>);
+  <span class="fn">xTaskCreatePinnedToCore</span>(serverTask,  <span class="str">"server"</span>,  <span class="num">8192</span>, <span class="kw">nullptr</span>, <span class="num">1</span>, &amp;hServer,  <span class="num">0</span>);
+  <span class="fn">xTaskCreatePinnedToCore</span>(displayTask, <span class="str">"display"</span>, <span class="num">4096</span>, <span class="kw">nullptr</span>, <span class="num">2</span>, &amp;hDisplay, <span class="num">1</span>);
+}
+
+<span class="kw">void</span> <span class="fn">loop</span>() {
+  <span class="cm">// loop() ว่างเกือบหมด — งานอยู่ใน Tasks</span>
+  <span class="cm">// ใช้แค่ตรวจ AP config button</span>
+  <span class="kw">if</span> (<span class="fn">digitalRead</span>(CONFIG_BTN) == LOW) {
+    configBtnPressTime = <span class="fn">millis</span>();
+    <span class="kw">while</span>(<span class="fn">digitalRead</span>(CONFIG_BTN) == LOW);
+    <span class="kw">if</span> (<span class="fn">millis</span>() - configBtnPressTime > <span class="num">5000</span>) <span class="fn">startAPMode</span>();
+  }
+  <span class="fn">vTaskDelay</span>(<span class="fn">pdMS_TO_TICKS</span>(<span class="num">100</span>));
+}
+
+<span class="cm">// ── Task Priorities ───────────────────────────────────</span>
+<span class="cm">// scanTask   → Core 1, Priority 3 (highest — response time สำคัญ)</span>
+<span class="cm">// displayTask → Core 1, Priority 2</span>
+<span class="cm">// serverTask  → Core 0, Priority 1 (network I/O แยก core)</span></pre>
+    </div>
+  </div>
+
+  <!-- ═══════ 11 OLED Design ═══════ -->
+  <div class="section" id="s11">
+    <div class="section-header">
+      <div class="section-num">11</div>
+      <div>
+        <div class="section-title">แนวทางออกแบบหน้าจอ OLED</div>
+        <div class="section-sub">128×64 pixel — ดูเป็นเครื่องจริง ไม่ใช่แค่ Serial Monitor</div>
+      </div>
+    </div>
+
+    <!-- OLED Mockups -->
+    <div class="oled-tabs">
+      <div class="oled-tab active" onclick="showOLED(this,'standby')">Standby</div>
+      <div class="oled-tab" onclick="showOLED(this,'success')">สแกนสำเร็จ</div>
+      <div class="oled-tab" onclick="showOLED(this,'fail')">UID ไม่รู้จัก</div>
+      <div class="oled-tab" onclick="showOLED(this,'offline')">Offline Mode</div>
+      <div class="oled-tab" onclick="showOLED(this,'ap')">AP Mode</div>
+    </div>
+
+    <div class="oled-wrap">
+      <div class="oled-device">
+        <div class="oled-screen" id="oledScreen">
+          <!-- Standby default -->
+          <div class="oled-content" id="oledContent">
+            <div class="oled-line oled-d" style="font-size:9px">━━━━━━━━━━━━━━━━━━━━━━━━━</div>
+            <div class="oled-big oled-g" style="text-align:center;margin-top:4px">ASIA-LB</div>
+            <div class="oled-line" style="text-align:center;font-size:10px;color:#888">ระบบลงชื่อเข้าเรียน</div>
+            <div class="oled-sep"></div>
+            <div class="oled-line oled-w" style="text-align:center;font-size:11px">▷  แตะบัตรเพื่อสแกน  ◁</div>
+            <div class="oled-sep"></div>
+            <div style="display:flex;justify-content:space-between;margin-top:2px">
+              <div class="oled-line oled-d" style="font-size:9px">09:32 AM</div>
+              <div class="oled-line oled-g" style="font-size:9px">● 127 UIDs</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-3" style="margin-top:16px">
+      <div class="card">
+        <div class="card-title"><i class="fas fa-ruler"></i> Layout Zones</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.8">
+          <div>Zone 1 (y:0–15): Header / School name</div>
+          <div>Zone 2 (y:16–47): Content area หลัก</div>
+          <div>Zone 3 (y:48–63): Status bar (เวลา, WiFi, Cache)</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fas fa-font"></i> Font Sizes</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.8">
+          <div>Title: Font Size 2 (12px)</div>
+          <div>Name: Font Size 2 Bold</div>
+          <div>Status: Font Size 1 (6px)</div>
+          <div>Icons: ▶ ✓ ✗ █ ░ (ASCII)</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><i class="fas fa-palette"></i> Visual Tips</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.8">
+          <div>ใช้ invert() สำหรับ header bar</div>
+          <div>ขีดเส้นแบ่ง Zone ด้วย drawFastHLine()</div>
+          <div>Animate: blink cursor บน Standby</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="code-block" style="margin-top:12px">
+      <div class="code-header"><span class="code-lang">C++ / SSD1306 Display Manager</span><div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div></div>
+<pre><span class="cm">// ── library: Adafruit_SSD1306 + Adafruit_GFX ─────────</span>
+<span class="type">Adafruit_SSD1306</span> display(<span class="num">128</span>, <span class="num">64</span>, &amp;Wire, OLED_RST);
+
+<span class="kw">void</span> <span class="fn">showSuccessScreen</span>(<span class="kw">const</span> <span class="type">Student</span>&amp; s, <span class="kw">const</span> <span class="type">String</span>&amp; timeStr) {
+  display.<span class="fn">clearDisplay</span>();
+  
+  <span class="cm">// Zone 1: Header (inverted bar)</span>
+  display.<span class="fn">fillRect</span>(<span class="num">0</span>,<span class="num">0</span>,<span class="num">128</span>,<span class="num">14</span>, SSD1306_WHITE);
+  display.<span class="fn">setTextColor</span>(SSD1306_BLACK);
+  display.<span class="fn">setCursor</span>(<span class="num">30</span>,<span class="num">3</span>); display.<span class="fn">setTextSize</span>(<span class="num">1</span>);
+  display.<span class="fn">print</span>(<span class="str">"✓  เข้าเรียนแล้ว  ✓"</span>);
+  
+  <span class="cm">// Zone 2: Student Info</span>
+  display.<span class="fn">setTextColor</span>(SSD1306_WHITE);
+  display.<span class="fn">setCursor</span>(<span class="num">0</span>,<span class="num">17</span>); display.<span class="fn">setTextSize</span>(<span class="num">2</span>);
+  display.<span class="fn">print</span>(s.name);  <span class="cm">// truncate if long</span>
+  display.<span class="fn">setCursor</span>(<span class="num">0</span>,<span class="num">35</span>); display.<span class="fn">setTextSize</span>(<span class="num">1</span>);
+  display.<span class="fn">print</span>(s.className);
+  
+  <span class="cm">// Zone 3: Status bar</span>
+  display.<span class="fn">drawFastHLine</span>(<span class="num">0</span>,<span class="num">52</span>,<span class="num">128</span>,SSD1306_WHITE);
+  display.<span class="fn">setCursor</span>(<span class="num">0</span>,<span class="num">55</span>); display.<span class="fn">setTextSize</span>(<span class="num">1</span>);
+  display.<span class="fn">print</span>(timeStr);
+  display.<span class="fn">setCursor</span>(<span class="num">90</span>,<span class="num">55</span>);
+  display.<span class="fn">print</span>(<span class="type">WiFi</span>.<span class="fn">RSSI</span>() > -<span class="num">70</span> ? <span class="str">"WiFi OK"</span> : <span class="str">"Weak"</span>);
+  
+  display.<span class="fn">display</span>();
+}</pre>
+    </div>
+  </div>
+
+  <!-- ═══════ 12 Troubleshooting ═══════ -->
+  <div class="section" id="s12">
+    <div class="section-header">
+      <div class="section-num">12</div>
+      <div>
+        <div class="section-title">ปัญหาที่พบบ่อยและวิธีแก้</div>
+        <div class="section-sub">จากประสบการณ์ deploy จริงในโรงเรียน</div>
+      </div>
+    </div>
+
+    <div class="problem-card danger">
+      <div class="problem-title"><i class="fas fa-bolt"></i> ไฟตก / ESP32 รีสตาร์ทกะทันหัน (Brownout Reset)</div>
+      <div class="problem-cause">สาเหตุ: MFRC522 ดูดกระแสตอนส่งสัญญาณ RF ทำให้ไฟ 3.3V วูบ</div>
+      <div class="problem-fix"><strong>วิธีแก้:</strong>
+        <ul>
+          <li>เพิ่ม capacitor 100µF (electrolytic) ระหว่าง 3.3V กับ GND ใกล้ MFRC522</li>
+          <li>เพิ่ม 100nF ceramic cap คู่กัน (bypass HF noise)</li>
+          <li>ใช้ power adapter 5V 2A คุณภาพดี ไม่ใช่ charger มือถือ</li>
+          <li>ตั้ง Brownout threshold: <code style="font-family:var(--mono);font-size:11px;color:var(--cyan)">WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0)</code> (ระวัง: อาจทำให้ chip เสียหายถ้าไฟต่ำจริงๆ)</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="problem-card danger">
+      <div class="problem-title"><i class="fas fa-memory"></i> RAM เต็ม / Heap Overflow / Task Stack Overflow</div>
+      <div class="problem-cause">สาเหตุ: ArduinoJson DynamicJsonDocument ขนาดใหญ่, String concatenation, UID cache โตเกิน</div>
+      <div class="problem-fix"><strong>วิธีแก้:</strong>
+        <ul>
+          <li>ใช้ <code style="font-family:var(--mono);font-size:11px;color:var(--cyan)">Serial.println(ESP.getFreeHeap())</code> monitor heap ตลอด</li>
+          <li>ใช้ <code style="font-family:var(--mono);font-size:11px;color:var(--cyan)">StaticJsonDocument</code> แทน Dynamic เมื่อรู้ขนาดแน่นอน</li>
+          <li>จำกัด cache ไม่เกิน 500 UID (ประมาณ 24KB heap)</li>
+          <li>เพิ่ม Task Stack: ถ้า crash → เพิ่ม stack size ใน xTaskCreate</li>
+          <li>ใช้ ESP32-S3 ที่มี PSRAM 4MB สำหรับ cache ขนาดใหญ่</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="problem-card warn">
+      <div class="problem-title"><i class="fas fa-wifi"></i> WiFi หลุดบ่อย / Reconnect loop</div>
+      <div class="problem-cause">สาเหตุ: สัญญาณอ่อน, DHCP timeout, router บล็อก</div>
+      <div class="problem-fix"><strong>วิธีแก้:</strong>
+        <ul>
+          <li>ตั้ง Static IP แทน DHCP: <code style="font-family:var(--mono);font-size:11px;color:var(--cyan)">WiFi.config(ip, gateway, subnet)</code></li>
+          <li>ใช้ WiFi Event Callback แทน while loop polling</li>
+          <li>เปิด Auto-reconnect: <code style="font-family:var(--mono);font-size:11px;color:var(--cyan)">WiFi.setAutoReconnect(true)</code></li>
+          <li>ถ้า WiFi หลุด → ทำงาน Offline Mode ต่อ อย่า block scanTask</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="problem-card warn">
+      <div class="problem-title"><i class="fas fa-clock"></i> NTP เวลาผิด / Timestamp ผิดพลาด</div>
+      <div class="problem-cause">สาเหตุ: ต่อ timezone ผิด, sync ไม่สำเร็จ, RTC drift หลัง reboot</div>
+      <div class="problem-fix"><strong>วิธีแก้:</strong>
+        <ul>
+          <li>ตั้ง timezone ไทย: <code style="font-family:var(--mono);font-size:11px;color:var(--cyan)">configTime(7*3600, 0, "pool.ntp.org", "time.google.com")</code></li>
+          <li>รอ NTP sync จริงๆ: <code style="font-family:var(--mono);font-size:11px;color:var(--cyan)">while(!time(nullptr)) delay(100)</code></li>
+          <li>เพิ่ม DS3231 RTC module สำหรับเวลาแม่นยำแม้ไม่มี internet</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="problem-card info">
+      <div class="problem-title"><i class="fas fa-credit-card"></i> อ่านการ์ดได้ไม่สม่ำเสมอ / Double scan</div>
+      <div class="problem-cause">สาเหตุ: ไม่ได้ HALT การ์ดหลังอ่าน, debounce ไม่ดี, antenna gain ต่ำ</div>
+      <div class="problem-fix"><strong>วิธีแก้:</strong>
+        <ul>
+          <li>เรียก <code style="font-family:var(--mono);font-size:11px;color:var(--cyan)">mfrc522.PICC_HaltA()</code> และ <code style="font-family:var(--mono);font-size:11px;color:var(--cyan)">mfrc522.PCD_StopCrypto1()</code> หลังอ่านทุกครั้ง</li>
+          <li>ใช้ debounce 3 วินาทีต่อ UID เดียวกัน</li>
+          <li>ปรับ antenna gain: <code style="font-family:var(--mono);font-size:11px;color:var(--cyan)">mfrc522.PCD_SetAntennaGain(0x70)</code></li>
+          <li>วางเสาอากาศห่างจากวัตถุโลหะ</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="problem-card info">
+      <div class="problem-title"><i class="fas fa-triangle-exclamation"></i> SPIFFS เขียนบ่อยเกิน → Flash เสื่อม</div>
+      <div class="problem-cause">สาเหตุ: เขียน scan log ลง SPIFFS ทุกครั้งที่สแกน (Flash อายุ ~100,000 write cycles)</div>
+      <div class="problem-fix"><strong>วิธีแก้:</strong>
+        <ul>
+          <li>เขียน offline queue ลง SPIFFS เฉพาะเมื่อ WiFi หลุดเท่านั้น</li>
+          <li>Batch write แทนการเขียนทีละ record</li>
+          <li>ใช้ LittleFS แทน SPIFFS (wear leveling ดีกว่า)</li>
+          <li>Cache file (uid_cache.json) sync แค่วันละ 2 ครั้ง</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+  <!-- end sections -->
+
+  </div><!-- end content -->
+</div><!-- end main -->
+
+<script>
+// ── OLED Screen Switcher ─────────────────────────────
+const oledScreens = {
+  standby: `
+    <div class="oled-content">
+      <div class="oled-line oled-d" style="font-size:9px">━━━━━━━━━━━━━━━━━━━━━━━━━</div>
+      <div class="oled-big oled-g" style="text-align:center;margin-top:4px">ASIA-LB</div>
+      <div class="oled-line" style="text-align:center;font-size:10px;color:#888">ระบบลงชื่อเข้าเรียน</div>
+      <div class="oled-sep"></div>
+      <div class="oled-line oled-w" style="text-align:center;font-size:11px">▷  แตะบัตรเพื่อสแกน  ◁</div>
+      <div class="oled-sep"></div>
+      <div style="display:flex;justify-content:space-between;margin-top:2px">
+        <div class="oled-line oled-d" style="font-size:9px">09:32 AM</div>
+        <div class="oled-line oled-g" style="font-size:9px">● 127 UIDs</div>
+      </div>
+    </div>`,
+  success: `
+    <div class="oled-content" style="padding:4px 6px">
+      <div style="background:#fff;color:#000;text-align:center;font-size:10px;padding:2px;border-radius:2px">✓  เข้าเรียนแล้ว</div>
+      <div class="oled-big oled-w" style="margin-top:4px;font-size:16px">สมชาย ใจดี</div>
+      <div class="oled-line oled-c" style="font-size:10px">ปวช.1/1 — กลุ่ม A</div>
+      <div class="oled-sep"></div>
+      <div style="display:flex;justify-content:space-between">
+        <div class="oled-line oled-g" style="font-size:9px">✓ APPROVED</div>
+        <div class="oled-line oled-d" style="font-size:9px">09:32:15</div>
+      </div>
+    </div>`,
+  fail: `
+    <div class="oled-content" style="padding:4px 6px">
+      <div style="background:#333;color:#ff5f6d;text-align:center;font-size:10px;padding:2px;border-radius:2px;border:1px solid #ff5f6d">✗  UID ไม่รู้จัก</div>
+      <div class="oled-big oled-r" style="margin-top:6px;font-size:14px">A1:B2:C3:D4</div>
+      <div class="oled-line oled-d" style="font-size:10px;margin-top:2px">ไม่พบในระบบ</div>
+      <div class="oled-sep"></div>
+      <div style="display:flex;justify-content:space-between">
+        <div class="oled-line oled-r" style="font-size:9px">✗ DENIED</div>
+        <div class="oled-line oled-d" style="font-size:9px">09:33:02</div>
+      </div>
+    </div>`,
+  offline: `
+    <div class="oled-content" style="padding:4px 6px">
+      <div style="background:#333;color:#ffd060;text-align:center;font-size:9px;padding:2px;border-radius:2px;border:1px solid #ffd060">! OFFLINE MODE</div>
+      <div class="oled-big oled-y" style="margin-top:4px;font-size:14px">สมหญิง ดีใจ</div>
+      <div class="oled-line oled-d" style="font-size:10px">ปวส.2/1 — บันทึกท้องถิ่น</div>
+      <div class="oled-sep"></div>
+      <div style="display:flex;justify-content:space-between">
+        <div class="oled-line oled-y" style="font-size:9px">⚠ Queued</div>
+        <div class="oled-line oled-d" style="font-size:9px">09:34:55</div>
+      </div>
+    </div>`,
+  ap: `
+    <div class="oled-content" style="text-align:center;padding:6px">
+      <div class="oled-line oled-y" style="font-size:10px;margin-bottom:4px">📡 AP CONFIG MODE</div>
+      <div class="oled-line oled-d" style="font-size:9px">เชื่อม WiFi:</div>
+      <div class="oled-big oled-c" style="font-size:12px">ESP32-RFID-A1B2</div>
+      <div class="oled-line oled-d" style="font-size:9px;margin-top:2px">รหัส: 12345678</div>
+      <div class="oled-sep"></div>
+      <div class="oled-line oled-g" style="font-size:9px">http://192.168.4.1</div>
+    </div>`
+};
+
+function showOLED(tab, key) {
+  document.querySelectorAll('.oled-tab').forEach(t => t.classList.remove('active'));
+  tab.classList.add('active');
+  document.getElementById('oledContent').outerHTML = '';
+  const screen = document.getElementById('oledScreen');
+  screen.innerHTML = oledScreens[key];
+}
+
+// ── Sidebar active highlight on scroll ──────────────
+const sections = document.querySelectorAll('.section');
+const navItems = document.querySelectorAll('.nav-item');
+
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      const id = entry.target.id;
+      navItems.forEach(item => {
+        item.classList.toggle('active', item.getAttribute('href') === '#' + id);
+      });
+    }
+  });
+}, { threshold: 0.3 });
+
+sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>

@@ -1,0 +1,1415 @@
+<!doctype html>
+<html lang="th">
+
+<head>
+    <title>สหกรณ์โรงเรียน – ASIA-LB</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+    <meta name="theme-color" content="#84D4FA">
+
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="stylesheet" href="/style/index.css">
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script src="/script/index.js" defer></script>
+    <script src="/config-students.js" defer></script>
+    <script>
+        /* Patch: guard against setProperty(undefined) from index.js */
+        (function () {
+            const o = CSSStyleDeclaration.prototype.setProperty;
+            CSSStyleDeclaration.prototype.setProperty = function (p, v, r) {
+                if (p === undefined || v === undefined) return; return o.call(this, p, v, r);
+            };
+        })();
+    </script>
+
+    <style>
+        :root {
+            --primary-color: #84D4FA;
+            --primary-dark: #4DB8F5;
+            --primary-light: #EAF7FF;
+            --accent: #FE4040;
+            --success: #22c55e;
+            --gray-soft: #F8FAFC;
+            --secondary-color: #FF7070;
+            --white-smoker: #F5F5F5;
+            --green: #1ED760;
+            --red: #FF7070;
+            --blue: #3B82F6;
+        }
+
+        body {
+            font-family: "Kanit", "Bai Jamjuree", monospace;
+            font-weight: 600;
+            background: linear-gradient(135deg, #EAF7FF 0%, #F0F9FF 40%, #E0F2FE 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ─── blobs ─── */
+        .bg-blob {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: .15;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ─── search bar ─── */
+        .search-bar {
+            background: rgba(255, 255, 255, .85);
+            backdrop-filter: blur(8px);
+            border: 1.5px solid #E2E8F0;
+            border-radius: 14px;
+            transition: all .2s;
+        }
+
+        .search-bar:focus-within {
+            border-color: var(--primary-dark);
+            box-shadow: 0 0 0 3px rgba(77, 184, 245, .18);
+        }
+
+        /* ─── Product Card ─── */
+        .product-card {
+            background: white;
+            border-radius: 18px;
+            overflow: hidden;
+            box-shadow: 0 4px 18px rgba(14, 165, 233, .10);
+            border: 1.5px solid #F1F5F9;
+            transition: all .25s cubic-bezier(.34, 1.2, .64, 1);
+        }
+
+        .product-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 32px rgba(14, 165, 233, .18);
+            border-color: var(--primary-color);
+        }
+
+        .product-img {
+            height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #EAF7FF, #F0F9FF);
+            font-size: 48px;
+            position: relative;
+        }
+
+        .stock-badge {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(255, 255, 255, .9);
+            border-radius: 20px;
+            padding: 2px 8px;
+            font-size: 10px;
+            font-weight: 700;
+            color: #64748B;
+        }
+
+        .stock-badge.low {
+            background: #FEF9C3;
+            color: #92400E;
+        }
+
+        .stock-badge.out {
+            background: #FEE2E2;
+            color: #991B1B;
+        }
+
+        .cat-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: 700;
+            background: #EFF6FF;
+            color: #0EA5E9;
+        }
+
+        /* ─── Filter tabs ─── */
+        .filter-tab {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            border: 1.5px solid #E2E8F0;
+            background: white;
+            color: #64748B;
+            cursor: pointer;
+            transition: all .2s;
+            white-space: nowrap;
+        }
+
+        .filter-tab.active {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+            color: white;
+            box-shadow: 0 4px 12px rgba(132, 212, 250, .4);
+        }
+
+        /* ─── Cart badge ─── */
+        .cart-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #FE4040;
+            color: white;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            font-size: 10px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* ─── Cart item ─── */
+        .cart-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 0;
+            border-bottom: 1px solid #F1F5F9;
+        }
+
+        .cart-item:last-child {
+            border-bottom: none;
+        }
+
+        /* ─── Modal ─── */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 999;
+            background: rgba(15, 23, 42, .45);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .25s;
+        }
+
+        .modal-overlay.open {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .modal-sheet {
+            background: white;
+            border-radius: 24px 24px 0 0;
+            width: 100%;
+            max-width: 520px;
+            padding: 0 0 28px;
+            transform: translateY(100%);
+            transition: transform .35s cubic-bezier(.34, 1.1, .64, 1);
+            max-height: 92vh;
+            overflow-y: auto;
+        }
+
+        .modal-overlay.open .modal-sheet {
+            transform: translateY(0);
+        }
+
+        .modal-handle {
+            width: 40px;
+            height: 4px;
+            background: #E2E8F0;
+            border-radius: 2px;
+            margin: 12px auto 0;
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #FFF;
+            border-bottom: 1px solid #F1F5F9;
+            padding: 14px 16px;
+        }
+
+        .modal-body {
+            padding: 16px 16px 0;
+        }
+
+        /* center modal variant */
+        .modal-center {
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            background: rgba(15, 23, 42, .5);
+            backdrop-filter: blur(6px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .25s;
+            padding: 16px;
+        }
+
+        .modal-center.open {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .modal-box {
+            background: white;
+            border-radius: 24px;
+            width: 100%;
+            max-width: 440px;
+            padding: 24px;
+            transform: scale(.92);
+            transition: transform .3s cubic-bezier(.34, 1.2, .64, 1);
+        }
+
+        .modal-center.open .modal-box {
+            transform: scale(1);
+        }
+
+        /* ─── QR ─── */
+        .qr-ring {
+            border: 4px solid var(--primary-light);
+            border-radius: 20px;
+            padding: 12px;
+            background: white;
+            display: inline-block;
+            box-shadow: 0 8px 28px rgba(14, 165, 233, .18);
+        }
+
+        /* ─── Slip ─── */
+        #slipCanvas {
+            border-radius: 16px;
+            display: block;
+            margin: 0 auto;
+        }
+
+        /* ─── Log entry ─── */
+        .log-entry {
+            padding: 10px 14px;
+            border-radius: 12px;
+            background: #F8FAFC;
+            border: 1px solid #F1F5F9;
+            margin-bottom: 8px;
+        }
+
+        .log-entry.paid {
+            border-left: 3px solid var(--success);
+        }
+
+        .log-entry.pending {
+            border-left: 3px solid #F59E0B;
+        }
+
+        /* ─── Profile card ─── */
+        .profile-card {
+            background: linear-gradient(135deg, #0EA5E9 0%, #38BDF8 50%, #84D4FA 100%);
+            border-radius: 20px;
+            padding: 18px;
+            color: white;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 12px 32px rgba(14, 165, 233, .35);
+        }
+
+        .profile-card.pvs {
+            background: linear-gradient(135deg, #EF4444 0%, #F87171 50%, #FF7070 100%);
+            box-shadow: 0 12px 32px rgba(239, 68, 68, .35);
+        }
+
+        .profile-card::before {
+            content: '';
+            position: absolute;
+            top: -40px;
+            right: -40px;
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, .1);
+        }
+
+        .profile-card::after {
+            content: '';
+            position: absolute;
+            bottom: -50px;
+            left: -20px;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, .07);
+        }
+
+        /* ─── Add-to-cart animation ─── */
+        @keyframes popIn {
+            0% {
+                transform: scale(.7);
+                opacity: 0
+            }
+
+            60% {
+                transform: scale(1.15)
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 1
+            }
+        }
+
+        .pop-in {
+            animation: popIn .3s cubic-bezier(.34, 1.56, .64, 1);
+        }
+
+        @keyframes floatUp {
+            0% {
+                transform: translateY(0);
+                opacity: 1
+            }
+
+            100% {
+                transform: translateY(-60px);
+                opacity: 0
+            }
+        }
+
+        .float-up {
+            animation: floatUp .7s ease forwards;
+        }
+
+        /* ─── Qty control ─── */
+        .qty-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            border: 1.5px solid #E2E8F0;
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all .15s;
+            color: #64748B;
+        }
+
+        .qty-btn:hover {
+            background: var(--primary-light);
+            border-color: var(--primary-color);
+            color: var(--primary-dark);
+        }
+
+        /* ─── Scrollbar ─── */
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: var(--primary-color) transparent;
+        }
+
+        /* tag pills */
+        .tag-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            padding: 1px 7px;
+            border-radius: 20px;
+            font-size: 9px;
+            font-weight: 700;
+            background: #DBEAFE;
+            color: #1D4ED8;
+        }
+
+        .tag-pill.แนะนำ {
+            background: #DCFCE7;
+            color: #166534;
+        }
+
+        .tag-pill.ขายดี {
+            background: #FEF9C3;
+            color: #92400E;
+        }
+    </style>
+</head>
+
+<body draggable="false" oncontextmenu="return false">
+    <!-- blobs -->
+    <div class="bg-blob" style="width:500px;height:500px;background:#84D4FA;top:-100px;right:-150px;"></div>
+    <div class="bg-blob" style="width:400px;height:400px;background:#4DB8F5;bottom:-80px;left:-100px;"></div>
+
+    <!-- ══════════════════ HEADER ══════════════════ -->
+    <header class="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200/60 shadow-sm">
+        <div class="max-w-6xl mx-auto px-3 sm:px-6">
+            <div class="h-16 flex items-center gap-3">
+                <!-- Logo -->
+                <a href="/" class="flex items-center gap-2 flex-shrink-0">
+                    <div class="w-9 h-9 rounded-xl flex items-center justify-center"
+                        style="background:linear-gradient(135deg,#84D4FA,#4DB8F5);">
+                        <i class="fa-solid fa-store text-white text-sm"></i>
+                    </div>
+                    <div class="hidden sm:block">
+                        <div class="text-sm font-bold text-slate-800 leading-tight">สหกรณ์โรงเรียน</div>
+                        <div class="text-[10px] text-slate-400 font-medium">ASIA-LB Co-op Shop</div>
+                    </div>
+                </a>
+
+                <!-- Search -->
+                <div class="search-bar flex items-center gap-2 flex-1 max-w-md px-3 py-2">
+                    <i class="fa-solid fa-magnifying-glass text-slate-400 text-sm flex-shrink-0"></i>
+                    <input id="searchInput" type="text" placeholder="ค้นหาสินค้า..."
+                        class="w-full bg-transparent outline-none text-sm text-slate-700 font-medium placeholder:text-slate-400 placeholder:font-normal">
+                    <button id="clearSearch"
+                        class="text-slate-300 hover:text-slate-500 transition-colors hidden text-sm">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <!-- Nav icons -->
+                <div class="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                    <button id="logBtn" onclick="openModal('modalLogs')"
+                        class="relative p-2 rounded-xl hover:bg-slate-100 transition text-slate-500 hover:text-blue-500">
+                        <i class="fa-solid fa-clock-rotate-left text-base"></i>
+                        <span id="logBadge" class="cart-badge hidden">0</span>
+                    </button>
+                    <button onclick="openModal('modalCart')"
+                        class="relative p-2 rounded-xl hover:bg-slate-100 transition text-slate-500 hover:text-sky-500">
+                        <i class="fa-solid fa-cart-shopping text-base"></i>
+                        <span id="cartBadge" class="cart-badge hidden">0</span>
+                    </button>
+                    <a href="/student.html"
+                        class="p-2 rounded-xl hover:bg-slate-100 transition text-slate-500 hover:text-slate-700">
+                        <i class="fa-solid fa-user-circle text-base"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ══════════════════ MAIN ══════════════════ -->
+    <main class="max-w-6xl mx-auto px-3 sm:px-6 py-6 pb-20 relative z-10">
+
+        <div class="flex flex-col lg:flex-row gap-6">
+
+            <!-- ── LEFT: Profile + Filters ── -->
+            <div class="lg:w-72 flex-shrink-0 space-y-4">
+
+                <!-- Profile Card -->
+                <div data-aos="fade-right" data-aos-delay="200">
+                    <p
+                        class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                        <i class="fa-solid fa-id-card text-sky-400"></i> ข้อมูลนักเรียน
+                    </p>
+                    <div class="profile-card" id="profileCard">
+                        <div style="position:relative;z-index:1">
+                            <div class="flex items-center gap-3 mb-3">
+                                <div class="w-12 h-12 rounded-2xl bg-white/20 border-2 border-white/40 flex items-center justify-center text-lg font-bold"
+                                    id="profAvatar">?</div>
+                                <div>
+                                    <div class="text-base font-bold leading-tight" id="profName">กำลังโหลด...</div>
+                                    <div class="text-xs opacity-75 mt-0.5" id="profNick"></div>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <div class="bg-white/15 rounded-xl px-3 py-2">
+                                    <div class="opacity-60 text-[10px] mb-0.5">ระดับ</div>
+                                    <div class="font-bold" id="profProgram">—</div>
+                                </div>
+                                <div class="bg-white/15 rounded-xl px-3 py-2">
+                                    <div class="opacity-60 text-[10px] mb-0.5">ชั้นปีที่</div>
+                                    <div class="font-bold" id="profGrade">—</div>
+                                </div>
+                                <div class="bg-white/15 rounded-xl px-3 py-2 col-span-2">
+                                    <div class="opacity-60 text-[10px] mb-0.5">สาขาวิชา</div>
+                                    <div class="font-bold truncate" id="profDept">—</div>
+                                </div>
+                            </div>
+                            <div class="mt-3 flex items-center gap-2 bg-white/15 rounded-xl px-3 py-2">
+                                <i class="fa-solid fa-wallet text-xs opacity-70"></i>
+                                <span class="text-xs opacity-70">ยอดซื้อวันนี้</span>
+                                <span class="ml-auto font-bold text-sm" id="todaySpend">฿0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Category filter (desktop sidebar) -->
+                <div data-aos="fade-right" data-aos-delay="300" class="hidden lg:block">
+                    <p
+                        class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                        <i class="fa-solid fa-layer-group text-sky-400"></i> หมวดหมู่
+                    </p>
+                    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                        <div id="sidebarCats" class="divide-y divide-slate-50"></div>
+                    </div>
+                </div>
+
+                <!-- Stats card -->
+                <div data-aos="fade-right" data-aos-delay="400"
+                    class="hidden lg:block bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">สรุปร้านค้า</p>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex items-center justify-between">
+                            <span class="text-slate-500 flex items-center gap-1.5"><i
+                                    class="fa-solid fa-box text-sky-400 text-xs w-4 text-center"></i>สินค้าทั้งหมด</span>
+                            <span class="font-bold text-slate-700" id="statTotal">—</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-slate-500 flex items-center gap-1.5"><i
+                                    class="fa-solid fa-check-circle text-green-400 text-xs w-4 text-center"></i>มีสินค้า</span>
+                            <span class="font-bold text-slate-700" id="statInStock">—</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-slate-500 flex items-center gap-1.5"><i
+                                    class="fa-solid fa-receipt text-amber-400 text-xs w-4 text-center"></i>รายการสั่งซื้อ</span>
+                            <span class="font-bold text-slate-700" id="statOrders">—</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── RIGHT: Products ── -->
+            <div class="flex-1">
+                <!-- Mobile category scroll -->
+                <div data-aos="fade-up" data-aos-delay="200" class="lg:hidden mb-4 overflow-x-auto pb-1">
+                    <div class="flex gap-2 w-max" id="mobileCats"></div>
+                </div>
+
+                <!-- Product grid header -->
+                <div data-aos="fade-up" data-aos-delay="300" class="flex items-center justify-between mb-4">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-800" id="gridTitle">สินค้าทั้งหมด</h2>
+                        <p class="text-xs text-slate-400 font-medium mt-0.5" id="gridSubtitle">กำลังโหลด...</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button id="sortBtn"
+                            class="text-xs text-slate-500 hover:text-sky-500 transition flex items-center gap-1 bg-white border border-slate-200 rounded-xl px-3 py-1.5">
+                            <i class="fa-solid fa-arrow-up-wide-short text-xs"></i>
+                            <span id="sortLabel">ราคา ↑</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Grid -->
+                <div id="productGrid" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3"></div>
+
+                <!-- Empty state -->
+                <div id="emptyState" class="hidden text-center py-16">
+                    <div class="text-5xl mb-3">🔍</div>
+                    <div class="text-slate-500 font-medium">ไม่พบสินค้าที่ตรงกัน</div>
+                    <div class="text-xs text-slate-400 mt-1">ลองค้นหาด้วยคำอื่น</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- ══════════════════ MODAL: CART ══════════════════ -->
+    <div class="modal-overlay" id="modalCart">
+        <div class="modal-sheet">
+            <div class="modal-handle"></div>
+            <div class="modal-header">
+                <div class="w-9 h-9 rounded-xl flex items-center justify-center bg-sky-50 text-sky-500">
+                    <i class="fa-solid fa-cart-shopping text-sm"></i>
+                </div>
+                <div>
+                    <div class="font-bold text-slate-800">ตะกร้าสินค้า</div>
+                    <div class="text-xs text-slate-400 mt-0.5">รายการที่เลือกไว้</div>
+                </div>
+                <button onclick="closeModal('modalCart')" class="ml-auto text-slate-400 hover:text-slate-600 p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="cartItems"></div>
+                <!-- empty cart -->
+                <div id="cartEmpty" class="text-center py-10 hidden">
+                    <div class="text-4xl mb-2">🛒</div>
+                    <div class="text-slate-400 text-sm">ยังไม่มีสินค้าในตะกร้า</div>
+                </div>
+                <!-- Summary -->
+                <div id="cartSummary" class="hidden">
+                    <div class="bg-slate-50 rounded-2xl p-4 mt-2 space-y-2">
+                        <div class="flex justify-between text-sm text-slate-500">
+                            <span>จำนวนรายการ</span><span id="cartCount" class="font-bold text-slate-700">0</span>
+                        </div>
+                        <div class="flex justify-between text-base border-t border-slate-200 pt-2 mt-2">
+                            <span class="font-bold text-slate-700">ยอดรวม</span>
+                            <span class="font-bold text-sky-500 text-lg" id="cartTotal">฿0</span>
+                        </div>
+                    </div>
+                    <button id="checkoutBtn" class="w-full mt-3 py-3 rounded-2xl font-bold text-white text-sm
+                   flex items-center justify-center gap-2" style="background:linear-gradient(135deg,#84D4FA,#4DB8F5);
+                   box-shadow:0 6px 18px rgba(77,184,245,.4);">
+                        <i class="fa-solid fa-qrcode"></i> ชำระเงิน (PromptPay)
+                    </button>
+                    <button onclick="clearCart()" class="w-full mt-2 py-2 rounded-2xl font-medium text-slate-500 text-xs
+                   border border-slate-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition">
+                        <i class="fa-solid fa-trash text-xs"></i> ล้างตะกร้า
+                    </button>
+                </div>
+                <div style="height:12px"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════ MODAL: PAYMENT (Omise PromptPay) ══════════════════ -->
+    <div class="modal-center" id="modalPayment">
+        <div class="modal-box">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2">
+                    <div class="w-9 h-9 rounded-xl bg-violet-50 flex items-center justify-center text-violet-500">
+                        <i class="fa-solid fa-qrcode"></i>
+                    </div>
+                    <div>
+                        <div class="font-bold text-slate-800">ชำระเงิน PromptPay</div>
+                        <div class="text-xs text-slate-400">สแกน QR ภายใน 15 นาที</div>
+                    </div>
+                </div>
+                <button onclick="cancelPayment()" class="text-slate-400 hover:text-slate-600 p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- QR Zone -->
+            <div class="text-center mb-3">
+                <!-- loading state -->
+                <div id="qrLoading" class="py-8">
+                    <i class="fa-solid fa-spinner fa-spin text-2xl text-violet-400 block mb-2"></i>
+                    <div class="text-xs text-slate-400">กำลังสร้าง QR Code...</div>
+                </div>
+                <!-- qr image -->
+                <div id="qrReady" class="hidden">
+                    <div class="qr-ring inline-block mb-2">
+                        <img id="qrImg" src="" alt="PromptPay QR" class="w-48 h-48 rounded-lg object-contain">
+                    </div>
+                    <div class="text-[10px] text-slate-400 mt-1">QR Code จาก Omise · หมดอายุใน 15 นาที</div>
+                </div>
+            </div>
+
+            <!-- Amount -->
+            <div class="bg-violet-50 rounded-2xl p-3 mb-3 flex items-center justify-between">
+                <div class="text-sm text-slate-600 font-medium">ยอดที่ต้องชำระ</div>
+                <div class="text-xl font-bold text-violet-600" id="payAmount">฿0</div>
+            </div>
+
+            <!-- Items summary -->
+            <div class="bg-slate-50 rounded-2xl p-3 mb-3 max-h-24 overflow-y-auto">
+                <div id="payItemList" class="space-y-1 text-xs text-slate-600"></div>
+            </div>
+
+            <!-- Polling status bar -->
+            <div id="payStatusBar" class="hidden rounded-xl px-3 py-2 mb-3 text-xs font-medium flex items-center gap-2">
+                <i class="fa-solid fa-circle-notch fa-spin text-xs"></i>
+                <span id="payStatusTxt">รอการชำระเงิน...</span>
+            </div>
+
+            <!-- Action -->
+            <button onclick="cancelPayment()"
+                class="w-full py-2.5 rounded-xl border border-slate-200 text-slate-500 text-sm font-medium hover:bg-red-50 hover:text-red-400 hover:border-red-200 transition">
+                ยกเลิกการชำระเงิน
+            </button>
+        </div>
+    </div>
+
+    <!-- ══════════════════ MODAL: SLIP ══════════════════ -->
+    <div class="modal-center" id="modalSlip">
+        <div class="modal-box">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2">
+                    <div class="w-9 h-9 rounded-xl bg-green-50 flex items-center justify-center text-green-500">
+                        <i class="fa-solid fa-receipt text-sm"></i>
+                    </div>
+                    <div>
+                        <div class="font-bold text-slate-800">ใบเสร็จรับเงิน</div>
+                        <div class="text-xs text-slate-400">สหกรณ์โรงเรียน ASIA-LB</div>
+                    </div>
+                </div>
+                <button onclick="closeModal('modalSlip')" class="text-slate-400 hover:text-slate-600 p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <canvas id="slipCanvas" width="380" height="560"></canvas>
+            <div class="grid grid-cols-2 gap-2 mt-4">
+                <button onclick="downloadSlip()"
+                    class="py-2.5 rounded-xl text-white text-sm font-bold flex items-center justify-center gap-1.5"
+                    style="background:linear-gradient(135deg,#84D4FA,#4DB8F5);box-shadow:0 4px 12px rgba(77,184,245,.35);">
+                    <i class="fa-solid fa-download"></i> ดาวน์โหลดสลิป
+                </button>
+                <button onclick="closeModal('modalSlip')"
+                    class="py-2.5 rounded-xl border border-slate-200 text-slate-500 text-sm font-medium hover:bg-slate-50 transition">
+                    ปิด
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════ MODAL: LOGS ══════════════════ -->
+    <div class="modal-overlay" id="modalLogs">
+        <div class="modal-sheet">
+            <div class="modal-handle"></div>
+            <div class="modal-header">
+                <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center">
+                    <i class="fa-solid fa-clock-rotate-left text-sm"></i>
+                </div>
+                <div>
+                    <div class="font-bold text-slate-800">ประวัติการสั่งซื้อ</div>
+                    <div class="text-xs text-slate-400 mt-0.5">รายการก่อน-หลังชำระเงิน</div>
+                </div>
+                <div class="ml-auto flex gap-2">
+                    <button onclick="clearLogs()"
+                        class="text-xs text-red-400 hover:text-red-600 px-2 py-1 rounded-lg hover:bg-red-50 transition">
+                        <i class="fa-solid fa-trash text-xs"></i> ล้าง
+                    </button>
+                    <button onclick="closeModal('modalLogs')" class="text-slate-400 hover:text-slate-600 p-1">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-body" id="logsContent">
+                <div id="logsEmpty" class="text-center py-10">
+                    <div class="text-4xl mb-2">📋</div>
+                    <div class="text-slate-400 text-sm">ยังไม่มีประวัติการสั่งซื้อ</div>
+                </div>
+                <div id="logsList" class="space-y-0"></div>
+                <div style="height:16px"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+       SCRIPT
+  ════════════════════════════════════════════════════ -->
+    <script>
+        // ══════════════════════════════════════════════════════════════════
+        //  SESSION GUARD — เหมือน student.html ทุกอย่าง
+        //  ใช้ LS_DATA / LS_TIME / SESSION_TTL จาก config-students.js
+        //  calcGrade() จาก config-students.js
+        // ══════════════════════════════════════════════════════════════════
+
+        // ── Helpers ────────────────────────────────────────────────────────
+        function openModal(id) { $("#" + id).addClass("open"); $("body").css("overflow", "hidden"); }
+        function closeModal(id) { $("#" + id).removeClass("open"); $("body").css("overflow", ""); }
+        function fmt(n) { return "฿" + (+n).toLocaleString(); }
+
+        // ── Session (เหมือน student.html) ──────────────────────────────────
+        function loadSession() {
+            try {
+                const raw = localStorage.getItem(LS_DATA);
+                const time = localStorage.getItem(LS_TIME);
+                if (!raw || !time) return null;
+                if (Date.now() - new Date(time).getTime() > SESSION_TTL) { clearSession(); return null; }
+                return { data: JSON.parse(raw), time };
+            } catch (_) { return null; }
+        }
+        function clearSession() {
+            try { localStorage.removeItem(LS_DATA); localStorage.removeItem(LS_TIME); } catch (_) { }
+        }
+        function doLogout() {
+            clearSession();
+            window.location.replace("/login.html");
+        }
+
+        // ── STATE ───────────────────────────────────────────────────────────
+        let PRODUCTS = [];
+        let CATS = ["ทั้งหมด"];
+        let cart = {};
+        let logs = [];
+        let currentCat = "ทั้งหมด";
+        let searchQ = "";
+        let sortDir = 1;
+        let lastOrder = null;
+        let studentData = null;
+        let pollTimer = null;
+
+        // โหลด logs จาก localStorage (ไม่ใช่สินค้า)
+        try { logs = JSON.parse(localStorage.getItem("coopLogs") || "[]"); } catch (_) { logs = []; }
+        function saveLogs() {
+            try { localStorage.setItem("coopLogs", JSON.stringify(logs.slice(0, 100))); } catch (_) { }
+            updateLogBadge(); updateStatOrders();
+        }
+
+        // ── EMOJI MAP (เพิ่มเติมสวยงาม เผื่อ images ใน sheet ว่าง) ─────────
+        const EMOJI_MAP = [
+            ["ดินสอ", "✏️"], ["ไม้บรรทัด", "📏"], ["สมุด", "📓"], ["ปากกา", "🖊️"],
+            ["ยางลบ", "🔲"], ["กรรไกร", "✂️"], ["แฟ้ม", "📁"], ["กระดาษ", "📄"],
+            ["ถุงเท้า", "🧦"], ["น้ำ", "🧴"], ["ขนม", "🍪"], ["ปิ้ง", "🥪"],
+            ["กาแฟ", "☕"], ["นม", "🥛"], ["เข็มขัด", "👔"],
+        ];
+        const CAT_EMOJI = { "เครื่องเขียน": "📝", "ของใช้": "🧰", "อาหาร/เครื่องดื่ม": "🍱", "อื่นๆ": "📦" };
+        function getEmoji(p) {
+            // ถ้า images มีค่า → ใช้เป็น emoji/url
+            if (p.images && p.images.trim() && !p.images.startsWith("http")) return p.images.trim();
+            for (const [k, v] of EMOJI_MAP) { if (p.name.includes(k)) return v; }
+            return CAT_EMOJI[p.cat] || "🏷️";
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        //  PROFILE — ใช้ session จริงเท่านั้น
+        // ══════════════════════════════════════════════════════════════════
+        function renderProfile() {
+            const d = studentData;
+            const isPvs = (d.program || "") === "ปวส";
+            const grade = calcGrade(d.program || "ปวช", d.entry_year);
+            const inits = ((d.first_name || "?")[0] + (d.last_name || "?")[0]).toUpperCase();
+
+            $("#profAvatar").text(inits);
+            $("#profName").text(`${d.first_name || ""} ${d.last_name || ""}`);
+            $("#profNick").text(d.nickname ? `"${d.nickname}"` : "");
+            $("#profProgram").text(d.program || "—");
+            $("#profGrade").text(grade);
+            $("#profDept").text(d.department || "—");
+            if (isPvs) $("#profileCard").addClass("pvs");
+            updateTodaySpend();
+        }
+
+        function updateTodaySpend() {
+            const today = new Date().toDateString();
+            const total = logs.filter(l => new Date(l.ts).toDateString() === today && l.status === "paid")
+                .reduce((s, l) => s + l.total, 0);
+            $("#todaySpend").text(fmt(total));
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        //  LOAD PRODUCTS จาก API เท่านั้น
+        // ══════════════════════════════════════════════════════════════════
+        function loadProducts(callback) {
+            $("#productGrid").html(`
+      <div class="col-span-full text-center py-14 text-slate-400">
+        <i class="fa-solid fa-spinner fa-spin text-3xl text-sky-400 block mb-3"></i>
+        <div class="text-sm font-medium">กำลังโหลดสินค้า...</div>
+      </div>`);
+
+            $.ajax({
+                url: API_URL,
+                dataType: "jsonp",
+                data: { action: "get_products" },
+                success(r) {
+                    if (r.status === "success" && Array.isArray(r.data) && r.data.length) {
+                        PRODUCTS = r.data.map(p => ({ ...p, emoji: getEmoji(p) }));
+                        CATS = ["ทั้งหมด", ...new Set(PRODUCTS.map(p => p.cat))];
+                        renderCats();
+                        renderGrid();
+                        $("#statTotal").text(PRODUCTS.length);
+                        $("#statInStock").text(PRODUCTS.filter(p => p.stock > 0).length);
+                    } else {
+                        showProductsError(r.message || "ไม่พบสินค้า");
+                    }
+                    if (callback) callback();
+                },
+                error() {
+                    showProductsError("ไม่สามารถเชื่อมต่อ API ได้");
+                }
+            });
+        }
+
+        function showProductsError(msg) {
+            $("#productGrid").html(`
+      <div class="col-span-full text-center py-14">
+        <div class="text-4xl mb-3">😕</div>
+        <div class="text-slate-600 font-medium">${msg}</div>
+        <button onclick="loadProducts()" class="mt-4 px-5 py-2 rounded-xl text-sm font-bold text-white"
+          style="background:linear-gradient(135deg,#84D4FA,#4DB8F5);">
+          <i class="fa-solid fa-rotate-right"></i> ลองอีกครั้ง
+        </button>
+      </div>`);
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        //  CATEGORY UI
+        // ══════════════════════════════════════════════════════════════════
+        const CAT_ICONS = {
+            "ทั้งหมด": "fa-solid fa-grid-2", "เครื่องเขียน": "fa-solid fa-pen-nib",
+            "ของใช้": "fa-solid fa-toolbox", "อาหาร/เครื่องดื่ม": "fa-solid fa-mug-hot", "อื่นๆ": "fa-solid fa-tag"
+        };
+        function renderCats() {
+            // sidebar
+            const sideHtml = CATS.map(c => {
+                const icon = CAT_ICONS[c] || "fa-solid fa-tag";
+                const cnt = c === "ทั้งหมด" ? PRODUCTS.length : PRODUCTS.filter(p => p.cat === c).length;
+                const on = c === currentCat;
+                return `<button class="cat-sidebar flex items-center gap-2 px-4 py-3 w-full text-left text-sm transition
+               hover:bg-sky-50 hover:text-sky-600 ${on ? "bg-sky-50 text-sky-600 font-bold" : "text-slate-600 font-medium"}"
+               data-cat="${c}">
+        <i class="${icon} text-xs w-4 text-center ${on ? "text-sky-500" : "text-slate-300"}"></i>
+        <span class="flex-1">${c}</span>
+        <span class="text-xs ${on ? "text-sky-400" : "text-slate-300"}">${cnt}</span>
+      </button>`;
+            }).join("");
+            $("#sidebarCats").html(sideHtml);
+
+            // mobile chips
+            const mobHtml = CATS.map(c => `
+      <button class="cat-mobile filter-tab ${c === currentCat ? "active" : ""}" data-cat="${c}">${c}</button>
+    `).join("");
+            $("#mobileCats").html(mobHtml);
+        }
+
+        $(document).on("click", ".cat-sidebar,.cat-mobile", function () {
+            currentCat = $(this).data("cat"); renderCats(); renderGrid();
+        });
+
+        // ══════════════════════════════════════════════════════════════════
+        //  PRODUCT GRID
+        // ══════════════════════════════════════════════════════════════════
+        function getFiltered() {
+            let list = PRODUCTS.slice();
+            if (currentCat !== "ทั้งหมด") list = list.filter(p => p.cat === currentCat);
+            if (searchQ) list = list.filter(p => p.name.toLowerCase().includes(searchQ.toLowerCase())
+                || p.cat.toLowerCase().includes(searchQ.toLowerCase()));
+            list.sort((a, b) => (a.price - b.price) * sortDir);
+            return list;
+        }
+
+        function renderGrid() {
+            const list = getFiltered();
+            $("#gridTitle").text(currentCat === "ทั้งหมด" ? "สินค้าทั้งหมด" : currentCat);
+            $("#gridSubtitle").text(list.length + " รายการ" + (searchQ ? ` · "${searchQ}"` : ""));
+
+            if (!list.length) { $("#productGrid").html(""); $("#emptyState").removeClass("hidden"); return; }
+            $("#emptyState").addClass("hidden");
+
+            const html = list.map((p, i) => {
+                const qty = cart[p.id] || 0;
+                const out = p.stock <= 0;
+                const low = !out && p.stock <= 10;
+                const sClass = out ? "out" : low ? "low" : "";
+                const sTxt = out ? "หมด" : low ? `เหลือ ${p.stock}` : `${p.stock} ${p.unit || ""}`;
+                const isImg = p.images && p.images.startsWith("http");
+
+                return `
+      <div class="product-card" data-aos="fade-up" data-aos-delay="${Math.min(i * 40, 200)}" data-id="${p.id}">
+        <div class="product-img">
+          ${isImg
+                        ? `<img src="${p.images}" alt="${p.name}" class="w-full h-full object-cover" loading="lazy">`
+                        : `<span style="font-size:42px">${p.emoji}</span>`}
+          <span class="stock-badge ${sClass}">${sTxt}</span>
+          ${p.tag ? `<span class="tag-pill ${p.tag} absolute top-2 left-2">${p.tag}</span>` : ""}
+        </div>
+        <div class="p-3">
+          <div class="text-[10px] mb-1.5">
+            <span class="cat-badge"><i class="${CAT_ICONS[p.cat] || "fa-solid fa-tag"} text-[9px]"></i> ${p.cat}</span>
+          </div>
+          <div class="text-sm font-bold text-slate-800 leading-tight mb-0.5">${p.name}</div>
+          <div class="text-[10px] text-slate-400 font-medium mb-2">${p.unit || ""}</div>
+          <div class="flex items-center justify-between">
+            <span class="text-base font-bold text-sky-500">${fmt(p.price)}</span>
+            ${out
+                        ? `<span class="text-xs text-red-400 font-medium">หมดแล้ว</span>`
+                        : qty === 0
+                            ? `<button class="add-btn w-8 h-8 rounded-xl flex items-center justify-center text-white text-sm
+                   bg-gradient-to-br from-sky-400 to-sky-500 shadow hover:scale-110 active:scale-95 transition-transform"
+                   data-id="${p.id}"><i class="fa-solid fa-plus text-xs"></i></button>`
+                            : `<div class="flex items-center gap-1.5">
+                   <button class="qty-btn minus-btn" data-id="${p.id}"><i class="fa-solid fa-minus" style="font-size:9px"></i></button>
+                   <span class="text-sm font-bold text-slate-700 w-5 text-center">${qty}</span>
+                   <button class="qty-btn plus-btn" data-id="${p.id}"><i class="fa-solid fa-plus" style="font-size:9px"></i></button>
+                 </div>`
+                    }
+          </div>
+        </div>
+      </div>`;
+            }).join("");
+            $("#productGrid").html(html);
+            AOS.refresh();
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        //  CART
+        // ══════════════════════════════════════════════════════════════════
+        $(document).on("click", ".add-btn", function (e) {
+            e.stopPropagation();
+            const id = parseInt($(this).data("id"));
+            const p = PRODUCTS.find(x => x.id === id);
+            if (!p || p.stock <= 0) return;
+            if ((cart[id] || 0) >= p.stock) { showNotification && showNotification("สินค้าไม่เพียงพอ", "error"); return; }
+            cart[id] = (cart[id] || 0) + 1;
+            refreshAll();
+            showNotification && showNotification(`เพิ่ม ${p.name} ลงตะกร้า`, "success");
+            // float anim
+            const off = $(this)[0].getBoundingClientRect();
+            const $f = $(`<span style="position:fixed;left:${off.left + 4}px;top:${off.top}px;font-size:18px;pointer-events:none;z-index:9999;color:#4DB8F5">✚</span>`);
+            $("body").append($f); $f.addClass("float-up"); setTimeout(() => $f.remove(), 700);
+        });
+        $(document).on("click", ".plus-btn", function () {
+            const id = parseInt($(this).data("id")); const p = PRODUCTS.find(x => x.id === id);
+            if (!p) return;
+            if ((cart[id] || 0) >= p.stock) { showNotification && showNotification("สินค้าไม่เพียงพอ", "error"); return; }
+            cart[id] = (cart[id] || 0) + 1; refreshAll();
+        });
+        $(document).on("click", ".minus-btn", function () {
+            const id = parseInt($(this).data("id"));
+            if ((cart[id] || 0) <= 1) delete cart[id]; else cart[id]--;
+            refreshAll();
+        });
+
+        function clearCart() { cart = {}; refreshAll(); closeModal("modalCart"); }
+        function getCartTotal() {
+            return Object.entries(cart).reduce((s, [id, qty]) => {
+                const p = PRODUCTS.find(x => x.id === parseInt(id));
+                return s + (p ? p.price * qty : 0);
+            }, 0);
+        }
+        function refreshAll() { updateCartBadge(); renderGrid(); renderCartModal(); }
+        function updateCartBadge() {
+            const t = Object.values(cart).reduce((s, q) => s + q, 0);
+            if (t > 0) $("#cartBadge").text(t).removeClass("hidden").addClass("pop-in");
+            else $("#cartBadge").addClass("hidden");
+        }
+        function renderCartModal() {
+            const ids = Object.keys(cart).filter(id => cart[id] > 0);
+            if (!ids.length) {
+                $("#cartItems").html(""); $("#cartEmpty").removeClass("hidden"); $("#cartSummary").addClass("hidden"); return;
+            }
+            $("#cartEmpty").addClass("hidden"); $("#cartSummary").removeClass("hidden");
+            const html = ids.map(id => {
+                const p = PRODUCTS.find(x => x.id === parseInt(id)); const qty = cart[id];
+                if (!p) return "";
+                const isImg = p.images && p.images.startsWith("http");
+                const thumb = isImg ? `<img src="${p.images}" class="w-8 h-8 rounded-lg object-cover">` : `<span class="text-2xl">${p.emoji}</span>`;
+                return `<div class="cart-item">
+        ${thumb}
+        <div class="flex-1"><div class="text-sm font-bold text-slate-700">${p.name}</div>
+        <div class="text-xs text-slate-400">${fmt(p.price)} / ${p.unit || ""}</div></div>
+        <div class="flex items-center gap-1.5">
+          <button class="qty-btn minus-btn" data-id="${id}"><i class="fa-solid fa-minus" style="font-size:9px"></i></button>
+          <span class="text-sm font-bold text-slate-700 w-5 text-center">${qty}</span>
+          <button class="qty-btn plus-btn" data-id="${id}"><i class="fa-solid fa-plus" style="font-size:9px"></i></button>
+        </div>
+        <div class="text-sm font-bold text-sky-500 w-14 text-right">${fmt(p.price * qty)}</div>
+      </div>`;
+            }).join("");
+            $("#cartItems").html(html);
+            const count = ids.length;
+            $("#cartCount").text(`${count} รายการ`);
+            $("#cartTotal").text(fmt(getCartTotal()));
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        //  CHECKOUT — Omise PromptPay
+        // ══════════════════════════════════════════════════════════════════
+        function cancelPayment() {
+            stopPolling();
+            closeModal("modalPayment");
+        }
+
+        $("#checkoutBtn").click(function () {
+            const total = getCartTotal();
+            if (!total) return;
+
+            const items = Object.entries(cart).map(([id, qty]) => {
+                const p = PRODUCTS.find(x => x.id == id);
+                return { id: p.id, name: p.name, price: p.price, qty, unit: p.unit || "" };
+            });
+
+            // เตรียม modal (loading state)
+            $("#payAmount").text(fmt(total));
+            $("#payItemList").html(items.map(i => `
+      <div class="flex justify-between">
+        <span>${i.name} × ${i.qty}</span>
+        <span class="font-bold">${fmt(i.price * i.qty)}</span>
+      </div>`).join(""));
+            $("#qrLoading").removeClass("hidden");
+            $("#qrReady").addClass("hidden");
+            $("#payStatusBar").addClass("hidden").removeClass("bg-amber-50 bg-green-50 bg-red-50");
+            closeModal("modalCart");
+            openModal("modalPayment");
+
+            // เรียก API create_order → GAS สร้าง Omise charge
+            $.ajax({
+                url: API_URL,
+                dataType: "jsonp",
+                data: {
+                    action: "create_order",
+                    student_id: studentData.student_id,
+                    student_name: `${studentData.first_name} ${studentData.last_name}`,
+                    items: JSON.stringify(items),
+                    total: total,
+                },
+                success(r) {
+                    if (r.status !== "success") {
+                        showNotification && showNotification(r.message || "เกิดข้อผิดพลาด", "error");
+                        closeModal("modalPayment"); return;
+                    }
+
+                    const orderId = r.order_id;
+
+                    // บันทึก log pending
+                    logs.unshift({
+                        orderId, ts: new Date().toISOString(), status: "pending",
+                        items, total,
+                        student: `${studentData.first_name} ${studentData.last_name}`,
+                        studentId: studentData.student_id
+                    });
+                    saveLogs();
+
+                    // แสดง QR จาก Omise
+                    if (r.qr_url) {
+                        $("#qrImg").attr("src", r.qr_url);
+                        $("#qrLoading").addClass("hidden");
+                        $("#qrReady").removeClass("hidden");
+                    }
+
+                    // แสดง status bar polling
+                    $("#payStatusBar")
+                        .removeClass("hidden bg-green-50 bg-red-50")
+                        .addClass("bg-amber-50 text-amber-700")
+                        .find("#payStatusTxt").text("รอการสแกน QR และชำระเงิน...");
+
+                    startPolling(orderId);
+                },
+                error() {
+                    showNotification && showNotification("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้", "error");
+                    closeModal("modalPayment");
+                }
+            });
+        });
+
+        // ── Polling สถานะ (ถาม GAS → GAS ถาม Omise) ──────────────────
+        function startPolling(orderId) {
+            stopPolling();
+            let tries = 0;
+            pollTimer = setInterval(() => {
+                if (++tries > 300) {  // หยุดหลัง 15 นาที (300 × 3s)
+                    stopPolling();
+                    showNotification && showNotification("QR หมดอายุ กรุณาสั่งซื้อใหม่", "error");
+                    closeModal("modalPayment");
+                    return;
+                }
+                $.ajax({
+                    url: API_URL, dataType: "jsonp",
+                    data: { action: "check_payment", order_id: orderId },
+                    success(r) {
+                        if (r.status !== "success") return;
+                        if (r.payment_status === "paid") onPaymentPaid(orderId);
+                        else if (r.payment_status === "failed") onPaymentFailed(orderId);
+                    }
+                });
+            }, 3000);
+        }
+        function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+
+        function onPaymentPaid(orderId) {
+            stopPolling();
+            const idx = logs.findIndex(l => l.orderId === orderId);
+            if (idx >= 0) logs[idx].status = "paid";
+            saveLogs();
+
+            // reload products (stock ถูกหักแล้วตอน create_order)
+            loadProducts(() => { cart = {}; refreshAll(); updateTodaySpend(); });
+
+            lastOrder = logs[idx >= 0 ? idx : 0];
+            closeModal("modalPayment");
+            generateSlip(lastOrder);
+            openModal("modalSlip");
+            showNotification && showNotification("ชำระเงินสำเร็จ! 🎉", "success");
+        }
+        function onPaymentFailed(orderId) {
+            stopPolling();
+            const idx = logs.findIndex(l => l.orderId === orderId);
+            if (idx >= 0) logs[idx].status = "cancelled";
+            saveLogs();
+            showNotification && showNotification("การชำระเงินล้มเหลว กรุณาลองใหม่", "error");
+            closeModal("modalPayment");
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        //  SLIP — Canvas
+        // ══════════════════════════════════════════════════════════════════
+        function generateSlip(order) {
+            const canvas = document.getElementById("slipCanvas");
+            const ctx = canvas.getContext("2d");
+            const W = 380, H = Math.max(520, 320 + order.items.length * 24);
+            canvas.width = W; canvas.height = H;
+
+            ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
+            const g = ctx.createLinearGradient(0, 0, W, 110);
+            g.addColorStop(0, "#0EA5E9"); g.addColorStop(1, "#84D4FA");
+            ctx.fillStyle = g; ctx.fillRect(0, 0, W, 110);
+
+            // deco circles
+            ctx.fillStyle = "rgba(255,255,255,.12)";
+            ctx.beginPath(); ctx.arc(W + 30, -30, 140, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(-10, 120, 80, 0, Math.PI * 2); ctx.fill();
+
+            ctx.fillStyle = "#fff"; ctx.textAlign = "center";
+            ctx.font = "bold 18px 'Kanit','Bai Jamjuree',sans-serif";
+            ctx.fillText("ใบเสร็จรับเงิน", W / 2, 38);
+            ctx.font = "12px 'Kanit','Bai Jamjuree',sans-serif";
+            ctx.fillStyle = "rgba(255,255,255,.85)";
+            ctx.fillText("สหกรณ์โรงเรียน ASIA-LB", W / 2, 58);
+            // paid badge
+            ctx.fillStyle = "rgba(255,255,255,.22)"; rRect(ctx, (W / 2) - 40, 68, 80, 26, 13); ctx.fill();
+            ctx.fillStyle = "#fff"; ctx.font = "bold 10px 'Kanit',sans-serif";
+            ctx.fillText("✅ ชำระแล้ว", W / 2, 85);
+
+            // body
+            ctx.fillStyle = "#F8FAFC"; ctx.fillRect(0, 110, W, H - 110);
+
+            const ts = new Date(order.ts || order.timestamp || Date.now());
+            const dStr = ts.toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" });
+            const tStr = ts.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+
+            // rows
+            let y = 134;
+            function infoRow(label, val) {
+                ctx.fillStyle = "#94A3B8"; ctx.textAlign = "left"; ctx.font = "11px 'Kanit',sans-serif";
+                ctx.fillText(label, 24, y);
+                ctx.fillStyle = "#1E293B"; ctx.textAlign = "right"; ctx.font = "bold 11px 'Kanit',sans-serif";
+                ctx.fillText(val, W - 24, y); y += 18;
+            }
+            infoRow("เลขที่ออเดอร์", order.orderId || "—");
+            infoRow("วันที่", dStr); infoRow("เวลา", tStr);
+            ctx.fillStyle = "#E2E8F0"; ctx.fillRect(24, y, W - 48, 1); y += 12;
+            infoRow("นักเรียน", order.student || "—");
+            infoRow("รหัสนักเรียน", order.studentId || "—");
+            ctx.fillStyle = "#E2E8F0"; ctx.fillRect(24, y, W - 48, 1); y += 10;
+
+            // items header
+            ctx.fillStyle = "#64748B"; ctx.textAlign = "left"; ctx.font = "bold 11px 'Kanit',sans-serif";
+            ctx.fillText("รายการสินค้า", 24, y); ctx.textAlign = "right"; ctx.fillText("ราคา", W - 24, y); y += 16;
+
+            order.items.forEach(item => {
+                const txt = `${item.name || ""} × ${item.qty}`;
+                ctx.fillStyle = "#1E293B"; ctx.textAlign = "left"; ctx.font = "12px 'Kanit',sans-serif";
+                ctx.fillText(txt, 30, y);
+                ctx.fillStyle = "#0EA5E9"; ctx.textAlign = "right"; ctx.font = "bold 12px 'Kanit',sans-serif";
+                ctx.fillText(fmt(item.price * item.qty), W - 24, y); y += 22;
+            });
+
+            // total
+            y += 4;
+            ctx.fillStyle = "#EFF6FF"; rRect(ctx, 24, y, W - 48, 42, 12); ctx.fill();
+            ctx.fillStyle = "#64748B"; ctx.textAlign = "left"; ctx.font = "13px 'Kanit',sans-serif";
+            ctx.fillText("ยอดรวมทั้งหมด", 34, y + 26);
+            ctx.fillStyle = "#0EA5E9"; ctx.textAlign = "right"; ctx.font = "bold 18px 'Kanit',sans-serif";
+            ctx.fillText(fmt(order.total), W - 34, y + 26); y += 54;
+
+            // payment
+            infoRow("วิธีชำระ", "PromptPay (Omise)");
+            infoRow("Order ID", order.orderId || "—");
+
+            // footer
+            ctx.fillStyle = "#E2E8F0"; ctx.fillRect(24, H - 52, W - 48, 1);
+            ctx.fillStyle = "#CBD5E1"; ctx.textAlign = "center"; ctx.font = "10px 'Kanit',sans-serif";
+            ctx.fillText("ขอบคุณที่ใช้บริการสหกรณ์โรงเรียน ASIA-LB", W / 2, H - 34);
+            ctx.fillText("เก็บใบเสร็จนี้เป็นหลักฐานการชำระเงิน", W / 2, H - 18);
+        }
+        function rRect(ctx, x, y, w, h, r) {
+            ctx.beginPath(); ctx.moveTo(x + r, y);
+            ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+            ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+            ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
+            ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r); ctx.closePath();
+        }
+        function downloadSlip() {
+            const canvas = document.getElementById("slipCanvas");
+            const a = document.createElement("a");
+            a.download = `receipt-${lastOrder?.orderId || "slip"}.png`;
+            a.href = canvas.toDataURL("image/png"); a.click();
+            showNotification && showNotification("ดาวน์โหลดสลิปแล้ว", "success");
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        //  LOGS
+        // ══════════════════════════════════════════════════════════════════
+        function updateLogBadge() {
+            const n = logs.filter(l => l.status === "pending").length;
+            if (n > 0) $("#logBadge").text(n).removeClass("hidden"); else $("#logBadge").addClass("hidden");
+        }
+        function updateStatOrders() { $("#statOrders").text(logs.length); }
+
+        function renderLogs() {
+            if (!logs.length) { $("#logsEmpty").show(); $("#logsList").html(""); return; }
+            $("#logsEmpty").hide();
+            const html = logs.map((l, idx) => {
+                const ts = new Date(l.ts);
+                const dStr = ts.toLocaleDateString("th-TH", { month: "short", day: "numeric" });
+                const tStr = ts.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+                const badge = l.status === "paid"
+                    ? `<span class="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">✅ ชำระแล้ว</span>`
+                    : l.status === "cancelled"
+                        ? `<span class="text-[10px] font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded-full">❌ ยกเลิก</span>`
+                        : `<span class="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">⏳ รอชำระ</span>`;
+                const summ = l.items.map(i => `${i.name}×${i.qty}`).join(", ");
+                return `<div class="log-entry ${l.status} mb-2">
+        <div class="flex items-start justify-between gap-2 mb-1">
+          <div>
+            <div class="text-xs font-bold text-slate-700 flex items-center gap-1.5">${l.orderId} ${badge}</div>
+            <div class="text-[10px] text-slate-400 mt-0.5">${dStr} ${tStr} · ${l.student}</div>
+          </div>
+          <div class="text-sm font-bold text-sky-500 flex-shrink-0">${fmt(l.total)}</div>
+        </div>
+        <div class="text-[10px] text-slate-400 truncate">${summ}</div>
+        ${l.status === "paid" ? `<button class="view-slip-btn mt-1.5 text-[10px] text-sky-500 font-medium flex items-center gap-1" data-idx="${idx}">
+          <i class="fa-solid fa-receipt"></i> ดูสลิป</button>`: ""}
+      </div>`;
+            }).join("");
+            $("#logsList").html(html);
+        }
+        $(document).on("click", ".view-slip-btn", function () {
+            lastOrder = logs[parseInt($(this).data("idx"))];
+            generateSlip(lastOrder); closeModal("modalLogs"); openModal("modalSlip");
+        });
+        function clearLogs() {
+            if (!logs.length || !confirm("ล้างประวัติทั้งหมด?")) return;
+            logs = []; saveLogs(); renderLogs();
+            showNotification && showNotification("ล้างประวัติแล้ว", "info");
+        }
+
+        // ── SEARCH + SORT ─────────────────────────────────────────────
+        $("#searchInput").on("input", function () {
+            searchQ = $(this).val().trim();
+            $("#clearSearch").toggleClass("hidden", !searchQ);
+            renderGrid();
+        });
+        $("#clearSearch").click(function () { searchQ = ""; $("#searchInput").val(""); $(this).addClass("hidden"); renderGrid(); });
+
+        const sortLabels = ["ราคา ↑", "ราคา ↓", "ชื่อ A-Z"]; let sortIdx = 0;
+        $("#sortBtn").click(function () {
+            sortIdx = (sortIdx + 1) % 3;
+            $("#sortLabel").text(sortLabels[sortIdx]);
+            if (sortIdx === 0) sortDir = 1;
+            else if (sortIdx === 1) sortDir = -1;
+            else { PRODUCTS.sort((a, b) => a.name.localeCompare(b.name, "th")); sortDir = 0; }
+            renderGrid();
+        });
+
+        $("#logBtn").click(() => { renderLogs(); openModal("modalLogs"); });
+        $(".modal-overlay").click(function (e) { if (e.target === this) closeModal(this.id); });
+        $(".modal-center").click(function (e) { if (e.target === this) closeModal(this.id); });
+
+        // ══════════════════════════════════════════════════════════════════
+        //  INIT — ตรวจ session ก่อนทุกอย่าง
+        // ══════════════════════════════════════════════════════════════════
+        $(function () {
+            AOS.init({ duration: 500, easing: "ease-out-cubic", once: true });
+
+            // ── 1. Guard session — ถ้าไม่ login → redirect ──────────────
+            const session = loadSession();
+            if (!session) {
+                window.location.replace("/login.html");
+                return;
+            }
+            studentData = session.data;
+
+            // ── 2. Render profile จาก session จริง ──────────────────────
+            renderProfile();
+            showNotification && showNotification(
+                `ยินดีต้อนรับ ${studentData.nickname || studentData.first_name} 🛒`, "success"
+            );
+
+            // ── 3. โหลดสินค้าจาก API ────────────────────────────────────
+            updateLogBadge();
+            updateStatOrders();
+            loadProducts();
+        });
+    </script>
+</body>
+
+</html>

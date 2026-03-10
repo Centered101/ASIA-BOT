@@ -1,0 +1,846 @@
+<!doctype html>
+<html lang="th">
+
+<head>
+    <title>ลงทะเบียนนักบัตรเรียน</title>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+    <meta name="theme-color" content="#84D4FA">
+    <meta name="keywords"
+        content="asia-lb, asialb, asia-lb.web.app, asia-lb.firebaseapp.com, abac, Student Entry Scanner, Class Track Room, Centered101">
+    <meta name="author" content="Centered101">
+    <meta name="description" content="ลงทะเบียนนักบัตรเรียน">
+
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://asia-lb.web.app">
+    <meta property="og:title" content="ระบบเว็บไซต์โครงงานนักศึกษา">
+    <meta property="og:description" content="ลงทะเบียนนักบัตรเรียน">
+    <meta property="og:image" content="/favicon.ico">
+
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://asia-lb.web.app">
+    <meta property="twitter:title" content="ระบบเว็บไซต์โครงงานนักศึกษา">
+    <meta property="twitter:description" content="ลงทะเบียนนักบัตรเรียน">
+    <meta property="twitter:image" content="/favicon.ico">
+
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="stylesheet" href="/style/index.css">
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+
+    <script src="/script/index.js" defer></script>
+    <script src="/config-students.js" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <!-- ─────────────────────────────────────────────────────────────────────
+         🐛 Patch: index.js line 20 เรียก setProperty(primaryColor,) ขาด arg ที่ 2
+         ✅ แก้ถาวรได้ที่ script/index.js บรรทัด 20 เป็น:
+            document.documentElement.style.setProperty('--primary-color', primaryColor);
+         ───────────────────────────────────────────────────────────────────── -->
+    <script>
+        (function () {
+            const _orig = CSSStyleDeclaration.prototype.setProperty;
+            CSSStyleDeclaration.prototype.setProperty = function (prop, val, priority) {
+                if (prop === undefined || val === undefined) return; // กัน crash index.js L20
+                return _orig.call(this, prop, val, priority);
+            };
+        })();
+    </script>
+    <style>
+        /* ── Step Indicator ── */
+        .step-dot {
+            width: 36px;
+            height: 36px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 600;
+            color: #94A3B8;
+            background: var(--white-smoker);
+            border: 2px solid #CBD5E1;
+            border-radius: 50%;
+            transition: all .4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            z-index: 2;
+        }
+
+        .step-dot.active {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+            color: var(--white-smoker);
+            transform: scale(1.15);
+            box-shadow: 0 0 0 5px rgba(132, 212, 250, 0.25);
+        }
+
+        .step-dot.done {
+            background: var(--success);
+            border-color: var(--success);
+            color: white;
+        }
+
+        .step-line {
+            flex: 1;
+            height: 2px;
+            background: #E2E8F0;
+            transition: background 0.5s;
+            margin-top: -10px;
+            z-index: -10;
+        }
+
+        .step-line.done {
+            background: var(--success);
+        }
+
+        /* ── Sections ── */
+        .form-section {
+            display: none;
+        }
+
+        .form-section.active {
+            display: block;
+            animation: slideIn 0.35s cubic-bezier(0.34, 1.2, 0.64, 1);
+        }
+
+        .form-section.active.go-back {
+            animation: slideInLeft 0.35s cubic-bezier(0.34, 1.2, 0.64, 1);
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        /* ── Section header ── */
+        .section-icon {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 16px;
+            color: var(--primary-dark);
+            background: var(--primary-light);
+            border-radius: 10px;
+        }
+    </style>
+</head>
+
+<body draggable="false" oncontextmenu="return false">
+    <!-- Preloader -->
+    <div id="preloader"
+        class="bg-stripes-gray visible touch-none min-h-screen fixed inset-0 flex items-center justify-center text-center bg-gray-50 z-50">
+        <span class="spinner animate-spin size-80 fixed border-8" style="animation-duration: 1s;"></span>
+        <div
+            class="size-80 flex flex-col items-center justify-center gap-2 bg-[color:var(--white-smoker)] rounded-full shadow">
+            <img src="/favicon.ico" onerror="this.src='https://asia-lb.firebaseapp.com/images/favicon.svg'" alt="logo"
+                class="size-16 fa-bounce drop-shadow" draggable="false">
+            <h2 class="text-xl sm:text-2xl">กำลังโหลด</h2>
+            <p class="text-sm sm:text-base text-gray-600">
+                การผจญภัยของคุณกำลังจะเริ่มต้น
+            </p>
+        </div>
+        <div class="bg-blob" style="width:520px;height:520px;background:var(--primary-color);top:-120px;right:-170px;">
+        </div>
+        <div class="bg-blob" style="width:420px;height:420px;background:var(--primary-dark);bottom:-110px;left:-130px;">
+        </div>
+    </div>
+
+    <!-- Decorative blobs -->
+    <div class="bg-blob" style="width:520px;height:520px;background:var(--primary-color);top:-120px;right:-170px;">
+    </div>
+    <div class="bg-blob" style="width:420px;height:420px;background:var(--primary-dark);bottom:-110px;left:-130px;">
+    </div>
+
+    <main class="min-h-screen flex items-center justify-center p-2 sm:p-4">
+        <div data-aos="zoom-in-up"
+            class="w-full max-w-lg relative bg-white-smoker border rounded-2xl shadow p-4 sm:p-6 md:p-8 z-10">
+
+            <!-- ── Header ── -->
+            <div class="text-center mb-8">
+                <div data-aos="zoom-in" data-aos-delay="500"
+                    class="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4"
+                    style="background:linear-gradient(135deg,#84D4FA,#4DB8F5);box-shadow:0 8px 24px rgba(77,184,245,0.38);">
+                    <i class="fa-solid fa-id-card text-white-smoker text-2xl"></i>
+                </div>
+                <h1 data-aos="zoom-in" data-aos-delay="550" class="text-xl sm:text-2xl font-bold text-slate-800 mb-1">
+                    ลงทะเบียนบัตรนักเรียน</h1>
+                <p data-aos="zoom-in" data-aos-delay="600" class="text-xs sm:text-sm text-slate-500">
+                    กรอกข้อมูลให้ครบถ้วนเพื่อสมัครบัตรเรียน</p>
+            </div>
+
+            <!-- ── Step Indicator ── -->
+            <div id="stepBar" class="flex items-start mb-8">
+                <div data-aos="zoom-in" data-aos-delay="700" class="flex flex-col items-center gap-2">
+                    <div id="dot1" class="step-dot active"><i class="fa-solid fa-user" style="font-size:11px"></i></div>
+                    <span id="lbl1" class="text-xs font-medium text-slate-500">ข้อมูล</span>
+                </div>
+                <div id="line12" data-aos="zoom-in" data-aos-delay="750" class="step-line mt-4"></div>
+                <div data-aos="zoom-in" data-aos-delay="800" class="flex flex-col items-center gap-2">
+                    <div id="dot2" class="step-dot"><i class="fa-solid fa-graduation-cap" style="font-size:11px"></i>
+                    </div>
+                    <span id="lbl2" class="text-xs font-medium text-slate-400">การศึกษา</span>
+                </div>
+                <div id="line23" data-aos="zoom-in" data-aos-delay="850" class="step-line mt-4"></div>
+                <div data-aos="zoom-in" data-aos-delay="900" class="flex flex-col items-center gap-2">
+                    <div id="dot3" class="step-dot"><i class="fa-solid fa-users" style="font-size:11px"></i></div>
+                    <span id="lbl3" class="text-xs font-medium text-slate-400">ผู้ปกครอง</span>
+                </div>
+                <div id="line34" data-aos="zoom-in" data-aos-delay="950" class="step-line mt-4"></div>
+                <div data-aos="zoom-in" data-aos-delay="1000" class="flex flex-col items-center gap-2">
+                    <div id="dot4" class="step-dot"><i class="fa-solid fa-check" style="font-size:11px"></i></div>
+                    <span id="lbl4" class="text-xs font-medium text-slate-400">ยืนยัน</span>
+                </div>
+            </div>
+
+            <!-- ═══════════════ STEP 1 ═══════════════ -->
+            <div class="form-section active" id="step1">
+                <div data-aos="fade-left" data-aos-delay="1500" class="flex items-center gap-3 mb-5">
+                    <div class="section-icon"><i class="fa-solid fa-user"></i></div>
+                    <div>
+                        <h3 class="text-sm sm:text-base font-bold text-slate-700 leading-tight">
+                            ข้อมูลส่วนตัว</h3>
+                        <p class="text-xs text-slate-400 mt-0.5">ขั้นตอนที่ 1 จาก 3</p>
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div data-aos="fade-up" data-aos-delay="1600" class="field-wrap" id="wrap_student_id">
+                            <i class="fa-solid fa-hashtag field-icon"></i>
+                            <input id="student_id" class="form-input text-xs sm:text-sm" placeholder="รหัสนักเรียน *"
+                                maxlength="5" inputmode="numeric" pattern="[0-9]*">
+                        </div>
+                        <div data-aos="fade-up" data-aos-delay="1650" class="field-wrap" id="wrap_student_phone">
+                            <i class="fa-solid fa-phone field-icon"></i>
+                            <input id="student_phone" class="form-input text-xs sm:text-sm"
+                                placeholder="เบอร์โทรนักเรียน *" maxlength="10" inputmode="tel" pattern="[0-9]*">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div data-aos="fade-up" data-aos-delay="1700" class="field-wrap" id="wrap_first_name">
+                            <i class="fa-solid fa-user-tag field-icon"></i>
+                            <input id="first_name" class="form-input text-xs sm:text-sm" placeholder="ชื่อ *"
+                                maxlength="20">
+                        </div>
+                        <div data-aos="fade-up" data-aos-delay="1750" class="field-wrap" id="wrap_last_name">
+                            <i class="fa-solid fa-user-tag field-icon"></i>
+                            <input id="last_name" class="form-input text-xs sm:text-sm" placeholder="นามสกุล *"
+                                maxlength="20">
+                        </div>
+                    </div>
+                    <div data-aos="fade-up" data-aos-delay="2000" class="field-wrap">
+                        <i class="fa-solid fa-face-smile field-icon"></i>
+                        <input id="nickname" class="form-input text-xs sm:text-sm" placeholder="ชื่อเล่น (ไม่บังคับ)"
+                            maxlength="20">
+                    </div>
+                </div>
+
+                <button id="next1Btn" data-aos="fade-up" data-aos-delay="1000"
+                    class="btn-primary w-full flex items-center justify-center gap-2 text-sm sm:text-base mt-6 overflow-hidden">
+                    <span class="line-clamp-1">ถัดไป</span>
+                    <i class="fas fa-arrow-right"></i>
+                </button>
+            </div>
+
+            <!-- ═══════════════ STEP 2 ═══════════════ -->
+            <div class="form-section" id="step2">
+                <div class="flex items-center gap-3 mb-5">
+                    <div class="section-icon"><i class="fa-solid fa-graduation-cap"></i></div>
+                    <div>
+                        <h3 class="text-sm sm:text-base font-bold text-slate-700 leading-tight">
+                            ข้อมูลการศึกษา</h3>
+                        <p class="text-xs text-slate-400 mt-0.5">ขั้นตอนที่ 2 จาก 3</p>
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    <div class="field-wrap" id="wrap_program">
+                        <i class="fa-solid fa-layer-group field-icon"></i>
+                        <select id="program" class="form-input text-xs sm:text-sm" style="padding-left:40px">
+                            <option disabled selected>เลือกระดับการศึกษา *</option>
+                            <option value="ปวช">ปวช — ประกาศนียบัตรวิชาชีพ</option>
+                            <option value="ปวส">ปวส — ประกาศนียบัตรวิชาชีพชั้นสูง</option>
+                        </select>
+                    </div>
+                    <div class="field-wrap" id="wrap_entry_year">
+                        <i class="fa-solid fa-calendar field-icon"></i>
+                        <input id="entry_year" class="form-input text-xs sm:text-sm"
+                            placeholder="ปีที่เข้าเรียน (พ.ศ.) เช่น 2567 *" maxlength="4" inputmode="numeric"
+                            pattern="[0-9]*">
+                    </div>
+                    <div class="field-wrap" id="wrap_department" style="position:relative">
+                        <i class="fa-solid fa-building-columns field-icon"></i>
+                        <input id="department" class="form-input text-xs sm:text-sm"
+                            placeholder="สาขาวิชา * (พิมพ์หรือเลือก)" maxlength="55" autocomplete="off">
+                        <i class="fa-solid fa-chevron-down" id="deptChevron"
+                            style="position:absolute;right:14px;top:50%;transform:translateY(-50%);color:#94A3B8;font-size:12px;cursor:pointer;transition:transform 0.25s;z-index:2;"></i>
+                        <div id="deptDropdown" style="display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:white;
+                                border:1.5px solid #E2E8F0;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.1);
+                                z-index:100;overflow:hidden;max-height:220px;overflow-y:auto;">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex gap-3 mt-6">
+                    <button id="back1Btn"
+                        class="btn-secondary w-[60%] flex items-center justify-center gap-1 text-sm sm:text-base overflow-hidden">
+                        <i class="fas fa-arrow-left"></i>
+                        <span class="line-clamp-1">ย้อนกลับ</span>
+                    </button>
+                    <button id="next2Btn"
+                        class="btn-primary w-full flex items-center justify-center gap-1 text-sm sm:text-base overflow-hidden">
+                        <span class="line-clamp-1">ถัดไป</span>
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- ═══════════════ STEP 3 ═══════════════ -->
+            <div class="form-section" id="step3">
+                <div class="flex items-center gap-3 mb-5">
+                    <div class="section-icon"><i class="fa-solid fa-users"></i></div>
+                    <div>
+                        <h3 class="text-sm sm:text-base font-bold text-slate-700 leading-tight">
+                            ข้อมูลผู้ปกครอง
+                            <span
+                                class="align-middle font-semibold text-[8px] text-slate-600 bg-slate-100 border rounded-2xl ml-1 py-px px-1">Optional</span>
+                        </h3>
+                        <p class="text-xs text-slate-400 mt-0.5">ขั้นตอนที่ 3 จาก 3 — กรอกหรือข้ามก็ได้</p>
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    <div class="field-wrap">
+                        <i class="fa-solid fa-user-tag field-icon"></i>
+                        <input id="parent_name" class="form-input text-xs sm:text-sm"
+                            placeholder="ชื่อ-นามสกุลผู้ปกครอง" maxlength="40">
+                    </div>
+                    <div class="field-wrap" id="wrap_parent_phone">
+                        <i class="fa-solid fa-phone field-icon"></i>
+                        <input id="parent_phone" class="form-input text-xs sm:text-sm" placeholder="เบอร์โทรผู้ปกครอง"
+                            maxlength="10" inputmode="tel" pattern="[0-9]*">
+                    </div>
+                    <div class="field-wrap">
+                        <i class="fa-brands fa-line field-icon text-lg text-green-500"></i>
+                        <input id="parent_line" class="form-input text-xs sm:text-sm" placeholder="LINE ID ผู้ปกครอง"
+                            maxlength="55">
+                    </div>
+                </div>
+
+                <div class="flex gap-3 mt-6">
+                    <button id="back2Btn"
+                        class="btn-secondary w-[60%] flex items-center justify-center gap-1 text-sm sm:text-base overflow-hidden">
+                        <i class="fas fa-arrow-left"></i>
+                        <span class="line-clamp-1">ย้อนกลับ</span>
+                    </button>
+                    <button id="next3Btn"
+                        class="btn-primary w-full flex items-center justify-center gap-1 text-sm sm:text-base overflow-hidden">
+                        <span class="line-clamp-1">ตรวจสอบข้อมูล</span>
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- ═══════════════ STEP 4 Preview ═══════════════ -->
+            <div class="form-section" id="step4">
+                <div class="flex items-center gap-3 mb-5">
+                    <div class="section-icon text-green-500 bg-green-100">
+                        <i class="fa-solid fa-clipboard-check"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm sm:text-base font-bold text-slate-700 leading-tight">
+                            ตรวจสอบข้อมูล</h3>
+                        <p class="text-xs text-slate-400 mt-0.5">กรุณาตรวจสอบความถูกต้องก่อนยืนยัน</p>
+                    </div>
+                </div>
+
+                <div id="previewData" class="space-y-1.5 mb-6 text-sm"></div>
+
+                <div class="flex gap-3">
+                    <button id="back3Btn"
+                        class="btn-secondary w-[60%] flex items-center justify-center gap-1 text-sm sm:text-base overflow-hidden">
+                        <i class="fa-solid fa-pen"></i>
+                        <span class="line-clamp-1">แก้ไข</span>
+                    </button>
+                    <button id="submitBtn"
+                        class="btn-success w-full flex items-center justify-center gap-1 text-sm sm:text-base overflow-hidden">
+                        <i class="fa-solid fa-paper-plane"></i>
+                        <span class="line-clamp-1">ยืนยันส่งข้อมูล</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- ═══════════════ SUCCESS ═══════════════ -->
+            <div class="form-section text-center py-4" id="stepSuccess">
+                <span
+                    class="size-16 flex items-center justify-center bg-green-100 border rounded-full shadow-inner mx-auto mb-6">
+                    <i class="fa-solid fa-check fa-bounce text-2xl text-green-500"></i>
+                </span>
+                <h2 class="text-base sm:text-xl font-bold text-slate-800 mb-2">ลงทะเบียนสำเร็จ!</h2>
+                <p class="text-xs sm:text-sm text-slate-500 mb-6">ข้อมูลของคุณถูกบันทึกเรียบร้อยแล้ว</p>
+                <div class="flex gap-3">
+                    <button id="resetBtn"
+                        class="btn-secondary w-full flex items-center justify-center gap-1 text-sm sm:text-base overflow-hidden">
+                        <i class="fa-solid fa-rotate-left"></i>
+                        <span class="line-clamp-1">ลงทะเบียนใหม่</span>
+                    </button>
+                    <button onclick="window.location.href='/login.html'"
+                        class="btn-primary w-full flex items-center justify-center gap-1 text-sm sm:text-base overflow-hidden">
+                        <i class="fa-solid fa-right-to-bracket"></i>
+                        <span class="line-clamp-1">เข้าสู่ระบบ</span>
+                    </button>
+                </div>
+            </div>
+
+        </div><!-- /card -->
+    </main>
+    <script>
+        let currentStep = 1;
+        let formData = {};
+
+        // ── Go to step ────────────────────────────────────────────────────────
+        function gotoStep(n, back = false) {
+            const $old = $(".form-section.active");
+            currentStep = n;
+
+            $old.removeClass("active go-back");
+
+            const $new = $(`#step${n}`);
+            $new.removeClass("go-back");
+            if (back) $new.addClass("go-back");
+            $new.addClass("active");
+
+            // dots & lines
+            const dotIcons = ['fa-user', 'fa-graduation-cap', 'fa-users', 'fa-check'];
+            for (let i = 1; i <= 4; i++) {
+                const $d = $(`#dot${i}`);
+                $d.removeClass("active done");
+                if (i < n) {
+                    $d.addClass("done").html('<i class="fa-solid fa-check" style="font-size:11px"></i>');
+                } else if (i === n) {
+                    $d.addClass("active").html(`<i class="fa-solid ${dotIcons[i - 1]}" style="font-size:11px"></i>`);
+                } else {
+                    $d.html(`<i class="fa-solid ${dotIcons[i - 1]}" style="font-size:11px"></i>`);
+                }
+                if (i < 4) $(`#line${i}${i + 1}`).toggleClass("done", i < n);
+            }
+        }
+
+        // ── Validation ────────────────────────────────────────────────────────
+        function clearError(id) {
+            $(`#${id}`).removeClass("error");
+            $(`#wrap_${id}`).removeClass("has-error");
+        }
+        function setError(id) {
+            $(`#${id}`).addClass("error");
+            $(`#wrap_${id}`).addClass("has-error");
+        }
+        function validateFields(rules) {
+            let ok = true;
+            rules.forEach(({ id, required }) => {
+                const val = $(`#${id}`).val().trim();
+                if (required && !val) { setError(id); ok = false; }
+                else clearError(id);
+                // live clear
+                $(`#${id}`).off("input.v change.v").on("input.v change.v", function () {
+                    if ($(this).val().trim()) clearError(id);
+                });
+            });
+            return ok;
+        }
+
+        // ── Step 1 ────────────────────────────────────────────────────────────
+        const PHONE_RE = /^[0-9\-+\s()]{9,15}$/;
+        const THAI_ONLY = /^[\u0E00-\u0E7F\s]+$/;
+
+        $("#next1Btn").click(function () {
+            // ── required fields ──────────────────────────────────────────────
+            if (!validateFields([
+                { id: "student_id", required: true },
+                { id: "first_name", required: true },
+                { id: "last_name", required: true },
+                { id: "student_phone", required: true },
+            ])) {
+                showNotification("กรุณากรอกข้อมูลส่วนตัวให้ครบ", "error");
+                return;
+            }
+            // ── ชื่อนักเรียน ต้องเป็นภาษาไทย ──────────────────────────────
+            const fn = $("#first_name").val().trim();
+            if (!THAI_ONLY.test(fn)) {
+                setError("first_name");
+                showNotification("ชื่อนักเรียนต้องเป็นภาษาไทยเท่านั้น", "error");
+                return;
+            }
+            clearError("first_name");
+
+            const ln = $("#last_name").val().trim();
+            if (!THAI_ONLY.test(ln)) {
+                setError("last_name");
+                showNotification("นามสกุลนักเรียนต้องเป็นภาษาไทยเท่านั้น", "error");
+                return;
+            }
+            clearError("last_name");
+
+            // ── ชื่อเล่น — ถ้ากรอก ต้องเป็นไทย ─────────────────────────────
+            const nn = $("#nickname").val().trim();
+            if (nn && !THAI_ONLY.test(nn)) {
+                setError("nickname");
+                showNotification("ชื่อเล่นต้องเป็นภาษาไทยเท่านั้น", "error");
+                return;
+            }
+            clearError("nickname");
+
+            // ── รูปแบบเบอร์นักเรียน ─────────────────────────────────────────
+            const sp = $("#student_phone").val().trim();
+            if (!PHONE_RE.test(sp)) {
+                setError("student_phone");
+                showNotification("รูปแบบเบอร์โทรนักเรียนไม่ถูกต้อง", "error");
+                return;
+            }
+            clearError("student_phone");
+
+            gotoStep(2);
+        });
+
+        // ── Step 2 ────────────────────────────────────────────────────────────
+        $("#back1Btn").click(() => gotoStep(1, true));
+        $("#next2Btn").click(function () {
+            // ── ตรวจทีละ field ให้ notification ชัดเจน ──────────────────────
+            const prog = ($("#program").val() || "").trim();
+            if (!prog) {
+                setError("program");
+                showNotification("กรุณาเลือกระดับการศึกษา", "error");
+                return;
+            }
+            clearError("program");
+
+            const yr = parseInt($("#entry_year").val().trim());
+            if (!$("#entry_year").val().trim()) {
+                setError("entry_year");
+                showNotification("กรุณากรอกปีที่เข้าเรียน", "error");
+                return;
+            }
+            if (isNaN(yr) || yr < 2500 || yr > 2600) {
+                setError("entry_year");
+                showNotification("ปีที่เข้าเรียนไม่ถูกต้อง (กรอกเป็น พ.ศ. เช่น 2567)", "error");
+                return;
+            }
+            clearError("entry_year");
+
+            const dept = ($("#department").val() || "").trim();
+            if (!dept) {
+                setError("department");
+                $("#department").focus();
+                showNotification("กรุณากรอกหรือเลือกสาขาวิชา", "error");
+                return;
+            }
+            clearError("department");
+
+            gotoStep(3);
+        });
+
+        // ── Step 3 ────────────────────────────────────────────────────────────
+        $("#back2Btn").click(() => gotoStep(2, true));
+        $("#next3Btn").click(function () {
+            // ── parent_name ภาษาไทย (optional แต่ถ้ากรอกต้องเป็นไทย) ──
+            const pn = $("#parent_name").val().trim();
+            if (pn && !THAI_ONLY.test(pn)) {
+                setError("parent_name");
+                showNotification("ชื่อผู้ปกครองต้องเป็นภาษาไทยเท่านั้น", "error");
+                return;
+            }
+            clearError("parent_name");
+
+            // ── student_phone ย้ายไป validate ที่ step1 แล้ว ดึงค่ามาใช้เฉยๆ ──
+            const studentPhone = $("#student_phone").val().trim();
+
+            // ── validate เบอร์ผู้ปกครอง ──
+            const parentPhone = $("#parent_phone").val().trim();
+            if (parentPhone && !PHONE_RE.test(parentPhone)) {
+                setError("parent_phone");
+                showNotification("รูปแบบเบอร์โทรผู้ปกครองไม่ถูกต้อง", "error");
+                return;
+            }
+            clearError("parent_phone");
+
+            // ── เช็คเบอร์ไม่ให้ซ้ำกัน ──
+            if (studentPhone && parentPhone && studentPhone === parentPhone) {
+                setError("student_phone");
+                setError("parent_phone");
+                showNotification("เบอร์นักเรียนและผู้ปกครองต้องไม่ซ้ำกัน", "error");
+                // ล้าง error เมื่อแก้ไขฝั่งใดฝั่งหนึ่ง
+                $("#student_phone, #parent_phone").off("input.dup2").on("input.dup2", function () {
+                    clearError("student_phone");
+                    clearError("parent_phone");
+                    $(this).off("input.dup2");
+                });
+                return;
+            }
+
+            formData = {
+                student_id: $("#student_id").val().trim(),
+                student_phone: studentPhone,
+                first_name: $("#first_name").val().trim(),
+                last_name: $("#last_name").val().trim(),
+                nickname: $("#nickname").val().trim(),
+                program: $("#program").val(),
+                entry_year: $("#entry_year").val().trim(),
+                department: $("#department").val().trim(),
+                parent_name: pn,
+                parent_phone: parentPhone,
+                parent_line: $("#parent_line").val().trim(),
+            };
+
+            // Build preview HTML
+            const rows = [
+                { icon: "fa-solid fa-hashtag", label: "รหัสนักเรียน", val: formData.student_id },
+                { icon: "fa-solid fa-phone", label: "เบอร์โทรนักเรียน", val: formData.student_phone },
+                { icon: "fa-solid fa-user", label: "ชื่อ-นามสกุล", val: `${formData.first_name} ${formData.last_name}` },
+                { icon: "fa-solid fa-face-smile", label: "ชื่อเล่น", val: formData.nickname },
+                { icon: "fa-solid fa-layer-group", label: "ระดับ", val: formData.program },
+                { icon: "fa-solid fa-calendar", label: "ปีที่เข้าเรียน", val: formData.entry_year },
+                { icon: "fa-solid fa-building-columns", label: "สาขาวิชา", val: formData.department },
+                { icon: "fa-solid fa-user", label: "ผู้ปกครอง", val: formData.parent_name },
+                { icon: "fa-solid fa-phone", label: "เบอร์โทรผู้ปกครอง", val: formData.parent_phone },
+                { icon: "fa-brands fa-line", label: "LINE ID", val: formData.parent_line },
+            ];
+
+            const html = rows.map(r => `
+                <div class="flex items-center gap-2 bg-[color:var(--gray-soft)] rounded-lg p-2 odd:bg-[color:var(--primary-light)]">
+                    <div class="min-w-[120px] flex items-center gap-2 text-slate-400">
+                        <i class="${r.icon} text-center"></i>
+                        <span class="font-medium text-xs">${r.label}</span>
+                    </div>
+                    ${r.val
+                    ? `<span class="flex-1 font-medium text-xs text-gray-600" style="font-family: 'Sarabun','Bai Jamjuree', monospace;">${r.val}</span>`
+                    : `<span class="flex-1 italic font-medium text-xs text-gray-300" style="font-family: 'Sarabun','Bai Jamjuree', monospace;">ไม่ระบุ</span>`}
+                </div>`).join("");
+
+            $("#previewData").html(html);
+            gotoStep(4);
+        });
+
+        // ── Step 4 Submit ─────────────────────────────────────────────────────
+        $("#back3Btn").click(() => gotoStep(3, true));
+
+        $("#submitBtn").click(function () {
+            const $btn = $(this);
+            $btn.prop("disabled", true).html('<span class="spinner"></span>&nbsp; กำลังส่งข้อมูล...');
+            showNotification("กำลังส่งข้อมูล กรุณารอสักครู่...", "info");
+
+            const resetSubmitBtn = () => $btn.prop("disabled", false).html(
+                '<i class="fa-solid fa-paper-plane" style="font-size:13px"></i> ยืนยันส่งข้อมูล'
+            );
+
+            // ✅ ใช้ fetch + URLSearchParams แทน $.ajax
+            // Apps Script ต้องการ application/x-www-form-urlencoded และ follow redirect ได้
+            fetch(API_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: new URLSearchParams(formData),   // formData = plain object { key: value }
+                redirect: "follow",                    // ✅ follow redirect ของ Apps Script
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status === "success") {
+                        showNotification("ลงทะเบียนสำเร็จเรียบร้อย! 🎉", "success");
+                        $(".form-section.active").removeClass("active go-back");
+                        $("#stepSuccess").addClass("active");
+                        $("#stepBar").fadeOut(300);
+
+                    } else if (data.status === "duplicate") {
+                        showNotification("รหัส " + formData.student_id + " มีในระบบแล้ว", "error");
+                        resetSubmitBtn();
+                        gotoStep(1, true);
+
+                        $("#wrap_student_id").addClass("has-error");
+                        $("#dup_msg").remove();
+                        $("<p>", {
+                            id: "dup_msg",
+                            html: '<i class="fa-solid fa-circle-exclamation"></i><span>รหัสนักเรียนนี้ถูกลงทะเบียนไปแล้ว</span>',
+                            css: {
+                                position: "absolute", display: "flex", alignItems: "center",
+                                gap: "2px", fontSize: "12px", color: "#FE4040", margin: "-18px 0 0 4px"
+                            }
+                        }).insertAfter("#wrap_student_id");
+
+                        $("#student_id").off("input.dup").on("input.dup", function () {
+                            $("#dup_msg").remove();
+                            $(this).removeClass("error");
+                            $("#wrap_student_id").removeClass("has-error");
+                        });
+
+                    } else {
+                        showNotification(data.message || "เกิดข้อผิดพลาด กรุณาลองอีกครั้ง", "error");
+                        console.error(data.message);
+                        resetSubmitBtn();
+                    }
+                })
+                .catch(err => {
+                    // ✅ แสดง raw response ช่วย debug ถ้า parse JSON ไม่ผ่าน
+                    console.error("Fetch/Parse error:", err);
+                    showNotification("เกิดข้อผิดพลาด กรุณาลองอีกครั้ง", "error");
+                    resetSubmitBtn();
+                });
+        });
+
+        // ── Department Combobox ───────────────────────────────────────────────
+        const deptCategories = [
+            {
+                icon: "fa-solid fa-gears",
+                color: "#0EA5E9", bg: "#EFF6FF",
+                label: "ช่างอุตสาหกรรม",
+                items: ["ช่างยนต์", "ช่างกลโรงงาน", "ช่างเชื่อมโลหะ", "ช่างไฟฟ้ากำลัง",
+                    "ช่างอิเล็กทรอนิกส์", "ช่างก่อสร้าง", "ช่างเมคคาทรอนิกส์",
+                    "ช่างแมคคาทรอนิกส์และหุ่นยนต์", "ช่างโยธา", "ช่างแอร์และเครื่องทำความเย็น"]
+            },
+            {
+                icon: "fa-solid fa-computer",
+                color: "#7C3AED", bg: "#F5F3FF",
+                label: "เทคโนโลยีสารสนเทศ",
+                items: ["เทคนิคคอมพิวเตอร์", "เทคโนโลยีสารสนเทศ", "เทคโนโลยีธุรกิจดิจิทัล",
+                    "คอมพิวเตอร์กราฟิก", "ระบบเครือข่ายและความมั่นคง"]
+            },
+            {
+                icon: "fa-solid fa-briefcase",
+                color: "#D97706", bg: "#FFFBEB",
+                label: "พาณิชยกรรม",
+                items: ["การบัญชี", "การตลาด", "การจัดการธุรกิจค้าปลีก", "การเลขานุการ",
+                    "การจัดการโลจิสติกส์", "ธุรกิจค้าปลีก", "การประกันภัย"]
+            },
+            {
+                icon: "fa-solid fa-plane",
+                color: "#059669", bg: "#ECFDF5",
+                label: "การท่องเที่ยวและโรงแรม",
+                items: ["การโรงแรม", "การท่องเที่ยว", "การบริการและการท่องเที่ยว"]
+            },
+            {
+                icon: "fa-solid fa-utensils",
+                color: "#DB2777", bg: "#FDF2F8",
+                label: "คหกรรม",
+                items: ["คหกรรมศาสตร์", "ผ้าและเครื่องแต่งกาย", "อาหารและโภชนาการ",
+                    "การออกแบบแฟชั่นและสิ่งทอ"]
+            },
+        ];
+
+        function highlight(text, query) {
+            if (!query) return text;
+            const re = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
+            return text.replace(re, `<span style="color:var(--primary-dark);font-weight:700;">$1</span>`);
+        }
+
+        function renderDeptOptions(filter = "") {
+            const $dd = $("#deptDropdown");
+            let html = "";
+            let totalFound = 0;
+
+            deptCategories.forEach(cat => {
+                const matched = filter
+                    ? cat.items.filter(d => d.toLowerCase().includes(filter.toLowerCase()))
+                    : cat.items;
+                if (!matched.length) return;
+                totalFound += matched.length;
+
+                html += `
+                    <div class="dept-cat-header" style="
+                        display:flex;align-items:center;gap:6px;
+                        padding:6px 14px 5px;
+                        background:${cat.bg};
+                        border-bottom:1px solid #F1F5F9;
+                        position:sticky;top:0;z-index:1;">
+                        <i class="${cat.icon}" style="font-size:9px;color:${cat.color};width:13px;text-align:center;"></i>
+                        <span style="font-size:10px;font-weight:700;color:${cat.color};letter-spacing:.4px;text-transform:uppercase;">${cat.label}</span>
+                    </div>`;
+
+                matched.forEach(d => {
+                    html += `
+                        <div class="dept-option"
+                             style="padding:10px 14px 10px 33px;font-size:12px;
+                                    cursor:pointer;transition:background 0.13s;
+                                    color:#1E293B;border-bottom:1px solid #F8FAFC;"
+                             data-val="${d}">${highlight(d, filter)}</div>`;
+                });
+            });
+
+            $dd.html(totalFound ? html : `
+                <div style="padding:16px 14px;color:#94A3B8;font-size:12px;text-align:center;">
+                    <i class="fa-solid fa-magnifying-glass" style="margin-right:6px;opacity:.5;"></i>ไม่พบสาขาที่ตรงกัน
+                </div>`);
+        }
+
+        function openDept() {
+            renderDeptOptions($("#department").val());
+            $("#deptDropdown").show();
+            $("#deptChevron").css("transform", "translateY(-50%) rotate(180deg)");
+        }
+        function closeDept() {
+            $("#deptDropdown").hide();
+            $("#deptChevron").css("transform", "translateY(-50%) rotate(0deg)");
+        }
+
+        // Event delegation for hover + select
+        $(document).on("mouseenter", ".dept-option", function () {
+            $(this).css("background", "var(--primary-light)");
+        }).on("mouseleave", ".dept-option", function () {
+            $(this).css("background", "white");
+        }).on("mousedown", ".dept-option", function (e) {
+            e.preventDefault();
+            const val = $(this).data("val");
+            $("#department").val(val).removeClass("error");
+            $("#wrap_department").removeClass("has-error");
+            closeDept();
+        });
+
+        $("#department").on("focus", openDept)
+            .on("blur", function () { setTimeout(closeDept, 150); })
+            .on("input", function () { renderDeptOptions($(this).val()); });
+
+        $("#deptChevron").on("mousedown", function (e) {
+            e.preventDefault();
+            $("#deptDropdown").is(":visible") ? closeDept() : ($("#department").focus(), openDept());
+        });
+
+        // ── Reset ─────────────────────────────────────────────────────────────
+        $("#resetBtn").click(function () {
+            $("input").val(""); $("select").val("");
+            $(".form-input").removeClass("error");
+            $(".field-wrap").removeClass("has-error");
+            formData = {};
+
+            // reset submit button
+            $("#submitBtn")
+                .prop("disabled", false)
+                .html('<i class="fa-solid fa-paper-plane" style="font-size:13px"></i> ยืนยันส่งข้อมูล');
+
+            $(".form-section.active").removeClass("active go-back");
+            $("#step1").addClass("active");
+            $("#stepBar").fadeIn(300);
+            gotoStep(1);
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,285 @@
+@import url(https://project-test-submission.netlify.app/style/style.css);
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Sarabun:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800&display=swap');
+
+:root {
+    --primary-color: #84D4FA;
+    --primary-dark: #4DB8F5;
+    --primary-light: #EAF7FF;
+    --accent: #FE4040;
+    --success: #22c55e;
+    --gray-soft: #F8FAFC;
+    --primary-color: #84D4FA;
+    --secondary-color: #FF7070;
+    --white-smoker: #F5F5F5;
+    --default: #B2B2B2;
+    --green: #1ED760;
+    --red: #FF7070;
+    --brue: #3B82F6;
+}
+
+/* —[ default ]——————————————————————————————————————————————————————————————————————————————————————————————————— */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+*,
+html {
+    scrollbar-width: none;
+}
+
+/* ========= Highlight Selection ========= */
+::selection {
+    background: #000000B3;
+    color: var(--primary-color);
+}
+
+body {
+    position: relative;
+    font-family: "Kanit", "Bai Jamjuree", monospace;
+    font-weight: 600;
+    background: linear-gradient(135deg, var(--primary-light) 0%, #F0F9FF 40%, #E0F2FE 100%);
+    transition: all 0.3s ease;
+    overflow: auto;
+}
+
+/* ── Background blobs ── */
+.bg-blob {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: .18;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.bg-stripes-gray {
+    background-size: 10px 10px;
+    background-image: repeating-linear-gradient(45deg, var(--primary-color) 0, var(--primary-color) 1px, transparent 0, transparent 50%);
+}
+
+html,
+select {
+    cursor: url(https://sweezy-cursors.com/wp-content/uploads/cursor/old-roblox/old-roblox-cursor-32x32.png), auto !important;
+}
+
+a,
+button,
+label,
+.cursor-pointer,
+.hashtag-mention:hover,
+.hashtag-mention.mention:hover,
+[class^="btn-"] {
+    cursor: url(https://sweezy-cursors.com/wp-content/uploads/cursor/old-roblox/old-roblox-pointer-32x32.png),
+        pointer !important;
+}
+
+/* ปุ่มพื้นฐาน */
+[class^="btn-"] {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    border-radius: 12px;
+    transition: all 300ms ease;
+    cursor: pointer;
+}
+
+/* ── Buttons ── */
+.btn-primary {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: white;
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-dark) 100%);
+    border: 1.5px solid var(--primary-color);
+    transition: all 0.25s;
+    overflow: hidden;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: linear-gradient(135deg,
+            color-mix(in srgb, var(--primary-color) 75%, #0D0D0D),
+            color-mix(in srgb, var(--primary-dark) 75%, #0D0D0D));
+}
+
+.btn-primary:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Secondary */
+.btn-secondary {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: 500;
+    font-size: 15px;
+    color: #475569;
+    background: transparent;
+    border: 1.5px solid #E2E8F0;
+    gap: 4px;
+    transition: all 0.25s;
+    overflow: hidden;
+}
+
+.btn-secondary:hover {
+    background: var(--gray-soft);
+    border-color: #CBD5E1;
+}
+
+.btn-success {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: white;
+    background: linear-gradient(135deg, var(--success) 0%, var(--green) 100%);
+    border: none;
+    transition: all 0.25s;
+    overflow: hidden;
+}
+
+.btn-success:hover {
+    background-color: color-mix(in srgb, var(--success) 75%, #0D0D0D);
+}
+
+.btn-success:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Outline */
+.btn-outline {
+    background-color: transparent;
+    border: 1.5px solid var(--primary-color);
+    color: var(--primary-color);
+    font-weight: 500;
+    padding: 0.5rem;
+    /* 8px */
+    transition: all 0.3s ease;
+}
+
+.btn-outline:hover {
+    background-color: color-mix(in srgb, var(--primary-color) 75%, #0D0D0D);
+    color: white;
+}
+
+/* Ghost */
+.btn-ghost {
+    color: var(--primary-color);
+    border: solid 1.5px rgba(0, 0, 0, 0.05);
+    background-color: rgba(0, 0, 0, 0.015);
+    box-shadow: none;
+}
+
+.btn-ghost:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+    box-shadow: none;
+}
+
+/* Text */
+.btn-text {
+    background: none;
+    border: none;
+    box-shadow: none;
+    text-decoration: underline;
+    padding: 0.125rem 0.5rem;
+    /* 2px --px */
+}
+
+.btn-text:hover {
+    background-color: #E3F2FD;
+    color: var(--primary-color);
+    box-shadow: none;
+}
+
+.eye-btn {
+    position: absolute !important;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #94A3B8;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 4px;
+    transition: color .2s;
+}
+
+.eye-btn:hover {
+    color: var(--primary-dark);
+}
+
+/* ── Spinner ── */
+.spinner {
+    width: 16px;
+    height: 16px;
+    border: 2.5px solid var(--primary-color);
+    border-top-color: transparent;
+    border-radius: 50%;
+    display: inline-block;
+    animation: spin .7s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ── Inputs ── */
+.field-wrap {
+    position: relative;
+}
+
+.field-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94A3B8;
+    font-size: 13px;
+    transition: color 0.2s;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.field-wrap:focus-within .field-icon {
+    color: var(--primary-dark);
+}
+
+.field-wrap.has-error .field-icon {
+    color: #F87171;
+}
+
+.form-input {
+    width: 100%;
+    padding: 12px 0 12px 35px;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 12px;
+    font-family: 'Sarabun', 'Bai Jamjuree', monospace;
+    font-size: 15px;
+    background: var(--gray-soft);
+    color: #1E293B;
+    outline: none;
+    transition: all .25s;
+}
+
+.form-input:focus {
+    border-color: var(--primary-color) !important;
+    background: white;
+    box-shadow: 0 0 0 4px rgba(132, 212, 250, 0.18);
+}
+
+.form-input.error {
+    border-color: #FCA5A5;
+    background: #FFF5F5;
+    box-shadow: 0 0 0 3px rgba(252, 165, 165, 0.15);
+}

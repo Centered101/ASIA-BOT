@@ -13,19 +13,21 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
 
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
-    <script src="/script/index.js" defer></script>
-    <script src="/config-students.js" defer></script>
     <script>
-        /* Patch: guard against setProperty(undefined) from index.js */
+        /* ── Patch: re-apply ทันทีหลัง Tailwind CDN โหลด
+           เพราะ Tailwind CDN ทับ CSSStyleDeclaration.prototype.setProperty ── */
         (function () {
-            const o = CSSStyleDeclaration.prototype.setProperty;
+            const _orig = CSSStyleDeclaration.prototype.setProperty;
             CSSStyleDeclaration.prototype.setProperty = function (p, v, r) {
-                if (p === undefined || v === undefined) return; return o.call(this, p, v, r);
+                if (p === undefined || v === undefined) return;
+                return _orig.call(this, p, v, r);
             };
         })();
     </script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script src="/config-students.js" defer></script>
+    <script src="/script/index.js" defer></script>
 
     <style>
         :root {
@@ -311,6 +313,93 @@
             border-left: 3px solid #F59E0B;
         }
 
+        /* ─── Product Table ─── */
+        .product-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 13px;
+        }
+
+        .product-table thead th {
+            background: linear-gradient(135deg, #0EA5E9, #38BDF8);
+            color: white;
+            padding: 10px 12px;
+            font-weight: 700;
+            font-size: 11px;
+            text-align: left;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+        .product-table thead th:first-child {
+            border-radius: 12px 0 0 0;
+        }
+
+        .product-table thead th:last-child {
+            border-radius: 0 12px 0 0;
+        }
+
+        .product-table tbody tr {
+            background: white;
+            border-bottom: 1px solid #F1F5F9;
+            transition: background .15s;
+        }
+
+        .product-table tbody tr:hover {
+            background: #F0F9FF;
+        }
+
+        .product-table tbody tr.out-of-stock {
+            opacity: .55;
+        }
+
+        .product-table td {
+            padding: 9px 12px;
+            vertical-align: middle;
+        }
+
+        .table-emoji {
+            font-size: 22px;
+        }
+
+        .table-img {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            object-fit: cover;
+        }
+
+        .qty-ctrl {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* ─── View toggle ─── */
+        .view-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 10px;
+            border: 1.5px solid #E2E8F0;
+            background: white;
+            color: #94A3B8;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all .2s;
+            font-size: 12px;
+        }
+
+        .view-btn.active {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+            color: white;
+            box-shadow: 0 4px 10px rgba(132, 212, 250, .4);
+        }
+
         /* ─── Profile card ─── */
         .profile-card {
             background: linear-gradient(135deg, #0EA5E9 0%, #38BDF8 50%, #84D4FA 100%);
@@ -440,12 +529,63 @@
 </head>
 
 <body draggable="false" oncontextmenu="return false">
-    <!-- blobs -->
-    <div class="bg-blob" style="width:500px;height:500px;background:#84D4FA;top:-100px;right:-150px;"></div>
-    <div class="bg-blob" style="width:400px;height:400px;background:#4DB8F5;bottom:-80px;left:-100px;"></div>
+    <!-- Preloader -->
+    <div id="preloader"
+        class="bg-stripes-gray visible touch-none min-h-screen fixed inset-0 flex items-center justify-center text-center bg-gray-50 z-50">
+        <span class="spinner animate-spin size-80 fixed border-8" style="animation-duration: 1s;"></span>
+        <div
+            class="size-80 flex flex-col items-center justify-center gap-2 bg-[color:var(--white-smoker)] rounded-full shadow">
+            <img src="/favicon.ico" onerror="this.src='https://asia-lb.firebaseapp.com/images/favicon.svg'" alt="logo"
+                class="size-16 fa-bounce drop-shadow" draggable="false">
+            <h2 class="text-xl sm:text-2xl">กำลังโหลด</h2>
+            <p class="text-sm sm:text-base text-gray-600">
+                การผจญภัยของคุณกำลังจะเริ่มต้น
+            </p>
+        </div>
+        <div class="bg-blob" style="width:520px;height:520px;background:var(--primary-color);top:-120px;right:-170px;">
+        </div>
+        <div class="bg-blob" style="width:420px;height:420px;background:var(--primary-dark);bottom:-110px;left:-130px;">
+        </div>
+    </div>
 
+    <!-- Decorative blobs -->
+    <div class="bg-blob" style="width:520px;height:520px;background:var(--primary-color);top:-120px;right:-170px;">
+    </div>
+    <div class="bg-blob" style="width:420px;height:420px;background:var(--primary-dark);bottom:-110px;left:-130px;">
+    </div>
+
+    <!-- Top Navigation -->
+    <header data-aos="fade-down" class="sticky top-0 bg-white-smoker border shadow z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="h-16 flex justify-between items-center">
+                <a href="/" onclick="window.scrollTo({ top: 0, behavior: 'smooth' })"
+                    class="ripple-effect flex flex items-center gap-2 rounded">
+                    <div
+                        class="size-10 sm:size-12 flex items-center justify-center bg-primary rounded-md text-white font-bold">
+                        <img class="size-8" src="/favicon.ico"
+                            onerror="this.src='https://asia-lb.firebaseapp.com/images/favicon.svg'" alt="logo">
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="font-bold fs-base pr-2">ASIA-LB</span>
+                        <span class="text-xs text-gray-600">สหกรณ์โรงเรียน</span>
+                    </div>
+                </a>
+                <nav id="main-nav" class="hidden md:flex items-center gap-4 fs-base">
+                </nav>
+                <button class="ripple-effect md:hidden bg-gray-50 border rounded-md shadow-inner p-2 focus:outline-none"
+                    aria-label="open menu">
+                    <svg class="size-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 6h16M4 12h16M4 18h16">
+                        </path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
     <!-- ══════════════════ HEADER ══════════════════ -->
-    <header class="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200/60 shadow-sm">
+    <div class="sticky top-0 z-0 bg-white/80 backdrop-blur-md border-b border-slate-200/60 shadow-sm">
         <div class="max-w-6xl mx-auto px-3 sm:px-6">
             <div class="h-16 flex items-center gap-3">
                 <!-- Logo -->
@@ -455,8 +595,6 @@
                         <i class="fa-solid fa-store text-white text-sm"></i>
                     </div>
                     <div class="hidden sm:block">
-                        <div class="text-sm font-bold text-slate-800 leading-tight">สหกรณ์โรงเรียน</div>
-                        <div class="text-[10px] text-slate-400 font-medium">ASIA-LB Co-op Shop</div>
                     </div>
                 </a>
 
@@ -490,7 +628,7 @@
                 </div>
             </div>
         </div>
-    </header>
+    </div>
 
     <!-- ══════════════════ MAIN ══════════════════ -->
     <main class="max-w-6xl mx-auto px-3 sm:px-6 py-6 pb-20 relative z-10">
@@ -498,14 +636,10 @@
         <div class="flex flex-col lg:flex-row gap-6">
 
             <!-- ── LEFT: Profile + Filters ── -->
-            <div class="lg:w-72 flex-shrink-0 space-y-4">
+            <div class="w-96 flex-shrink-0 mx-auto space-y-4">
 
                 <!-- Profile Card -->
                 <div data-aos="fade-right" data-aos-delay="200">
-                    <p
-                        class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                        <i class="fa-solid fa-id-card text-sky-400"></i> ข้อมูลนักเรียน
-                    </p>
                     <div class="profile-card" id="profileCard">
                         <div style="position:relative;z-index:1">
                             <div class="flex items-center gap-3 mb-3">
@@ -593,6 +727,12 @@
                             <i class="fa-solid fa-arrow-up-wide-short text-xs"></i>
                             <span id="sortLabel">ราคา ↑</span>
                         </button>
+                        <button id="viewGrid" class="view-btn active" title="มุมมองการ์ด">
+                            <i class="fa-solid fa-grid-2"></i>
+                        </button>
+                        <button id="viewTable" class="view-btn" title="มุมมองตาราง">
+                            <i class="fa-solid fa-table-list"></i>
+                        </button>
                     </div>
                 </div>
 
@@ -658,62 +798,57 @@
         </div>
     </div>
 
-    <!-- ══════════════════ MODAL: PAYMENT (Omise PromptPay) ══════════════════ -->
+    <!-- ══════════════════ MODAL: PAYMENT ══════════════════ -->
     <div class="modal-center" id="modalPayment">
         <div class="modal-box">
-            <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center justify-between mb-5">
                 <div class="flex items-center gap-2">
-                    <div class="w-9 h-9 rounded-xl bg-violet-50 flex items-center justify-center text-violet-500">
+                    <div class="w-9 h-9 rounded-xl bg-green-50 flex items-center justify-center text-green-500">
                         <i class="fa-solid fa-qrcode"></i>
                     </div>
                     <div>
                         <div class="font-bold text-slate-800">ชำระเงิน PromptPay</div>
-                        <div class="text-xs text-slate-400">สแกน QR ภายใน 15 นาที</div>
+                        <div class="text-xs text-slate-400">สแกน QR เพื่อโอนเงิน</div>
                     </div>
                 </div>
-                <button onclick="cancelPayment()" class="text-slate-400 hover:text-slate-600 p-1">
+                <button onclick="closeModal('modalPayment')" class="text-slate-400 hover:text-slate-600 p-1">
                     <i class="fa-solid fa-xmark text-lg"></i>
                 </button>
             </div>
 
-            <!-- QR Zone -->
-            <div class="text-center mb-3">
-                <!-- loading state -->
-                <div id="qrLoading" class="py-8">
-                    <i class="fa-solid fa-spinner fa-spin text-2xl text-violet-400 block mb-2"></i>
-                    <div class="text-xs text-slate-400">กำลังสร้าง QR Code...</div>
+            <!-- QR Code -->
+            <div class="text-center mb-4">
+                <div class="qr-ring inline-block mb-3">
+                    <img id="qrImg" src="" alt="QR Code" class="w-48 h-48 rounded-lg object-contain">
                 </div>
-                <!-- qr image -->
-                <div id="qrReady" class="hidden">
-                    <div class="qr-ring inline-block mb-2">
-                        <img id="qrImg" src="" alt="PromptPay QR" class="w-48 h-48 rounded-lg object-contain">
-                    </div>
-                    <div class="text-[10px] text-slate-400 mt-1">QR Code จาก Omise · หมดอายุใน 15 นาที</div>
-                </div>
+                <div class="text-xs text-slate-400 mb-1">โอนเงินมายัง</div>
+                <div class="font-bold text-slate-700 text-sm" id="promptPayNum">0XX-XXX-XXXX</div>
+                <div class="text-xs text-slate-400">ASIA-LB สหกรณ์โรงเรียน</div>
             </div>
 
-            <!-- Amount -->
-            <div class="bg-violet-50 rounded-2xl p-3 mb-3 flex items-center justify-between">
+            <!-- Amount display -->
+            <div class="bg-sky-50 rounded-2xl p-3 mb-4 flex items-center justify-between">
                 <div class="text-sm text-slate-600 font-medium">ยอดที่ต้องชำระ</div>
-                <div class="text-xl font-bold text-violet-600" id="payAmount">฿0</div>
+                <div class="text-xl font-bold text-sky-500" id="payAmount">฿0</div>
             </div>
 
             <!-- Items summary -->
-            <div class="bg-slate-50 rounded-2xl p-3 mb-3 max-h-24 overflow-y-auto">
+            <div class="bg-slate-50 rounded-2xl p-3 mb-4 max-h-28 overflow-y-auto">
                 <div id="payItemList" class="space-y-1 text-xs text-slate-600"></div>
             </div>
 
-            <!-- Polling status bar -->
-            <div id="payStatusBar" class="hidden rounded-xl px-3 py-2 mb-3 text-xs font-medium flex items-center gap-2">
-                <i class="fa-solid fa-circle-notch fa-spin text-xs"></i>
-                <span id="payStatusTxt">รอการชำระเงิน...</span>
+            <!-- Action buttons -->
+            <div class="grid grid-cols-2 gap-2">
+                <button onclick="closeModal('modalPayment')"
+                    class="py-2.5 rounded-xl border border-slate-200 text-slate-500 text-sm font-medium hover:bg-slate-50 transition">
+                    ยกเลิก
+                </button>
+                <button id="confirmPayBtn"
+                    class="py-2.5 rounded-xl text-white text-sm font-bold flex items-center justify-center gap-1.5 transition"
+                    style="background:linear-gradient(135deg,#22c55e,#16a34a);box-shadow:0 4px 12px rgba(34,197,94,.35);">
+                    <i class="fa-solid fa-check"></i> ยืนยันโอนแล้ว
+                </button>
             </div>
-
-            <!-- Action -->
-            <button onclick="cancelPayment()"
-                class="w-full py-2.5 rounded-xl border border-slate-200 text-slate-500 text-sm font-medium hover:bg-red-50 hover:text-red-400 hover:border-red-200 transition">
-                ยกเลิกการชำระเงิน
-            </button>
         </div>
     </div>
 
@@ -786,6 +921,14 @@
        SCRIPT
   ════════════════════════════════════════════════════ -->
     <script>
+        // ══ GLOBAL ERROR CATCHER ═══════════════════════════════════════════
+        window.onerror = function (msg, src, line, col, err) {
+            console.error("💥 [GLOBAL ERROR]", msg, "\n  ที่:", src, "บรรทัด:", line + ":" + col, "\n  err:", err);
+        };
+        window.addEventListener("unhandledrejection", function (e) {
+            console.error("💥 [UNHANDLED PROMISE]", e.reason);
+        });
+
         // ══════════════════════════════════════════════════════════════════
         //  SESSION GUARD — เหมือน student.html ทุกอย่าง
         //  ใช้ LS_DATA / LS_TIME / SESSION_TTL จาก config-students.js
@@ -802,10 +945,15 @@
             try {
                 const raw = localStorage.getItem(LS_DATA);
                 const time = localStorage.getItem(LS_TIME);
-                if (!raw || !time) return null;
-                if (Date.now() - new Date(time).getTime() > SESSION_TTL) { clearSession(); return null; }
-                return { data: JSON.parse(raw), time };
-            } catch (_) { return null; }
+                console.log("🔑 [session] raw:", !!raw, "| time:", time);
+                if (!raw || !time) { console.warn("🔑 [session] ❌ ไม่มี raw/time → redirect"); return null; }
+                const age = Date.now() - new Date(time).getTime();
+                console.log("🔑 [session] age:", Math.round(age / 1000) + "s | TTL:", SESSION_TTL / 1000 + "s");
+                if (age > SESSION_TTL) { clearSession(); console.warn("🔑 [session] ❌ หมดอายุ → redirect"); return null; }
+                const parsed = JSON.parse(raw);
+                console.log("🔑 [session] ✅ OK →", parsed.student_id, parsed.first_name);
+                return { data: parsed, time };
+            } catch (err) { console.error("🔑 [session] EXCEPTION:", err); return null; }
         }
         function clearSession() {
             try { localStorage.removeItem(LS_DATA); localStorage.removeItem(LS_TIME); } catch (_) { }
@@ -834,6 +982,31 @@
             updateLogBadge(); updateStatOrders();
         }
 
+        // ── VIEW MODE ──────────────────────────────────────────────────────
+        let viewMode = "grid"; // "grid" | "table"
+
+        // ── ACTIVITY LOGGER — fire-and-forget ไป GAS ──────────────────────
+        function logActivity(event, detail, orderId) {
+            console.log(`📋 [logActivity] event="${event}" | detail="${detail}" | orderId="${orderId || ""}"`);
+            if (typeof API_SHOP === "undefined") { console.warn("📋 [logActivity] ⚠️ API_SHOP ไม่ถูกกำหนด — ข้าม"); return; }
+            if (!studentData) { console.warn("📋 [logActivity] ⚠️ studentData ว่าง — ข้าม"); return; }
+            try {
+                $.ajax({
+                    url: API_SHOP, dataType: "jsonp",
+                    data: {
+                        action: "log_activity",
+                        student_id: studentData.student_id || "",
+                        student_name: `${studentData.first_name || ""} ${studentData.last_name || ""}`.trim(),
+                        event: event,
+                        detail: (detail || "").substring(0, 300),
+                        order_id: orderId || "",
+                    },
+                    success(r) { console.log("📋 [logActivity] GAS response:", r); },
+                    error(xhr, status, err) { console.warn("📋 [logActivity] AJAX error:", status, err); }
+                });
+            } catch (err) { console.error("📋 [logActivity] EXCEPTION:", err); }
+        }
+
         // ── EMOJI MAP (เพิ่มเติมสวยงาม เผื่อ images ใน sheet ว่าง) ─────────
         const EMOJI_MAP = [
             ["ดินสอ", "✏️"], ["ไม้บรรทัด", "📏"], ["สมุด", "📓"], ["ปากกา", "🖊️"],
@@ -853,6 +1026,7 @@
         //  PROFILE — ใช้ session จริงเท่านั้น
         // ══════════════════════════════════════════════════════════════════
         function renderProfile() {
+            console.log("👤 [renderProfile] studentData:", JSON.stringify(studentData));
             const d = studentData;
             const isPvs = (d.program || "") === "ปวส";
             const grade = calcGrade(d.program || "ปวช", d.entry_year);
@@ -879,6 +1053,7 @@
         //  LOAD PRODUCTS จาก API เท่านั้น
         // ══════════════════════════════════════════════════════════════════
         function loadProducts(callback) {
+            console.log("🛒 [loadProducts] เริ่ม — API_SHOP:", typeof API_SHOP !== "undefined" ? API_SHOP.substring(0, 60) + "..." : "❌ ไม่ถูกกำหนด");
             $("#productGrid").html(`
       <div class="col-span-full text-center py-14 text-slate-400">
         <i class="fa-solid fa-spinner fa-spin text-3xl text-sky-400 block mb-3"></i>
@@ -886,23 +1061,27 @@
       </div>`);
 
             $.ajax({
-                url: API_URL,
+                url: API_SHOP,
                 dataType: "jsonp",
                 data: { action: "get_products" },
                 success(r) {
+                    console.log("🛒 [loadProducts] response:", r);
                     if (r.status === "success" && Array.isArray(r.data) && r.data.length) {
                         PRODUCTS = r.data.map(p => ({ ...p, emoji: getEmoji(p) }));
                         CATS = ["ทั้งหมด", ...new Set(PRODUCTS.map(p => p.cat))];
+                        console.log("🛒 [loadProducts] ✅ สินค้า:", PRODUCTS.length, "| หมวด:", CATS);
                         renderCats();
                         renderGrid();
                         $("#statTotal").text(PRODUCTS.length);
                         $("#statInStock").text(PRODUCTS.filter(p => p.stock > 0).length);
                     } else {
+                        console.warn("🛒 [loadProducts] ❌ ข้อมูลผิดพลาด:", r.message, r);
                         showProductsError(r.message || "ไม่พบสินค้า");
                     }
                     if (callback) callback();
                 },
-                error() {
+                error(xhr, status, err) {
+                    console.error("🛒 [loadProducts] AJAX error — status:", status, "| err:", err, "| xhr:", xhr);
                     showProductsError("ไม่สามารถเชื่อมต่อ API ได้");
                 }
             });
@@ -967,7 +1146,10 @@
         }
 
         function renderGrid() {
+            console.log("🎨 [renderGrid] viewMode:", viewMode, "| PRODUCTS:", PRODUCTS.length, "| cat:", currentCat, "| search:", searchQ);
+            if (viewMode === "table") { renderTable(); return; }
             const list = getFiltered();
+            console.log("🎨 [renderGrid] filtered:", list.length, "รายการ");
             $("#gridTitle").text(currentCat === "ทั้งหมด" ? "สินค้าทั้งหมด" : currentCat);
             $("#gridSubtitle").text(list.length + " รายการ" + (searchQ ? ` · "${searchQ}"` : ""));
 
@@ -1019,6 +1201,68 @@
             AOS.refresh();
         }
 
+        // ── TABLE VIEW ──────────────────────────────────────────────────────
+        function renderTable() {
+            console.log("📊 [renderTable] PRODUCTS:", PRODUCTS.length, "| cat:", currentCat);
+            const list = getFiltered();
+            $("#gridTitle").text(currentCat === "ทั้งหมด" ? "สินค้าทั้งหมด" : currentCat);
+            $("#gridSubtitle").text(list.length + " รายการ" + (searchQ ? ` · "${searchQ}"` : ""));
+
+            if (!list.length) { $("#productGrid").html(""); $("#emptyState").removeClass("hidden"); return; }
+            $("#emptyState").addClass("hidden");
+
+            const rows = list.map(p => {
+                const qty = cart[p.id] || 0;
+                const out = p.stock <= 0;
+                const low = !out && p.stock <= 10;
+                const isImg = p.images && p.images.startsWith("http");
+                const thumb = isImg
+                    ? `<img src="${p.images}" class="table-img" loading="lazy">`
+                    : `<span class="table-emoji">${p.emoji}</span>`;
+                const stockCell = out
+                    ? `<span class="text-xs font-bold text-red-400">หมดแล้ว</span>`
+                    : `<span class="text-xs font-bold ${low ? "text-amber-500" : "text-slate-600"}">${p.stock} ${p.unit || ""}</span>`;
+                const addCtrl = out
+                    ? `<span class="text-xs text-red-300">—</span>`
+                    : qty === 0
+                        ? `<button class="add-btn w-8 h-8 rounded-xl flex items-center justify-center text-white text-sm
+                          bg-gradient-to-br from-sky-400 to-sky-500 shadow hover:scale-110 active:scale-95 transition-transform"
+                          data-id="${p.id}"><i class="fa-solid fa-plus text-xs"></i></button>`
+                        : `<div class="qty-ctrl">
+                         <button class="qty-btn minus-btn" data-id="${p.id}"><i class="fa-solid fa-minus" style="font-size:9px"></i></button>
+                         <span class="text-sm font-bold text-slate-700 w-5 text-center">${qty}</span>
+                         <button class="qty-btn plus-btn" data-id="${p.id}"><i class="fa-solid fa-plus" style="font-size:9px"></i></button>
+                       </div>`;
+                return `<tr class="${out ? "out-of-stock" : ""}" data-id="${p.id}">
+                  <td>${thumb}</td>
+                  <td><div class="font-bold text-slate-800 text-sm leading-tight">${p.name}</div>
+                      ${p.tag ? `<span class="text-[9px] font-bold text-sky-500 uppercase">${p.tag}</span>` : ""}</td>
+                  <td><span class="cat-badge"><i class="${CAT_ICONS[p.cat] || "fa-solid fa-tag"} text-[9px]"></i> ${p.cat}</span></td>
+                  <td class="text-sm font-bold text-sky-500">${fmt(p.price)}</td>
+                  <td>${stockCell}</td>
+                  <td>${addCtrl}</td>
+                </tr>`;
+            }).join("");
+
+            const tableHtml = `
+              <div class="col-span-full overflow-x-auto rounded-2xl border border-slate-100 shadow-sm">
+                <table class="product-table">
+                  <thead>
+                    <tr>
+                      <th style="width:48px"></th>
+                      <th>ชื่อสินค้า</th>
+                      <th>หมวดหมู่</th>
+                      <th>ราคา</th>
+                      <th>คงเหลือ</th>
+                      <th style="width:80px">ตะกร้า</th>
+                    </tr>
+                  </thead>
+                  <tbody>${rows}</tbody>
+                </table>
+              </div>`;
+            $("#productGrid").html(tableHtml);
+        }
+
         // ══════════════════════════════════════════════════════════════════
         //  CART
         // ══════════════════════════════════════════════════════════════════
@@ -1026,11 +1270,13 @@
             e.stopPropagation();
             const id = parseInt($(this).data("id"));
             const p = PRODUCTS.find(x => x.id === id);
-            if (!p || p.stock <= 0) return;
+            console.log("🛍️ [add-btn] id:", id, "| product:", p?.name, "| stock:", p?.stock, "| cart now:", cart[id] || 0);
+            if (!p || p.stock <= 0) { console.warn("🛍️ [add-btn] ❌ ไม่พบสินค้า หรือหมด"); return; }
             if ((cart[id] || 0) >= p.stock) { showNotification && showNotification("สินค้าไม่เพียงพอ", "error"); return; }
             cart[id] = (cart[id] || 0) + 1;
             refreshAll();
             showNotification && showNotification(`เพิ่ม ${p.name} ลงตะกร้า`, "success");
+            logActivity("add_to_cart", `${p.name} (id:${id}) x1 | ราคา ${p.price}`);
             // float anim
             const off = $(this)[0].getBoundingClientRect();
             const $f = $(`<span style="position:fixed;left:${off.left + 4}px;top:${off.top}px;font-size:18px;pointer-events:none;z-index:9999;color:#4DB8F5">✚</span>`);
@@ -1044,11 +1290,24 @@
         });
         $(document).on("click", ".minus-btn", function () {
             const id = parseInt($(this).data("id"));
-            if ((cart[id] || 0) <= 1) delete cart[id]; else cart[id]--;
+            const p = PRODUCTS.find(x => x.id === id);
+            if ((cart[id] || 0) <= 1) {
+                delete cart[id];
+                if (p) logActivity("remove_from_cart", `${p.name} (id:${id}) ลบออก`);
+            } else {
+                cart[id]--;
+            }
             refreshAll();
         });
 
-        function clearCart() { cart = {}; refreshAll(); closeModal("modalCart"); }
+        function clearCart() {
+            const summary = Object.entries(cart).map(([id, qty]) => {
+                const p = PRODUCTS.find(x => x.id === parseInt(id));
+                return p ? `${p.name}x${qty}` : id;
+            }).join(", ");
+            logActivity("clear_cart", `ล้างตะกร้า: ${summary}`);
+            cart = {}; refreshAll(); closeModal("modalCart");
+        }
         function getCartTotal() {
             return Object.entries(cart).reduce((s, [id, qty]) => {
                 const p = PRODUCTS.find(x => x.id === parseInt(id));
@@ -1091,38 +1350,39 @@
         }
 
         // ══════════════════════════════════════════════════════════════════
-        //  CHECKOUT — Omise PromptPay
+        //  CHECKOUT — create_order ผ่าน API
         // ══════════════════════════════════════════════════════════════════
-        function cancelPayment() {
-            stopPolling();
-            closeModal("modalPayment");
-        }
-
         $("#checkoutBtn").click(function () {
             const total = getCartTotal();
-            if (!total) return;
+            console.log("💳 [checkout] total:", total, "| cart:", JSON.stringify(cart));
+            if (!total) { console.warn("💳 [checkout] ❌ total=0 หยุด"); return; }
 
             const items = Object.entries(cart).map(([id, qty]) => {
-                const p = PRODUCTS.find(x => x.id == id);
-                return { id: p.id, name: p.name, price: p.price, qty, unit: p.unit || "" };
+                const p = PRODUCTS.find(x => x.id === parseInt(id));
+                return { id: parseInt(id), name: p.name, price: p.price, qty, unit: p.unit || "" };
             });
+            console.log("💳 [checkout] items:", items);
 
-            // เตรียม modal (loading state)
+            // log start_checkout
+            logActivity("start_checkout", `${items.length} รายการ | ยอด ${total} บาท`);
+
+            // แสดง modal ก่อน แล้วค่อยเรียก API
+            $("#qrImg").attr("src", "");
             $("#payAmount").text(fmt(total));
             $("#payItemList").html(items.map(i => `
       <div class="flex justify-between">
         <span>${i.name} × ${i.qty}</span>
         <span class="font-bold">${fmt(i.price * i.qty)}</span>
       </div>`).join(""));
-            $("#qrLoading").removeClass("hidden");
-            $("#qrReady").addClass("hidden");
-            $("#payStatusBar").addClass("hidden").removeClass("bg-amber-50 bg-green-50 bg-red-50");
+            $("#confirmPayBtn")
+                .prop("disabled", true)
+                .html('<i class="fa-solid fa-spinner fa-spin text-xs"></i> กำลังสร้างออเดอร์...')
+                .css({ "background": "linear-gradient(135deg,#94A3B8,#64748B)", "box-shadow": "none" });
             closeModal("modalCart");
             openModal("modalPayment");
 
-            // เรียก API create_order → GAS สร้าง Omise charge
             $.ajax({
-                url: API_URL,
+                url: API_SHOP,
                 dataType: "jsonp",
                 data: {
                     action: "create_order",
@@ -1132,12 +1392,14 @@
                     total: total,
                 },
                 success(r) {
+                    console.log("💳 [create_order] response:", r);
                     if (r.status !== "success") {
+                        console.error("💳 [create_order] ❌ status:", r.status, "| msg:", r.message);
                         showNotification && showNotification(r.message || "เกิดข้อผิดพลาด", "error");
                         closeModal("modalPayment"); return;
                     }
-
                     const orderId = r.order_id;
+                    console.log("💳 [create_order] ✅ orderId:", orderId, "| qr_url:", r.qr_url ? r.qr_url.substring(0, 60) : "❌ ไม่มี QR");
 
                     // บันทึก log pending
                     logs.unshift({
@@ -1147,48 +1409,50 @@
                         studentId: studentData.student_id
                     });
                     saveLogs();
+                    logActivity("order_created", `${items.length} รายการ | ยอด ${total} บาท`, orderId);
 
-                    // แสดง QR จาก Omise
+                    // แสดง QR
+                    // แสดง QR จาก Stripe
                     if (r.qr_url) {
                         $("#qrImg").attr("src", r.qr_url);
                         $("#qrLoading").addClass("hidden");
                         $("#qrReady").removeClass("hidden");
                     }
-
-                    // แสดง status bar polling
-                    $("#payStatusBar")
-                        .removeClass("hidden bg-green-50 bg-red-50")
-                        .addClass("bg-amber-50 text-amber-700")
-                        .find("#payStatusTxt").text("รอการสแกน QR และชำระเงิน...");
-
+                    $("#confirmPayBtn")
+                        .prop("disabled", false)
+                        .html('<i class="fa-solid fa-clock-rotate-left text-xs"></i> รอผู้ดูแลยืนยัน...')
+                        .css({
+                            "background": "linear-gradient(135deg,#F59E0B,#D97706)",
+                            "box-shadow": "0 4px 12px rgba(245,158,11,.35)"
+                        });
+                    $("#confirmPayBtn").data("orderId", orderId);
                     startPolling(orderId);
                 },
-                error() {
+                error(xhr, status, err) {
+                    console.error("💳 [create_order] AJAX error — status:", status, "| err:", err);
                     showNotification && showNotification("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้", "error");
                     closeModal("modalPayment");
                 }
             });
         });
 
-        // ── Polling สถานะ (ถาม GAS → GAS ถาม Omise) ──────────────────
+        // ── Polling สถานะ ──────────────────────────────────────────────
         function startPolling(orderId) {
             stopPolling();
             let tries = 0;
+            console.log("⏳ [polling] เริ่ม poll orderId:", orderId);
             pollTimer = setInterval(() => {
-                if (++tries > 300) {  // หยุดหลัง 15 นาที (300 × 3s)
-                    stopPolling();
-                    showNotification && showNotification("QR หมดอายุ กรุณาสั่งซื้อใหม่", "error");
-                    closeModal("modalPayment");
-                    return;
-                }
+                if (++tries > 120) { stopPolling(); console.warn("⏳ [polling] หยุด — ครบ 6 นาที"); return; }
                 $.ajax({
-                    url: API_URL, dataType: "jsonp",
+                    url: API_SHOP, dataType: "jsonp",
                     data: { action: "check_payment", order_id: orderId },
                     success(r) {
+                        console.log(`⏳ [polling] try#${tries} →`, r.payment_status || r.status, r);
                         if (r.status !== "success") return;
                         if (r.payment_status === "paid") onPaymentPaid(orderId);
-                        else if (r.payment_status === "failed") onPaymentFailed(orderId);
-                    }
+                        else if (r.payment_status === "cancelled") onPaymentCancelled(orderId);
+                    },
+                    error(xhr, s, e) { console.warn(`⏳ [polling] try#${tries} error:`, s, e); }
                 });
             }, 3000);
         }
@@ -1199,29 +1463,38 @@
             const idx = logs.findIndex(l => l.orderId === orderId);
             if (idx >= 0) logs[idx].status = "paid";
             saveLogs();
-
-            // reload products (stock ถูกหักแล้วตอน create_order)
-            loadProducts(() => { cart = {}; refreshAll(); updateTodaySpend(); });
-
+            logActivity("payment_success", `ชำระสำเร็จ | ยอด ${logs[idx >= 0 ? idx : 0]?.total || ""} บาท`, orderId);
+            // reload products (สต็อกถูกหักแล้วใน GAS)
+            loadProducts(() => {
+                cart = {}; refreshAll(); updateTodaySpend();
+            });
             lastOrder = logs[idx >= 0 ? idx : 0];
             closeModal("modalPayment");
             generateSlip(lastOrder);
             openModal("modalSlip");
             showNotification && showNotification("ชำระเงินสำเร็จ! 🎉", "success");
         }
-        function onPaymentFailed(orderId) {
+        function onPaymentCancelled(orderId) {
             stopPolling();
             const idx = logs.findIndex(l => l.orderId === orderId);
             if (idx >= 0) logs[idx].status = "cancelled";
             saveLogs();
-            showNotification && showNotification("การชำระเงินล้มเหลว กรุณาลองใหม่", "error");
+            logActivity("payment_cancelled", "ออเดอร์ถูกยกเลิก / หมดเวลา", orderId);
+            showNotification && showNotification("ออเดอร์ถูกยกเลิก", "error");
             closeModal("modalPayment");
         }
+
+        $("#confirmPayBtn").click(function () {
+            const orderId = $(this).data("orderId");
+            if (!orderId || $(this).prop("disabled")) return;
+            showNotification && showNotification("กรุณารอผู้ดูแลร้านยืนยันการโอนเงิน", "info");
+        });
 
         // ══════════════════════════════════════════════════════════════════
         //  SLIP — Canvas
         // ══════════════════════════════════════════════════════════════════
         function generateSlip(order) {
+            logActivity("view_slip", `ดูใบเสร็จ | ยอด ${order?.total || ""} บาท`, order?.orderId || "");
             const canvas = document.getElementById("slipCanvas");
             const ctx = canvas.getContext("2d");
             const W = 380, H = Math.max(520, 320 + order.items.length * 24);
@@ -1291,7 +1564,7 @@
             ctx.fillText(fmt(order.total), W - 34, y + 26); y += 54;
 
             // payment
-            infoRow("วิธีชำระ", "PromptPay (Omise)");
+            infoRow("วิธีชำระ", "PromptPay");
             infoRow("Order ID", order.orderId || "—");
 
             // footer
@@ -1308,6 +1581,7 @@
             ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r); ctx.closePath();
         }
         function downloadSlip() {
+            logActivity("download_slip", `ดาวน์โหลดสลิป`, lastOrder?.orderId || "");
             const canvas = document.getElementById("slipCanvas");
             const a = document.createElement("a");
             a.download = `receipt-${lastOrder?.orderId || "slip"}.png`;
@@ -1381,6 +1655,18 @@
         });
 
         $("#logBtn").click(() => { renderLogs(); openModal("modalLogs"); });
+
+        // ── View mode toggle ───────────────────────────────────────────────
+        $("#viewGrid").click(function () {
+            viewMode = "grid";
+            $("#viewGrid").addClass("active"); $("#viewTable").removeClass("active");
+            renderGrid();
+        });
+        $("#viewTable").click(function () {
+            viewMode = "table";
+            $("#viewTable").addClass("active"); $("#viewGrid").removeClass("active");
+            renderGrid();
+        });
         $(".modal-overlay").click(function (e) { if (e.target === this) closeModal(this.id); });
         $(".modal-center").click(function (e) { if (e.target === this) closeModal(this.id); });
 
@@ -1388,15 +1674,23 @@
         //  INIT — ตรวจ session ก่อนทุกอย่าง
         // ══════════════════════════════════════════════════════════════════
         $(function () {
+            console.log("🚀 [init] DOM ready");
+            console.log("🚀 [init] LS_DATA:", typeof LS_DATA !== "undefined" ? LS_DATA : "❌ ไม่ถูกกำหนด");
+            console.log("🚀 [init] SESSION_TTL:", typeof SESSION_TTL !== "undefined" ? SESSION_TTL : "❌ ไม่ถูกกำหนด");
+            console.log("🚀 [init] API_SHOP:", typeof API_SHOP !== "undefined" ? API_SHOP.substring(0, 60) + "..." : "❌ ไม่ถูกกำหนด");
+            console.log("🚀 [init] calcGrade:", typeof calcGrade !== "undefined" ? "✅" : "❌ ไม่ถูกกำหนด");
+
             AOS.init({ duration: 500, easing: "ease-out-cubic", once: true });
 
             // ── 1. Guard session — ถ้าไม่ login → redirect ──────────────
             const session = loadSession();
             if (!session) {
+                console.warn("🚀 [init] ❌ ไม่มี session → redirect to /login.html");
                 window.location.replace("/login.html");
                 return;
             }
             studentData = session.data;
+            console.log("🚀 [init] ✅ studentData set:", studentData.student_id, studentData.first_name);
 
             // ── 2. Render profile จาก session จริง ──────────────────────
             renderProfile();
@@ -1408,6 +1702,7 @@
             updateLogBadge();
             updateStatOrders();
             loadProducts();
+            logActivity("view_shop", "เปิดหน้าสหกรณ์");
         });
     </script>
 </body>

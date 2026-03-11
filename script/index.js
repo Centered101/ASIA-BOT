@@ -273,7 +273,7 @@ $(function () {
                class="btn-text">
                Centered101
             </a>
-            <span>• ASIA-LB — สงวนลิขสิทธิ์ทุกประการ</span>
+            <span>• ASIA-BOT — สงวนลิขสิทธิ์ทุกประการ</span>
         </p>
     `;
 

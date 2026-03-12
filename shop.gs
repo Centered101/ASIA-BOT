@@ -12,8 +12,7 @@
 
 // ── 🔑 Keys & IDs — อัปเดตก่อน Deploy ───────────────────────────────
 const STRIPE_SECRET_KEY =
-  "sk_test_51T0GcyPvb75VFaaMhmVYKOuiW4ZgDAd1ub6EUBUGDvQO1cYbE0SP0etnApNizjEWLIfFYNH8QKal2m07TqDNLuzj00BCct4hXP"; // Stripe Dashboard → Developers → API keys
-//                        "sk_live_xxxxxxxxxxxx"    ← สลับตอน go-live
+  ""; // Stripe Dashboard → Developers → API keys
 
 // Spreadsheet ID ของ Shop (ดูจาก URL: /spreadsheets/d/{ID}/edit)
 const SHOP_SS_ID = ""; // ← ใส่ ID ของ Spreadsheet Shop ใหม่

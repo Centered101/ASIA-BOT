@@ -280,6 +280,30 @@
         }
 
         /* ─── QR ─── */
+        /* ── Timer & Pending ─────────────────────── */
+        @keyframes timerUrgent {
+
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1)
+            }
+
+            50% {
+                opacity: .7;
+                transform: scale(1.05)
+            }
+        }
+
+        #payTimerBadge.urgent {
+            background: linear-gradient(135deg, #EF4444, #DC2626) !important;
+            animation: timerUrgent 1s infinite;
+        }
+
+        #payTimerBar.urgent {
+            background: linear-gradient(90deg, #EF4444, #F87171) !important;
+        }
+
         .qr-ring {
             border: 4px solid var(--primary-light);
             border-radius: 20px;
@@ -529,14 +553,24 @@
 </head>
 
 <body draggable="false" oncontextmenu="return false">
+
+    <!-- ⚠️ Pending Order Banner -->
+    <div id="pendingBanner"
+        style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;background:linear-gradient(135deg,#F59E0B,#D97706);padding:10px 16px;color:#fff;font-weight:700;font-size:.8rem;box-shadow:0 4px 12px rgba(245,158,11,.4);display:flex;align-items:center;gap:8px;">
+        <i class="fa-solid fa-clock"></i>
+        <span>มีออเดอร์ค้างชำระ — กรุณาชำระภายใน <span id="pendingBannerTimer" style="font-size:1rem;"></span></span>
+        <button onclick="resumePendingOrder()"
+            style="margin-left:auto;background:rgba(255,255,255,.25);border:none;border-radius:8px;padding:4px 12px;color:#fff;cursor:pointer;font-weight:700;font-size:.8rem;">
+            กลับไปชำระ
+        </button>
+    </div>
     <!-- Preloader -->
     <div id="preloader"
         class="bg-stripes-gray visible touch-none min-h-screen fixed inset-0 flex items-center justify-center text-center bg-gray-50 z-50">
         <span class="spinner animate-spin size-80 fixed border-8" style="animation-duration: 1s;"></span>
         <div
             class="size-80 flex flex-col items-center justify-center gap-2 bg-[color:var(--white-smoker)] rounded-full shadow">
-            <img src="/favicon.ico" alt="logo"
-                class="size-16 fa-bounce drop-shadow" draggable="false">
+            <img src="/favicon.ico" alt="logo" class="size-16 fa-bounce drop-shadow" draggable="false">
             <h2 class="text-xl sm:text-2xl">กำลังโหลด</h2>
             <p class="text-sm sm:text-base text-gray-600">
                 การผจญภัยของคุณกำลังจะเริ่มต้น
@@ -562,8 +596,7 @@
                     class="ripple-effect flex flex items-center gap-2 rounded">
                     <div
                         class="size-10 sm:size-12 flex items-center justify-center bg-primary rounded-md text-white font-bold">
-                        <img class="size-8" src="/favicon.ico"
-                         alt="logo">
+                        <img class="size-8" src="/favicon.ico" alt="logo">
                     </div>
                     <div class="flex flex-col">
                         <span class="font-bold fs-base pr-2">ASIA-BOT</span>
@@ -747,6 +780,16 @@
                 </div>
             </div>
         </div>
+        <div id="pendingBanner" class="!hidden w-full fixed bottom-0 z-20"
+            style="background:linear-gradient(135deg,#F59E0B,#D97706);padding:10px 16px;color:#fff;font-weight:700;font-size:.8rem;box-shadow:0 4px 12px rgba(245,158,11,.4);display:flex;align-items:center;gap:8px;">
+            <i class="fa-solid fa-clock"></i>
+            <span>มีออเดอร์ค้างชำระ — กรุณาชำระภายใน <span id="pendingBannerTimer"
+                    style="font-size:1rem;"></span></span>
+            <button onclick="resumePendingOrder()"
+                style="margin-left:auto;background:rgba(255,255,255,.25);border:none;border-radius:8px;padding:4px 12px;color:#fff;cursor:pointer;font-weight:700;font-size:.8rem;">
+                กลับไปชำระ
+            </button>
+        </div>
     </main>
 
     <!-- ══════════════════ MODAL: CART ══════════════════ -->
@@ -800,54 +843,73 @@
 
     <!-- ══════════════════ MODAL: PAYMENT ══════════════════ -->
     <div class="modal-center" id="modalPayment">
-        <div class="modal-box">
-            <div class="flex items-center justify-between mb-5">
+        <div class="modal-box" style="max-width:360px;">
+            <!-- Header -->
+            <div class="flex items-center justify-between mb-4">
                 <div class="flex items-center gap-2">
-                    <div class="w-9 h-9 rounded-xl bg-green-50 flex items-center justify-center text-green-500">
+                    <div class="w-9 h-9 rounded-xl bg-sky-50 flex items-center justify-center text-sky-500">
                         <i class="fa-solid fa-qrcode"></i>
                     </div>
                     <div>
                         <div class="font-bold text-slate-800">ชำระเงิน PromptPay</div>
-                        <div class="text-xs text-slate-400">สแกน QR เพื่อโอนเงิน</div>
+                        <div class="text-xs text-slate-400">สแกน QR — ระบบยืนยันอัตโนมัติ</div>
                     </div>
                 </div>
-                <button onclick="closeModal('modalPayment')" class="text-slate-400 hover:text-slate-600 p-1">
-                    <i class="fa-solid fa-xmark text-lg"></i>
-                </button>
+                <!-- Countdown badge -->
+                <div id="payTimerBadge"
+                    style="background:linear-gradient(135deg,#0EA5E9,#0284C7);border-radius:12px;padding:4px 10px;min-width:64px;text-align:center;">
+                    <div class="text-white font-bold text-sm" id="payTimerText">30:00</div>
+                    <div class="text-blue-100 text-xs" style="font-size:9px;">หมดเวลา</div>
+                </div>
+            </div>
+
+            <!-- Countdown progress bar -->
+            <div style="height:4px;background:#E0F2FE;border-radius:4px;margin-bottom:14px;overflow:hidden;">
+                <div id="payTimerBar"
+                    style="height:100%;width:100%;background:linear-gradient(90deg,#0EA5E9,#38BDF8);border-radius:4px;transition:width .5s linear;">
+                </div>
             </div>
 
             <!-- QR Code -->
-            <div class="text-center mb-4">
-                <div class="qr-ring inline-block mb-3">
-                    <img id="qrImg" src="" alt="QR Code" class="w-48 h-48 rounded-lg object-contain">
+            <div class="text-center mb-3">
+                <div id="qrLoading" class="w-48 h-48 mx-auto rounded-2xl bg-slate-100 flex items-center justify-center">
+                    <i class="fa-solid fa-spinner fa-spin text-3xl text-slate-300"></i>
                 </div>
-                <div class="text-xs text-slate-400 mb-1">โอนเงินมายัง</div>
-                <div class="font-bold text-slate-700 text-sm" id="promptPayNum">0XX-XXX-XXXX</div>
-                <div class="text-xs text-slate-400">ASIA-BOT สหกรณ์โรงเรียน</div>
+                <div id="qrReady" class="hidden">
+                    <div class="qr-ring inline-block mb-2">
+                        <img id="qrImg" src="" alt="QR Code" class="w-48 h-48 rounded-lg object-contain">
+                    </div>
+                </div>
+                <div class="text-xs text-slate-400 mb-0.5 mt-1">โอนเงินมายัง</div>
+                <div class="text-xs text-slate-400">สหกรณ์โรงเรียน ASIA-LB</div>
             </div>
 
-            <!-- Amount display -->
-            <div class="bg-sky-50 rounded-2xl p-3 mb-4 flex items-center justify-between">
+            <!-- Amount -->
+            <div class="rounded-2xl p-3 mb-3 flex items-center justify-between"
+                style="background:linear-gradient(135deg,#EFF6FF,#DBEAFE);">
                 <div class="text-sm text-slate-600 font-medium">ยอดที่ต้องชำระ</div>
                 <div class="text-xl font-bold text-sky-500" id="payAmount">฿0</div>
             </div>
 
-            <!-- Items summary -->
-            <div class="bg-slate-50 rounded-2xl p-3 mb-4 max-h-28 overflow-y-auto">
+            <!-- Items -->
+            <div class="bg-slate-50 rounded-2xl p-3 mb-3 max-h-24 overflow-y-auto">
                 <div id="payItemList" class="space-y-1 text-xs text-slate-600"></div>
             </div>
 
-            <!-- Action buttons -->
-            <div class="grid grid-cols-2 gap-2">
-                <button onclick="closeModal('modalPayment')"
-                    class="py-2.5 rounded-xl border border-slate-200 text-slate-500 text-sm font-medium hover:bg-slate-50 transition">
-                    ยกเลิก
-                </button>
-                <button id="confirmPayBtn"
-                    class="py-2.5 rounded-xl text-white text-sm font-bold flex items-center justify-center gap-1.5 transition"
-                    style="background:linear-gradient(135deg,#22c55e,#16a34a);box-shadow:0 4px 12px rgba(34,197,94,.35);">
-                    <i class="fa-solid fa-check"></i> ยืนยันโอนแล้ว
-                </button>
+            <!-- Status -->
+            <div id="payStatusRow" class="flex items-center gap-2 rounded-xl px-3 py-2 mb-3"
+                style="background:#F0FDF4;">
+                <i id="payStatusIcon" class="fa-solid fa-circle-notch fa-spin text-green-400 text-xs"></i>
+                <span id="payStatusText" class="text-xs text-green-600 font-medium">กำลังรอการชำระเงิน...</span>
+            </div>
+
+            <!-- Cancel only -->
+            <button id="cancelPayBtn"
+                class="w-full py-2.5 rounded-xl border border-slate-200 text-slate-500 text-sm font-medium hover:bg-slate-50 transition">
+                <i class="fa-solid fa-xmark text-xs"></i> ยกเลิกออเดอร์
+            </button>
+            <div class="text-center text-xs text-slate-400 mt-2">
+                ระบบตรวจสอบอัตโนมัติทุก 3 วินาที — ไม่ต้องกดปุ่มใด
             </div>
         </div>
     </div>
@@ -974,6 +1036,10 @@
         let lastOrder = null;
         let studentData = null;
         let pollTimer = null;
+        let payCountdown = null;   // countdown interval
+        let payExpireAt = null;   // expire timestamp (ms)
+        let pendingOrder = null;   // pending order ที่ค้างอยู่
+        const PAY_LIMIT = 30 * 60 * 1000; // 30 นาที
 
         // โหลด logs จาก localStorage (ไม่ใช่สินค้า)
         try { logs = JSON.parse(localStorage.getItem("coopLogs") || "[]"); } catch (_) { logs = []; }
@@ -1079,6 +1145,7 @@
                         showProductsError(r.message || "ไม่พบสินค้า");
                     }
                     if (callback) callback();
+                    else logActivity("view_shop", "เปิดหน้าสหกรณ์");
                 },
                 error(xhr, status, err) {
                     console.error("🛒 [loadProducts] AJAX error — status:", status, "| err:", err, "| xhr:", xhr);
@@ -1352,21 +1419,108 @@
         // ══════════════════════════════════════════════════════════════════
         //  CHECKOUT — create_order ผ่าน API
         // ══════════════════════════════════════════════════════════════════
+        // ══════════════════════════════════════════════════════════════════
+        //  PENDING ORDER — localStorage block + resume
+        // ══════════════════════════════════════════════════════════════════
+
+        const LS_PENDING = "coopPendingOrder";
+
+        function savePendingOrder(obj) {
+            try { localStorage.setItem(LS_PENDING, JSON.stringify(obj)); } catch (_) { }
+        }
+        function loadPendingOrder() {
+            try { return JSON.parse(localStorage.getItem(LS_PENDING) || "null"); } catch (_) { return null; }
+        }
+        function clearPendingOrder() {
+            try { localStorage.removeItem(LS_PENDING); } catch (_) { }
+            pendingOrder = null;
+            $("#pendingBanner").hide();
+            stopCountdown();
+        }
+
+        // แสดง banner และ countdown ถ้ามี pending order ค้างอยู่
+        function checkPendingOnLoad() {
+            const po = loadPendingOrder();
+            if (!po) return;
+            const remaining = po.expireAt - Date.now();
+            if (remaining <= 0) {
+                clearPendingOrder();
+                return;
+            }
+            pendingOrder = po;
+            showPendingBanner(remaining);
+            // resume countdown (banner timer) + polling
+            payExpireAt = po.expireAt; // sync payExpireAt ให้ตรงกับ pendingOrder
+            startPolling(po.orderId, remaining);
+            // เริ่ม countdown เฉพาะ banner (ไม่เปิด modal)
+            payCountdown = setInterval(() => {
+                const rem = payExpireAt - Date.now();
+                if (rem <= 0) { stopCountdown(); clearPendingOrder(); return; }
+                updateBannerTimer(rem);
+            }, 1000);
+        }
+
+        function showPendingBanner(remainingMs) {
+            $("#pendingBanner").css("display", "flex");
+            updateBannerTimer(remainingMs);
+        }
+
+        function updateBannerTimer(ms) {
+            const m = Math.floor(ms / 60000);
+            const s = Math.floor((ms % 60000) / 1000);
+            $("#pendingBannerTimer").text(`${m}:${s.toString().padStart(2, "0")}`);
+        }
+
+        function resumePendingOrder() {
+            if (!pendingOrder) return;
+            const remaining = pendingOrder.expireAt - Date.now();
+            if (remaining <= 0) { clearPendingOrder(); return; }
+            // เปิด modal กลับขึ้นมา
+            $("#payAmount").text(fmt(pendingOrder.total));
+            $("#payItemList").html((pendingOrder.items || []).map(i => `
+      <div class="flex justify-between">
+        <span>${i.name} × ${i.qty}</span>
+        <span class="font-bold">${fmt(i.price * i.qty)}</span>
+      </div>`).join(""));
+            if (pendingOrder.qr_url) {
+                $("#qrImg").attr("src", pendingOrder.qr_url);
+                $("#qrLoading").addClass("hidden"); $("#qrReady").removeClass("hidden");
+            }
+            startCountdown(remaining, pendingOrder.orderId);
+            openModal("modalPayment");
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        //  CHECKOUT
+        // ══════════════════════════════════════════════════════════════════
+
         $("#checkoutBtn").click(function () {
+            // ── Block ถ้ายังมี pending order ──────────────────────────
+            const po = loadPendingOrder();
+            if (po && po.expireAt > Date.now()) {
+                showNotification && showNotification(
+                    "คุณมีออเดอร์ค้างชำระ กรุณาชำระก่อน", "error");
+                resumePendingOrder();
+                return;
+            } else if (po) {
+                // expired pending order ที่ค้างใน localStorage — ลบทิ้ง
+                clearPendingOrder();
+            }
+
             const total = getCartTotal();
-            console.log("💳 [checkout] total:", total, "| cart:", JSON.stringify(cart));
-            if (!total) { console.warn("💳 [checkout] ❌ total=0 หยุด"); return; }
+            if (!total) return;
 
             const items = Object.entries(cart).map(([id, qty]) => {
                 const p = PRODUCTS.find(x => x.id === parseInt(id));
                 return { id: parseInt(id), name: p.name, price: p.price, qty, unit: p.unit || "" };
             });
-            console.log("💳 [checkout] items:", items);
 
-            // log start_checkout
             logActivity("start_checkout", `${items.length} รายการ | ยอด ${total} บาท`);
 
-            // แสดง modal ก่อน แล้วค่อยเรียก API
+            // Reset modal state
+            stopCountdown(); // หยุด countdown เก่าถ้ามี
+            payExpireAt = null;
+            $("#qrLoading").removeClass("hidden"); $("#qrReady").addClass("hidden");
             $("#qrImg").attr("src", "");
             $("#payAmount").text(fmt(total));
             $("#payItemList").html(items.map(i => `
@@ -1374,34 +1528,30 @@
         <span>${i.name} × ${i.qty}</span>
         <span class="font-bold">${fmt(i.price * i.qty)}</span>
       </div>`).join(""));
-            $("#confirmPayBtn")
-                .prop("disabled", true)
-                .html('<i class="fa-solid fa-spinner fa-spin text-xs"></i> กำลังสร้างออเดอร์...')
-                .css({ "background": "linear-gradient(135deg,#94A3B8,#64748B)", "box-shadow": "none" });
+            $("#payTimerText").text("30:00");
+            $("#payTimerBar").css("width", "100%").removeClass("urgent");
+            $("#payTimerBadge").removeClass("urgent");
+            setPayStatus("loading");
             closeModal("modalCart");
             openModal("modalPayment");
 
             $.ajax({
-                url: API_SHOP,
-                dataType: "jsonp",
+                url: API_SHOP, dataType: "jsonp",
                 data: {
                     action: "create_order",
                     student_id: studentData.student_id,
                     student_name: `${studentData.first_name} ${studentData.last_name}`,
                     items: JSON.stringify(items),
-                    total: total,
+                    total,
                 },
                 success(r) {
-                    console.log("💳 [create_order] response:", r);
                     if (r.status !== "success") {
-                        console.error("💳 [create_order] ❌ status:", r.status, "| msg:", r.message);
                         showNotification && showNotification(r.message || "เกิดข้อผิดพลาด", "error");
                         closeModal("modalPayment"); return;
                     }
                     const orderId = r.order_id;
-                    console.log("💳 [create_order] ✅ orderId:", orderId, "| qr_url:", r.qr_url ? r.qr_url.substring(0, 60) : "❌ ไม่มี QR");
 
-                    // บันทึก log pending
+                    // บันทึก logs
                     logs.unshift({
                         orderId, ts: new Date().toISOString(), status: "pending",
                         items, total,
@@ -1411,83 +1561,182 @@
                     saveLogs();
                     logActivity("order_created", `${items.length} รายการ | ยอด ${total} บาท`, orderId);
 
+                    // บันทึก pending order ลง localStorage (เพื่อ block)
+                    const expireAt = Date.now() + PAY_LIMIT;
+                    pendingOrder = { orderId, expireAt, total, items, qr_url: r.qr_url || "" };
+                    savePendingOrder(pendingOrder);
+
                     // แสดง QR
-                    // แสดง QR จาก Stripe
                     if (r.qr_url) {
                         $("#qrImg").attr("src", r.qr_url);
-                        $("#qrLoading").addClass("hidden");
-                        $("#qrReady").removeClass("hidden");
+                        $("#qrLoading").addClass("hidden"); $("#qrReady").removeClass("hidden");
                     }
-                    $("#confirmPayBtn")
-                        .prop("disabled", false)
-                        .html('<i class="fa-solid fa-clock-rotate-left text-xs"></i> รอผู้ดูแลยืนยัน...')
-                        .css({
-                            "background": "linear-gradient(135deg,#F59E0B,#D97706)",
-                            "box-shadow": "0 4px 12px rgba(245,158,11,.35)"
-                        });
-                    $("#confirmPayBtn").data("orderId", orderId);
-                    startPolling(orderId);
+                    setPayStatus("waiting");
+
+                    // เริ่ม countdown + polling
+                    startCountdown(PAY_LIMIT, orderId);
+                    startPolling(orderId, PAY_LIMIT);
                 },
-                error(xhr, status, err) {
-                    console.error("💳 [create_order] AJAX error — status:", status, "| err:", err);
+                error() {
                     showNotification && showNotification("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้", "error");
                     closeModal("modalPayment");
                 }
             });
         });
 
-        // ── Polling สถานะ ──────────────────────────────────────────────
-        function startPolling(orderId) {
+        // ══════════════════════════════════════════════════════════════════
+        //  COUNTDOWN TIMER (30 นาที)
+        // ══════════════════════════════════════════════════════════════════
+
+        function startCountdown(durationMs, orderId) {
+            // Guard: ถ้า durationMs น้อยกว่า 5 วินาที ถือว่าหมดเวลาแล้ว
+            if (!durationMs || durationMs < 5000) {
+                console.warn("⏱ [countdown] durationMs:", durationMs, "— ข้าม countdown");
+                return;
+            }
+            stopCountdown();
+            payExpireAt = Date.now() + durationMs;
+            const TOTAL = PAY_LIMIT; // เสมอ 30 นาที เพื่อให้ bar % ถูกต้อง
+
+            // แสดงค่าทันที (ไม่รอ interval tick แรก)
+            function renderTick() {
+                const remaining = payExpireAt - Date.now();
+                if (remaining <= 0) {
+                    stopCountdown();
+                    onPaymentExpired(orderId);
+                    return;
+                }
+                const m = Math.floor(remaining / 60000);
+                const s = Math.floor((remaining % 60000) / 1000);
+                $("#payTimerText").text(`${m}:${s.toString().padStart(2, "0")}`);
+                const pct = Math.max(0, (remaining / TOTAL) * 100);
+                $("#payTimerBar").css("width", pct + "%");
+                if (remaining < 5 * 60 * 1000) {
+                    $("#payTimerBadge").addClass("urgent");
+                    $("#payTimerBar").addClass("urgent");
+                } else {
+                    $("#payTimerBadge").removeClass("urgent");
+                    $("#payTimerBar").removeClass("urgent");
+                }
+                updateBannerTimer(remaining);
+            }
+
+            renderTick(); // แสดงค่าทันที
+            payCountdown = setInterval(renderTick, 1000); // ทุก 1 วินาที
+        }
+
+        function stopCountdown() {
+            if (payCountdown) { clearInterval(payCountdown); payCountdown = null; }
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        //  STATUS HELPER
+        // ══════════════════════════════════════════════════════════════════
+
+        function setPayStatus(state) {
+            const map = {
+                loading: { icon: "fa-circle-notch fa-spin", color: "text-slate-400", bg: "#F8FAFC", text: "กำลังสร้างออเดอร์..." },
+                waiting: { icon: "fa-circle-notch fa-spin", color: "text-green-500", bg: "#F0FDF4", text: "กำลังรอการชำระเงิน — สแกน QR แล้วโอน" },
+                checking: { icon: "fa-magnifying-glass fa-pulse", color: "text-sky-500", bg: "#EFF6FF", text: "ตรวจสอบการโอน..." },
+                expired: { icon: "fa-clock", color: "text-red-500", bg: "#FEF2F2", text: "หมดเวลาชำระเงิน — ออเดอร์ถูกยกเลิก" },
+            };
+            const d = map[state] || map.waiting;
+            $("#payStatusRow").css("background", d.bg);
+            $("#payStatusIcon").attr("class", `fa-solid ${d.icon} ${d.color} text-xs`);
+            $("#payStatusText").text(d.text);
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        //  POLLING
+        // ══════════════════════════════════════════════════════════════════
+
+        function startPolling(orderId, limitMs) {
             stopPolling();
+            const maxTries = Math.ceil((limitMs || PAY_LIMIT) / 3000) + 10;
             let tries = 0;
-            console.log("⏳ [polling] เริ่ม poll orderId:", orderId);
             pollTimer = setInterval(() => {
-                if (++tries > 120) { stopPolling(); console.warn("⏳ [polling] หยุด — ครบ 6 นาที"); return; }
+                if (++tries > maxTries || (payExpireAt && Date.now() > payExpireAt)) {
+                    stopPolling(); return;
+                }
                 $.ajax({
                     url: API_SHOP, dataType: "jsonp",
                     data: { action: "check_payment", order_id: orderId },
                     success(r) {
-                        console.log(`⏳ [polling] try#${tries} →`, r.payment_status || r.status, r);
                         if (r.status !== "success") return;
                         if (r.payment_status === "paid") onPaymentPaid(orderId);
-                        else if (r.payment_status === "cancelled") onPaymentCancelled(orderId);
-                    },
-                    error(xhr, s, e) { console.warn(`⏳ [polling] try#${tries} error:`, s, e); }
+                        else if (r.payment_status === "cancelled" ||
+                            r.payment_status === "failed") onPaymentCancelled(orderId);
+                    }
                 });
             }, 3000);
         }
         function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
 
+        // ══════════════════════════════════════════════════════════════════
+        //  PAYMENT OUTCOMES
+        // ══════════════════════════════════════════════════════════════════
+
         function onPaymentPaid(orderId) {
-            stopPolling();
+            stopPolling(); stopCountdown();
+            clearPendingOrder();
             const idx = logs.findIndex(l => l.orderId === orderId);
             if (idx >= 0) logs[idx].status = "paid";
             saveLogs();
-            logActivity("payment_success", `ชำระสำเร็จ | ยอด ${logs[idx >= 0 ? idx : 0]?.total || ""} บาท`, orderId);
-            // reload products (สต็อกถูกหักแล้วใน GAS)
-            loadProducts(() => {
-                cart = {}; refreshAll(); updateTodaySpend();
-            });
+            logActivity("payment_success", `ชำระสำเร็จ`, orderId);
+            loadProducts(() => { cart = {}; refreshAll(); updateTodaySpend && updateTodaySpend(); });
             lastOrder = logs[idx >= 0 ? idx : 0];
             closeModal("modalPayment");
             generateSlip(lastOrder);
             openModal("modalSlip");
             showNotification && showNotification("ชำระเงินสำเร็จ! 🎉", "success");
         }
+
         function onPaymentCancelled(orderId) {
-            stopPolling();
+            stopPolling(); stopCountdown();
+            clearPendingOrder();
             const idx = logs.findIndex(l => l.orderId === orderId);
             if (idx >= 0) logs[idx].status = "cancelled";
             saveLogs();
-            logActivity("payment_cancelled", "ออเดอร์ถูกยกเลิก / หมดเวลา", orderId);
+            logActivity("payment_cancelled", "ออเดอร์ถูกยกเลิก", orderId);
             showNotification && showNotification("ออเดอร์ถูกยกเลิก", "error");
             closeModal("modalPayment");
         }
 
-        $("#confirmPayBtn").click(function () {
-            const orderId = $(this).data("orderId");
-            if (!orderId || $(this).prop("disabled")) return;
-            showNotification && showNotification("กรุณารอผู้ดูแลร้านยืนยันการโอนเงิน", "info");
+        function onPaymentExpired(orderId) {
+            stopPolling(); stopCountdown();
+            setPayStatus("expired");
+            $("#payTimerText").text("0:00");
+            $("#payTimerBar").css("width", "0%");
+            const idx = logs.findIndex(l => l.orderId === orderId);
+            if (idx >= 0) logs[idx].status = "expired";
+            saveLogs();
+            logActivity("payment_expired", "หมดเวลาชำระ 30 นาที", orderId);
+            // แจ้ง GAS ยกเลิก (Stripe จะยกเลิก PI เองหลังหมดเวลา)
+            $.ajax({
+                url: API_SHOP, dataType: "jsonp",
+                data: { action: "check_payment", order_id: orderId }
+            });
+            // บันทึกว่าบัญชีนี้หมดเวลา — block checkout ต่อไป 30 นาที
+            try { localStorage.setItem("coopExpired_" + (studentData?.student_id || "x"), String(Date.now())); } catch (_) { }
+            showNotification && showNotification("หมดเวลาชำระเงิน — ออเดอร์ถูกยกเลิก", "error");
+            setTimeout(() => { closeModal("modalPayment"); clearPendingOrder(); }, 3500);
+        }
+
+        // ── ปุ่มยกเลิกออเดอร์ ────────────────────────────────────────────
+        $("#cancelPayBtn").click(function () {
+            const po = pendingOrder || loadPendingOrder();
+            if (!po) { closeModal("modalPayment"); return; }
+            if (!confirm("ยืนยันยกเลิกออเดอร์? สต็อกจะถูกคืน")) return;
+            stopPolling(); stopCountdown();
+            // แจ้ง GAS
+            $.ajax({
+                url: API_SHOP, dataType: "jsonp",
+                data: {
+                    action: "cancel_order", order_id: po.orderId,
+                    student_id: studentData?.student_id || ""
+                }
+            });
+            onPaymentCancelled(po.orderId);
         });
 
         // ══════════════════════════════════════════════════════════════════
@@ -1702,7 +1951,8 @@
             updateLogBadge();
             updateStatOrders();
             loadProducts();
-            logActivity("view_shop", "เปิดหน้าสหกรณ์");
+            // ── ตรวจ pending order ────────────────────────────────────
+            setTimeout(checkPendingOnLoad, 800);
         });
     </script>
 </body>

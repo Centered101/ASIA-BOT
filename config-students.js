@@ -3,7 +3,7 @@ const API_URL = "https://script.google.com/macros/s/AKfycbycQG1QSp8be8zxgdZBn_11
 const LS_DATA = "asia_lb_session";
 const LS_TIME = "asia_lb_session_time";
 const SESSION_TTL = 8 * 60 * 60 * 1000;
-const API_SHOP = "https://script.google.com/macros/s/AKfycbyf40RXaViqRWv4pQX53VEhBlqOxAI9HH7xJEdlOH7dlKkgmtrKLERVJ-atfZqK0SfT/exec";
+const API_SHOP = "https://script.google.com/macros/s/AKfycbwvxdCLL1RXjeMGxckdtBGZEIQHPwLAYftOQ6v2UCATe4Hg4JYff70VPLfjATmWfYGc/exec";
 
 // ══════════════════════════════════════════════
 //  คำนวณระดับชั้น

@@ -858,7 +858,7 @@
                 <!-- Countdown badge -->
                 <div id="payTimerBadge"
                     style="background:linear-gradient(135deg,#0EA5E9,#0284C7);border-radius:12px;padding:4px 10px;min-width:64px;text-align:center;">
-                    <div class="text-white font-bold text-sm" id="payTimerText">30:00</div>
+                    <div class="text-white font-bold text-sm" id="payTimerText">15:00</div>
                     <div class="text-blue-100 text-xs" style="font-size:9px;">หมดเวลา</div>
                 </div>
             </div>
@@ -1039,39 +1039,19 @@
         let payCountdown = null;   // countdown interval
         let payExpireAt = null;   // expire timestamp (ms)
         let pendingOrder = null;   // pending order ที่ค้างอยู่
-        const PAY_LIMIT = 30 * 60 * 1000; // 30 นาที
+        const PAY_LIMIT = 15 * 60 * 1000; // 15 นาที
 
-        // โหลด logs จาก localStorage (ไม่ใช่สินค้า)
+        // ── ORDER LOGS เฉพาะ status ออเดอร์ ──────────────────────────
         try { logs = JSON.parse(localStorage.getItem("coopLogs") || "[]"); } catch (_) { logs = []; }
         function saveLogs() {
-            try { localStorage.setItem("coopLogs", JSON.stringify(logs.slice(0, 100))); } catch (_) { }
+            try { localStorage.setItem("coopLogs", JSON.stringify(logs.slice(0, 50))); } catch (_) { }
             updateLogBadge(); updateStatOrders();
         }
+        function logActivity() {} // stub — ไม่ส่ง activity ไป GAS
+
 
         // ── VIEW MODE ──────────────────────────────────────────────────────
         let viewMode = "grid"; // "grid" | "table"
-
-        // ── ACTIVITY LOGGER — fire-and-forget ไป GAS ──────────────────────
-        function logActivity(event, detail, orderId) {
-            console.log(`📋 [logActivity] event="${event}" | detail="${detail}" | orderId="${orderId || ""}"`);
-            if (typeof API_SHOP === "undefined") { console.warn("📋 [logActivity] ⚠️ API_SHOP ไม่ถูกกำหนด — ข้าม"); return; }
-            if (!studentData) { console.warn("📋 [logActivity] ⚠️ studentData ว่าง — ข้าม"); return; }
-            try {
-                $.ajax({
-                    url: API_SHOP, dataType: "jsonp",
-                    data: {
-                        action: "log_activity",
-                        student_id: studentData.student_id || "",
-                        student_name: `${studentData.first_name || ""} ${studentData.last_name || ""}`.trim(),
-                        event: event,
-                        detail: (detail || "").substring(0, 300),
-                        order_id: orderId || "",
-                    },
-                    success(r) { console.log("📋 [logActivity] GAS response:", r); },
-                    error(xhr, status, err) { console.warn("📋 [logActivity] AJAX error:", status, err); }
-                });
-            } catch (err) { console.error("📋 [logActivity] EXCEPTION:", err); }
-        }
 
         // ── EMOJI MAP (เพิ่มเติมสวยงาม เผื่อ images ใน sheet ว่าง) ─────────
         const EMOJI_MAP = [
@@ -1145,7 +1125,6 @@
                         showProductsError(r.message || "ไม่พบสินค้า");
                     }
                     if (callback) callback();
-                    else logActivity("view_shop", "เปิดหน้าสหกรณ์");
                 },
                 error(xhr, status, err) {
                     console.error("🛒 [loadProducts] AJAX error — status:", status, "| err:", err, "| xhr:", xhr);
@@ -1343,7 +1322,6 @@
             cart[id] = (cart[id] || 0) + 1;
             refreshAll();
             showNotification && showNotification(`เพิ่ม ${p.name} ลงตะกร้า`, "success");
-            logActivity("add_to_cart", `${p.name} (id:${id}) x1 | ราคา ${p.price}`);
             // float anim
             const off = $(this)[0].getBoundingClientRect();
             const $f = $(`<span style="position:fixed;left:${off.left + 4}px;top:${off.top}px;font-size:18px;pointer-events:none;z-index:9999;color:#4DB8F5">✚</span>`);
@@ -1360,7 +1338,6 @@
             const p = PRODUCTS.find(x => x.id === id);
             if ((cart[id] || 0) <= 1) {
                 delete cart[id];
-                if (p) logActivity("remove_from_cart", `${p.name} (id:${id}) ลบออก`);
             } else {
                 cart[id]--;
             }
@@ -1372,7 +1349,6 @@
                 const p = PRODUCTS.find(x => x.id === parseInt(id));
                 return p ? `${p.name}x${qty}` : id;
             }).join(", ");
-            logActivity("clear_cart", `ล้างตะกร้า: ${summary}`);
             cart = {}; refreshAll(); closeModal("modalCart");
         }
         function getCartTotal() {
@@ -1515,7 +1491,6 @@
                 return { id: parseInt(id), name: p.name, price: p.price, qty, unit: p.unit || "" };
             });
 
-            logActivity("start_checkout", `${items.length} รายการ | ยอด ${total} บาท`);
 
             // Reset modal state
             stopCountdown(); // หยุด countdown เก่าถ้ามี
@@ -1528,7 +1503,7 @@
         <span>${i.name} × ${i.qty}</span>
         <span class="font-bold">${fmt(i.price * i.qty)}</span>
       </div>`).join(""));
-            $("#payTimerText").text("30:00");
+            $("#payTimerText").text("15:00");
             $("#payTimerBar").css("width", "100%").removeClass("urgent");
             $("#payTimerBadge").removeClass("urgent");
             setPayStatus("loading");
@@ -1559,7 +1534,6 @@
                         studentId: studentData.student_id
                     });
                     saveLogs();
-                    logActivity("order_created", `${items.length} รายการ | ยอด ${total} บาท`, orderId);
 
                     // บันทึก pending order ลง localStorage (เพื่อ block)
                     const expireAt = Date.now() + PAY_LIMIT;
@@ -1585,7 +1559,7 @@
         });
 
         // ══════════════════════════════════════════════════════════════════
-        //  COUNTDOWN TIMER (30 นาที)
+        //  COUNTDOWN TIMER (15 นาที)
         // ══════════════════════════════════════════════════════════════════
 
         function startCountdown(durationMs, orderId) {
@@ -1596,7 +1570,7 @@
             }
             stopCountdown();
             payExpireAt = Date.now() + durationMs;
-            const TOTAL = PAY_LIMIT; // เสมอ 30 นาที เพื่อให้ bar % ถูกต้อง
+            const TOTAL = PAY_LIMIT; // เสมอ 15 นาที เพื่อให้ bar % ถูกต้อง
 
             // แสดงค่าทันที (ไม่รอ interval tick แรก)
             function renderTick() {
@@ -1682,7 +1656,6 @@
             const idx = logs.findIndex(l => l.orderId === orderId);
             if (idx >= 0) logs[idx].status = "paid";
             saveLogs();
-            logActivity("payment_success", `ชำระสำเร็จ`, orderId);
             loadProducts(() => { cart = {}; refreshAll(); updateTodaySpend && updateTodaySpend(); });
             lastOrder = logs[idx >= 0 ? idx : 0];
             closeModal("modalPayment");
@@ -1697,7 +1670,6 @@
             const idx = logs.findIndex(l => l.orderId === orderId);
             if (idx >= 0) logs[idx].status = "cancelled";
             saveLogs();
-            logActivity("payment_cancelled", "ออเดอร์ถูกยกเลิก", orderId);
             showNotification && showNotification("ออเดอร์ถูกยกเลิก", "error");
             closeModal("modalPayment");
         }
@@ -1710,13 +1682,12 @@
             const idx = logs.findIndex(l => l.orderId === orderId);
             if (idx >= 0) logs[idx].status = "expired";
             saveLogs();
-            logActivity("payment_expired", "หมดเวลาชำระ 30 นาที", orderId);
             // แจ้ง GAS ยกเลิก (Stripe จะยกเลิก PI เองหลังหมดเวลา)
             $.ajax({
                 url: API_SHOP, dataType: "jsonp",
                 data: { action: "check_payment", order_id: orderId }
             });
-            // บันทึกว่าบัญชีนี้หมดเวลา — block checkout ต่อไป 30 นาที
+            // บันทึกว่าบัญชีนี้หมดเวลา — block checkout ต่อไป 15 นาที
             try { localStorage.setItem("coopExpired_" + (studentData?.student_id || "x"), String(Date.now())); } catch (_) { }
             showNotification && showNotification("หมดเวลาชำระเงิน — ออเดอร์ถูกยกเลิก", "error");
             setTimeout(() => { closeModal("modalPayment"); clearPendingOrder(); }, 3500);
@@ -1743,7 +1714,6 @@
         //  SLIP — Canvas
         // ══════════════════════════════════════════════════════════════════
         function generateSlip(order) {
-            logActivity("view_slip", `ดูใบเสร็จ | ยอด ${order?.total || ""} บาท`, order?.orderId || "");
             const canvas = document.getElementById("slipCanvas");
             const ctx = canvas.getContext("2d");
             const W = 380, H = Math.max(520, 320 + order.items.length * 24);
@@ -1830,7 +1800,6 @@
             ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r); ctx.closePath();
         }
         function downloadSlip() {
-            logActivity("download_slip", `ดาวน์โหลดสลิป`, lastOrder?.orderId || "");
             const canvas = document.getElementById("slipCanvas");
             const a = document.createElement("a");
             a.download = `receipt-${lastOrder?.orderId || "slip"}.png`;

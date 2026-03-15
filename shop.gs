@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════
-//  ASIA-LB — Shop API  (Code_shop.gs)
+//  ASIA-BOT — Shop API  (Code_shop.gs)
 //  ผู้พัฒนา: Centered101  |  v4.0  |  2025
 //
 //  ▸ GAS Project แยกต่างหาก (API_SHOP ใน config-students.js)
@@ -14,6 +14,13 @@
 const STRIPE_SECRET_KEY =
   ""; // Stripe Dashboard → Developers → API keys
 
+// ── 📧 Notification ────────────────────────────────────────────────────
+const NOTIFY_EMAIL = "centered101@outlook.com"; // email แจ้งเตือน
+// LINE Messaging API (ต่างจาก LINE Notify — ใช้ token จาก LINE Developers Console)
+const LINE_TOKEN = "";
+const LINE_USER = ""; // User ID ของ admin
+const SHOP_LABEL = "สหกรณ์โรงเรียน ASIA-BOT";
+
 // Spreadsheet ID ของ Shop (ดูจาก URL: /spreadsheets/d/{ID}/edit)
 const SHOP_SS_ID = ""; // ← ใส่ ID ของ Spreadsheet Shop ใหม่
 
@@ -21,7 +28,6 @@ const SHOP_SS_ID = ""; // ← ใส่ ID ของ Spreadsheet Shop ใหม�
 const SHOP_SHEET_NAME = "สินค้า";
 const ORDERS_SHEET_NAME = "ออเดอร์";
 const PAY_LOG_SHEET = "ชำระเงิน_Logs";
-const ACTIVITY_LOG_SHEET = "กิจกรรม_Logs";
 const SHOP_DATA_START = 2; // แถวข้อมูลเริ่มที่ 2
 
 // ── schema สินค้า ─────────────────────────────────────────────────────
@@ -49,6 +55,9 @@ const ORDER_COLUMNS = [
   { key: "total", label: "ยอดรวม", width: 90 },
   { key: "pi_id", label: "PaymentIntent ID", width: 240 },
   { key: "status", label: "สถานะ", width: 100 },
+  { key: "delivery_mode", label: "รับ/ส่ง", width: 100 },
+  { key: "delivery_loc", label: "สถานที่", width: 160 },
+  { key: "delivery_slot", label: "ช่วงเวลา", width: 130 },
 ];
 
 // ── schema ชำระเงิน_Logs ──────────────────────────────────────────────
@@ -63,17 +72,7 @@ const PAY_LOG_COLUMNS = [
   { key: "note", label: "หมายเหตุ", width: 260 },
 ];
 
-// ── schema กิจกรรม_Logs ───────────────────────────────────────────────
-const ACTIVITY_LOG_COLUMNS = [
-  { key: "log_ts", label: "เวลา", width: 160 },
-  { key: "student_id", label: "รหัสนักเรียน", width: 125 },
-  { key: "student_name", label: "ชื่อนักเรียน", width: 175 },
-  { key: "event", label: "เหตุการณ์", width: 150 },
-  { key: "detail", label: "รายละเอียด", width: 320 },
-  { key: "order_id", label: "Order ID", width: 175 },
-];
-
-// ═══════════════════════════════════════════════════════════════════════
+// ═══// ═══════════════════════════════════════════════════════════════════════
 //  ENTRY POINT
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -99,13 +98,13 @@ function doGet(e) {
         return handleCreateOrder(e);
       case "check_payment":
         return handleCheckPayment(e);
-      case "log_activity":
-        return handleLogActivity(e);
+      case "cancel_order":
+        return handleCancelOrder(e);
       default:
         console.log("[doGet] unknown action:", action);
         return shopRes({
           status: "ok",
-          message: "ASIA-LB Shop API v4.0 🛒",
+          message: "ASIA-BOT Shop API v4.0 🛒",
           action,
         });
     }
@@ -175,12 +174,18 @@ function handleCreateOrder(e) {
   const studentName = (params.student_name || "").trim();
   const itemsRaw = (params.items || "").trim();
   const total = parseFloat(params.total || "0");
+  const deliveryMode = (params.delivery_mode || "pickup").trim();
+  const deliveryLoc = (params.delivery_loc || "สหกรณ์").trim();
+  const deliverySlot = (params.delivery_slot || "").trim();
 
   console.log("[create_order] ── รับ params ──────────────────────");
-  console.log("[create_order]  student_id  :", studentId);
-  console.log("[create_order]  student_name:", studentName);
-  console.log("[create_order]  total       :", total);
-  console.log("[create_order]  items (raw) :", itemsRaw.substring(0, 120));
+  console.log("[create_order]  student_id    :", studentId);
+  console.log("[create_order]  student_name  :", studentName);
+  console.log("[create_order]  total         :", total);
+  console.log("[create_order]  delivery_mode :", deliveryMode);
+  console.log("[create_order]  delivery_loc  :", deliveryLoc);
+  console.log("[create_order]  delivery_slot :", deliverySlot);
+  console.log("[create_order]  items (raw)   :", itemsRaw.substring(0, 120));
 
   try {
     // ── validate ────────────────────────────────────────────────────
@@ -222,12 +227,7 @@ function handleCreateOrder(e) {
 
     // ── Stripe: create + confirm PaymentIntent ────────────────────
     console.log("[create_order] เรียก Stripe...");
-    const piResult = createStripePromptPay(
-      total,
-      orderId,
-      studentName,
-      studentId,
-    );
+    const piResult = createStripePromptPay(total, orderId, studentName, studentId);
 
     if (!piResult.ok) {
       console.error("[create_order] ❌ Stripe ล้มเหลว:", piResult.error);
@@ -268,6 +268,12 @@ function handleCreateOrder(e) {
             return pi_id;
           case "status":
             return "pending";
+          case "delivery_mode":
+            return deliveryMode;
+          case "delivery_loc":
+            return deliveryLoc;
+          case "delivery_slot":
+            return deliverySlot;
           default:
             return "";
         }
@@ -300,6 +306,178 @@ function handleCreateOrder(e) {
   } catch (err) {
     console.error("[create_order] ❌ UNCAUGHT:", err.message, err.stack);
     return shopRes({ status: "error", message: err.message });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  📧 NOTIFY DEDUP — เช็คจาก order status ใน Sheet (atomic)
+//  GAS ไม่มี state ระหว่าง requests — in-memory cache ไม่ช่วย
+//  วิธีที่ถูกต้อง: อ่าน status ก่อน write → ถ้าเป็น "paid" แล้ว = ส่งแล้ว
+// ═══════════════════════════════════════════════════════════════════════
+
+function getOrderCurrentStatus(orderId) {
+  // อ่าน status ปัจจุบันจาก Sheet โดยตรง
+  try {
+    const sheet = getOrCreateOrdersSheet();
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return null;
+    const oidCol = ORDER_COLUMNS.findIndex(c => c.key === "order_id") + 1;
+    const statusCol = ORDER_COLUMNS.findIndex(c => c.key === "status") + 1;
+    const ids = sheet.getRange(2, oidCol, lastRow - 1, 1).getValues();
+    const idx = ids.findIndex(r => r[0].toString().trim() === orderId);
+    if (idx === -1) return null;
+    return sheet.getRange(idx + 2, statusCol).getValue().toString().trim();
+  } catch (_) { return null; }
+}
+
+function markNotified(orderId) {
+  // ไม่ต้องทำอะไร — updateOrderStatus("paid") คือ flag แล้ว
+  console.log("[notify] markNotified:", orderId, "→ status=paid is the flag");
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  📧 ORDER NOTIFICATION — Email + LINE Notify
+// ═══════════════════════════════════════════════════════════════════════
+
+function sendOrderNotify(orderId, studentId, studentName, items, total, deliveryMode, deliveryLoc, deliverySlot) {
+  var NL = "\n";
+  deliveryMode = deliveryMode || "pickup";
+  deliveryLoc = deliveryLoc || "\u0E2A\u0E2B\u0E01\u0E23\u0E13\u0E4C";
+  deliverySlot = deliverySlot || "-";
+  var modeLabel = (deliveryMode === "pickup")
+    ? "\u{1F3EA} \u0E21\u0E32\u0E23\u0E31\u0E1A\u0E17\u0E35\u0E48\u0E2A\u0E2B\u0E01\u0E23\u0E13\u0E4C"
+    : "\u{1F6B6} \u0E43\u0E2B\u0E49 \u0E2D\u0E27\u0E17. \u0E2A\u0E48\u0E07\u0E17\u0E35\u0E48 " + deliveryLoc;
+
+  var itemLines = items.map(function (i) {
+    return "  - " + i.name + " x" + i.qty + " = " + (i.price * i.qty).toFixed(2) + " \u0E1A\u0E32\u0E17";
+  }).join(NL);
+
+  // ── Email ────────────────────────────────────────────────────────
+  if (NOTIFY_EMAIL) {
+    var emailBody =
+      "[\u0E0A\u0E33\u0E23\u0E30\u0E40\u0E07\u0E34\u0E19\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08] " + SHOP_LABEL + NL +
+      "Order ID   : " + orderId + NL +
+      "\u0E19\u0E31\u0E01\u0E40\u0E23\u0E35\u0E22\u0E19  : " + studentName + " (" + studentId + ")" + NL +
+      "\u0E40\u0E27\u0E25\u0E32      : " + nowBkk() + NL +
+      "----------------------------" + NL +
+      itemLines + NL +
+      "----------------------------" + NL +
+      "\u0E22\u0E2D\u0E14\u0E23\u0E27\u0E21   : " + total.toFixed(2) + " \u0E1A\u0E32\u0E17" + NL +
+      "\u0E23\u0E31\u0E1A/\u0E2A\u0E48\u0E07   : " + modeLabel + NL +
+      "\u0E0A\u0E48\u0E27\u0E07\u0E40\u0E27\u0E25\u0E32  : " + deliverySlot + NL;
+    MailApp.sendEmail({
+      to: NOTIFY_EMAIL,
+      subject: "[" + SHOP_LABEL + "] \u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08 " + orderId + " | " + total.toFixed(2) + " THB",
+      body: emailBody
+    });
+    console.log("[notify] Email sent to " + NOTIFY_EMAIL);
+  }
+
+  // ── LINE Flex Message ─────────────────────────────────────────────
+  if (!LINE_TOKEN) return;
+
+  var itemContents = items.map(function (i) {
+    return {
+      type: "box", layout: "horizontal",
+      contents: [
+        { type: "text", text: i.name + " x" + i.qty, size: "sm", color: "#555566", flex: 5, wrap: true },
+        { type: "text", text: (i.price * i.qty).toFixed(2) + " \u0E1A.", size: "sm", color: "#111111", align: "end", flex: 2 }
+      ]
+    };
+  });
+
+  var flexMsg = {
+    type: "flex",
+    altText: "\u2705 \u0E0A\u0E33\u0E23\u0E30\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08 #" + orderId + " | " + total.toFixed(2) + " \u0E1A\u0E32\u0E17",
+    contents: {
+      type: "bubble",
+      header: {
+        type: "box", layout: "vertical", paddingAll: "18px",
+        backgroundColor: "#0EA5E9",
+        contents: [
+          { type: "text", text: SHOP_LABEL, color: "#ffffff", size: "md", weight: "bold" },
+          { type: "text", text: "\u2705 \u0E0A\u0E33\u0E23\u0E30\u0E40\u0E07\u0E34\u0E19\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08", color: "#E0F2FE", size: "sm" }
+        ]
+      },
+      body: {
+        type: "box", layout: "vertical", spacing: "md",
+        backgroundColor: "#F5F5F5",
+        contents: [
+          {
+            type: "box", layout: "vertical", spacing: "xs", contents: [
+              {
+                type: "box", layout: "horizontal", contents: [
+                  { type: "text", text: "Order ID", size: "xs", color: "#aaaaaa", flex: 3 },
+                  { type: "text", text: orderId, size: "xs", color: "#333333", flex: 5, weight: "bold" }
+                ]
+              },
+              {
+                type: "box", layout: "horizontal", contents: [
+                  { type: "text", text: "\u0E19\u0E31\u0E01\u0E40\u0E23\u0E35\u0E22\u0E19", size: "xs", color: "#aaaaaa", flex: 3 },
+                  { type: "text", text: studentName + " (" + studentId + ")", size: "xs", color: "#333333", flex: 5, wrap: true }
+                ]
+              },
+              {
+                type: "box", layout: "horizontal", contents: [
+                  { type: "text", text: "\u0E40\u0E27\u0E25\u0E32", size: "xs", color: "#aaaaaa", flex: 3 },
+                  { type: "text", text: nowBkk(), size: "xs", color: "#333333", flex: 5 }
+                ]
+              }
+            ]
+          },
+          { type: "separator" },
+          { type: "box", layout: "vertical", spacing: "xs", contents: itemContents },
+          { type: "separator" },
+          {
+            type: "box", layout: "horizontal", contents: [
+              { type: "text", text: "\u0E22\u0E2D\u0E14\u0E23\u0E27\u0E21", size: "md", weight: "bold", color: "#0EA5E9", flex: 3 },
+              { type: "text", text: total.toFixed(2) + " \u0E1A\u0E32\u0E17", size: "md", weight: "bold", color: "#0EA5E9", align: "end", flex: 4 }
+            ]
+          },
+          { type: "separator" },
+          {
+            type: "box", layout: "vertical", spacing: "xs",
+            backgroundColor: "#FFFFFF", paddingAll: "12px", cornerRadius: "10px",
+            contents: [
+              {
+                type: "box", layout: "horizontal", contents: [
+                  { type: "text", text: "\u{1F4E6} \u0E23\u0E31\u0E1A/\u0E2A\u0E48\u0E07", size: "xs", color: "#0284C7", flex: 3 },
+                  { type: "text", text: modeLabel, size: "xs", color: "#0369A1", flex: 5, weight: "bold", wrap: true }
+                ]
+              },
+              {
+                type: "box", layout: "horizontal", contents: [
+                  { type: "text", text: "\u23F0 \u0E0A\u0E48\u0E27\u0E07\u0E40\u0E27\u0E25\u0E32", size: "xs", color: "#0284C7", flex: 3 },
+                  { type: "text", text: deliverySlot, size: "xs", color: "#0369A1", flex: 5, weight: "bold" }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  };
+
+  // ส่ง admin
+  if (LINE_USER) {
+    UrlFetchApp.fetch("https://api.line.me/v2/bot/message/push", {
+      method: "post",
+      headers: { "Authorization": "Bearer " + LINE_TOKEN, "Content-Type": "application/json" },
+      payload: JSON.stringify({ to: LINE_USER, messages: [flexMsg] }),
+      muteHttpExceptions: true
+    });
+    console.log("[notify] Flex sent to admin " + LINE_USER);
+  }
+
+  // ส่งกลุ่ม อวท.
+  if (LINE_GROUP) {
+    UrlFetchApp.fetch("https://api.line.me/v2/bot/message/push", {
+      method: "post",
+      headers: { "Authorization": "Bearer " + LINE_TOKEN, "Content-Type": "application/json" },
+      payload: JSON.stringify({ to: LINE_GROUP, messages: [flexMsg] }),
+      muteHttpExceptions: true
+    });
+    console.log("[notify] Flex sent to group " + LINE_GROUP);
   }
 }
 
@@ -343,9 +521,36 @@ function handleCheckPayment(e) {
     console.log("[check_payment] → payStatus:", payStatus);
 
     if (payStatus === "paid") {
+      // ── เช็ค status ปัจจุบันก่อน — ถ้าเป็น "paid" แล้ว = เคย notify ไปแล้ว ──
+      const currentStatus = getOrderCurrentStatus(orderId);
+      console.log("[check_payment] currentStatus in Sheet:", currentStatus);
+
+      if (currentStatus === "paid") {
+        // already processed — คืน paid ให้ client แต่ไม่ notify ซ้ำ
+        console.log("[check_payment] ⚠️ order already paid — skip notify");
+        return shopRes({ status: "success", payment_status: "paid", order_id: orderId });
+      }
+
+      // ── บันทึกก่อน notify ─────────────────────────────────────────
       updateOrderStatus(orderId, "paid");
       writePayLog(orderId, "", 0, piId, "succeeded", "Stripe ยืนยันชำระแล้ว");
       console.log("[check_payment] ✅ อัปเดต paid");
+
+      // ── notify ครั้งเดียว ─────────────────────────────────────────
+      try {
+        const orderInfo = getOrderInfo(orderId);
+        if (orderInfo) {
+          sendOrderNotify(
+            orderId, orderInfo.student_id, orderInfo.student_name,
+            JSON.parse(orderInfo.items_json || "[]"), parseFloat(orderInfo.total || 0),
+            orderInfo.delivery_mode || "pickup",
+            orderInfo.delivery_loc || "สหกรณ์",
+            orderInfo.delivery_slot || ""
+          );
+          console.log("[check_payment] ✅ notify ส่งสำเร็จ");
+        }
+      } catch (ne) { console.warn("[check_payment] notify error:", ne.message); }
+
     } else if (payStatus === "failed") {
       updateOrderStatus(orderId, "failed");
       const errMsg = pi.last_payment_error ? pi.last_payment_error.message : "";
@@ -365,44 +570,49 @@ function handleCheckPayment(e) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-//  ACTION: log_activity
+//  ACTION: cancel_order  — นักเรียนกดยกเลิกเอง / หมดเวลา
 // ═══════════════════════════════════════════════════════════════════════
 
-function handleLogActivity(e) {
+function handleCancelOrder(e) {
   const params = e && e.parameter ? e.parameter : {};
-  const studentId = (params.student_id || "").trim();
-  const studentName = (params.student_name || "").trim();
-  const event = (params.event || "unknown").trim();
-  const detail = (params.detail || "").trim();
   const orderId = (params.order_id || "").trim();
+  console.log("[cancel_order] orderId:", orderId);
   try {
-    const sheet = getOrCreateActivityLogSheet();
-    sheet.appendRow(
-      ACTIVITY_LOG_COLUMNS.map((col) => {
-        switch (col.key) {
-          case "log_ts":
-            return nowBkk();
-          case "student_id":
-            return studentId;
-          case "student_name":
-            return studentName;
-          case "event":
-            return event;
-          case "detail":
-            return detail;
-          case "order_id":
-            return orderId;
-          default:
-            return "";
-        }
-      }),
-    );
-    styleActivityRow(sheet, sheet.getLastRow(), event);
-    return shopRes({ status: "success", event });
+    if (!orderId) return shopRes({ status: "error", message: "ไม่มี order_id" });
+    updateOrderStatus(orderId, "cancelled");
+    writePayLog(orderId, params.student_id || "", 0, "", "cancelled", "นักเรียนยกเลิก / หมดเวลา");
+    // คืน stock
+    const ordersSheet = getOrCreateOrdersSheet();
+    const lastRow = ordersSheet.getLastRow();
+    if (lastRow >= 2) {
+      const oidCol = ORDER_COLUMNS.findIndex(c => c.key === "order_id") + 1;
+      const itemsCol = ORDER_COLUMNS.findIndex(c => c.key === "items_json") + 1;
+      const ids = ordersSheet.getRange(2, oidCol, lastRow - 1, 1).getValues();
+      const idx = ids.findIndex(r => r[0].toString().trim() === orderId);
+      if (idx >= 0) {
+        const itemsRaw = ordersSheet.getRange(idx + 2, itemsCol).getValue();
+        try {
+          const items = JSON.parse(itemsRaw);
+          const shopSheet = getOrCreateShopSheet();
+          items.forEach(item => {
+            const { rowIdx } = findProductRow(shopSheet, item.id);
+            if (rowIdx) {
+              const stockCol = SHOP_COLUMNS.findIndex(c => c.key === "stock") + 1;
+              const cur = parseInt(shopSheet.getRange(rowIdx, stockCol).getValue() || "0");
+              shopSheet.getRange(rowIdx, stockCol).setValue(cur + parseInt(item.qty || 1));
+            }
+          });
+          console.log("[cancel_order] ✅ คืน stock แล้ว");
+        } catch (pe) { console.warn("[cancel_order] คืน stock ล้มเหลว:", pe.message); }
+      }
+    }
+    return shopRes({ status: "success", order_id: orderId });
   } catch (err) {
+    console.error("[cancel_order] ❌", err.message);
     return shopRes({ status: "error", message: err.message });
   }
 }
+
 
 // ═══════════════════════════════════════════════════════════════════════
 //  STRIPE API
@@ -464,8 +674,7 @@ function createStripePromptPay(amountBaht, orderId, customerName, studentId) {
         payload: {
           "payment_method_data[type]": "promptpay",
           // Stripe PromptPay บังคับมี billing_details[email]
-          "payment_method_data[billing_details][email]":
-            studentId + "@asia-lb.ac.th",
+          "payment_method_data[billing_details][email]": studentId + "@ASIA-BOT.ac.th",
           "payment_method_data[billing_details][name]": customerName,
           return_url: "https://asia-lb.web.app/shop/",
         },
@@ -625,6 +834,18 @@ function findProductRow(sheet, productId) {
 //  ORDER HELPERS
 // ═══════════════════════════════════════════════════════════════════════
 
+function getOrderInfo(orderId) {
+  const sheet = getOrCreateOrdersSheet();
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+  const oidCol = ORDER_COLUMNS.findIndex(c => c.key === "order_id") + 1;
+  const ids = sheet.getRange(2, oidCol, lastRow - 1, 1).getValues();
+  const idx = ids.findIndex(r => r[0].toString().trim() === orderId);
+  if (idx === -1) return null;
+  const row = sheet.getRange(idx + 2, 1, 1, ORDER_COLUMNS.length).getValues()[0];
+  return Object.fromEntries(ORDER_COLUMNS.map((c, i) => [c.key, row[i]]));
+}
+
 function findPiIdByOrder(orderId) {
   const sheet = getOrCreateOrdersSheet();
   const lastRow = sheet.getLastRow();
@@ -762,16 +983,6 @@ function getOrCreatePayLogSheet() {
   }
   return s;
 }
-function getOrCreateActivityLogSheet() {
-  const ss = getSpreadsheet();
-  let s = ss.getSheetByName(ACTIVITY_LOG_SHEET);
-  if (!s) {
-    console.log("[Sheet] สร้าง Sheet ใหม่:", ACTIVITY_LOG_SHEET);
-    s = ss.insertSheet(ACTIVITY_LOG_SHEET);
-    initActivityLogSheet(s);
-  }
-  return s;
-}
 
 function initShopSheet(sheet) {
   sheet.appendRow(SHOP_COLUMNS.map((c) => c.label));
@@ -821,21 +1032,6 @@ function initPayLogSheet(sheet) {
   sheet.setRowHeight(1, 30);
   console.log("[initPayLogSheet] ✅ สร้าง header ชำระเงิน_Logs แล้ว");
 }
-function initActivityLogSheet(sheet) {
-  sheet.appendRow(ACTIVITY_LOG_COLUMNS.map((c) => c.label));
-  ACTIVITY_LOG_COLUMNS.forEach((col, i) => {
-    sheet
-      .getRange(1, i + 1)
-      .setBackground("#7C3AED")
-      .setFontColor("white")
-      .setFontWeight("bold")
-      .setHorizontalAlignment("center")
-      .setVerticalAlignment("middle");
-    sheet.setColumnWidth(i + 1, col.width);
-  });
-  sheet.setFrozenRows(1);
-  sheet.setRowHeight(1, 30);
-}
 
 // ═══════════════════════════════════════════════════════════════════════
 //  ROW STYLING
@@ -872,28 +1068,6 @@ function stylePayLogRow(sheet, rowNum, status) {
     cell.setBackground("#FEF9C3").setFontColor("#92400E").setFontWeight("bold");
 }
 
-// ── styleActivityRow ─────────────────────────────────────────────────
-function styleActivityRow(sheet, rowNum, event) {
-  const bg = rowNum % 2 === 0 ? "#FAF5FF" : "#FFFFFF";
-  sheet
-    .getRange(rowNum, 1, 1, ACTIVITY_LOG_COLUMNS.length)
-    .setBackground(bg)
-    .setVerticalAlignment("middle");
-  const col = ACTIVITY_LOG_COLUMNS.findIndex((c) => c.key === "event") + 1;
-  const cell = sheet.getRange(rowNum, col);
-  const payE = ["payment_success", "order_created"];
-  const alertE = ["payment_cancelled", "payment_failed"];
-  const cartE = ["add_to_cart", "remove_from_cart", "clear_cart"];
-  if (payE.includes(event))
-    cell.setBackground("#DCFCE7").setFontColor("#16A34A").setFontWeight("bold");
-  else if (alertE.includes(event))
-    cell.setBackground("#FEE2E2").setFontColor("#DC2626").setFontWeight("bold");
-  else if (cartE.includes(event))
-    cell.setBackground("#EFF6FF").setFontColor("#2563EB").setFontWeight("bold");
-  else
-    cell.setBackground("#F3E8FF").setFontColor("#7C3AED").setFontWeight("bold");
-}
-
 // ═══════════════════════════════════════════════════════════════════════
 //  UTILITIES
 // ═══════════════════════════════════════════════════════════════════════
@@ -919,9 +1093,8 @@ function nowBkk() {
 function shopRes(obj) {
   const json = JSON.stringify(obj);
   if (_jsonpCb) {
-    return ContentService.createTextOutput(
-      _jsonpCb + "(" + json + ")",
-    ).setMimeType(ContentService.MimeType.JAVASCRIPT);
+    return ContentService.createTextOutput(_jsonpCb + "(" + json + ")")
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
   }
   return ContentService.createTextOutput(json).setMimeType(
     ContentService.MimeType.JSON,

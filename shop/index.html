@@ -829,7 +829,7 @@
                     <button id="checkoutBtn" class="w-full mt-3 py-3 rounded-2xl font-bold text-white text-sm
                    flex items-center justify-center gap-2" style="background:linear-gradient(135deg,#84D4FA,#4DB8F5);
                    box-shadow:0 6px 18px rgba(77,184,245,.4);">
-                        <i class="fa-solid fa-qrcode"></i> ชำระเงิน (PromptPay)
+                        <i class="fa-solid fa-truck"></i> เลือกวิธีรับ & ชำระเงิน
                     </button>
                     <button onclick="clearCart()" class="w-full mt-2 py-2 rounded-2xl font-medium text-slate-500 text-xs
                    border border-slate-200 hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition">
@@ -838,6 +838,104 @@
                 </div>
                 <div style="height:12px"></div>
             </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════ MODAL: DELIVERY ══════════════════ -->
+    <div class="modal-center" id="modalDelivery">
+        <div class="modal-box" style="max-width:380px;">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2">
+                    <div class="w-9 h-9 rounded-xl bg-sky-50 flex items-center justify-center text-sky-500">
+                        <i class="fa-solid fa-truck"></i>
+                    </div>
+                    <div>
+                        <div class="font-bold text-slate-800">เลือกวิธีรับสินค้า</div>
+                        <div class="text-xs text-slate-400">ก่อนชำระเงิน</div>
+                    </div>
+                </div>
+                <button onclick="closeModal('modalDelivery')" class="text-slate-400 hover:text-slate-600 p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Pickup / Delivery tabs -->
+            <div class="grid grid-cols-2 gap-2 mb-4">
+                <button id="tabPickup" onclick="selectDeliveryMode('pickup')"
+                    class="py-3 rounded-2xl text-sm font-bold border-2 transition flex flex-col items-center gap-1"
+                    style="border-color:#0EA5E9;background:#EFF6FF;color:#0EA5E9;">
+                    <i class="fa-solid fa-store text-lg"></i>
+                    <span>มารับเอง</span>
+                    <span class="text-xs font-normal opacity-70">ที่สหกรณ์</span>
+                </button>
+                <button id="tabDeliver" onclick="selectDeliveryMode('deliver')"
+                    class="py-3 rounded-2xl text-sm font-bold border-2 transition flex flex-col items-center gap-1"
+                    style="border-color:#E2E8F0;background:#F8FAFC;color:#94A3B8;">
+                    <i class="fa-solid fa-person-carry-box text-lg"></i>
+                    <span>ให้ อวท. ส่ง</span>
+                    <span class="text-xs font-normal opacity-70">เลือกสถานที่</span>
+                </button>
+            </div>
+
+            <!-- Pickup info (default) -->
+            <div id="pickupInfo" class="rounded-2xl p-3 mb-4 text-sm text-slate-600"
+                style="background:#F0FDF4;border:1px solid #BBF7D0;">
+                <i class="fa-solid fa-circle-info text-green-500 mr-1"></i>
+                มารับสินค้าด้วยตนเองที่ <strong>ห้องสหกรณ์</strong> ตามช่วงเวลาที่เลือก
+            </div>
+
+            <!-- Delivery location (hidden by default) -->
+            <div id="deliverInfo" style="display:none;" class="mb-4">
+                <div class="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wide">สถานที่ส่ง</div>
+                <div class="grid grid-cols-2 gap-2" id="locationGrid">
+                    <button class="loc-btn py-2.5 rounded-xl text-sm font-medium border-2 border-slate-200 text-slate-600 hover:border-sky-400 hover:text-sky-600 transition" data-loc="โรงอาหาร">
+                        <i class="fa-solid fa-utensils mr-1"></i>โรงอาหาร
+                    </button>
+                    <button class="loc-btn py-2.5 rounded-xl text-sm font-medium border-2 border-slate-200 text-slate-600 hover:border-sky-400 hover:text-sky-600 transition" data-loc="ตึกหน้า">
+                        <i class="fa-solid fa-building mr-1"></i>ตึกหน้า
+                    </button>
+                    <button class="loc-btn py-2.5 rounded-xl text-sm font-medium border-2 border-slate-200 text-slate-600 hover:border-sky-400 hover:text-sky-600 transition" data-loc="ตึก Shop">
+                        <i class="fa-solid fa-shop mr-1"></i>ตึก Shop
+                    </button>
+                    <button class="loc-btn py-2.5 rounded-xl text-sm font-medium border-2 border-slate-200 text-slate-600 hover:border-sky-400 hover:text-sky-600 transition" data-loc="ห้องเรียน">
+                        <i class="fa-solid fa-chalkboard mr-1"></i>ห้องเรียน...
+                    </button>
+                </div>
+                <input id="customLocation" placeholder="ระบุห้องเรียน เช่น ห้อง 201" maxlength="40"
+                    style="display:none;margin-top:8px;width:100%;padding:8px 12px;border-radius:10px;border:2px solid #0EA5E9;font-size:.85rem;outline:none;font-family:inherit;">
+            </div>
+
+            <!-- Time slot -->
+            <div class="mb-4">
+                <div class="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wide">ช่วงเวลา</div>
+                <div class="grid grid-cols-2 gap-2">
+                    <button class="slot-btn py-2.5 rounded-xl text-xs font-bold border-2 border-slate-200 text-slate-600 hover:border-sky-400 hover:text-sky-600 transition flex flex-col items-center gap-0.5" data-slot="6:00–8:30">
+                        <i class="fa-solid fa-sun text-amber-400"></i>
+                        <span>6:00 – 8:30</span>
+                        <span class="font-normal text-slate-400">เช้า</span>
+                    </button>
+                    <button class="slot-btn py-2.5 rounded-xl text-xs font-bold border-2 border-slate-200 text-slate-600 hover:border-sky-400 hover:text-sky-600 transition flex flex-col items-center gap-0.5" data-slot="11:50–13:15">
+                        <i class="fa-solid fa-cloud-sun text-sky-400"></i>
+                        <span>11:50 – 13:15</span>
+                        <span class="font-normal text-slate-400">เที่ยง</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Summary -->
+            <div id="deliverySummary" style="display:none;"
+                class="rounded-xl px-3 py-2 mb-3 text-sm text-sky-700 font-medium"
+                style="background:#EFF6FF;">
+                <i class="fa-solid fa-check-circle mr-1 text-sky-400"></i>
+                <span id="deliverySummaryText"></span>
+            </div>
+
+            <!-- Confirm button -->
+            <button id="confirmDeliveryBtn" disabled
+                class="w-full py-3 rounded-2xl text-white text-sm font-bold flex items-center justify-center gap-2 transition"
+                style="background:linear-gradient(135deg,#94A3B8,#64748B);box-shadow:none;">
+                <i class="fa-solid fa-qrcode"></i> ชำระเงิน (PromptPay)
+            </button>
         </div>
     </div>
 
@@ -853,12 +951,13 @@
                     <div>
                         <div class="font-bold text-slate-800">ชำระเงิน PromptPay</div>
                         <div class="text-xs text-slate-400">สแกน QR — ระบบยืนยันอัตโนมัติ</div>
+                        <div id="payDeliveryTag" class="text-xs font-bold text-sky-600 mt-0.5"></div>
                     </div>
                 </div>
                 <!-- Countdown badge -->
                 <div id="payTimerBadge"
                     style="background:linear-gradient(135deg,#0EA5E9,#0284C7);border-radius:12px;padding:4px 10px;min-width:64px;text-align:center;">
-                    <div class="text-white font-bold text-sm" id="payTimerText">15:00</div>
+                    <div class="text-white font-bold text-sm" id="payTimerText">30:00</div>
                     <div class="text-blue-100 text-xs" style="font-size:9px;">หมดเวลา</div>
                 </div>
             </div>
@@ -1040,18 +1139,22 @@
         let payExpireAt = null;   // expire timestamp (ms)
         let pendingOrder = null;   // pending order ที่ค้างอยู่
         const PAY_LIMIT = 15 * 60 * 1000; // 15 นาที
+        let deliveryMode = "pickup";  // "pickup" | "deliver"
+        let deliveryLoc  = "สหกรณ์";
+        let deliverySlot = "";
 
-        // ── ORDER LOGS เฉพาะ status ออเดอร์ ──────────────────────────
+        // โหลด logs จาก localStorage (ไม่ใช่สินค้า)
         try { logs = JSON.parse(localStorage.getItem("coopLogs") || "[]"); } catch (_) { logs = []; }
         function saveLogs() {
             try { localStorage.setItem("coopLogs", JSON.stringify(logs.slice(0, 50))); } catch (_) { }
             updateLogBadge(); updateStatOrders();
         }
-        function logActivity() {} // stub — ไม่ส่ง activity ไป GAS
-
 
         // ── VIEW MODE ──────────────────────────────────────────────────────
         let viewMode = "grid"; // "grid" | "table"
+
+        // ── ACTIVITY LOGGER — fire-and-forget ไป GAS ──────────────────────
+        function logActivity() {} // ไม่ส่ง logs
 
         // ── EMOJI MAP (เพิ่มเติมสวยงาม เผื่อ images ใน sheet ว่าง) ─────────
         const EMOJI_MAP = [
@@ -1338,7 +1441,7 @@
             const p = PRODUCTS.find(x => x.id === id);
             if ((cart[id] || 0) <= 1) {
                 delete cart[id];
-            } else {
+                } else {
                 cart[id]--;
             }
             refreshAll();
@@ -1470,7 +1573,95 @@
         //  CHECKOUT
         // ══════════════════════════════════════════════════════════════════
 
+        // ══════════════════════════════════════════════════════════════════
+        //  DELIVERY MODAL LOGIC
+        // ══════════════════════════════════════════════════════════════════
+
+        function selectDeliveryMode(mode) {
+            deliveryMode = mode;
+            if (mode === "pickup") {
+                $("#tabPickup").css({"border-color":"#0EA5E9","background":"#EFF6FF","color":"#0EA5E9"});
+                $("#tabDeliver").css({"border-color":"#E2E8F0","background":"#F8FAFC","color":"#94A3B8"});
+                $("#pickupInfo").show(); $("#deliverInfo").hide();
+                deliveryLoc = "สหกรณ์";
+            } else {
+                $("#tabDeliver").css({"border-color":"#0EA5E9","background":"#EFF6FF","color":"#0EA5E9"});
+                $("#tabPickup").css({"border-color":"#E2E8F0","background":"#F8FAFC","color":"#94A3B8"});
+                $("#pickupInfo").hide(); $("#deliverInfo").show();
+                deliveryLoc = "";
+            }
+            updateDeliverySummary();
+        }
+
+        $(document).on("click", ".loc-btn", function () {
+            $(".loc-btn").css({"border-color":"#E2E8F0","color":"#4B5563","background":""});
+            $(this).css({"border-color":"#0EA5E9","color":"#0EA5E9","background":"#EFF6FF"});
+            const loc = $(this).data("loc");
+            if (loc === "ห้องเรียน") {
+                $("#customLocation").show().focus();
+                deliveryLoc = "";
+            } else {
+                $("#customLocation").hide().val("");
+                deliveryLoc = loc;
+            }
+            updateDeliverySummary();
+        });
+
+        $("#customLocation").on("input", function () {
+            const v = $(this).val().trim();
+            deliveryLoc = v ? "ห้องเรียน: " + v : "";
+            updateDeliverySummary();
+        });
+
+        $(document).on("click", ".slot-btn", function () {
+            $(".slot-btn").css({"border-color":"#E2E8F0","color":"#4B5563","background":""});
+            $(this).css({"border-color":"#0EA5E9","color":"#0EA5E9","background":"#EFF6FF"});
+            deliverySlot = $(this).data("slot");
+            updateDeliverySummary();
+        });
+
+        function updateDeliverySummary() {
+            const locOK  = !!(deliveryMode === "pickup" ? true : deliveryLoc);
+            const slotOK = !!deliverySlot;
+            if (locOK && slotOK) {
+                const locText = deliveryMode === "pickup" ? "มารับที่สหกรณ์" : "ส่งที่ " + deliveryLoc;
+                $("#deliverySummaryText").text(locText + " | ช่วง " + deliverySlot);
+                $("#deliverySummary").show();
+                $("#confirmDeliveryBtn").prop("disabled", false)
+                    .css({"background":"linear-gradient(135deg,#84D4FA,#4DB8F5)",
+                          "box-shadow":"0 6px 18px rgba(77,184,245,.4)"});
+            } else {
+                $("#deliverySummary").hide();
+                $("#confirmDeliveryBtn").prop("disabled", true)
+                    .css({"background":"linear-gradient(135deg,#94A3B8,#64748B)","box-shadow":"none"});
+            }
+        }
+
+        $("#confirmDeliveryBtn").click(function () {
+            if ($(this).prop("disabled")) return;
+            closeModal("modalDelivery");
+            doCheckout();
+        });
+
+        // checkoutBtn → open delivery modal
         $("#checkoutBtn").click(function () {
+            const po = loadPendingOrder();
+            if (po && po.expireAt > Date.now()) {
+                showNotification && showNotification("คุณมีออเดอร์ค้างชำระ กรุณาชำระก่อน", "error");
+                resumePendingOrder(); return;
+            } else if (po) { clearPendingOrder(); }
+            // reset delivery
+            deliveryMode = "pickup"; deliveryLoc = "สหกรณ์"; deliverySlot = "";
+            selectDeliveryMode("pickup");
+            $(".slot-btn, .loc-btn").css({"border-color":"#E2E8F0","color":"#4B5563","background":""});
+            $("#customLocation").hide().val(""); updateDeliverySummary();
+            openModal("modalDelivery");
+        });
+
+        // ══════════════════════════════════════════════════════════════════
+        //  CHECKOUT (actual payment flow)
+        // ══════════════════════════════════════════════════════════════════
+        function doCheckout() {
             // ── Block ถ้ายังมี pending order ──────────────────────────
             const po = loadPendingOrder();
             if (po && po.expireAt > Date.now()) {
@@ -1518,6 +1709,9 @@
                     student_name: `${studentData.first_name} ${studentData.last_name}`,
                     items: JSON.stringify(items),
                     total,
+                    delivery_mode: deliveryMode,
+                    delivery_loc:  deliveryLoc,
+                    delivery_slot: deliverySlot,
                 },
                 success(r) {
                     if (r.status !== "success") {
@@ -1537,7 +1731,7 @@
 
                     // บันทึก pending order ลง localStorage (เพื่อ block)
                     const expireAt = Date.now() + PAY_LIMIT;
-                    pendingOrder = { orderId, expireAt, total, items, qr_url: r.qr_url || "" };
+                    pendingOrder = { orderId, expireAt, total, items, qr_url: r.qr_url || "", deliveryMode, deliveryLoc, deliverySlot };
                     savePendingOrder(pendingOrder);
 
                     // แสดง QR
@@ -1545,6 +1739,8 @@
                         $("#qrImg").attr("src", r.qr_url);
                         $("#qrLoading").addClass("hidden"); $("#qrReady").removeClass("hidden");
                     }
+                    const _modeLabel = deliveryMode === "pickup" ? "🏪 มารับที่สหกรณ์" : "🚶 ส่งที่ " + deliveryLoc;
+                    $("#payDeliveryTag").text(_modeLabel + " | ⏰ " + deliverySlot);
                     setPayStatus("waiting");
 
                     // เริ่ม countdown + polling
@@ -1556,10 +1752,11 @@
                     closeModal("modalPayment");
                 }
             });
-        });
+        }
+
 
         // ══════════════════════════════════════════════════════════════════
-        //  COUNTDOWN TIMER (15 นาที)
+        //  COUNTDOWN TIMER (30 นาที)
         // ══════════════════════════════════════════════════════════════════
 
         function startCountdown(durationMs, orderId) {
@@ -1570,7 +1767,7 @@
             }
             stopCountdown();
             payExpireAt = Date.now() + durationMs;
-            const TOTAL = PAY_LIMIT; // เสมอ 15 นาที เพื่อให้ bar % ถูกต้อง
+            const TOTAL = PAY_LIMIT; // เสมอ 30 นาที เพื่อให้ bar % ถูกต้อง
 
             // แสดงค่าทันที (ไม่รอ interval tick แรก)
             function renderTick() {
@@ -1670,8 +1867,16 @@
             const idx = logs.findIndex(l => l.orderId === orderId);
             if (idx >= 0) logs[idx].status = "cancelled";
             saveLogs();
-            showNotification && showNotification("ออเดอร์ถูกยกเลิก", "error");
-            closeModal("modalPayment");
+            // แจ้ง admin
+            if (studentData && typeof API_SHOP !== "undefined") {
+                $.ajax({ url: API_SHOP, dataType: "jsonp", data: {
+                    action: "notify_failure", reason: "cancelled",
+                    order_id: orderId,
+                    student_id:   (studentData.student_id  || ""),
+                    student_name: ((studentData.first_name || "") + " " + (studentData.last_name || "")).trim(),
+                    total: (logs.find(l => l.orderId === orderId)?.total || 0)
+                }}); }
+            showPayResult("cancelled");
         }
 
         function onPaymentExpired(orderId) {
@@ -1682,15 +1887,21 @@
             const idx = logs.findIndex(l => l.orderId === orderId);
             if (idx >= 0) logs[idx].status = "expired";
             saveLogs();
-            // แจ้ง GAS ยกเลิก (Stripe จะยกเลิก PI เองหลังหมดเวลา)
-            $.ajax({
-                url: API_SHOP, dataType: "jsonp",
-                data: { action: "check_payment", order_id: orderId }
-            });
-            // บันทึกว่าบัญชีนี้หมดเวลา — block checkout ต่อไป 15 นาที
+            // ยกเลิก order ที่ GAS + คืน stock
+            $.ajax({ url: API_SHOP, dataType: "jsonp",
+                data: { action: "cancel_order", order_id: orderId,
+                        student_id: studentData?.student_id || "" } });
+            // แจ้ง admin
+            if (studentData && typeof API_SHOP !== "undefined") {
+                $.ajax({ url: API_SHOP, dataType: "jsonp", data: {
+                    action: "notify_failure", reason: "expired",
+                    order_id: orderId,
+                    student_id:   (studentData.student_id  || ""),
+                    student_name: ((studentData.first_name || "") + " " + (studentData.last_name || "")).trim(),
+                    total: (logs.find(l => l.orderId === orderId)?.total || 0)
+                }}); }
             try { localStorage.setItem("coopExpired_" + (studentData?.student_id || "x"), String(Date.now())); } catch (_) { }
-            showNotification && showNotification("หมดเวลาชำระเงิน — ออเดอร์ถูกยกเลิก", "error");
-            setTimeout(() => { closeModal("modalPayment"); clearPendingOrder(); }, 3500);
+            showPayResult("expired");
         }
 
         // ── ปุ่มยกเลิกออเดอร์ ────────────────────────────────────────────
@@ -1699,13 +1910,10 @@
             if (!po) { closeModal("modalPayment"); return; }
             if (!confirm("ยืนยันยกเลิกออเดอร์? สต็อกจะถูกคืน")) return;
             stopPolling(); stopCountdown();
-            // แจ้ง GAS
             $.ajax({
                 url: API_SHOP, dataType: "jsonp",
-                data: {
-                    action: "cancel_order", order_id: po.orderId,
-                    student_id: studentData?.student_id || ""
-                }
+                data: { action: "cancel_order", order_id: po.orderId,
+                        student_id: studentData?.student_id || "" }
             });
             onPaymentCancelled(po.orderId);
         });

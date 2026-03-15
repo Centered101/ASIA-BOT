@@ -1,9 +1,9 @@
 // V42
-const API_URL = "https://script.google.com/macros/s/AKfycbycQG1QSp8be8zxgdZBn_11R22qHWhDjtIHqySl3OUj_ekfYqqGjFUUBUq1r2RggMou6w/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbxHk65tHwlMIye05TW6vGnXT1pXhwQodu5TF1fukMka3mr4ZNvUG-HUyIqQvMbEKI3JAw/exec";
 const LS_DATA = "asia_lb_session";
 const LS_TIME = "asia_lb_session_time";
 const SESSION_TTL = 8 * 60 * 60 * 1000;
-const API_SHOP = "https://script.google.com/macros/s/AKfycbw8NE3zLb2g4npJX5bzH934n6iurjy1JduApSOmgL1m5ZSb3sbMAh8uc-XKuK0Qa4kE/exec";
+const API_SHOP = "https://script.google.com/macros/s/AKfycbyaghGYtQGSgnYcxrZUHKyDBzpBgiZWaFoRkll846qWuBysuoVOZT9GtnKwMVZ4PB-Q/exec";
 
 // ══════════════════════════════════════════════
 //  คำนวณระดับชั้น

@@ -1395,7 +1395,7 @@
         // ════════════════════════════════════════════════
         //  CONFIG
         // ════════════════════════════════════════════════
-        const API = localStorage.getItem("asia_lb_api") || API_URL;
+        const API_URL = localStorage.getItem("asia_lb_api") || API_URL;
 
         let allStudents = [];
         let allLogs = [];
@@ -1470,7 +1470,7 @@
         //  FETCH DATA
         // ════════════════════════════════════════════════
         function fetchStudents() {
-            return $.get(API, { action: "list" }).then(raw => {
+            return $.get(API_URL, { action: "list" }).then(raw => {
                 const res = typeof raw === "string" ? JSON.parse(raw) : raw;
                 if (res.status === "success") allStudents = res.data || [];
                 return allStudents;
@@ -1478,7 +1478,7 @@
         }
 
         function fetchLogs() {
-            return $.get(API, { action: "list_logs" }).then(raw => {
+            return $.get(API_URL, { action: "list_logs" }).then(raw => {
                 const res = typeof raw === "string" ? JSON.parse(raw) : raw;
                 if (res.status === "success") allLogs = res.data || [];
                 return allLogs;
@@ -1836,7 +1836,7 @@
                 showNotification("กรุณากรอกชื่อและนามสกุล", "error"); return;
             }
             $btn.prop("disabled", true).html('<span class="spinner"></span> กำลังบันทึก...');
-            $.get(API, { action: "update", ...updates }).then(raw => {
+            $.get(API_URL, { action: "update", ...updates }).then(raw => {
                 const res = typeof raw === "string" ? JSON.parse(raw) : raw;
                 if (res.status === "success") {
                     // อัปเดต local
@@ -1881,7 +1881,7 @@
         $("#modalCard").click(function (e) { if (e.target === this) closeModal("modalCard"); });
 
         function updateCard(sid, status) {
-            $.get(API, { action: "update_card", student_id: sid, card_status: status }).then(raw => {
+            $.get(API_URL, { action: "update_card", student_id: sid, card_status: status }).then(raw => {
                 const res = typeof raw === "string" ? JSON.parse(raw) : raw;
                 if (res.status === "success") {
                     const s = allStudents.find(x => x.student_id === sid);
@@ -1914,7 +1914,7 @@
         // ════════════════════════════════════════════════
         //  SETTINGS
         // ════════════════════════════════════════════════
-        $("#cfg-api").val(API);
+        $("#cfg-api").val(API_URL);
         $("#saveCfgBtn").click(function () {
             const url = $("#cfg-api").val().trim();
             if (url) localStorage.setItem("asia_lb_api", url);
@@ -1947,7 +1947,7 @@
         });
         $("#resetLogBtn").click(function () {
             if (!confirm("ยืนยันลบ Login Log ทั้งหมด?")) return;
-            $.get(API, { action: "clear_login_logs" }).then(() => showNotification("ล้าง Log สำเร็จ", "success"))
+            $.get(API_URL, { action: "clear_login_logs" }).then(() => showNotification("ล้าง Log สำเร็จ", "success"))
                 .fail(() => showNotification("เกิดข้อผิดพลาด", "error"));
         });
 

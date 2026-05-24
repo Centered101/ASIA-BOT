@@ -44,43 +44,43 @@ ASIA-BOT คือระบบบริหารจัดการโรงเ�
 
 ```mermaid
 graph TB
-    subgraph Client["🌐 Client (Next.js App Router)"]
+    subgraph Client[Client - Next.js App Router]
         direction TB
         Home["/ หน้าแรก"]
-        Projects["/projects โปรเจค"]
-        Eval["/project/[slug] ประเมิน"]
+        Projects["/projects"]
+        Eval["/project/:slug ประเมิน"]
         Scanner["/student-entry-scanner"]
         ClassRoom["/class-track-room"]
-        Roomly["/roomly จองห้อง"]
-        Shop["/shop สหกรณ์"]
-        Student["/student บัตรนักเรียน"]
-        Admin["/admin แดชบอร์ด"]
+        Roomly["/roomly"]
+        Shop["/shop"]
+        Student["/student"]
+        Admin["/admin"]
     end
 
-    subgraph API["⚡ API Routes"]
+    subgraph API[API Routes]
         direction TB
         ApiProjects["/api/projects"]
         ApiEval["/api/evaluate"]
         ApiStats["/api/stats"]
-        ApiAdmin["/api/admin/*"]
+        ApiAdmin["/api/admin/..."]
         ApiUpload["/api/admin/upload-project"]
     end
 
-    subgraph Backend["🗄️ Supabase"]
+    subgraph Backend[Supabase]
         direction LR
-        DB[("PostgreSQL\nDatabase")]
-        Storage[("Storage\nproject-images")]
-        Auth["Auth\n(Admin)"]
+        DB[(PostgreSQL)]
+        Storage[(Storage)]
+        Auth[Auth]
     end
 
-    subgraph Deploy["🚀 Deploy"]
-        Firebase["Firebase Hosting"]
-        Vercel["Vercel (alt)"]
+    subgraph Deploy[Deploy]
+        Firebase[Firebase Hosting]
+        Vercel[Vercel]
     end
 
     Client --> API
     API --> Backend
-    Client -.->|"Static Assets"| Deploy
+    Client -.->|Static Assets| Deploy
 ```
 
 ---

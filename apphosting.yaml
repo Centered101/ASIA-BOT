@@ -1,0 +1,68 @@
+runConfig:
+  cpu: 1
+  memoryMiB: 512
+  minInstances: 0
+  maxInstances: 10
+  concurrency: 80
+
+env:
+  - variable: ADMIN_SECRET
+    secret: ADMIN_SECRET
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: LINE_GROUP_ATTEND
+    secret: LINE_GROUP_ATTEND
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: LINE_GROUP_FEEDBACK
+    secret: LINE_GROUP_FEEDBACK
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: LINE_GROUP_SHOP
+    secret: LINE_GROUP_SHOP
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: LINE_TOKEN
+    secret: LINE_TOKEN
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: LINE_USER_ADMIN
+    secret: LINE_USER_ADMIN
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_ADMIN_SECRET
+    secret: NEXT_PUBLIC_ADMIN_SECRET
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_SITE_URL
+    secret: NEXT_PUBLIC_SITE_URL
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_SUPABASE_ANON_KEY
+    secret: NEXT_PUBLIC_SUPABASE_ANON_KEY
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_SUPABASE_URL
+    secret: NEXT_PUBLIC_SUPABASE_URL
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: STRIPE_SECRET_KEY
+    secret: STRIPE_SECRET_KEY
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: SUPABASE_SERVICE_ROLE_KEY
+    secret: SUPABASE_SERVICE_ROLE_KEY
+    availability:
+      - BUILD
+      - RUNTIME

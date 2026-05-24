@@ -1,20 +1,37 @@
-# Build and Release Folders
-bin-debug/
-bin-release/
-[Oo]bj/
-[Bb]in/
+# Dependencies
+node_modules/
 
-# Other files and folders
-.settings/
-.tmp.driveupload
-.vscode
-desktop.ini
-# Executables
-*.swf
-*.air
-*.ipa
-*.apk
-*.ini
-# Project files, i.e. `.project`, `.actionScriptProperties` and `.flexProperties`
-# should NOT be excluded as they contain compiler settings and other important
-# information for Eclipse / Flash Builder.
+# Next.js
+.next/
+out/
+next-env.d.ts
+tsconfig.tsbuildinfo
+
+# Environment variables — NEVER commit these
+.env
+.env.local
+.env*.local
+.env.production
+
+# Build output
+build/
+dist/
+
+# Vercel / Firebase
+.vercel
+firebase-debug.log
+firebase-debug.*.log
+.firebase/
+
+# Claude Code
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp
+.tmp.driveupload/
+*.log
+
+.vercel

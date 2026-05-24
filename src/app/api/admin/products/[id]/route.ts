@@ -1,0 +1,49 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database";
+
+const supabase = createClient<Database>(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const body = await req.json() as {
+    name?: string; price?: number; cost?: number | null; stock?: number;
+    unit?: string | null; category?: string | null; tag?: string | null;
+    images?: string[] | null; active?: boolean;
+  };
+
+  const update: Database["public"]["Tables"]["products"]["Update"] = {};
+  if ("name"     in body) update.name     = body.name;
+  if ("price"    in body) update.price    = body.price;
+  if ("cost"     in body) update.cost     = body.cost;
+  if ("stock"    in body) update.stock    = body.stock;
+  if ("unit"     in body) update.unit     = body.unit;
+  if ("category" in body) update.category = body.category;
+  if ("tag"      in body) update.tag      = body.tag;
+  if ("images"   in body) update.images   = body.images;
+  if ("active"   in body) update.active   = body.active;
+
+  if (Object.keys(update).length === 0) {
+    return NextResponse.json({ status: "error", message: "ไม่มีข้อมูลให้อัพเดท" }, { status: 400 });
+  }
+
+  const { error } = await supabase.from("products").update(update).eq("id", id);
+  if (error) return NextResponse.json({ status: "error", message: error.message }, { status: 500 });
+  return NextResponse.json({ status: "success" });
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const { error } = await supabase.from("products").update({ active: false }).eq("id", id);
+  if (error) return NextResponse.json({ status: "error", message: error.message }, { status: 500 });
+  return NextResponse.json({ status: "success" });
+}

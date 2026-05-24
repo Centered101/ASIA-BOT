@@ -1,0 +1,8 @@
+.env*
+.git
+.next
+node_modules
+firebase-debug.log
+firebase-debug.*.log
+tsconfig.tsbuildinfo
+.tmp.driveupload

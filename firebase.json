@@ -1,0 +1,13 @@
+{
+  "apphosting": {
+    "backendId": "asia-bot",
+    "rootDir": "/",
+    "ignore": [
+      "node_modules",
+      ".git",
+      "firebase-debug.log",
+      "firebase-debug.*.log",
+      ".next"
+    ]
+  }
+}

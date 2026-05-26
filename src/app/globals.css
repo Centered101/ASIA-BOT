@@ -27,7 +27,7 @@ html, * { scrollbar-width: none; }
 ::selection { background: #000000b3; color: var(--primary-color); }
 
 body {
-    font-family: "Kanit", "Bai Jamjuree", monospace;
+  font-family: "Kanit", "Bai Jamjuree", monospace;
   font-weight: 600;
   background: linear-gradient(135deg, var(--primary-light) 0%, #F0F9FF 40%, #E0F2FE 100%);
   min-height: 100vh;

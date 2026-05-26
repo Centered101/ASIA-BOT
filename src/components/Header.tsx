@@ -53,7 +53,7 @@ export default function Header({ subtitle = "Overview" }: { subtitle?: string })
             </Link>
 
             {/* ── Desktop nav ── */}
-            <nav className="hidden md:flex items-center gap-0.5 flex-1 ml-1">
+            <nav className="hidden lg:flex items-center gap-0.5 flex-1 ml-1">
               {mainLinks.map(link => (
                 <Link key={link.name} href={link.url ?? (link.path ?? "#")}
                   target={link.external ? "_blank" : undefined}
@@ -96,7 +96,7 @@ export default function Header({ subtitle = "Overview" }: { subtitle?: string })
             </nav>
 
             {/* ── Desktop CTA buttons ── */}
-            <div className="hidden md:flex items-center gap-2 flex-shrink-0">
+            <div className="hidden lg:flex items-center gap-2 flex-shrink-0">
               {session ? (
                 <>
                   <Link href="/student"
@@ -140,7 +140,7 @@ export default function Header({ subtitle = "Overview" }: { subtitle?: string })
 
             {/* ── Mobile hamburger ── */}
             <button
-              className="md:hidden ml-auto w-10 h-10 rounded-xl border border-slate-200 bg-white flex items-center justify-center text-slate-600 hover:bg-slate-50 transition"
+              className="lg:hidden ml-auto w-10 h-10 rounded-xl border border-slate-200 bg-white flex items-center justify-center text-slate-600 hover:bg-slate-50 transition"
               onClick={() => setMenuOpen(v => !v)}
               aria-label="เปิดเมนู">
               <i className={`fa-solid ${menuOpen ? "fa-xmark" : "fa-bars"} text-sm`} />
@@ -150,7 +150,7 @@ export default function Header({ subtitle = "Overview" }: { subtitle?: string })
       </header>
 
       {/* ── Mobile bottom-sheet menu ── */}
-      <div className={`md:hidden fixed inset-0 z-40 transition-all duration-300 ${menuOpen ? "pointer-events-auto" : "pointer-events-none"}`}>
+      <div className={`lg:hidden fixed inset-0 z-40 transition-all duration-300 ${menuOpen ? "pointer-events-auto" : "pointer-events-none"}`}>
         {/* Backdrop */}
         <div className={`absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-300 ${menuOpen ? "opacity-100" : "opacity-0"}`}
           onClick={() => setMenuOpen(false)} />

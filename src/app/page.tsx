@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import Preloader from "@/components/Preloader";
 import TeamSection from "@/components/TeamSection";
 import QuickLinksList from "@/components/QuickLinksList";
 import ProjectsGrid from "@/components/ProjectsGrid";
@@ -41,7 +40,6 @@ export default function HomePage() {
 
   return (
     <>
-      <Preloader />
       <div className="bg-blob" style={{ width: 520, height: 520, background: "var(--primary-color)", top: -120, right: -170 }} />
       <div className="bg-blob" style={{ width: 420, height: 420, background: "#FF7070",              bottom: -110, left: -130 }} />
 

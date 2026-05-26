@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
-import Preloader from "@/components/Preloader";
 import Footer from "@/components/Footer";
 import { getStudentSession } from "@/lib/session";
 
@@ -178,11 +177,10 @@ export default function RoomlyPage() {
   const bookedSlotIds = new Set(bookedSlots.map((b) => b.slot_id));
   const selectedSlot = timeSlots.find((s) => s.id === slotId);
 
-  if (authed === null) return <Preloader />;
+  if (authed === null) return null;
 
   return (
     <>
-      <Preloader />
       <div className="bg-blob" style={{ width: 500, height: 500, background: "var(--primary-color)", top: -120, right: -170 }} />
       <div className="bg-blob" style={{ width: 400, height: 400, background: "#FF7070", bottom: -100, left: -130 }} />
       <Header subtitle="Roomly — จองห้อง" />

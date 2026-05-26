@@ -15,25 +15,28 @@ export async function PATCH(
   const body = await req.json() as {
     name?: string; price?: number; cost?: number | null; stock?: number;
     unit?: string | null; category?: string | null; tag?: string | null;
-    images?: string[] | null; active?: boolean;
+    images?: string[] | null; active?: boolean; deleted_at?: string | null;
   };
 
-  const update: Database["public"]["Tables"]["products"]["Update"] = {};
-  if ("name"     in body) update.name     = body.name;
-  if ("price"    in body) update.price    = body.price;
-  if ("cost"     in body) update.cost     = body.cost;
-  if ("stock"    in body) update.stock    = body.stock;
-  if ("unit"     in body) update.unit     = body.unit;
-  if ("category" in body) update.category = body.category;
-  if ("tag"      in body) update.tag      = body.tag;
-  if ("images"   in body) update.images   = body.images;
-  if ("active"   in body) update.active   = body.active;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const update: Record<string, any> = {};
+  if ("name"       in body) update.name       = body.name;
+  if ("price"      in body) update.price      = body.price;
+  if ("cost"       in body) update.cost       = body.cost;
+  if ("stock"      in body) update.stock      = body.stock;
+  if ("unit"       in body) update.unit       = body.unit;
+  if ("category"   in body) update.category   = body.category;
+  if ("tag"        in body) update.tag        = body.tag;
+  if ("images"     in body) update.images     = body.images;
+  if ("active"     in body) update.active     = body.active;
+  if ("deleted_at" in body) update.deleted_at = body.deleted_at;
 
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ status: "error", message: "ไม่มีข้อมูลให้อัพเดท" }, { status: 400 });
   }
 
-  const { error } = await supabase.from("products").update(update).eq("id", id);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase.from("products") as any).update(update).eq("id", id);
   if (error) return NextResponse.json({ status: "error", message: error.message }, { status: 500 });
   return NextResponse.json({ status: "success" });
 }
@@ -43,7 +46,10 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const { error } = await supabase.from("products").update({ active: false }).eq("id", id);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase.from("products") as any)
+    .update({ active: false, stock: 0, deleted_at: new Date().toISOString() })
+    .eq("id", id);
   if (error) return NextResponse.json({ status: "error", message: error.message }, { status: 500 });
   return NextResponse.json({ status: "success" });
 }

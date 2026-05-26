@@ -3,9 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
-import Preloader from "@/components/Preloader";
 import Footer from "@/components/Footer";
-import { useNotification } from "@/components/Notification";
+import { toast } from "sonner";
 import { getStudentSession } from "@/lib/session";
 
 type Location = "school" | "library" | "meeting";
@@ -39,7 +38,6 @@ function fmtDuration(min: number | null) {
 
 export default function StudentEntryScannerPage() {
   const router = useRouter();
-  const { showNotification } = useNotification();
 
   const [authed,    setAuthed]    = useState<boolean | null>(null); // null = checking
   const [tab,       setTab]       = useState<Location>("school");
@@ -65,11 +63,11 @@ export default function StudentEntryScannerPage() {
         setLastUpdate(new Date().toLocaleTimeString("th-TH"));
       }
     } catch {
-      showNotification("ไม่สามารถโหลดข้อมูลได้", "error");
+      toast.error("ไม่สามารถโหลดข้อมูลได้");
     } finally {
       setLoading(false);
     }
-  }, [authed, date, tab, showNotification]);
+  }, [authed, date, tab]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -77,7 +75,6 @@ export default function StudentEntryScannerPage() {
   if (authed === null) {
     return (
       <>
-        <Preloader />
         <Header subtitle="Student Entry Scanner" />
         <main className="min-h-screen flex items-center justify-center">
           <span className="spinner w-10 h-10 border-4" />
@@ -90,7 +87,6 @@ export default function StudentEntryScannerPage() {
   if (!authed) {
     return (
       <>
-        <Preloader />
         <div className="bg-blob" style={{ width: 500, height: 500, background: "var(--primary-color)", top: -120, right: -170 }} />
         <div className="bg-blob" style={{ width: 400, height: 400, background: "#FF7070", bottom: -100, left: -130 }} />
         <Header subtitle="Student Entry Scanner" />
@@ -120,7 +116,6 @@ export default function StudentEntryScannerPage() {
 
   return (
     <>
-      <Preloader />
       <div className="bg-blob" style={{ width: 500, height: 500, background: "var(--primary-color)", top: -120, right: -170 }} />
       <div className="bg-blob" style={{ width: 400, height: 400, background: "#FF7070", bottom: -100, left: -130 }} />
       <Header subtitle="Student Entry Scanner" />

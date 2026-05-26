@@ -18,7 +18,10 @@ export function getStudentSession(): StudentSession | null {
     const raw  = localStorage.getItem(SESSION_KEY);
     const time = localStorage.getItem(SESSION_TIME_KEY);
     if (!raw || !time) return null;
-    if (Date.now() - new Date(time).getTime() > SESSION_TTL) return null;
+    if (Date.now() - new Date(time).getTime() > SESSION_TTL) {
+      clearStudentSession();
+      return null;
+    }
     return JSON.parse(raw) as StudentSession;
   } catch { return null; }
 }

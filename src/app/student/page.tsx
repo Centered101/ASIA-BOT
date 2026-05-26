@@ -4,9 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Header from "@/components/Header";
-import Preloader from "@/components/Preloader";
 import Footer from "@/components/Footer";
-import { useNotification } from "@/components/Notification";
+import { toast } from "sonner";
 import { SESSION_KEY, SESSION_TIME_KEY, SESSION_TTL, DEPARTMENTS } from "@/lib/config";
 import type { Database } from "@/types/database";
 import QRCode from "qrcode";
@@ -27,7 +26,6 @@ function calcGrade(program: string, entryYear: number | string | null) {
 
 export default function StudentPage() {
   const router = useRouter();
-  const { showNotification } = useNotification();
   const [student, setStudent] = useState<Student | null>(null);
   const [loginTime, setLoginTime] = useState("");
   const [flipped, setFlipped] = useState(false);
@@ -71,12 +69,12 @@ export default function StudentPage() {
         const updated = json.data ?? { ...student, photo_url: json.photo_url };
         localStorage.setItem(SESSION_KEY, JSON.stringify(updated));
         setStudent(updated);
-        showNotification("อัพโหลดรูปสำเร็จ!", "success");
+        toast.success("อัพโหลดรูปสำเร็จ!");
       } else {
-        showNotification(json.message ?? "อัพโหลดไม่สำเร็จ", "error");
+        toast.error(json.message ?? "อัพโหลดไม่สำเร็จ");
       }
     } catch {
-      showNotification("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้", "error");
+      toast.error("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
     } finally {
       setUploadingPhoto(false);
       if (photoInputRef.current) photoInputRef.current.value = "";
@@ -165,7 +163,7 @@ export default function StudentPage() {
   async function saveDirectEdit() {
     if (!student) return;
     if (editPhone && !/^[0-9]{9,10}$/.test(editPhone)) {
-      showNotification("เบอร์โทรต้องเป็นตัวเลข 9-10 หลัก", "error");
+      toast.error("เบอร์โทรต้องเป็นตัวเลข 9-10 หลัก");
       return;
     }
     setSaving(true);
@@ -186,12 +184,12 @@ export default function StudentPage() {
       if (data.status === "success") {
         localStorage.setItem(SESSION_KEY, JSON.stringify(data.data));
         setStudent(data.data);
-        showNotification("บันทึกข้อมูลสำเร็จ!", "success");
+        toast.success("บันทึกข้อมูลสำเร็จ!");
       } else {
-        showNotification(data.message || "เกิดข้อผิดพลาด", "error");
+        toast.error(data.message || "เกิดข้อผิดพลาด");
       }
     } catch {
-      showNotification("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้", "error");
+      toast.error("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
     } finally {
       setSaving(false);
     }
@@ -203,15 +201,15 @@ export default function StudentPage() {
     const changes: Record<string, string> = {};
     const sid = reqStudentId.trim();
     if (sid && sid !== student.student_id) {
-      if (!/^[0-9A-Za-z\-]{4,20}$/.test(sid)) { showNotification("เลขบัตรต้องเป็นตัวเลข/อักษร 4-20 หลัก", "error"); return; }
+      if (!/^[0-9A-Za-z\-]{4,20}$/.test(sid)) { toast.error("เลขบัตรต้องเป็นตัวเลข/อักษร 4-20 หลัก"); return; }
       changes.student_id = sid;
     }
     if (reqFirstName.trim() && reqFirstName.trim() !== student.first_name) {
-      if (!THAI_RE.test(reqFirstName.trim())) { showNotification("ชื่อต้องเป็นภาษาไทย", "error"); return; }
+      if (!THAI_RE.test(reqFirstName.trim())) { toast.error("ชื่อต้องเป็นภาษาไทย"); return; }
       changes.first_name = reqFirstName.trim();
     }
     if (reqLastName.trim() && reqLastName.trim() !== student.last_name) {
-      if (!THAI_RE.test(reqLastName.trim())) { showNotification("นามสกุลต้องเป็นภาษาไทย", "error"); return; }
+      if (!THAI_RE.test(reqLastName.trim())) { toast.error("นามสกุลต้องเป็นภาษาไทย"); return; }
       changes.last_name = reqLastName.trim();
     }
     if (reqProgram && reqProgram !== (student.program ?? "")) {
@@ -219,14 +217,14 @@ export default function StudentPage() {
     }
     if (reqEntryYear.trim() && reqEntryYear.trim() !== String(student.entry_year ?? "")) {
       const yr = parseInt(reqEntryYear.trim());
-      if (isNaN(yr) || yr < 2500 || yr > 2600) { showNotification("ปีที่เข้าเรียนไม่ถูกต้อง (กรอก พ.ศ. เช่น 2567)", "error"); return; }
+      if (isNaN(yr) || yr < 2500 || yr > 2600) { toast.error("ปีที่เข้าเรียนไม่ถูกต้อง (กรอก พ.ศ. เช่น 2567)"); return; }
       changes.entry_year = reqEntryYear.trim();
     }
     if (reqDept && reqDept !== (student.department ?? "")) {
       changes.department = reqDept;
     }
     if (Object.keys(changes).length === 0) {
-      showNotification("ไม่มีข้อมูลที่เปลี่ยนแปลง", "info");
+      toast.info("ไม่มีข้อมูลที่เปลี่ยนแปลง");
       return;
     }
     setRequesting(true);
@@ -238,19 +236,19 @@ export default function StudentPage() {
       });
       const data = await res.json();
       if (data.status === "success") {
-        showNotification("ส่งคำขอแล้ว Admin จะตรวจสอบในเร็วๆ นี้", "success");
+        toast.success("ส่งคำขอแล้ว Admin จะตรวจสอบในเร็วๆ นี้");
         setModalEdit(false);
       } else {
-        showNotification(data.message || "เกิดข้อผิดพลาด", "error");
+        toast.error(data.message || "เกิดข้อผิดพลาด");
       }
     } catch {
-      showNotification("ไม่สามารถส่งคำขอได้", "error");
+      toast.error("ไม่สามารถส่งคำขอได้");
     } finally {
       setRequesting(false);
     }
   }
 
-  if (!student) return <Preloader />;
+  if (!student) return null;
 
   const isPvs = student.program === "ปวส";
   const grade = calcGrade(student.program, student.entry_year);
@@ -278,7 +276,6 @@ export default function StudentPage() {
 
   return (
     <>
-      <Preloader />
       <div className="bg-blob" style={{ width: 520, height: 520, background: "var(--primary-color)", top: -120, right: -170 }} />
       <div className="bg-blob" style={{ width: 420, height: 420, background: "var(--primary-dark)", bottom: -110, left: -130 }} />
       <Header subtitle="ระบบนักเรียน" />
@@ -573,7 +570,7 @@ export default function StudentPage() {
               <i className="fa-solid fa-pen-to-square text-[13px]" /> แก้ไขข้อมูล
             </button>
 
-            <button onClick={() => { showNotification("ออกจากระบบแล้ว", "info"); setTimeout(doLogout, 600); }}
+            <button onClick={() => { toast.info("ออกจากระบบแล้ว"); setTimeout(doLogout, 600); }}
               className="btn-ghost w-full text-red-500 text-sm overflow-hidden"
               style={{ background: "#FEF2F2", borderColor: "rgba(239,68,68,0.5)" }}>
               <i className="fa-solid fa-right-from-bracket text-[13px]" /> ออกจากระบบ

@@ -10,7 +10,7 @@ const supabase = createClient<Database>(
 export async function GET() {
   const { data, error } = await supabase
     .from("products")
-    .select("id, tag, stock, name, price, cost, images, unit, category, active, created_at")
+    .select("id, tag, stock, name, price, cost, images, unit, category, active, deleted_at, created_at")
     .order("name");
   if (error) return NextResponse.json({ status: "error", message: error.message }, { status: 500 });
   return NextResponse.json({ status: "success", data });

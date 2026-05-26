@@ -1,4 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+
+export const viewport: Viewport = {
+  themeColor: "#FF7070",
+};
 
 export const metadata: Metadata = {
   title: "ASIA-BOT Admin",
@@ -9,5 +13,10 @@ export const metadata: Metadata = {
 };
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
+  return (
+    <>
+      <style>{`::selection { background: #FF707066; color: #fff; }`}</style>
+      {children}
+    </>
+  );
 }

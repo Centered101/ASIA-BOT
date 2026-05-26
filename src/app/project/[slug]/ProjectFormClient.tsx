@@ -2,8 +2,7 @@
 
 import { useState, use, useEffect, useCallback, useContext, createContext } from "react";
 import { useRouter } from "next/navigation";
-import Preloader from "@/components/Preloader";
-import { useNotification } from "@/components/Notification";
+import { toast } from "sonner";
 import type { CustomField } from "@/lib/config";
 import { getStudentSession, type StudentSession } from "@/lib/session";
 
@@ -601,7 +600,6 @@ function MascotBubble({ mascot, msg, accent, onDismiss }: {
 export default function ProjectFormClient({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
   const router = useRouter();
-  const { showNotification } = useNotification();
 
   const [dbProject, setDbProject] = useState<DBProject | null>(null);
   const [dbLoading, setDbLoading] = useState(true);
@@ -691,18 +689,18 @@ export default function ProjectFormClient({ params }: { params: Promise<{ slug: 
   }
 
   function validateSection1() {
-    if (!form.gender)      { showNotification("กรุณาเลือกเพศของคุณ", "error");        return false; }
-    if (!form.evaluator)   { showNotification("กรุณาเลือกสถานะผู้ประเมิน", "error"); return false; }
-    if (!form.name.trim()) { showNotification("กรุณากรอกชื่อ-นามสกุล", "error");     return false; }
+    if (!form.gender)      { toast.error("กรุณาเลือกเพศของคุณ");        return false; }
+    if (!form.evaluator)   { toast.error("กรุณาเลือกสถานะผู้ประเมิน"); return false; }
+    if (!form.name.trim()) { toast.error("กรุณากรอกชื่อ-นามสกุล");     return false; }
     return true;
   }
 
   function validateSection2() {
     for (const c of CRITERIA) {
-      if (form[c.key as CriterionKey] === null) { showNotification(`กรุณาให้คะแนน: ${c.label}`, "error"); return false; }
+      if (form[c.key as CriterionKey] === null) { toast.error(`กรุณาให้คะแนน: ${c.label}`); return false; }
     }
     for (const f of project?.customFields ?? []) {
-      if (f.required && !custom[f.key]) { showNotification(`กรุณาตอบ: ${f.label}`, "error"); return false; }
+      if (f.required && !custom[f.key]) { toast.error(`กรุณาตอบ: ${f.label}`); return false; }
     }
     return true;
   }
@@ -725,11 +723,11 @@ export default function ProjectFormClient({ params }: { params: Promise<{ slug: 
         setSavedEval(snap);
         setSubmitted(true);
         setMascotBubble(null);
-        showNotification("ขอบคุณสำหรับการประเมิน!", "success");
+        toast.success("ขอบคุณสำหรับการประเมิน!");
       }
-      else showNotification(data.message || "เกิดข้อผิดพลาด กรุณาลองอีกครั้ง", "error");
+      else toast.error(data.message || "เกิดข้อผิดพลาด กรุณาลองอีกครั้ง");
     } catch {
-      showNotification("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้", "error");
+      toast.error("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
     } finally {
       setLoading(false);
     }
@@ -737,7 +735,7 @@ export default function ProjectFormClient({ params }: { params: Promise<{ slug: 
 
 
 
-  if (dbLoading) return <Preloader loading={dbLoading} />;
+  if (dbLoading) return null;
 
   // ── Not found ────────────────────────────────────────────────────────────────
 
@@ -862,8 +860,6 @@ export default function ProjectFormClient({ params }: { params: Promise<{ slug: 
 
   return (
     <AccentCtx.Provider value={accent}>
-      <Preloader />
-
       {/* ── Receipt preview modal ── */}
       {previewUrl && (
         <div

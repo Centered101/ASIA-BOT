@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import Preloader from "@/components/Preloader";
 
 type Project = {
   id: string;
@@ -252,7 +251,6 @@ export default function ProjectsPage() {
 
   return (
     <>
-      <Preloader />
       <div className="bg-blob" style={{ width: 440, height: 440, background: "var(--primary-color)", top: -100, right: -140 }} />
       <div className="bg-blob" style={{ width: 360, height: 360, background: "var(--primary-dark)", bottom: -80, left: -100 }} />
 

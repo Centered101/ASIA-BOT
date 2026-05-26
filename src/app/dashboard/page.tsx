@@ -2,9 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Header from "@/components/Header";
-import Preloader from "@/components/Preloader";
 import TeamSection from "@/components/TeamSection";
-import { useNotification } from "@/components/Notification";
+import { toast } from "sonner";
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement,
   RadialLinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler,
@@ -38,7 +37,6 @@ const EMOJI_MAP: Record<number, string> = { 1: "😞", 2: "😐", 3: "😀" };
 const chartOpts = { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: "bottom" as const } } };
 
 export default function DashboardPage() {
-  const { showNotification } = useNotification();
   const [data, setData] = useState<Evaluation[]>([]);
   const [loading, setLoading] = useState(true);
   const [projectFilter, setProjectFilter] = useState("all");
@@ -54,14 +52,14 @@ export default function DashboardPage() {
         setData(json.data);
         setLastUpdate(new Date().toLocaleTimeString("th-TH"));
       } else {
-        showNotification("ไม่สามารถโหลดข้อมูลได้", "error");
+        toast.error("ไม่สามารถโหลดข้อมูลได้");
       }
     } catch {
-      showNotification("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้", "error");
+      toast.error("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
     } finally {
       setLoading(false);
     }
-  }, [showNotification]);
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -148,7 +146,6 @@ export default function DashboardPage() {
 
   return (
     <>
-      <Preloader />
       <Header subtitle="Analytics Dashboard" />
 
       <section className="max-w-screen-2xl grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mx-auto p-4 pt-6">

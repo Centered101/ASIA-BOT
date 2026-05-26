@@ -3,14 +3,12 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
-import Preloader from "@/components/Preloader";
-import { useNotification } from "@/components/Notification";
+import { toast } from "sonner";
 import { SESSION_KEY, SESSION_TIME_KEY, SESSION_TTL } from "@/lib/config";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { showNotification } = useNotification();
 
   const next = searchParams.get("next") || "/student";
 
@@ -32,8 +30,8 @@ function LoginForm() {
   }, [router, next]);
 
   async function handleLogin() {
-    if (!studentId.trim()) { setIdErr(true); showNotification("กรุณากรอกรหัสนักเรียน", "error"); return; }
-    if (!phone.trim()) { setPassErr(true); showNotification("กรุณากรอกเบอร์โทรนักเรียน", "error"); return; }
+    if (!studentId.trim()) { setIdErr(true); toast.error("กรุณากรอกรหัสนักเรียน"); return; }
+    if (!phone.trim()) { setPassErr(true); toast.error("กรุณากรอกเบอร์โทรนักเรียน"); return; }
 
     setLoading(true);
     try {
@@ -47,14 +45,14 @@ function LoginForm() {
       if (data.status === "success") {
         localStorage.setItem(SESSION_KEY, JSON.stringify(data.data));
         localStorage.setItem(SESSION_TIME_KEY, new Date().toISOString());
-        showNotification("เข้าสู่ระบบสำเร็จ!", "success");
+        toast.success("เข้าสู่ระบบสำเร็จ!");
         setTimeout(() => router.replace(next), 700);
       } else {
         setIdErr(true); setPassErr(true);
-        showNotification(data.message || "รหัสหรือเบอร์โทรไม่ถูกต้อง", "error");
+        toast.error(data.message || "รหัสหรือเบอร์โทรไม่ถูกต้อง");
       }
     } catch {
-      showNotification("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้", "error");
+      toast.error("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
     } finally {
       setLoading(false);
     }
@@ -62,7 +60,6 @@ function LoginForm() {
 
   return (
     <>
-      <Preloader />
       <div className="bg-blob" style={{ width: 520, height: 520, background: "var(--primary-color)", top: -120, right: -170 }} />
       <div className="bg-blob" style={{ width: 420, height: 420, background: "var(--primary-dark)", bottom: -110, left: -130 }} />
       <Header subtitle="เข้าสู่ระบบ" />

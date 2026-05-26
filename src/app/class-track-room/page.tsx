@@ -2,9 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Header from "@/components/Header";
-import Preloader from "@/components/Preloader";
 import Footer from "@/components/Footer";
-import { useNotification } from "@/components/Notification";
+import { toast } from "sonner";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -96,40 +95,37 @@ function MascotRoomCard({ name, location, status, capacity, amenities, descripti
 }
 
 function ClassroomNowCard({ entry }: { entry: ScheduleEntry }) {
-  const color = entry.class_groups?.color ?? "var(--primary-color)";
+  const color = entry.class_groups?.color ?? "#dc2626";
   return (
     <div className="bg-white rounded-2xl border-2 overflow-hidden transition-all hover:shadow-lg hover:-translate-y-0.5"
       style={{ borderColor: color + "55" }}>
-      {/* Header */}
-      <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-2"
-        style={{ background: `linear-gradient(135deg, ${color}12 0%, ${color}06 100%)` }}>
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-            <span className="w-2 h-2 rounded-full animate-pulse flex-shrink-0" style={{ background: color }} />
-            <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color }}>กำลังเรียน</span>
-            {entry.has_override && (
-              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: "#f0883e22", color: "#f0883e" }}>
-                <i className="fa-solid fa-rotate mr-0.5" />เปลี่ยนห้อง
-              </span>
-            )}
-          </div>
-          <div className="text-lg font-extrabold text-slate-800 leading-tight truncate">{entry.room_name}</div>
-          {entry.has_override && entry.original_room && (
-            <div className="text-[10px] text-slate-400 line-through">{entry.original_room}</div>
-          )}
-          {entry.subject && (
-            <div className="text-xs font-semibold mt-0.5 truncate" style={{ color }}>{entry.subject}</div>
-          )}
-        </div>
-        <div className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center"
-          style={{ background: color + "18", color }}>
-          <i className="fa-solid fa-chalkboard-user text-lg" />
-        </div>
+      {/* Mascot banner */}
+      <div className="relative h-24 flex items-end justify-center pb-1 overflow-hidden"
+        style={{ background: `linear-gradient(135deg,${color}18,${color}08)` }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/status_room/mascot-reds.svg" alt="occupied" className="h-20 w-auto object-contain drop-shadow-md" />
+        <span className="absolute top-2 left-2 flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-50 text-red-500 border border-red-100">
+          <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+          กำลังเรียน
+        </span>
+        {entry.has_override && (
+          <span className="absolute top-2 right-2 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+            style={{ background: "#f0883e22", color: "#f0883e" }}>
+            <i className="fa-solid fa-rotate mr-0.5" />เปลี่ยนห้อง
+          </span>
+        )}
       </div>
       {/* Body */}
-      <div className="px-4 pb-4 pt-3 space-y-2">
+      <div className="px-3 pb-3 pt-2.5 space-y-1.5">
+        <div className="text-sm font-extrabold text-slate-800 leading-tight truncate">{entry.room_name}</div>
+        {entry.has_override && entry.original_room && (
+          <div className="text-[10px] text-slate-400 line-through">{entry.original_room}</div>
+        )}
+        {entry.subject && (
+          <div className="text-xs font-semibold truncate" style={{ color }}>{entry.subject}</div>
+        )}
         {entry.class_groups && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: color }}>
               {entry.class_groups.name}
             </span>
@@ -160,7 +156,6 @@ function ClassroomNowCard({ entry }: { entry: ScheduleEntry }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ClassTrackRoomPage() {
-  const { showNotification } = useNotification();
 
   // Bookable rooms
   const [rooms, setRooms]           = useState<Room[]>([]);
@@ -180,9 +175,9 @@ export default function ClassTrackRoomPage() {
       const res = await fetch("/api/rooms");
       const json = await res.json();
       if (json.status === "success") { setRooms(json.data); setLastUpdate(new Date().toLocaleTimeString("th-TH")); }
-    } catch { showNotification("ไม่สามารถโหลดข้อมูลห้องได้", "error"); }
+    } catch { toast.error("ไม่สามารถโหลดข้อมูลห้องได้"); }
     finally { setRoomsLoading(false); }
-  }, [showNotification]);
+  }, []);
 
   const fetchSchedule = useCallback(async () => {
     try {
@@ -239,7 +234,6 @@ export default function ClassTrackRoomPage() {
 
   return (
     <>
-      <Preloader />
       <div className="bg-blob" style={{ width: 500, height: 500, background: "var(--primary-color)", top: -120, right: -170 }} />
       <div className="bg-blob" style={{ width: 400, height: 400, background: "#FF7070", bottom: -100, left: -130 }} />
       <Header subtitle="Class Track Room" />
@@ -324,8 +318,10 @@ export default function ClassTrackRoomPage() {
             {roomsLoading ? (
               <div className="flex justify-center py-20"><span className="spinner w-12 h-12 border-4" /></div>
             ) : bookableFiltered.length === 0 ? (
-              <div className="text-center py-20 text-slate-400">
-                <i className="fa-solid fa-door-open text-4xl mb-3 opacity-30 block" />ไม่พบห้อง
+              <div className="text-center py-16">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/status_room/mascot-blues.svg" alt="empty" className="w-24 h-24 mx-auto mb-3 opacity-70" />
+                <p className="text-slate-400 text-sm font-medium">ไม่พบห้องที่ค้นหา</p>
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -346,10 +342,11 @@ export default function ClassTrackRoomPage() {
             {schedLoading ? (
               <div className="flex justify-center py-20"><span className="spinner w-12 h-12 border-4" /></div>
             ) : schedule.length === 0 ? (
-              <div className="text-center py-20 text-slate-400">
-                <i className="fa-solid fa-calendar-xmark text-4xl mb-3 opacity-30 block" />
-                <p className="text-sm">ยังไม่มีข้อมูลตารางเรียน</p>
-                <p className="text-xs mt-1">ผู้ดูแลระบบสามารถเพิ่มได้ที่ Admin Panel</p>
+              <div className="text-center py-16">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/status_room/mascot-blues.svg" alt="empty" className="w-24 h-24 mx-auto mb-3 opacity-70" />
+                <p className="text-slate-500 text-sm font-medium">ยังไม่มีข้อมูลตารางเรียน</p>
+                <p className="text-slate-400 text-xs mt-1">ผู้ดูแลระบบสามารถเพิ่มได้ที่ Admin Panel</p>
               </div>
             ) : (
               <>
@@ -371,11 +368,12 @@ export default function ClassTrackRoomPage() {
                   </div>
 
                   {currentEntries.length === 0 ? (
-                    <div className="flex items-center gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-100 text-slate-400">
-                      <i className="fa-solid fa-mug-hot text-2xl opacity-40" />
+                    <div className="flex items-center gap-4 p-4 rounded-2xl bg-green-50 border border-green-100">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src="/status_room/mascot-greens.svg" alt="free" className="w-14 h-14 object-contain flex-shrink-0" />
                       <div>
-                        <div className="text-sm font-semibold">ไม่มีการเรียนในขณะนี้</div>
-                        <div className="text-xs mt-0.5">ดูตารางทั้งวันด้านล่าง</div>
+                        <div className="text-sm font-bold text-green-700">ไม่มีการเรียนในขณะนี้</div>
+                        <div className="text-xs text-green-500 mt-0.5">ดูตารางทั้งวันด้านล่าง</div>
                       </div>
                     </div>
                   ) : (

@@ -12,6 +12,7 @@ export async function GET() {
     .from("products")
     .select("id, tag, stock, name, price, images, unit, category")
     .eq("active", true)
+    .is("deleted_at", null)
     .order("name");
 
   if (error) return NextResponse.json({ status: "error", message: error.message }, { status: 500 });

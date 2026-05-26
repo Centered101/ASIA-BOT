@@ -2,9 +2,8 @@
 
 import { useState, useEffect, useRef, Suspense } from "react";
 import Header from "@/components/Header";
-import Preloader from "@/components/Preloader";
 import Footer from "@/components/Footer";
-import { useNotification } from "@/components/Notification";
+import { toast } from "sonner";
 import { createClient } from "@supabase/supabase-js";
 import { getStudentSession } from "@/lib/session";
 
@@ -37,7 +36,6 @@ type ImagePreview = { file: File; url: string };
 type FeedbackStats = { total: number; pending: number; in_progress: number; resolved: number };
 
 function FeedbackContent() {
-  const { showNotification } = useNotification();
   const [session, setSession] = useState<ReturnType<typeof getStudentSession>>(null);
   useEffect(() => { setSession(getStudentSession()); }, []);
 
@@ -102,11 +100,11 @@ function FeedbackContent() {
   function handleFiles(files: FileList | null) {
     if (!files) return;
     const remaining = MAX_IMAGES - images.length;
-    if (remaining <= 0) { showNotification(`อัพโหลดได้สูงสุด ${MAX_IMAGES} รูป`, "error"); return; }
+    if (remaining <= 0) { toast.error(`อัพโหลดได้สูงสุด ${MAX_IMAGES} รูป`); return; }
     const added: ImagePreview[] = [];
     Array.from(files).slice(0, remaining).forEach(file => {
       if (file.size > MAX_SIZE_MB * 1024 * 1024) {
-        showNotification(`${file.name} ขนาดเกิน ${MAX_SIZE_MB} MB`, "error");
+        toast.error(`${file.name} ขนาดเกิน ${MAX_SIZE_MB} MB`);
         return;
       }
       added.push({ file, url: URL.createObjectURL(file) });
@@ -141,8 +139,8 @@ function FeedbackContent() {
 
   async function handleSubmit() {
     let ok = true;
-    if (!category) { setCatErr(true); showNotification("กรุณาเลือกหมวดหมู่", "error"); ok = false; }
-    if (!message.trim()) { setMsgErr(true); if (ok) showNotification("กรุณากรอกข้อความ", "error"); ok = false; }
+    if (!category) { setCatErr(true); toast.error("กรุณาเลือกหมวดหมู่"); ok = false; }
+    if (!message.trim()) { setMsgErr(true); if (ok) toast.error("กรุณากรอกข้อความ"); ok = false; }
     if (!ok) return;
 
     setLoading(true);
@@ -161,13 +159,13 @@ function FeedbackContent() {
       const data = await res.json();
       if (data.status === "success") {
         setSuccess(true);
-        showNotification(tab === "comment" ? "ส่งความคิดเห็นสำเร็จ!" : "รายงานปัญหาสำเร็จ!", "success");
+        toast.success(tab === "comment" ? "ส่งความคิดเห็นสำเร็จ!" : "รายงานปัญหาสำเร็จ!");
         setFbStats(prev => prev ? { ...prev, total: prev.total + 1, pending: prev.pending + 1 } : prev);
       } else {
-        showNotification(data.message || "เกิดข้อผิดพลาด", "error");
+        toast.error(data.message || "เกิดข้อผิดพลาด");
       }
     } catch {
-      showNotification("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้", "error");
+      toast.error("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
     } finally {
       setLoading(false);
     }
@@ -185,7 +183,6 @@ function FeedbackContent() {
 
   return (
     <>
-      <Preloader />
       <div className="bg-blob" style={{ width: 520, height: 520, background: "var(--primary-color)", top: -120, right: -170 }} />
       <div className="bg-blob" style={{ width: 420, height: 420, background: "#FF7070", bottom: -110, left: -130 }} />
       <Header subtitle="Feedback" />
@@ -265,7 +262,7 @@ function FeedbackContent() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { if (session) setIdentityMode("identified"); else showNotification("กรุณาเข้าสู่ระบบก่อน", "error"); }}
+                  onClick={() => { if (session) setIdentityMode("identified"); else toast.error("กรุณาเข้าสู่ระบบก่อน"); }}
                   className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all ${identityMode === "identified" ? "bg-sky-500 text-white shadow" : "text-slate-500 hover:text-sky-500"} ${!session ? "opacity-50" : ""}`}>
                   <i className="fa-solid fa-id-card" /> ระบุตัวตน
                   {!session && <span className="text-[10px] opacity-70">(ต้อง login)</span>}

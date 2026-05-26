@@ -1,9 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState, useCallback, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { CustomField } from "@/lib/config";
 import { Chart, registerables } from "chart.js";
+import { toast } from "sonner";
 Chart.register(...registerables);
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -57,11 +58,13 @@ type EntryLog = {
 type Product = {
   id: string; name: string; price: number; cost: number | null;
   stock: number; unit: string | null; category: string | null;
-  tag: string | null; images: string[] | null; active: boolean; created_at: string;
+  tag: string | null; images: string[] | null; active: boolean;
+  deleted_at: string | null; created_at: string;
 };
 
 type ShopOrder = {
   order_id: string; student_id: string; student_name: string;
+  student_photo_url: string | null;
   items_json: unknown; total: number; pi_id: string | null;
   status: "pending" | "paid" | "cancelled" | "refunded";
   delivery_mode: "pickup" | "delivery" | null;
@@ -69,7 +72,7 @@ type ShopOrder = {
   created_at: string; updated_at: string;
 };
 
-type OrderItem = { id: string; name: string; price: number; qty: number; unit: string };
+type OrderItem = { id: string; name: string; price: number; qty: number; unit: string; imageUrl?: string | null };
 
 type NameChangeRequest = {
   id: string; student_id: string;
@@ -623,19 +626,25 @@ function SidebarUser({ admin, onLogout, onAvatarChange }: {
   useEffect(() => {
     const raw = sessionStorage.getItem(STORAGE_TIME_KEY);
     if (!raw) return;
+    let tid: ReturnType<typeof setInterval> | undefined;
     function tick() {
       const exp = new Date(raw!).getTime() + SESSION_8H;
       const rem = exp - Date.now();
-      if (rem <= 0) { setTimeLeft("หมดอายุ"); return; }
+      if (rem <= 0) {
+        setTimeLeft("หมดอายุ");
+        clearInterval(tid);
+        onLogout();
+        return;
+      }
       const h = Math.floor(rem / 3_600_000);
       const m = Math.floor((rem % 3_600_000) / 60_000);
       const s = Math.floor((rem % 60_000) / 1_000);
       setTimeLeft(`${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
     }
     tick();
-    const id = setInterval(tick, 1_000);
-    return () => clearInterval(id);
-  }, []);
+    tid = setInterval(tick, 1_000);
+    return () => clearInterval(tid);
+  }, [onLogout]);
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -1498,7 +1507,7 @@ function AllRequestsTab({ adminId, kind = "all" }: { adminId: string; kind?: "al
     const res = await adminFetch(endpoint, adminId, { method: "PATCH", body: JSON.stringify({ status, admin_note: note ?? null }) });
     const j = await res.json();
     setUpdating(null);
-    if (j.status !== "success") alert(j.message ?? "เกิดข้อผิดพลาด");
+    if (j.status !== "success") toast.error(j.message ?? "เกิดข้อผิดพลาด");
     fetch_();
   }
 
@@ -1651,7 +1660,7 @@ function StudentsTab({ adminId, refreshKey, role }: { adminId: string; refreshKe
     const res = await adminFetch(`/api/admin/students/${confirmDelete.id}`, adminId, { method: "DELETE" });
     const json = await res.json();
     setDeleting(false);
-    if (json.status !== "success") { alert(json.message ?? "ลบไม่สำเร็จ"); return; }
+    if (json.status !== "success") { toast.error(json.message ?? "ลบไม่สำเร็จ"); return; }
     setConfirmDelete(null);
     fetch_();
   }
@@ -2017,6 +2026,7 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Product | "new" | null>(null);
   const [showInactive, setShowInactive] = useState(false);
+  const [showDeleted,  setShowDeleted]  = useState(false);
   const canEdit = role !== "staff";
 
   const fetch_ = useCallback(async () => {
@@ -2029,7 +2039,11 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
 
   useEffect(() => { fetch_(); }, [fetch_]);
 
-  const displayed = showInactive ? products : products.filter((p) => p.active);
+  const displayed = products.filter(p => {
+    if (p.deleted_at) return showDeleted;
+    if (!p.active)    return showInactive;
+    return true;
+  });
 
   async function toggleActive(p: Product) {
     await adminFetch(`/api/admin/products/${p.id}`, adminId, { method: "PATCH", body: JSON.stringify({ active: !p.active }) });
@@ -2037,14 +2051,118 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
   }
 
   async function deleteProduct(p: Product) {
-    if (!confirm(`ลบสินค้า "${p.name}" ออกจากระบบ?`)) return;
-    await adminFetch(`/api/admin/products/${p.id}`, adminId, { method: "DELETE" });
-    fetch_();
+    if (!confirm(`ลบสินค้า "${p.name}" ? (สามารถกู้คืนได้ภายหลัง)`)) return;
+    try {
+      const res = await adminFetch(`/api/admin/products/${p.id}`, adminId, { method: "DELETE" });
+      const json = await res.json();
+      if (json.status !== "success") { toast.error(`ลบไม่สำเร็จ: ${json.message ?? "unknown error"}`); return; }
+      setProducts(prev => prev.map(pr => pr.id === p.id
+        ? { ...pr, active: false, stock: 0, deleted_at: new Date().toISOString() }
+        : pr));
+    } catch (e) { toast.error(`เกิดข้อผิดพลาด: ${e}`); }
   }
+
+  async function restoreProduct(p: Product) {
+    try {
+      const res = await adminFetch(`/api/admin/products/${p.id}`, adminId, {
+        method: "PATCH", body: JSON.stringify({ deleted_at: null, active: true }),
+      });
+      const json = await res.json();
+      if (json.status !== "success") { toast.error(`กู้คืนไม่สำเร็จ: ${json.message ?? "unknown error"}`); return; }
+      setProducts(prev => prev.map(pr => pr.id === p.id
+        ? { ...pr, active: true, deleted_at: null }
+        : pr));
+    } catch (e) { toast.error(`เกิดข้อผิดพลาด: ${e}`); }
+  }
+
+  // ── Overview calculations ──────────────────────────────────────────
+  const activeProducts   = products.filter(p => !p.deleted_at && p.active);
+  const inactiveProducts = products.filter(p => !p.deleted_at && !p.active);
+  const deletedProducts  = products.filter(p => !!p.deleted_at);
+  const outOfStock       = activeProducts.filter(p => p.stock === 0);
+  const lowStock         = activeProducts.filter(p => p.stock > 0 && p.stock <= 5);
+  const stockValue       = activeProducts.reduce((s, p) => s + p.stock * p.price, 0);
+  const costValue        = activeProducts.reduce((s, p) => s + p.stock * (p.cost ?? p.price), 0);
+
+  // Category breakdown
+  const catMap: Record<string, number> = {};
+  activeProducts.forEach(p => { const k = p.category ?? "ไม่ระบุหมวด"; catMap[k] = (catMap[k] ?? 0) + 1; });
+  const categories = Object.entries(catMap).sort((a, b) => b[1] - a[1]);
 
   return (
     <div>
       <DarkSectionHeader title="จัดการสินค้า" icon="fa-box" count={displayed.length} />
+
+      {/* ── Overview ── */}
+      {!loading && products.length > 0 && (
+        <div className="mt-4 mb-5 space-y-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {[
+              { label: "สินค้าเปิดขาย", val: activeProducts.length.toString(), icon: "fa-box-open", color: "#3fb950" },
+              { label: "ปิดการขาย",     val: inactiveProducts.length.toString(), icon: "fa-eye-slash", color: "#f0b429" },
+              { label: "หมดสต็อก",      val: outOfStock.length.toString(), icon: "fa-triangle-exclamation", color: "#f85149" },
+              { label: "สต็อกน้อย (≤5)", val: lowStock.length.toString(), icon: "fa-circle-exclamation", color: "#fb923c" },
+              { label: "มูลค่าขาย",    val: `฿${stockValue.toLocaleString("th-TH", { maximumFractionDigits: 0 })}`, icon: "fa-coins", color: "#ff7070" },
+              { label: "มูลค่าต้นทุน", val: `฿${costValue.toLocaleString("th-TH", { maximumFractionDigits: 0 })}`, icon: "fa-scale-balanced", color: "#636363" },
+            ].map((c) => (
+              <div key={c.label} className="rounded-2xl p-4 flex flex-col gap-2" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: `${c.color}20` }}>
+                  <i className={`fa-solid ${c.icon} text-[10px]`} style={{ color: c.color }} />
+                </div>
+                <div className="text-lg font-black leading-tight" style={{ color: c.color }}>{c.val}</div>
+                <div className="text-[10px] font-semibold leading-tight" style={{ color: "#9e9e9e" }}>{c.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Category + Low stock row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Category breakdown */}
+            {categories.length > 0 && (
+              <div className="rounded-2xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
+                <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: "1px solid #252525" }}>
+                  <i className="fa-solid fa-tags text-xs" style={{ color: "#84D4FA" }} />
+                  <span className="text-xs font-bold text-white">หมวดหมู่สินค้า</span>
+                </div>
+                <div className="p-3 flex flex-wrap gap-2">
+                  {categories.map(([cat, count]) => (
+                    <span key={cat} className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-xl font-semibold"
+                      style={{ background: "#252525", color: "#ededed", border: "1px solid #3e3e3e" }}>
+                      {cat}
+                      <span className="text-[10px] font-black px-1.5 py-0.5 rounded-lg" style={{ background: "#3e3e3e", color: "#9e9e9e" }}>{count}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Low/out of stock list */}
+            {(outOfStock.length > 0 || lowStock.length > 0) && (
+              <div className="rounded-2xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
+                <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: "1px solid #252525" }}>
+                  <i className="fa-solid fa-triangle-exclamation text-xs" style={{ color: "#f85149" }} />
+                  <span className="text-xs font-bold text-white">สต็อกต้องดูแล</span>
+                </div>
+                <div className="divide-y max-h-40 overflow-y-auto" style={{ borderColor: "#1e1e1e" }}>
+                  {[...outOfStock, ...lowStock].slice(0, 8).map(p => (
+                    <div key={p.id} className="flex items-center gap-3 px-4 py-2">
+                      {p.images?.[0]
+                        ? <img src={p.images[0]} alt="" className="w-7 h-7 rounded-md object-cover flex-shrink-0" style={{ border: "1px solid #3e3e3e" }} />
+                        : <div className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: "#252525", color: "#636363", fontSize: 10 }}>🛍️</div>}
+                      <div className="flex-1 min-w-0 text-xs text-white truncate">{p.name}</div>
+                      <span className="text-[10px] font-black flex-shrink-0 px-2 py-0.5 rounded-lg"
+                        style={{ background: p.stock === 0 ? "rgba(248,81,73,0.15)" : "rgba(251,146,60,0.15)", color: p.stock === 0 ? "#f85149" : "#fb923c" }}>
+                        {p.stock === 0 ? "หมด" : `${p.stock} ${p.unit ?? "ชิ้น"}`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center gap-3 mt-4 mb-4 flex-wrap">
         {canEdit && (
           <button onClick={() => setEditing("new")}
@@ -2055,26 +2173,39 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
         )}
         <button onClick={() => setShowInactive(!showInactive)}
           className="text-sm px-3 py-2 rounded-xl font-semibold transition-all"
-          style={{ background: "#2a2a2a", color: "#9e9e9e", border: `1px solid ${showInactive ? "#f85149" : "#3e3e3e"}` }}>
+          style={{ background: "#2a2a2a", color: showInactive ? "#f0b429" : "#9e9e9e", border: `1px solid ${showInactive ? "#f0b429" : "#3e3e3e"}` }}>
+          <i className={`fa-solid fa-eye${showInactive ? "" : "-slash"} mr-1.5 text-xs`} />
           {showInactive ? "ซ่อนสินค้าปิด" : "แสดงสินค้าปิด"}
+        </button>
+        <button onClick={() => setShowDeleted(!showDeleted)}
+          className="text-sm px-3 py-2 rounded-xl font-semibold transition-all"
+          style={{ background: "#2a2a2a", color: showDeleted ? "#f85149" : "#9e9e9e", border: `1px solid ${showDeleted ? "#f85149" : "#3e3e3e"}` }}>
+          <i className="fa-solid fa-trash-can mr-1.5 text-xs" />
+          {showDeleted ? "ซ่อนที่ลบแล้ว" : "แสดงที่ลบแล้ว"}
         </button>
       </div>
 
       {loading ? <DarkSpinner /> : displayed.length === 0 ? <DarkEmpty text="ไม่มีสินค้า" /> : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {displayed.map((p) => (
-            <div key={p.id} className={`rounded-2xl overflow-hidden transition-all ${!p.active ? "opacity-50" : ""}`}
-              style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-              <div className="h-36 relative overflow-hidden" style={{ background: "#2a2a2a" }}>
+            <div key={p.id} className={`rounded-2xl overflow-hidden transition-all ${!p.active && !p.deleted_at ? "opacity-50" : ""} ${p.deleted_at ? "opacity-40" : ""}`}
+              style={{ background: "#1c1c1c", border: `1px solid ${p.deleted_at ? "#f85149" : "#3e3e3e"}` }}>
+              <div className="h-64 relative overflow-hidden" style={{ background: "#2a2a2a" }}>
                 {p.images?.[0] ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.images[0]} alt={p.name} className="w-full h-full object-cover" />
+                  <img src={p.images[0]} alt={p.name} className="w-full h-full object-cover aspect-video" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center" style={{ color: "#636363" }}>
                     <i className="fa-solid fa-image text-3xl" />
                   </div>
                 )}
-                {!p.active && (
+                {p.deleted_at ? (
+                  <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(248,81,73,0.18)" }}>
+                    <span className="text-xs font-bold px-2 py-1 rounded-lg text-white flex items-center gap-1" style={{ background: "rgba(248,81,73,0.7)" }}>
+                      <i className="fa-solid fa-trash text-[10px]" /> ลบแล้ว
+                    </span>
+                  </div>
+                ) : !p.active && (
                   <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(13,17,23,0.7)" }}>
                     <span className="text-xs font-bold px-2 py-1 rounded-lg text-white" style={{ background: "#3e3e3e" }}>ปิดการขาย</span>
                   </div>
@@ -2096,21 +2227,31 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
                 </div>
                 {canEdit && (
                   <div className="flex gap-1.5">
-                    <button onClick={() => setEditing(p)}
-                      className="flex-1 text-xs font-semibold py-1.5 rounded-lg transition-all text-[#9e9e9e] hover:text-white"
-                      style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>
-                      <i className="fa-solid fa-pen mr-1" /> แก้ไข
-                    </button>
-                    <button onClick={() => toggleActive(p)}
-                      className="text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-all"
-                      style={{ background: p.active ? "rgba(248,81,73,0.1)" : "rgba(63,185,80,0.1)", color: p.active ? "#f85149" : "#3fb950", border: `1px solid ${p.active ? "rgba(248,81,73,0.3)" : "rgba(63,185,80,0.3)"}` }}>
-                      {p.active ? "ปิด" : "เปิด"}
-                    </button>
-                    <button onClick={() => deleteProduct(p)}
-                      className="text-xs font-semibold px-2 py-1.5 rounded-lg transition-all"
-                      style={{ background: "rgba(248,81,73,0.08)", color: "#f85149", border: "1px solid rgba(248,81,73,0.2)" }}>
-                      <i className="fa-solid fa-trash" />
-                    </button>
+                    {p.deleted_at ? (
+                      <button onClick={() => restoreProduct(p)}
+                        className="flex-1 text-xs font-semibold py-1.5 rounded-lg transition-all flex items-center justify-center gap-1"
+                        style={{ background: "rgba(63,185,80,0.12)", color: "#3fb950", border: "1px solid rgba(63,185,80,0.3)" }}>
+                        <i className="fa-solid fa-rotate-left text-[10px]" /> กู้คืน
+                      </button>
+                    ) : (
+                      <>
+                        <button onClick={() => setEditing(p)}
+                          className="flex-1 text-xs font-semibold py-1.5 rounded-lg transition-all text-[#9e9e9e] hover:text-white"
+                          style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>
+                          <i className="fa-solid fa-pen mr-1" /> แก้ไข
+                        </button>
+                        <button onClick={() => toggleActive(p)}
+                          className="text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-all"
+                          style={{ background: p.active ? "rgba(248,81,73,0.1)" : "rgba(63,185,80,0.1)", color: p.active ? "#f85149" : "#3fb950", border: `1px solid ${p.active ? "rgba(248,81,73,0.3)" : "rgba(63,185,80,0.3)"}` }}>
+                          {p.active ? "ปิด" : "เปิด"}
+                        </button>
+                        <button onClick={() => deleteProduct(p)}
+                          className="text-xs font-semibold px-2 py-1.5 rounded-lg transition-all"
+                          style={{ background: "rgba(248,81,73,0.08)", color: "#f85149", border: "1px solid rgba(248,81,73,0.2)" }}>
+                          <i className="fa-solid fa-trash" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -2262,7 +2403,8 @@ function ShopOrdersTab({ adminId }: { adminId: string }) {
   const [orders, setOrders] = useState<ShopOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [viewMode, setViewMode] = useState<"grid" | "list" | "card">("grid");
   const [confirming, setConfirming] = useState<string | null>(null);
 
   const fetch_ = useCallback(async () => {
@@ -2283,88 +2425,322 @@ function ShopOrdersTab({ adminId }: { adminId: string }) {
   }
 
   const paidTotal = orders.filter((o) => o.status === "paid").reduce((s, o) => s + o.total, 0);
+  const q = search.trim().toLowerCase();
+  const filtered = q
+    ? orders.filter(o =>
+        o.student_name.toLowerCase().includes(q) ||
+        o.student_id.includes(q) ||
+        o.order_id.toLowerCase().includes(q) ||
+        (o.items_json as OrderItem[])?.some(i => i.name.toLowerCase().includes(q))
+      )
+    : orders;
+
+  // ── Overview calculations ─────────────────────────────────────────
+  const todayStr = new Date().toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok" });
+  const pendingOrders   = orders.filter(o => o.status === "pending");
+  const paidOrders_     = orders.filter(o => o.status === "paid");
+  const cancelledOrders = orders.filter(o => o.status === "cancelled");
+  const todayOrders     = orders.filter(o => new Date(o.created_at).toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok" }) === todayStr);
+  const paidRevenue     = paidOrders_.reduce((s, o) => s + o.total, 0);
+  const pendingRevenue  = pendingOrders.reduce((s, o) => s + o.total, 0);
+
+  // Top-selling from paid orders
+  const itemSales: Record<string, { name: string; qty: number; revenue: number; imageUrl?: string | null }> = {};
+  paidOrders_.forEach(o => {
+    ((o.items_json as OrderItem[]) ?? []).forEach(i => {
+      if (!itemSales[i.id]) itemSales[i.id] = { name: i.name, qty: 0, revenue: 0, imageUrl: i.imageUrl };
+      itemSales[i.id].qty     += i.qty;
+      itemSales[i.id].revenue += i.price * i.qty;
+    });
+  });
+  const topItems = Object.values(itemSales).sort((a, b) => b.qty - a.qty).slice(0, 5);
 
   return (
     <div>
-      <DarkSectionHeader title="ออเดอร์สหกรณ์" icon="fa-receipt" count={orders.length} />
-      <div className="flex gap-2 flex-wrap mt-4 mb-2">
-        {["all", "pending", "paid", "delivered", "cancelled"].map((s) => (
-          <button key={s} onClick={() => setFilter(s)}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-            style={{ background: filter === s ? "#f85149" : "#2a2a2a", color: filter === s ? "white" : "#9e9e9e", border: `1px solid ${filter === s ? "#f85149" : "#3e3e3e"}` }}>
-            {s === "all" ? "ทั้งหมด" : ORDER_STATUS[s]}
-          </button>
-        ))}
-      </div>
-      {filter === "all" && orders.length > 0 && (
-        <div className="mb-4 text-sm text-[#9e9e9e]">ยอดชำระแล้ว: <span className="font-black" style={{ color: "#ff7070" }}>฿{paidTotal.toFixed(2)}</span></div>
-      )}
+      <DarkSectionHeader title="ออเดอร์สหกรณ์" icon="fa-receipt" count={filtered.length} />
 
-      {loading ? <DarkSpinner /> : orders.length === 0 ? <DarkEmpty text="ไม่มีออเดอร์" /> : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-          {orders.map((o) => {
-            const items = (o.items_json as OrderItem[]) ?? [];
-            const sc = ORDER_STYLE[o.status] ?? { bg: "#2a2a2a", text: "#9e9e9e" };
-            return (
-              <div key={o.order_id} className="rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
-                      <span className="font-bold text-[#9e9e9e] font-mono text-xs">#{o.order_id.slice(-8).toUpperCase()}</span>
-                      <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: sc.bg, color: sc.text }}>{ORDER_STATUS[o.status]}</span>
-                    </div>
-                    <div className="text-sm font-bold text-white truncate">
-                      <i className="fa-solid fa-user mr-1 text-[#636363] text-xs" />{o.student_name}
-                    </div>
-                    <div className="text-[11px] text-[#636363] mt-0.5">{formatDateTime(o.created_at)}</div>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <div className="text-base font-black" style={{ color: "#f85149" }}>฿{o.total.toFixed(2)}</div>
-                    {o.delivery_mode && (
-                      <div className="text-[10px] mt-0.5" style={{ color: "#9e9e9e" }}>
-                        <i className={`fa-solid mr-0.5 ${o.delivery_mode === "pickup" ? "fa-store" : "fa-truck"}`} />
-                        {o.delivery_mode === "pickup" ? "รับเอง" : "จัดส่ง"}
-                      </div>
-                    )}
+      {/* ── Overview ── */}
+      {!loading && orders.length > 0 && (
+        <div className="mt-4 mb-5 space-y-3">
+          {/* Stat cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { label: "รายได้รวม (ชำระแล้ว)", val: `฿${paidRevenue.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: "fa-coins", color: "#ff7070", sub: `${paidOrders_.length} ออเดอร์` },
+              { label: "รอชำระเงิน", val: pendingOrders.length.toString(), icon: "fa-hourglass-half", color: "#f59e0b", sub: pendingOrders.length > 0 ? `฿${pendingRevenue.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "ไม่มี" },
+              { label: "ออเดอร์วันนี้", val: todayOrders.length.toString(), icon: "fa-calendar-day", color: "#84D4FA", sub: `จาก ${orders.length} ทั้งหมด` },
+              { label: "ยกเลิก", val: cancelledOrders.length.toString(), icon: "fa-ban", color: "#636363", sub: `${orders.length > 0 ? Math.round(cancelledOrders.length / orders.length * 100) : 0}%` },
+            ].map((c) => (
+              <div key={c.label} className="rounded-2xl p-4 flex flex-col gap-2" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
+                <div className="flex items-center justify-between">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${c.color}20` }}>
+                    <i className={`fa-solid ${c.icon} text-xs`} style={{ color: c.color }} />
                   </div>
                 </div>
-
-                {/* Items preview */}
-                <button onClick={() => setExpanded(expanded === o.order_id ? null : o.order_id)}
-                  className="w-full text-left text-[11px] py-1.5 flex items-center gap-1 transition-colors"
-                  style={{ color: expanded === o.order_id ? "#ededed" : "#636363" }}>
-                  <i className={`fa-solid fa-chevron-${expanded === o.order_id ? "up" : "down"} text-[9px]`} />
-                  {expanded === o.order_id ? "ซ่อนรายการ" : `ดูรายการ (${items.length} รายการ)`}
-                </button>
-
-                {expanded === o.order_id && items.length > 0 && (
-                  <div className="pt-2 space-y-1" style={{ borderTop: "1px solid #2a2a2a" }}>
-                    {items.map((item, i) => (
-                      <div key={i} className="flex items-center justify-between text-xs">
-                        <span className="text-[#ededed]">{item.name} × {item.qty}</span>
-                        <span style={{ color: "#9e9e9e" }}>฿{(item.price * item.qty).toFixed(2)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Delivery confirmation */}
-                {o.status === "paid" && (
-                  <div className="mt-3 pt-3" style={{ borderTop: "1px solid #2a2a2a" }}>
-                    <button onClick={() => updateOrderStatus(o.order_id, "delivered")} disabled={confirming === o.order_id}
-                      className="w-full py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
-                      style={{ background: "rgba(255,112,112,0.15)", color: "#ff7070", border: "1px solid rgba(255,112,112,0.3)" }}>
-                      {confirming === o.order_id
-                        ? <><i className="fa-solid fa-spinner fa-spin" /> กำลังยืนยัน...</>
-                        : <><i className="fa-solid fa-box-open" /> ยืนยันส่งมอบแล้ว</>}
-                    </button>
-                  </div>
-                )}
+                <div className="text-xl font-black leading-tight" style={{ color: c.color }}>{c.val}</div>
+                <div>
+                  <div className="text-[10px] font-semibold" style={{ color: "#9e9e9e" }}>{c.label}</div>
+                  <div className="text-[10px]" style={{ color: "#636363" }}>{c.sub}</div>
+                </div>
               </div>
-            );
-          })}
+            ))}
+          </div>
+
+          {/* Top selling */}
+          {topItems.length > 0 && (
+            <div className="rounded-2xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
+              <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: "1px solid #252525" }}>
+                <i className="fa-solid fa-fire text-xs" style={{ color: "#ff7070" }} />
+                <span className="text-xs font-bold text-white">สินค้าขายดี</span>
+                <span className="text-[10px]" style={{ color: "#636363" }}>(จากออเดอร์ที่ชำระแล้ว)</span>
+              </div>
+              <div className="divide-y" style={{ borderColor: "#1e1e1e" }}>
+                {topItems.map((item, i) => (
+                  <div key={item.name} className="flex items-center gap-3 px-4 py-2.5">
+                    <div className="text-[10px] font-bold w-4 flex-shrink-0" style={{ color: i === 0 ? "#ff7070" : "#636363" }}>#{i + 1}</div>
+                    {item.imageUrl
+                      ? <img src={item.imageUrl} alt="" className="w-8 h-8 rounded-lg object-cover flex-shrink-0" style={{ border: "1px solid #3e3e3e" }} />
+                      : <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-sm" style={{ background: "#252525" }}>🛍️</div>}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-semibold text-white truncate">{item.name}</div>
+                      <div className="text-[10px]" style={{ color: "#636363" }}>฿{item.revenue.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    </div>
+                    <div className="text-xs font-black flex-shrink-0" style={{ color: "#ff7070" }}>{item.qty} ชิ้น</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
+
+      {/* ── Toolbar ── */}
+      <div className="flex flex-col gap-2 mt-4 mb-3">
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1.5 flex-wrap flex-1">
+            {["all", "pending", "paid", "delivered", "cancelled"].map((s) => (
+              <button key={s} onClick={() => setFilter(s)}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                style={{ background: filter === s ? "#f85149" : "#2a2a2a", color: filter === s ? "white" : "#9e9e9e", border: `1px solid ${filter === s ? "#f85149" : "#3e3e3e"}` }}>
+                {s === "all" ? "ทั้งหมด" : ORDER_STATUS[s]}
+              </button>
+            ))}
+          </div>
+          {/* View mode toggle */}
+          <div className="flex rounded-lg overflow-hidden flex-shrink-0" style={{ border: "1px solid #3e3e3e" }}>
+            {([["grid","fa-table-cells-large"],["list","fa-list"],["card","fa-rectangle-list"]] as const).map(([mode, icon]) => (
+              <button key={mode} onClick={() => setViewMode(mode)}
+                className="w-8 h-8 flex items-center justify-center transition-all"
+                style={{ background: viewMode === mode ? "#f85149" : "#2a2a2a", color: viewMode === mode ? "white" : "#636363" }}
+                title={mode}>
+                <i className={`fa-solid ${icon} text-xs`} />
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="relative">
+          <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-[#636363] text-xs" />
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="ค้นหาชื่อ, รหัสนักเรียน, เลขออเดอร์, ชื่อสินค้า..."
+            className="w-full pl-8 pr-4 py-2 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none transition-colors"
+            style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }}
+          />
+          {search && (
+            <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#636363] hover:text-white transition-colors">
+              <i className="fa-solid fa-xmark text-xs" />
+            </button>
+          )}
+        </div>
+        {filter === "all" && orders.length > 0 && (
+          <div className="text-sm text-[#9e9e9e]">ยอดชำระแล้ว: <span className="font-black" style={{ color: "#ff7070" }}>฿{paidTotal.toFixed(2)}</span></div>
+        )}
+      </div>
+
+      {loading ? <DarkSpinner /> : filtered.length === 0 ? <DarkEmpty text={search ? "ไม่พบผลการค้นหา" : "ไม่มีออเดอร์"} /> : (() => {
+        const DeliverBtn = ({ o }: { o: ShopOrder }) => o.status !== "paid" ? null : (
+          <button onClick={() => updateOrderStatus(o.order_id, "delivered")} disabled={confirming === o.order_id}
+            className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition-all disabled:opacity-50 flex items-center gap-1 flex-shrink-0"
+            style={{ background: "rgba(255,112,112,0.15)", color: "#ff7070", border: "1px solid rgba(255,112,112,0.3)" }}>
+            {confirming === o.order_id ? <><i className="fa-solid fa-spinner fa-spin" />ยืนยัน...</> : <><i className="fa-solid fa-box-open" />ส่งมอบแล้ว</>}
+          </button>
+        );
+        const Avatar = ({ o, size = 10 }: { o: ShopOrder; size?: number }) => {
+          const sc = ORDER_STYLE[o.status] ?? { text: "#9e9e9e" };
+          return o.student_photo_url
+            ? <img src={o.student_photo_url} alt="" className={`w-${size} h-${size} object-cover flex-shrink-0`} style={{ borderRadius: 8, border: `2px solid ${sc.text}55` }} />
+            : <div className={`w-${size} h-${size} flex items-center justify-center flex-shrink-0`} style={{ borderRadius: 8, background: "#2a2a2a", color: "#636363", fontSize: size * 1.5 }}><i className="fa-solid fa-user" /></div>;
+        };
+
+        // ══ GRID ══════════════════════════════════════════════════════
+        if (viewMode === "grid") return (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+            {filtered.map((o) => {
+              const items = (o.items_json as OrderItem[]) ?? [];
+              const sc = ORDER_STYLE[o.status] ?? { bg: "#2a2a2a", text: "#9e9e9e" };
+              return (
+                <div key={o.order_id} className="rounded-2xl overflow-hidden flex flex-col"
+                  style={{ background: "#1c1c1c", borderTop: "1px solid #2e2e2e", borderRight: "1px solid #2e2e2e", borderBottom: "1px solid #2e2e2e", borderLeft: `3px solid ${sc.text}` }}>
+                  <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <span className="font-mono text-[11px] font-bold text-[#636363]">#{o.order_id.slice(-8).toUpperCase()}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: sc.bg, color: sc.text }}>{ORDER_STATUS[o.status]}</span>
+                      </div>
+                      <div className="font-bold text-white text-sm truncate">{o.student_name}</div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] font-mono text-[#636363]">{o.student_id}</span>
+                        <span className="text-[#3e3e3e]">·</span>
+                        <span className="text-[10px] text-[#636363]">{formatDateTime(o.created_at)}</span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                      <div className="text-xl font-black" style={{ color: sc.text }}>฿{o.total.toFixed(2)}</div>
+                      <Avatar o={o} size={10} />
+                    </div>
+                  </div>
+                  {items.length > 0 && (
+                    <div className="px-4 py-3 space-y-2" style={{ borderTop: "1px solid #252525" }}>
+                      {items.map((item, i) => (
+                        <div key={i} className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {item.imageUrl ? <img src={item.imageUrl} alt="" className="w-7 h-7 rounded-md object-cover flex-shrink-0" style={{ border: "1px solid #3e3e3e" }} />
+                              : <div className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 text-[10px]" style={{ background: "#2a2a2a" }}>🛍️</div>}
+                            <div className="min-w-0">
+                              <span className="text-xs text-[#ededed] truncate block">{item.name}</span>
+                              <span className="text-[10px] text-[#636363]">{item.qty} {item.unit} × ฿{item.price.toFixed(2)}</span>
+                            </div>
+                          </div>
+                          <span className="text-xs font-semibold flex-shrink-0" style={{ color: "#9e9e9e" }}>฿{(item.price * item.qty).toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="px-4 py-2.5 mt-auto flex items-center justify-between gap-2" style={{ borderTop: "1px solid #252525", background: "#161616" }}>
+                    <div className="flex items-center gap-1.5 text-[11px] min-w-0" style={{ color: "#9e9e9e" }}>
+                      <i className={`fa-solid flex-shrink-0 ${o.delivery_mode === "delivery" ? "fa-truck" : "fa-store"} text-[10px]`} />
+                      {o.delivery_mode === "delivery"
+                        ? <span className="truncate">{o.delivery_loc ?? "—"}{o.delivery_slot && <span style={{ color: "#636363" }}> · {o.delivery_slot}</span>}</span>
+                        : <span>รับเองที่สหกรณ์{o.delivery_slot && <span style={{ color: "#636363" }}> · {o.delivery_slot}</span>}</span>}
+                    </div>
+                    <DeliverBtn o={o} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+
+        // ══ LIST ══════════════════════════════════════════════════════
+        if (viewMode === "list") return (
+          <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid #2e2e2e" }}>
+            {filtered.map((o, idx) => {
+              const items = (o.items_json as OrderItem[]) ?? [];
+              const sc = ORDER_STYLE[o.status] ?? { bg: "#2a2a2a", text: "#9e9e9e" };
+              return (
+                <div key={o.order_id} className="flex items-center gap-3 px-4 py-3"
+                  style={{ borderBottom: idx < filtered.length - 1 ? "1px solid #232323" : "none", background: "#1c1c1c", borderLeft: `3px solid ${sc.text}` }}>
+                  <Avatar o={o} size={9} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-white text-sm truncate">{o.student_name}</span>
+                      <span className="text-[10px] font-mono text-[#636363]">{o.student_id}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ background: sc.bg, color: sc.text }}>{ORDER_STATUS[o.status]}</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      <span className="font-mono text-[10px] text-[#636363]">#{o.order_id.slice(-8).toUpperCase()}</span>
+                      <span className="text-[#3e3e3e]">·</span>
+                      <span className="text-[10px] text-[#636363]">{formatDateTime(o.created_at)}</span>
+                      <span className="text-[#3e3e3e]">·</span>
+                      <span className="text-[10px] text-[#636363]">
+                        <i className={`fa-solid mr-0.5 ${o.delivery_mode === "delivery" ? "fa-truck" : "fa-store"}`} />
+                        {o.delivery_mode === "delivery" ? (o.delivery_loc ?? "จัดส่ง") : "รับเอง"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 mt-1 flex-wrap">
+                      {items.map((item, i) => (
+                        <span key={i} className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded" style={{ background: "#252525", color: "#9e9e9e" }}>
+                          {item.imageUrl && <img src={item.imageUrl} alt="" className="w-3.5 h-3.5 rounded object-cover" />}
+                          {item.name} ×{item.qty}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <div className="text-base font-black text-right" style={{ color: sc.text }}>฿{o.total.toFixed(2)}</div>
+                    <DeliverBtn o={o} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+
+        // ══ CARD ══════════════════════════════════════════════════════
+        return (
+          <div className="space-y-3">
+            {filtered.map((o) => {
+              const items = (o.items_json as OrderItem[]) ?? [];
+              const sc = ORDER_STYLE[o.status] ?? { bg: "#2a2a2a", text: "#9e9e9e" };
+              return (
+                <div key={o.order_id} className="rounded-2xl overflow-hidden"
+                  style={{ background: "#1c1c1c", borderTop: "1px solid #2e2e2e", borderRight: "1px solid #2e2e2e", borderBottom: "1px solid #2e2e2e", borderLeft: `4px solid ${sc.text}` }}>
+                  {/* Top bar */}
+                  <div className="px-5 py-3 flex items-center justify-between gap-4" style={{ background: "#161616" }}>
+                    <div className="flex items-center gap-3">
+                      {o.student_photo_url
+                        ? <img src={o.student_photo_url} alt="" className="object-cover flex-shrink-0"
+                            style={{ width: 64, height: 64, maxWidth: 64, borderRadius: 8, border: `2px solid ${sc.text}55` }} />
+                        : <div className="flex items-center justify-center flex-shrink-0"
+                            style={{ width: 64, height: 64, maxWidth: 64, borderRadius: 8, background: "#2a2a2a", color: "#636363", fontSize: 24 }}>
+                            <i className="fa-solid fa-user" />
+                          </div>}
+                      <div>
+                        <div className="font-bold text-white">{o.student_name}</div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[11px] font-mono text-[#636363]">{o.student_id}</span>
+                          <span className="text-[#3e3e3e]">·</span>
+                          <span className="text-[11px] font-mono text-[#636363]">#{o.order_id.slice(-8).toUpperCase()}</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: sc.bg, color: sc.text }}>{ORDER_STATUS[o.status]}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <div className="text-2xl font-black" style={{ color: sc.text }}>฿{o.total.toFixed(2)}</div>
+                      <div className="text-[10px] text-[#636363] mt-0.5">{formatDateTime(o.created_at)}</div>
+                    </div>
+                  </div>
+                  {/* Items */}
+                  {items.length > 0 && (
+                    <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {items.map((item, i) => (
+                        <div key={i} className="flex items-center gap-3 rounded-xl p-3" style={{ background: "#252525" }}>
+                          {item.imageUrl
+                            ? <img src={item.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover flex-shrink-0" style={{ border: "1px solid #3e3e3e" }} />
+                            : <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 text-xl" style={{ background: "#2a2a2a" }}>🛍️</div>}
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-bold text-white truncate">{item.name}</div>
+                            <div className="text-[11px] text-[#9e9e9e] mt-0.5">{item.qty} {item.unit} × ฿{item.price.toFixed(2)}</div>
+                          </div>
+                          <div className="text-sm font-black flex-shrink-0" style={{ color: sc.text }}>฿{(item.price * item.qty).toFixed(2)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* Footer */}
+                  <div className="px-5 py-3 flex items-center justify-between gap-3" style={{ borderTop: "1px solid #252525" }}>
+                    <div className="flex items-center gap-2 text-sm" style={{ color: "#9e9e9e" }}>
+                      <i className={`fa-solid ${o.delivery_mode === "delivery" ? "fa-truck" : "fa-store"}`} />
+                      {o.delivery_mode === "delivery"
+                        ? <span>{o.delivery_loc ?? "—"}{o.delivery_slot && <span style={{ color: "#636363" }}> · {o.delivery_slot}</span>}</span>
+                        : <span>รับเองที่สหกรณ์{o.delivery_slot && <span style={{ color: "#636363" }}> · {o.delivery_slot}</span>}</span>}
+                    </div>
+                    <DeliverBtn o={o} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -2913,7 +3289,7 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
     });
     const j = await res.json();
     setUpdating(null);
-    if (j.status !== "success") alert(j.message ?? "เกิดข้อผิดพลาด");
+    if (j.status !== "success") toast.error(j.message ?? "เกิดข้อผิดพลาด");
     load();
   }
 

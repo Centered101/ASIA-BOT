@@ -1209,6 +1209,7 @@ export default function ProjectFormClient({ params }: { params: Promise<{ slug: 
           </div>
 
           <p className="mt-5 text-xs text-center" style={{ color: C.muted }}>
+            ASIA-BOT&#160;โปรเจคที่&#160;
             {project.slug} · {project.year ?? "—"}
             {hasCustom && ` · คำถามพิเศษ ${project.customFields!.length} ข้อ`}
           </p>

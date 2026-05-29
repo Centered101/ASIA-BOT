@@ -34,11 +34,12 @@ type Booking = {
 };
 
 type Feedback = {
-  id: string; type: "comment" | "report"; name: string | null;
-  contact: string | null; category: string | null; report_url: string | null;
+  id: string; type: "comment" | "report";
+  name: string | null; student_id: string | null; email: string | null; contact: string | null;
+  category: string | null; report_url: string | null;
   message: string; image_urls: string[] | null;
-  status: "pending" | "in_progress" | "resolved";
-  admin_note: string | null; created_at: string;
+  status: "pending" | "in_progress" | "resolved" | "rejected";
+  created_at: string;
 };
 
 type Student = {
@@ -1255,20 +1256,20 @@ function BookingsTab({ adminId }: { adminId: string }) {
 
 // ─── Feedbacks Tab ────────────────────────────────────────────────────────────
 
-const FB_STATUS_STYLE: Record<string, { bg: string; text: string }> = {
-  pending:     { bg: "rgba(255,255,255,0.05)", text: "#9e9e9e" },
-  in_progress: { bg: "rgba(132,212,250,0.15)", text: "#84D4FA" },
-  resolved:    { bg: "rgba(63,185,80,0.15)",   text: "#3fb950" },
-  rejected:    { bg: "rgba(248,81,73,0.15)",   text: "#f85149" },
+const FB_STATUS: Record<string, { label: string; bg: string; text: string; icon: string }> = {
+  pending:     { label: "รอดำเนินการ",      bg: "rgba(245,158,11,0.15)",  text: "#f59e0b", icon: "fa-hourglass-half" },
+  in_progress: { label: "กำลังดำเนินการ",   bg: "rgba(132,212,250,0.15)", text: "#84D4FA", icon: "fa-spinner" },
+  resolved:    { label: "แก้ไขแล้ว",        bg: "rgba(63,185,80,0.15)",   text: "#3fb950", icon: "fa-circle-check" },
+  rejected:    { label: "ปฏิเสธ",           bg: "rgba(248,81,73,0.15)",   text: "#f85149", icon: "fa-ban" },
 };
 
-function FeedbackCard({ f, accentColor, adminId, onUpdated }: {
-  f: Feedback; accentColor: string; adminId: string; onUpdated: () => void;
-}) {
+function FeedbackCard({ f, adminId, onUpdated }: { f: Feedback; adminId: string; onUpdated: () => void }) {
   const [updating, setUpdating] = useState(false);
-  const [noteEdit, setNoteEdit] = useState("");
-  const [showNote, setShowNote] = useState(false);
-  const sc = FB_STATUS_STYLE[f.status] ?? { bg: "#2a2a2a", text: "#9e9e9e" };
+  const [deleting, setDeleting] = useState(false);
+  const [lightbox, setLightbox] = useState<string | null>(null);
+  const isReport    = f.type === "report";
+  const accentColor = isReport ? "#ff7070" : "#84D4FA";
+  const sc          = FB_STATUS[f.status] ?? FB_STATUS.pending;
 
   async function changeStatus(status: string) {
     setUpdating(true);
@@ -1277,87 +1278,169 @@ function FeedbackCard({ f, accentColor, adminId, onUpdated }: {
     onUpdated();
   }
 
-  async function saveNote() {
-    setUpdating(true);
-    await adminFetch(`/api/admin/feedback/${f.id}`, adminId, { method: "PATCH", body: JSON.stringify({ admin_note: noteEdit }) });
-    setUpdating(false);
-    setShowNote(false);
-    onUpdated();
+  async function deleteFeedback() {
+    const label = f.name || f.category || f.id.slice(0, 8);
+    if (!confirm(`ลบ Feedback "${label}" ถาวร?`)) return;
+
+    setDeleting(true);
+    try {
+      const res = await adminFetch(`/api/admin/feedback/${f.id}`, adminId, { method: "DELETE" });
+      const text = await res.text();
+      const json = text
+        ? (() => {
+            try { return JSON.parse(text); }
+            catch { return { status: res.ok ? "success" : "error", message: text }; }
+          })()
+        : { status: res.ok ? "success" : "error" };
+      if (json.status !== "success") {
+        toast.error(json.message ?? "ลบ Feedback ไม่สำเร็จ");
+        return;
+      }
+      toast.success("ลบ Feedback แล้ว");
+      onUpdated();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "ลบ Feedback ไม่สำเร็จ");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   return (
-    <div className="rounded-xl p-3 mb-2.5" style={{ background: "#1c1c1c", border: `1px solid ${accentColor}22` }}>
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs font-semibold text-white truncate">{f.name || "ไม่ระบุชื่อ"}</span>
-            {f.category && <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: "#2a2a2a", color: "#9e9e9e" }}>{f.category}</span>}
-          </div>
-          <div className="text-[10px] mt-0.5 flex gap-2 flex-wrap" style={{ color: "#636363" }}>
-            {f.contact && <span><i className="fa-solid fa-at mr-1" />{f.contact}</span>}
-            <span><i className="fa-solid fa-clock mr-1" />{formatDateTime(f.created_at)}</span>
-          </div>
-        </div>
-        <select value={f.status} onChange={(e) => changeStatus(e.target.value)} disabled={updating}
-          className="text-[10px] px-2 py-1 rounded-lg outline-none font-semibold cursor-pointer flex-shrink-0"
-          style={{ background: sc.bg, color: sc.text, border: `1px solid ${sc.text}44` }}>
-          <option value="pending">รอดำเนินการ</option>
-          <option value="in_progress">กำลังดำเนินการ</option>
-          <option value="resolved">แก้ไขแล้ว</option>
-          <option value="rejected">ปฏิเสธ</option>
-        </select>
-      </div>
-
-      <p className="text-sm text-[#ededed] leading-relaxed mb-2">{f.message}</p>
-
-      {f.report_url && (
-        <div className="text-xs mb-2 truncate" style={{ color: accentColor }}>
-          <i className="fa-solid fa-link mr-1" />{f.report_url}
+    <>
+      {/* Lightbox */}
+      {lightbox && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(6px)" }}
+          onClick={() => setLightbox(null)}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={lightbox} alt="" className="max-w-full max-h-full rounded-2xl object-contain"
+            style={{ maxWidth: "90vw", maxHeight: "90vh", boxShadow: "0 20px 60px rgba(0,0,0,.8)" }} />
+          <button className="absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center text-white"
+            style={{ background: "rgba(255,255,255,0.1)" }}>
+            <i className="fa-solid fa-xmark" />
+          </button>
         </div>
       )}
 
-      {f.image_urls && f.image_urls.length > 0 && (
-        <div className="flex gap-1.5 mb-2 flex-wrap">
-          {f.image_urls.map((url, i) => (
-            <a key={i} href={url} target="_blank" rel="noreferrer">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt="" className="w-20 h-20 object-cover rounded-lg"
-                style={{ border: `1px solid ${accentColor}44` }} />
+      <div className="rounded-2xl overflow-hidden flex flex-col"
+        style={{ background: "#1c1c1c", borderTop: "1px solid #2e2e2e", borderRight: "1px solid #2e2e2e", borderBottom: "1px solid #2e2e2e", borderLeft: `3px solid ${accentColor}` }}>
+
+        {/* ── Header ── */}
+        <div className="px-4 pt-3 pb-2.5 flex items-start justify-between gap-3" style={{ borderBottom: "1px solid #252525" }}>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                style={{ background: `${accentColor}20`, color: accentColor }}>
+                <i className={`fa-solid ${isReport ? "fa-triangle-exclamation" : "fa-comment"} mr-1 text-[9px]`} />
+                {isReport ? "รายงานปัญหา" : "ความคิดเห็น"}
+              </span>
+              {f.category && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: "#252525", color: "#9e9e9e" }}>
+                  {f.category}
+                </span>
+              )}
+              <span className="text-[10px] ml-auto flex-shrink-0" style={{ color: "#636363" }}>
+                <i className="fa-solid fa-clock mr-1" />{formatDateTime(f.created_at)}
+              </span>
+            </div>
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="font-semibold text-sm text-white">{f.name || <span style={{ color: "#636363" }}>ไม่ระบุชื่อ</span>}</span>
+              {f.student_id && (
+                <span className="text-[11px] flex items-center gap-1" style={{ color: "#9e9e9e" }}>
+                  <i className="fa-solid fa-id-badge text-[9px]" />{f.student_id}
+                </span>
+              )}
+              {f.email && (
+                <span className="text-[11px] flex items-center gap-1" style={{ color: "#9e9e9e" }}>
+                  <i className="fa-solid fa-envelope text-[9px]" />{f.email}
+                </span>
+              )}
+              {f.contact && (
+                <span className="text-[11px] flex items-center gap-1" style={{ color: "#9e9e9e" }}>
+                  <i className="fa-solid fa-at text-[9px]" />{f.contact}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <select value={f.status} onChange={e => changeStatus(e.target.value)} disabled={updating || deleting}
+              className="text-[10px] px-2 py-1.5 rounded-lg outline-none font-bold cursor-pointer"
+              style={{ background: sc.bg, color: sc.text, border: `1px solid ${sc.text}55` }}>
+              {Object.entries(FB_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            </select>
+            <button onClick={deleteFeedback} disabled={updating || deleting}
+              title="ลบ Feedback"
+              className="w-8 h-8 rounded-lg flex items-center justify-center transition-all disabled:opacity-50"
+              style={{ background: "rgba(248,81,73,0.08)", color: "#f85149", border: "1px solid rgba(248,81,73,0.2)" }}>
+              <i className={`fa-solid ${deleting ? "fa-spinner fa-spin" : "fa-trash"} text-[11px]`} />
+            </button>
+          </div>
+        </div>
+
+        {/* ── Message ── */}
+        <div className="px-4 py-3">
+          <p className="text-sm leading-relaxed" style={{ color: "#ededed" }}>{f.message}</p>
+          {f.report_url && (
+            <a href={f.report_url} target="_blank" rel="noreferrer"
+              className="mt-1.5 flex items-center gap-1.5 text-[11px] truncate hover:underline"
+              style={{ color: accentColor }}>
+              <i className="fa-solid fa-link text-[9px]" />{f.report_url}
             </a>
-          ))}
+          )}
         </div>
-      )}
 
-      {f.admin_note && !showNote && (
-        <div className="text-[10px] mb-1 flex items-center gap-1" style={{ color: "#9e9e9e" }}>
-          <i className="fa-solid fa-note-sticky text-[8px]" style={{ color: accentColor }} />
-          {f.admin_note}
-        </div>
-      )}
+        {/* ── Images ── */}
+        {f.image_urls && f.image_urls.length > 0 && (
+          <div className="px-4 pb-3">
+            <div className={`grid gap-2 ${f.image_urls.length === 1 ? "grid-cols-1" : f.image_urls.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
+              {f.image_urls.map((url, i) => (
+                <button key={i} onClick={() => setLightbox(url)} className="rounded-xl overflow-hidden relative group"
+                  style={{ aspectRatio: "4/3", background: "#252525" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt="" className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{ background: "rgba(0,0,0,0.4)" }}>
+                    <i className="fa-solid fa-magnifying-glass-plus text-white text-lg" />
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
-      {showNote ? (
-        <div className="flex gap-1.5 mt-1">
-          <input value={noteEdit} onChange={e => setNoteEdit(e.target.value)}
-            placeholder="หมายเหตุ admin..." autoFocus
-            className="flex-1 px-2 py-1 text-xs rounded-lg text-white placeholder:text-[#636363] outline-none"
-            style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }} />
-          <button onClick={saveNote} disabled={updating} className="text-[11px] px-2.5 py-1 rounded-lg font-semibold text-white" style={{ background: "#ff7070" }}>บันทึก</button>
-          <button onClick={() => setShowNote(false)} className="text-[11px] px-2 text-[#9e9e9e]">ยกเลิก</button>
-        </div>
-      ) : (
-        <button onClick={() => { setNoteEdit(f.admin_note ?? ""); setShowNote(true); }}
-          className="text-[10px] hover:underline flex items-center gap-1 mt-1" style={{ color: accentColor }}>
-          <i className="fa-solid fa-pen text-[8px]" />
-          {f.admin_note ? "แก้ไขหมายเหตุ" : "เพิ่มหมายเหตุ"}
-        </button>
-      )}
-    </div>
+        {/* ── Quick actions ── */}
+        {(f.status === "pending" || f.status === "in_progress") && (
+          <div className="px-4 pb-3 flex gap-2">
+            {f.status === "pending" && (
+              <button onClick={() => changeStatus("in_progress")} disabled={updating}
+                className="flex-1 text-[11px] font-bold py-1.5 rounded-xl transition-all flex items-center justify-center gap-1.5"
+                style={{ background: "rgba(132,212,250,0.1)", color: "#84D4FA", border: "1px solid rgba(132,212,250,0.3)" }}>
+                <i className="fa-solid fa-spinner" /> รับเรื่อง
+              </button>
+            )}
+            <button onClick={() => changeStatus("resolved")} disabled={updating}
+              className="flex-1 text-[11px] font-bold py-1.5 rounded-xl transition-all flex items-center justify-center gap-1.5"
+              style={{ background: "rgba(63,185,80,0.1)", color: "#3fb950", border: "1px solid rgba(63,185,80,0.3)" }}>
+              <i className="fa-solid fa-circle-check" /> แก้ไขแล้ว
+            </button>
+            <button onClick={() => changeStatus("rejected")} disabled={updating}
+              className="text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all flex items-center justify-center gap-1.5"
+              style={{ background: "rgba(248,81,73,0.08)", color: "#f85149", border: "1px solid rgba(248,81,73,0.2)" }}>
+              <i className="fa-solid fa-ban" />
+            </button>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
 function FeedbacksTab({ adminId }: { adminId: string }) {
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading,   setLoading]   = useState(true);
+  const [typeFilter,   setTypeFilter]   = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [search,       setSearch]       = useState("");
 
   const fetch_ = useCallback(async () => {
     setLoading(true);
@@ -1369,51 +1452,102 @@ function FeedbacksTab({ adminId }: { adminId: string }) {
 
   useEffect(() => { fetch_(); }, [fetch_]);
 
-  const comments = feedbacks.filter(f => f.type === "comment");
-  const reports  = feedbacks.filter(f => f.type === "report");
+  // ── Overview stats ──────────────────────────────────────────────
+  const total       = feedbacks.length;
+  const byStatus    = (s: string) => feedbacks.filter(f => f.status === s).length;
+  const pendingCount     = byStatus("pending");
+  const inProgressCount  = byStatus("in_progress");
+  const resolvedCount    = byStatus("resolved");
+  const reportsCount     = feedbacks.filter(f => f.type === "report").length;
+
+  // ── Filter ──────────────────────────────────────────────────────
+  const q = search.trim().toLowerCase();
+  const filtered = feedbacks.filter(f => {
+    if (typeFilter   !== "all" && f.type   !== typeFilter)   return false;
+    if (statusFilter !== "all" && f.status !== statusFilter) return false;
+    if (q && !(
+      f.message.toLowerCase().includes(q) ||
+      (f.name    ?? "").toLowerCase().includes(q) ||
+      (f.contact ?? "").toLowerCase().includes(q) ||
+      (f.category ?? "").toLowerCase().includes(q)
+    )) return false;
+    return true;
+  });
 
   return (
-    <div style={{ height: "calc(100vh - 136px)", display: "flex", flexDirection: "column" }}>
-      <div className="flex items-center justify-between mb-3 flex-shrink-0">
-        <h2 className="text-sm font-bold text-white flex items-center gap-2">
-          <i className="fa-solid fa-comment-dots" style={{ color: "#ff7070" }} />
-          ความคิดเห็น &amp; รายงาน
-        </h2>
-        <button onClick={fetch_} className="text-xs flex items-center gap-1 transition-colors"
-          style={{ color: "#636363" }}
-          onMouseEnter={e => (e.currentTarget.style.color = "#ededed")}
-          onMouseLeave={e => (e.currentTarget.style.color = "#636363")}>
-          <i className="fa-solid fa-rotate" /> รีเฟรช
-        </button>
+    <div>
+      <DarkSectionHeader title="Feedback & รายงาน" icon="fa-comment-dots" count={filtered.length} />
+
+      {/* ── Overview ── */}
+      {!loading && total > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 mb-5">
+          {[
+            { label: "ทั้งหมด",          val: total,          icon: "fa-layer-group",     color: "#9e9e9e" },
+            { label: "รอดำเนินการ",      val: pendingCount,   icon: "fa-hourglass-half",  color: "#f59e0b" },
+            { label: "กำลังดำเนินการ",   val: inProgressCount,icon: "fa-spinner",         color: "#84D4FA" },
+            { label: "แก้ไขแล้ว",        val: resolvedCount,  icon: "fa-circle-check",    color: "#3fb950" },
+          ].map(c => (
+            <div key={c.label} className="rounded-2xl p-4 flex flex-col gap-2" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: `${c.color}20` }}>
+                <i className={`fa-solid ${c.icon} text-[10px]`} style={{ color: c.color }} />
+              </div>
+              <div className="text-2xl font-black" style={{ color: c.color }}>{c.val}</div>
+              <div className="text-[10px] font-semibold" style={{ color: "#9e9e9e" }}>{c.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Toolbar ── */}
+      <div className="flex flex-col gap-2 mb-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Type filter */}
+          <div className="flex gap-1.5">
+            {[["all","ทั้งหมด"],["comment","ความคิดเห็น"],["report","รายงานปัญหา"]].map(([v,l]) => (
+              <button key={v} onClick={() => setTypeFilter(v)}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                style={{ background: typeFilter === v ? "#f85149" : "#2a2a2a", color: typeFilter === v ? "white" : "#9e9e9e", border: `1px solid ${typeFilter === v ? "#f85149" : "#3e3e3e"}` }}>
+                {l}{v === "report" && reportsCount > 0 && <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: "rgba(255,255,255,0.15)" }}>{reportsCount}</span>}
+              </button>
+            ))}
+          </div>
+          <div className="w-px h-5 flex-shrink-0" style={{ background: "#3e3e3e" }} />
+          {/* Status filter */}
+          <div className="flex gap-1.5 flex-wrap">
+            {[["all","ทั้งหมด"], ...Object.entries(FB_STATUS).map(([k,v]) => [k, v.label])].map(([v,l]) => (
+              <button key={v} onClick={() => setStatusFilter(v)}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                style={{
+                  background: statusFilter === v ? (v === "all" ? "#f85149" : (FB_STATUS[v]?.bg ?? "#2a2a2a")) : "#2a2a2a",
+                  color:      statusFilter === v ? (v === "all" ? "white"    : (FB_STATUS[v]?.text ?? "#9e9e9e")) : "#9e9e9e",
+                  border:     `1px solid ${statusFilter === v ? (v === "all" ? "#f85149" : (FB_STATUS[v]?.text ?? "#3e3e3e")) : "#3e3e3e"}`,
+                }}>
+                {l}
+              </button>
+            ))}
+          </div>
+          <button onClick={fetch_} className="ml-auto flex items-center gap-1.5 text-xs transition-colors flex-shrink-0" style={{ color: "#636363" }}
+            onMouseEnter={e => (e.currentTarget.style.color = "#ededed")} onMouseLeave={e => (e.currentTarget.style.color = "#636363")}>
+            <i className="fa-solid fa-rotate" /> รีเฟรช
+          </button>
+        </div>
+        <div className="relative">
+          <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-[#636363] text-xs" />
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="ค้นหาชื่อ, ข้อความ, ติดต่อ, หมวดหมู่..."
+            className="w-full pl-8 pr-8 py-2 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none"
+            style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }} />
+          {search && (
+            <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#636363] hover:text-white">
+              <i className="fa-solid fa-xmark text-xs" />
+            </button>
+          )}
+        </div>
       </div>
 
-      {loading ? <DarkSpinner /> : (
-        <div className="flex-1 grid grid-cols-2 gap-4 overflow-hidden min-h-0">
-          {/* ── Comments ── */}
-          <div className="flex flex-col overflow-hidden rounded-xl" style={{ border: "1px solid #84D4FA33", background: "#0c0c0c" }}>
-            <div className="flex items-center gap-2 px-4 py-3 flex-shrink-0" style={{ borderBottom: "1px solid #84D4FA33", background: "#84D4FA08" }}>
-              <i className="fa-solid fa-comment text-sm" style={{ color: "#84D4FA" }} />
-              <span className="text-sm font-bold" style={{ color: "#84D4FA" }}>ความคิดเห็น</span>
-              <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: "#84D4FA22", color: "#84D4FA" }}>{comments.length}</span>
-            </div>
-            <div className="flex-1 overflow-y-auto p-3">
-              {comments.length === 0 ? <DarkEmpty text="ไม่มีความคิดเห็น" /> :
-                comments.map(f => <FeedbackCard key={f.id} f={f} accentColor="#84D4FA" adminId={adminId} onUpdated={fetch_} />)}
-            </div>
-          </div>
-
-          {/* ── Reports ── */}
-          <div className="flex flex-col overflow-hidden rounded-xl" style={{ border: "1px solid #ff707033", background: "#0c0c0c" }}>
-            <div className="flex items-center gap-2 px-4 py-3 flex-shrink-0" style={{ borderBottom: "1px solid #ff707033", background: "#ff707008" }}>
-              <i className="fa-solid fa-triangle-exclamation text-sm" style={{ color: "#ff7070" }} />
-              <span className="text-sm font-bold" style={{ color: "#ff7070" }}>รายงานปัญหา</span>
-              <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: "#ff707022", color: "#ff7070" }}>{reports.length}</span>
-            </div>
-            <div className="flex-1 overflow-y-auto p-3">
-              {reports.length === 0 ? <DarkEmpty text="ไม่มีรายงาน" /> :
-                reports.map(f => <FeedbackCard key={f.id} f={f} accentColor="#ff7070" adminId={adminId} onUpdated={fetch_} />)}
-            </div>
-          </div>
+      {loading ? <DarkSpinner /> : filtered.length === 0 ? <DarkEmpty text={search ? "ไม่พบผลการค้นหา" : "ไม่มี Feedback"} /> : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          {filtered.map(f => <FeedbackCard key={f.id} f={f} adminId={adminId} onUpdated={fetch_} />)}
         </div>
       )}
     </div>
@@ -5322,4 +5456,3 @@ function ClassScheduleTab({ adminId }: { adminId: string }) {
     </div>
   );
 }
-

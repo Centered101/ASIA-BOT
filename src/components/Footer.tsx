@@ -31,6 +31,11 @@ export default function Footer() {
                 title="GitHub">
                 <i className="fa-brands fa-github text-sm" />
               </Link>
+              <Link href="https://centered101.com" target="_blank" rel="noopener noreferrer"
+                className="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition"
+                title="Centered101">
+                <i className="fa-brands fa-dev text-sm" />
+              </Link>
             </div>
           </div>
 
@@ -68,7 +73,7 @@ export default function Footer() {
                   <i className="fa-brands fa-github text-sm text-slate-400 group-hover:text-white transition" />
                 </div>
                 <div>
-                  <div className="text-sm font-semibold text-slate-300 group-hover:text-white transition">GitHub: Centered101/asia-bot</div>
+                  <div className="text-sm font-semibold text-slate-300 group-hover:text-white transition">GitHub: Centered101/ASIA-BOT</div>
                   <div className="text-xs text-slate-500">ซอร์สโค้ดและโปรเจกต์</div>
                 </div>
               </Link>

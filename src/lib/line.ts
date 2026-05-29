@@ -268,3 +268,167 @@ export function buildOrderFlexMessage(params: {
     },
   };
 }
+
+// ─── Feedback Flex Message builder ───────────────────────────────────────────
+
+export function buildFeedbackFlexMessage(params: {
+  feedbackId: string;
+  type: "comment" | "report";
+  name?: string | null;
+  studentId?: string | null;
+  studentPhotoUrl?: string | null;
+  email?: string | null;
+  contact?: string | null;
+  category?: string | null;
+  reportUrl?: string | null;
+  message: string;
+  imageUrls?: string[] | null;
+}) {
+  const { type, name, studentId, studentPhotoUrl, email, contact, category, reportUrl, message, imageUrls } = params;
+  const siteUrl     = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-lb.web.app";
+  const typeLabel   = type === "comment" ? "ความคิดเห็น" : "รายงานปัญหา";
+  const headerColor = type === "comment" ? "#84D4FA" : "#FDE68A";
+  const imgs        = (imageUrls ?? []).filter(Boolean);
+  const heroUrl     = imgs[0] ?? null;
+  const extraImgs   = imgs.slice(1, 3);
+
+  const bubble: Record<string, unknown> = { type: "bubble", size: "giga" };
+
+  // ── Hero (first image) ──────────────────────────────────────────
+  if (heroUrl) {
+    bubble.hero = {
+      type: "image",
+      url: heroUrl,
+      size: "full",
+      aspectMode: "cover",
+      aspectRatio: "20:9",
+    };
+  }
+
+  // ── Header (with optional student photo) ───────────────────────
+  bubble.header = {
+    type: "box",
+    layout: "horizontal",
+    backgroundColor: headerColor,
+    paddingAll: "20px",
+    alignItems: "center",
+    contents: [
+      {
+        type: "box" as const,
+        layout: "vertical" as const,
+        flex: 1,
+        contents: [
+          { type: "text" as const, text: "ASIA-BOT Feedback", color: "#000000", weight: "bold" as const, size: "lg" as const },
+          { type: "text" as const, text: "รับเรื่องใหม่จากผู้ใช้งาน", color: "#1E293B", size: "sm" as const, margin: "sm" as const },
+        ],
+      },
+      ...(studentPhotoUrl ? [{
+        type: "box" as const,
+        layout: "vertical" as const,
+        width: "56px",
+        height: "56px",
+        cornerRadius: "8px",
+        contents: [{
+          type: "image" as const,
+          url: studentPhotoUrl,
+          size: "full" as const,
+          aspectRatio: "1:1",
+          aspectMode: "cover" as const,
+        }],
+      }] : []),
+    ],
+  };
+
+  // ── Body ────────────────────────────────────────────────────────
+  const bodyContents: object[] = [
+    { type: "text", text: "สถานะ: รอรับเรื่อง", weight: "bold", size: "xl", color: "#FE4040" },
+    { type: "text", text: `ประเภท: ${typeLabel}`, size: "sm", color: "#475569" },
+  ];
+
+  // Info rows — shown only when field has a value
+  const infoRow = (label: string, value: string) => ({
+    type: "box" as const,
+    layout: "horizontal" as const,
+    contents: [
+      { type: "text" as const, text: label, size: "sm" as const, color: "#64748B", flex: 2 },
+      { type: "text" as const, text: value, size: "sm" as const, color: "#0F172A", weight: "bold" as const, align: "end" as const, flex: 3, wrap: true },
+    ],
+  });
+  const infoRows = [
+    name      ? infoRow("ชื่อ",           name)      : null,
+    studentId ? infoRow("รหัสนักเรียน",   studentId) : null,
+    email     ? infoRow("อีเมล",          email)     : null,
+    contact   ? infoRow("ติดต่อ",          contact)   : null,
+    category  ? infoRow("หมวดหมู่",        category)  : null,
+    reportUrl ? infoRow("URL",            reportUrl) : null,
+  ].filter(Boolean) as object[];
+
+  if (infoRows.length > 0) {
+    bodyContents.push(
+      { type: "separator", margin: "md" },
+      { type: "box", layout: "vertical", spacing: "sm", contents: infoRows }
+    );
+  }
+
+  bodyContents.push({ type: "separator", margin: "md" });
+
+  // Extra images (index 1+) horizontal grid
+  if (extraImgs.length > 0) {
+    bodyContents.push(
+      {
+        type: "box",
+        layout: "vertical",
+        spacing: "sm",
+        contents: [
+          { type: "text" as const, text: "รูปภาพเพิ่มเติม", weight: "bold" as const, size: "sm" as const, color: "#0F172A" },
+          {
+            type: "box" as const,
+            layout: "horizontal" as const,
+            spacing: "sm" as const,
+            contents: extraImgs.map(url => ({
+              type: "image" as const,
+              url,
+              aspectMode: "cover" as const,
+              aspectRatio: "1:1" as const,
+              size: "sm" as const,
+            })),
+          },
+        ],
+      },
+      { type: "separator", margin: "md" }
+    );
+  }
+
+  // Message box
+  bodyContents.push({
+    type: "box",
+    layout: "vertical",
+    backgroundColor: "#EAF7FF",
+    paddingAll: "14px",
+    cornerRadius: "16px",
+    spacing: "sm",
+    contents: [
+      { type: "text" as const, text: "ข้อความ", size: "sm" as const, weight: "bold" as const, color: "#0F172A" },
+      { type: "text" as const, text: message, size: "sm" as const, color: "#475569", wrap: true },
+    ],
+  });
+
+  bubble.body = { type: "box", layout: "vertical", spacing: "md", contents: bodyContents };
+
+  // ── Footer ──────────────────────────────────────────────────────
+  bubble.footer = {
+    type: "box",
+    layout: "vertical",
+    spacing: "sm",
+    contents: [
+      {
+        type: "button",
+        style: "primary",
+        color: headerColor,
+        action: { type: "uri", label: "เปิด Feedback", uri: `${siteUrl}/admin?tab=feedbacks` },
+      },
+    ],
+  };
+
+  return bubble;
+}

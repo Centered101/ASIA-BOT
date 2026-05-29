@@ -4,30 +4,12 @@ import { useState, useEffect, useRef, Suspense } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { toast } from "sonner";
-import { createClient } from "@supabase/supabase-js";
 import { getStudentSession } from "@/lib/session";
-
-const supabaseClient = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 type Tab = "comment" | "report";
 
 const COMMENT_CATEGORIES = ["ข้อเสนอแนะ", "คำชม", "คำถาม", "อื่นๆ"];
 const REPORT_CATEGORIES = ["บั๊ก/ข้อผิดพลาด", "ระบบล่ม", "ข้อมูลผิดพลาด", "ปัญหาการแสดงผล", "อื่นๆ"];
-
-const PAGES = [
-  { emoji: "🏠", label: "หน้าหลัก" },
-  { emoji: "🔐", label: "เข้าสู่ระบบ" },
-  { emoji: "📋", label: "ลงทะเบียน" },
-  { emoji: "🪪", label: "บัตรนักเรียน" },
-  { emoji: "📊", label: "Dashboard" },
-  { emoji: "🏫", label: "Class Track Room" },
-  { emoji: "📡", label: "Student Entry Scanner" },
-  { emoji: "🛒", label: "สหกรณ์โรงเรียน" },
-  { emoji: "🏷️", label: "จองห้อง" },
-];
 
 const MAX_IMAGES = 3;
 const MAX_SIZE_MB = 5;
@@ -42,9 +24,9 @@ function FeedbackContent() {
   const [tab,          setTab]          = useState<Tab>("comment");
   const [identityMode, setIdentityMode] = useState<"anonymous" | "identified">("anonymous");
   const [name,         setName]         = useState("");
+  const [email,        setEmail]        = useState("");
   const [contact,      setContact]      = useState("");
   const [category,     setCategory]     = useState("");
-  const [page,         setPage]         = useState("");
   const [message,      setMessage]      = useState("");
   const [images,       setImages]       = useState<ImagePreview[]>([]);
   const [loading,      setLoading]      = useState(false);
@@ -58,10 +40,9 @@ function FeedbackContent() {
   useEffect(() => {
     if (identityMode === "identified" && session) {
       setName(`${session.first_name} ${session.last_name}`);
-      setContact("");
+      setEmail(""); setContact("");
     } else if (identityMode === "anonymous") {
-      setName("");
-      setContact("");
+      setName(""); setEmail(""); setContact("");
     }
   }, [identityMode, session]);
 
@@ -92,9 +73,7 @@ function FeedbackContent() {
   function switchTab(t: Tab) {
     setTab(t);
     window.location.hash = t;
-    setCategory("");
-    setCatErr(false);
-    setMsgErr(false);
+    setCategory(""); setCatErr(false); setMsgErr(false);
   }
 
   function handleFiles(files: FileList | null) {
@@ -123,16 +102,13 @@ function FeedbackContent() {
     const urls: string[] = [];
     for (const img of images) {
       try {
-        const ext = img.file.name.split(".").pop();
-        const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-        const { data, error } = await supabaseClient.storage
-          .from("feedback")
-          .upload(path, img.file, { upsert: false });
-        if (!error && data) {
-          const { data: { publicUrl } } = supabaseClient.storage.from("feedback").getPublicUrl(data.path);
-          urls.push(publicUrl);
-        }
-      } catch {}
+        const fd = new FormData();
+        fd.append("file", img.file);
+        const res  = await fetch("/api/feedback/upload", { method: "POST", body: fd });
+        const json = await res.json();
+        if (json.status === "success" && json.url) urls.push(json.url);
+        else toast.error(`อัพโหลด ${img.file.name} ไม่สำเร็จ: ${json.message ?? ""}`);
+      } catch { toast.error(`อัพโหลด ${img.file.name} ล้มเหลว`); }
     }
     return urls;
   }
@@ -151,9 +127,11 @@ function FeedbackContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: tab,
-          name: identityMode === "identified" ? name : "",
-          contact: identityMode === "identified" ? contact : "",
-          category, page, message, image_urls,
+          name:       identityMode === "identified" ? name    : "",
+          student_id: identityMode === "identified" ? (session?.student_id ?? "") : "",
+          email:      identityMode === "identified" ? email   : "",
+          contact:    identityMode === "identified" ? contact : "",
+          category, message, image_urls,
         }),
       });
       const data = await res.json();
@@ -173,7 +151,7 @@ function FeedbackContent() {
 
   function resetForm() {
     setName(identityMode === "identified" && session ? `${session.first_name} ${session.last_name}` : "");
-    setContact(""); setCategory(""); setPage(""); setMessage("");
+    setEmail(""); setContact(""); setCategory(""); setMessage("");
     images.forEach(i => URL.revokeObjectURL(i.url));
     setImages([]); setSuccess(false); setCatErr(false); setMsgErr(false);
   }
@@ -262,7 +240,7 @@ function FeedbackContent() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { if (session) setIdentityMode("identified"); else toast.error("กรุณาเข้าสู่ระบบก่อน"); }}
+                  onClick={() => { if (session) setIdentityMode("identified"); else window.location.href = "/login?next=/feedback%23comment"; }}
                   className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all ${identityMode === "identified" ? "bg-sky-500 text-white shadow" : "text-slate-500 hover:text-sky-500"} ${!session ? "opacity-50" : ""}`}>
                   <i className="fa-solid fa-id-card" /> ระบุตัวตน
                   {!session && <span className="text-[10px] opacity-70">(ต้อง login)</span>}
@@ -277,12 +255,15 @@ function FeedbackContent() {
                 </div>
               ) : session ? (
                 <div className="flex items-center gap-3 bg-sky-50 border border-sky-100 rounded-xl px-3 py-2.5 mb-4">
-                  <div className="w-8 h-8 rounded-xl bg-sky-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                    {session.first_name?.[0]?.toUpperCase()}
-                  </div>
+                  {session.photo_url
+                    ? /* eslint-disable-next-line @next/next/no-img-element */
+                      <img src={session.photo_url} alt="" className="w-8 h-8 rounded-xl object-cover flex-shrink-0" style={{ border: "2px solid #0EA5E9" }} />
+                    : <div className="w-8 h-8 rounded-xl bg-sky-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                        {session.first_name?.[0]?.toUpperCase()}
+                      </div>}
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-bold text-sky-700">{session.first_name} {session.last_name}</div>
-                    <div className="text-[10px] text-sky-400">{session.program} · {session.department}</div>
+                    <div className="text-[10px] text-sky-400">{session.student_id} · {session.program}</div>
                   </div>
                   <i className="fa-solid fa-circle-check text-sky-400 text-sm" />
                 </div>
@@ -304,23 +285,28 @@ function FeedbackContent() {
               ) : (
                 <div className="space-y-4">
 
-                  {/* Name + contact (identified only) */}
+                  {/* Name / email / contact (identified only) */}
                   {identityMode === "identified" && (
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-500 mb-1.5">
-                        ชื่อ / ข้อมูลติดต่อ <span className="text-slate-300 font-normal">(ไม่บังคับ)</span>
+                    <div className="space-y-2">
+                      <label className="block text-xs font-semibold text-slate-500">
+                        ข้อมูลติดต่อ <span className="text-slate-300 font-normal">(ไม่บังคับ)</span>
                       </label>
                       <div className="grid grid-cols-2 gap-2">
                         <div className="field-wrap">
                           <i className="fa-solid fa-user field-icon" />
                           <input value={name} onChange={e => setName(e.target.value)}
-                            className="form-input text-xs sm:text-sm" placeholder="ชื่อของคุณ" maxLength={40} />
+                            className="form-input text-xs sm:text-sm" placeholder="ชื่อ-นามสกุล" maxLength={40} />
                         </div>
                         <div className="field-wrap">
                           <i className="fa-solid fa-at field-icon" />
                           <input value={contact} onChange={e => setContact(e.target.value)}
                             className="form-input text-xs sm:text-sm" placeholder="Line / โทร" maxLength={60} />
                         </div>
+                      </div>
+                      <div className="field-wrap">
+                        <i className="fa-solid fa-envelope field-icon" />
+                        <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                          className="form-input text-xs sm:text-sm" placeholder="อีเมล (ไม่บังคับ)" maxLength={100} />
                       </div>
                     </div>
                   )}
@@ -343,23 +329,6 @@ function FeedbackContent() {
                       ))}
                     </div>
                     {catErr && <p className="text-xs text-red-400 mt-1">กรุณาเลือกหมวดหมู่</p>}
-                  </div>
-
-                  {/* Affected page */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">
-                      หน้าที่เกี่ยวข้อง <span className="text-slate-300 font-normal">(ไม่บังคับ)</span>
-                    </label>
-                    <div className="field-wrap">
-                      <i className="fa-solid fa-file field-icon" />
-                      <select value={page} onChange={e => setPage(e.target.value)}
-                        className="form-input text-xs sm:text-sm" style={{ paddingLeft: 36 }}>
-                        <option value="">-- เลือกหน้า --</option>
-                        {PAGES.map(p => (
-                          <option key={p.label} value={p.label}>{p.emoji} {p.label}</option>
-                        ))}
-                      </select>
-                    </div>
                   </div>
 
                   {/* Message */}
@@ -429,12 +398,16 @@ function FeedbackContent() {
                 <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">บัญชีของคุณ</h3>
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-sky-500 flex items-center justify-center text-white font-bold text-base flex-shrink-0">
-                      {session.first_name?.[0]?.toUpperCase()}
-                    </div>
+                    {session.photo_url
+                      ? /* eslint-disable-next-line @next/next/no-img-element */
+                        <img src={session.photo_url} alt="" className="w-12 h-12 rounded-xl object-cover flex-shrink-0" style={{ border: "2px solid #e0f2fe" }} />
+                      : <div className="w-12 h-12 rounded-xl bg-sky-500 flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
+                          {session.first_name?.[0]?.toUpperCase()}
+                        </div>}
                     <div className="min-w-0">
                       <div className="text-sm font-bold text-slate-800 truncate">{session.first_name} {session.last_name}</div>
-                      <div className="text-[10px] text-slate-400">{session.program}</div>
+                      <div className="text-[10px] text-slate-400">{session.student_id} · {session.program}</div>
+                      <div className="text-[10px] text-slate-400">{session.department}</div>
                     </div>
                   </div>
                   <div className="mt-3 pt-3 border-t border-slate-100 text-[11px] text-slate-500 flex items-center gap-1.5">
@@ -446,7 +419,7 @@ function FeedbackContent() {
                 <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">เข้าสู่ระบบ</h3>
                   <p className="text-xs text-slate-500 mb-3">Login เพื่อส่งความคิดเห็นแบบระบุตัวตน ให้ทีมงานติดต่อกลับได้</p>
-                  <a href="/login" className="btn-primary text-xs w-full flex items-center justify-center gap-1.5 py-2">
+                  <a href="/login?next=/feedback%23comment" className="btn-primary text-xs w-full flex items-center justify-center gap-1.5 py-2">
                     <i className="fa-solid fa-right-to-bracket" /> เข้าสู่ระบบ
                   </a>
                 </div>

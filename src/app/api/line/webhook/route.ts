@@ -46,6 +46,32 @@ async function handleEvent(event: LineEvent) {
 }
 
 async function handleTextMessage(userId: string, text: string, replyToken: string) {
+  // ── "รับเรื่อง Feedback #<id>" from admin ────────────────────────
+  const fbMatch = text.match(/รับเรื่อง\s+Feedback\s+#([a-zA-Z0-9-]+)/i);
+  if (fbMatch) {
+    const feedbackId = fbMatch[1];
+    const { data: updated } = await supabase
+      .from("feedback")
+      .update({ status: "in_progress" })
+      .eq("id", feedbackId)
+      .eq("status", "pending")
+      .select("id");
+
+    if (updated?.length) {
+      await replyLineMessage(replyToken, [{
+        type: "text",
+        text: `✅ รับเรื่อง Feedback #${feedbackId.slice(0, 8).toUpperCase()} แล้ว\nสถานะเปลี่ยนเป็น "กำลังดำเนินการ"`,
+      }]);
+    } else {
+      await replyLineMessage(replyToken, [{
+        type: "text",
+        text: `ℹ️ Feedback #${feedbackId.slice(0, 8).toUpperCase()} อาจถูกดำเนินการแล้ว`,
+      }]);
+    }
+    return;
+  }
+
+  // ── Student ID linking ───────────────────────────────────────────
   const studentId = text.trim().toUpperCase();
 
   const { data: student } = await (supabase as any)

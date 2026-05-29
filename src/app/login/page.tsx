@@ -65,7 +65,7 @@ function LoginForm() {
       <Header subtitle="เข้าสู่ระบบ" />
 
       <main className="min-h-[calc(100vh-64px)] flex items-center justify-center p-2 sm:p-4">
-        <div data-aos="zoom-in-up" className="w-full max-w-lg relative bg-[color:var(--white-smoker)] border rounded-2xl shadow p-4 sm:p-6 md:p-8 z-10">
+        <div data-aos="zoom-in-up" suppressHydrationWarning className="w-full max-w-lg relative bg-[color:var(--white-smoker)] border rounded-2xl shadow p-4 sm:p-6 md:p-8 z-10">
 
           {next !== "/student" && (
             <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 mb-5">

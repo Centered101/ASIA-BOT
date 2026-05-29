@@ -23,12 +23,68 @@ create table if not exists public.students (
   updated_at    timestamptz not null default now()
 );
 
+-- Student RFID cards table
+create table if not exists public.student_cards (
+  id          uuid primary key default gen_random_uuid(),
+  student_id  text references public.students(student_id) on delete cascade,
+  uid         text unique not null,
+  card_status text not null default 'active' check (card_status in ('active', 'inactive', 'lost')),
+  card_type   text not null default 'mifare',
+  created_at  timestamptz not null default now()
+);
+
+create index if not exists idx_student_cards_student_id on public.student_cards (student_id);
+
+-- Production RFID cards table
+create table if not exists public.rfid_cards (
+  id          uuid primary key default gen_random_uuid(),
+  student_id  text not null references public.students(student_id) on delete cascade,
+  uid         text not null unique,
+  card_type   text not null default 'mifare',
+  status      text not null default 'active' check (status in ('active', 'inactive', 'lost')),
+  issued_at   timestamptz default now(),
+  revoked_at  timestamptz,
+  created_at  timestamptz default now()
+);
+
+create index if not exists idx_rfid_cards_student_id on public.rfid_cards (student_id);
+create index if not exists idx_rfid_cards_status on public.rfid_cards (status);
+
+-- RFID devices table
+create table if not exists public.rfid_devices (
+  id          uuid primary key default gen_random_uuid(),
+  device_id   text unique not null,
+  device_key  text not null,
+  name        text,
+  location    text,
+  status      text not null default 'active' check (status in ('active', 'inactive')),
+  created_at  timestamptz default now()
+);
+
+-- RFID attendance sessions table
+create table if not exists public.attendance_logs (
+  id               uuid primary key default gen_random_uuid(),
+  student_id       text references public.students(student_id),
+  uid              text not null,
+  location         text not null,
+  check_in         timestamptz,
+  check_out        timestamptz,
+  duration_minutes int,
+  created_at       timestamptz default now()
+);
+
+create index if not exists idx_attendance_logs_open
+  on public.attendance_logs (student_id, uid, location, check_out);
+
+create index if not exists idx_attendance_logs_created_at
+  on public.attendance_logs (created_at desc);
+
 -- Projects table
 create table if not exists public.projects (
   id          uuid primary key default gen_random_uuid(),
   name        text not null,
   slug        text unique not null,
-  year        integer not null,
+  project_date text,
   poster_url  text,
   demo_url    text,
   created_at  timestamptz not null default now()
@@ -112,18 +168,6 @@ create table if not exists public.room_bookings (
 );
 
 create index if not exists idx_room_bookings_room_date on public.room_bookings (room_id, date);
-
--- ================================================================
--- Seed: Projects (matching PROJECTS in config.ts)
--- ================================================================
-insert into public.projects (name, slug, year) values
-  ('ตู้กดอเนกประสงค์', 'project-1', 2024),
-  ('คุกกี้โปรตีนจิ้งหรีด', 'project-2', 2024),
-  ('ไม้เท้าเลเซอร์สตาฟ์', 'project-3', 2024),
-  ('รีวิวผู้พิทักษ์', 'project-4', 2025),
-  ('ระบบเช็กสถานะห้องเรียนแบบเรียลไทม์', 'project-5', 2026),
-  ('พัฒนาท้องถิ่น', 'project-6', 2026)
-on conflict (slug) do nothing;
 
 -- ================================================================
 -- Row Level Security (optional — enable for production)

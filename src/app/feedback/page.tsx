@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, Suspense } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import StudentAvatar from "@/components/StudentAvatar";
 import { toast } from "sonner";
 import { getStudentSession } from "@/lib/session";
 
@@ -254,18 +255,13 @@ function FeedbackContent() {
                   <span>ส่งในนาม <strong>ไม่ระบุตัวตน</strong> — ชื่อและข้อมูลติดต่อจะไม่ถูกบันทึก</span>
                 </div>
               ) : session ? (
-                <div className="flex items-center gap-3 bg-sky-50 border border-sky-100 rounded-xl px-3 py-2.5 mb-4">
-                  {session.photo_url
-                    ? /* eslint-disable-next-line @next/next/no-img-element */
-                      <img src={session.photo_url} alt="" className="w-8 h-8 rounded-xl object-cover flex-shrink-0" style={{ border: "2px solid #0EA5E9" }} />
-                    : <div className="w-8 h-8 rounded-xl bg-sky-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                        {session.first_name?.[0]?.toUpperCase()}
-                      </div>}
+                <div className="flex items-center gap-3 bg-[rgba(132,212,250,0.12)] border border-[rgba(132,212,250,0.45)] rounded-xl px-3 py-2.5 mb-4">
+                  <StudentAvatar src={session.photo_url} name={`${session.first_name} ${session.last_name}`} size={32} rounded="xl" />
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs font-bold text-sky-700">{session.first_name} {session.last_name}</div>
-                    <div className="text-[10px] text-sky-400">{session.student_id} · {session.program}</div>
+                    <div className="text-xs font-bold text-[var(--primary-dark)]">{session.first_name} {session.last_name}</div>
+                    <div className="text-[10px] text-slate-500">{session.student_id} · {session.program}</div>
                   </div>
-                  <i className="fa-solid fa-circle-check text-sky-400 text-sm" />
+                  <i className="fa-solid fa-circle-check text-[var(--primary-dark)] text-sm" />
                 </div>
               ) : null}
 
@@ -398,12 +394,7 @@ function FeedbackContent() {
                 <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">บัญชีของคุณ</h3>
                   <div className="flex items-center gap-3">
-                    {session.photo_url
-                      ? /* eslint-disable-next-line @next/next/no-img-element */
-                        <img src={session.photo_url} alt="" className="w-12 h-12 rounded-xl object-cover flex-shrink-0" style={{ border: "2px solid #e0f2fe" }} />
-                      : <div className="w-12 h-12 rounded-xl bg-sky-500 flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
-                          {session.first_name?.[0]?.toUpperCase()}
-                        </div>}
+                    <StudentAvatar src={session.photo_url} name={`${session.first_name} ${session.last_name}`} size={48} rounded="xl" />
                     <div className="min-w-0">
                       <div className="text-sm font-bold text-slate-800 truncate">{session.first_name} {session.last_name}</div>
                       <div className="text-[10px] text-slate-400">{session.student_id} · {session.program}</div>

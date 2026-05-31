@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Header from "@/components/Header";
@@ -11,6 +12,8 @@ import type { Database } from "@/types/database";
 import QRCode from "qrcode";
 
 type Student = Database["public"]["Tables"]["students"]["Row"] & { photo_url?: string | null };
+
+const CROP_SIZE = 280;
 
 function calcGrade(program: string, entryYear: number | string | null) {
   const now = new Date();
@@ -38,6 +41,21 @@ export default function StudentPage() {
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [sessionCountdown, setSessionCountdown] = useState("");
 
+  const [cropOpen, setCropOpen] = useState(false);
+  const [cropRawSrc, setCropRawSrc] = useState("");
+  const [cropRawFile, setCropRawFile] = useState<File | null>(null);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [imgNat, setImgNat] = useState({ w: 0, h: 0 });
+  const [cropDragging, setCropDragging] = useState(false);
+  const [cropZoom, setCropZoom] = useState(1);
+  const [portalReady, setPortalReady] = useState(false);
+  const dragD = useRef({ mx: 0, my: 0, ox: 0, oy: 0 });
+  const cropImgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
+
   useEffect(() => {
     if (!loginTime) return;
     function tick() {
@@ -57,6 +75,12 @@ export default function StudentPage() {
   async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !student) return;
+    pickPhoto(file);
+    e.target.value = "";
+  }
+
+  async function uploadPhoto(file: File) {
+    if (!student) return;
     setUploadingPhoto(true);
     try {
       const fd = new FormData();
@@ -79,6 +103,103 @@ export default function StudentPage() {
       setUploadingPhoto(false);
       if (photoInputRef.current) photoInputRef.current.value = "";
     }
+  }
+
+  function pickPhoto(file: File) {
+    if (!file.type.startsWith("image/")) { toast.error("กรุณาเลือกไฟล์รูปภาพ"); return; }
+    if (file.size > 3 * 1024 * 1024) { toast.error("ขนาดไฟล์ไม่เกิน 3MB"); return; }
+    setCropRawFile(file);
+    setCropRawSrc(URL.createObjectURL(file));
+    setImgNat({ w: 0, h: 0 });
+    setPanOffset({ x: 0, y: 0 });
+    setCropZoom(1);
+    setCropOpen(true);
+  }
+
+  function onCropLoad(e: React.SyntheticEvent<HTMLImageElement>) {
+    const { naturalWidth: nw, naturalHeight: nh } = e.currentTarget;
+    setImgNat({ w: nw, h: nh });
+    const s = Math.max(CROP_SIZE / nw, CROP_SIZE / nh);
+    setPanOffset({ x: -(nw * s - CROP_SIZE) / 2, y: -(nh * s - CROP_SIZE) / 2 });
+  }
+
+  function cropClamp(off: { x: number; y: number }, nw: number, nh: number) {
+    const s = Math.max(CROP_SIZE / nw, CROP_SIZE / nh) * cropZoom;
+    return {
+      x: Math.max(-(nw * s - CROP_SIZE), Math.min(0, off.x)),
+      y: Math.max(-(nh * s - CROP_SIZE), Math.min(0, off.y)),
+    };
+  }
+
+  function onCropMouseDown(e: React.MouseEvent) {
+    e.preventDefault();
+    dragD.current = { mx: e.clientX, my: e.clientY, ox: panOffset.x, oy: panOffset.y };
+    setCropDragging(true);
+  }
+
+  function onCropMouseMove(e: React.MouseEvent) {
+    if (!cropDragging || !imgNat.w) return;
+    setPanOffset(cropClamp(
+      { x: dragD.current.ox + e.clientX - dragD.current.mx, y: dragD.current.oy + e.clientY - dragD.current.my },
+      imgNat.w, imgNat.h,
+    ));
+  }
+
+  function onCropTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0];
+    dragD.current = { mx: t.clientX, my: t.clientY, ox: panOffset.x, oy: panOffset.y };
+    setCropDragging(true);
+  }
+
+  function onCropTouchMove(e: React.TouchEvent) {
+    if (!cropDragging || !imgNat.w) return;
+    const t = e.touches[0];
+    setPanOffset(cropClamp(
+      { x: dragD.current.ox + t.clientX - dragD.current.mx, y: dragD.current.oy + t.clientY - dragD.current.my },
+      imgNat.w, imgNat.h,
+    ));
+  }
+
+  function stopCropDrag() { setCropDragging(false); }
+
+  function setZoomAndClamp(value: number) {
+    const zoom = Math.max(1, Math.min(3, value));
+    setCropZoom(zoom);
+    if (imgNat.w) {
+      const s = Math.max(CROP_SIZE / imgNat.w, CROP_SIZE / imgNat.h) * zoom;
+      setPanOffset(off => ({
+        x: Math.max(-(imgNat.w * s - CROP_SIZE), Math.min(0, off.x)),
+        y: Math.max(-(imgNat.h * s - CROP_SIZE), Math.min(0, off.y)),
+      }));
+    }
+  }
+
+  function closeCrop() {
+    if (cropRawSrc) URL.revokeObjectURL(cropRawSrc);
+    setCropOpen(false);
+    setCropRawSrc("");
+    setCropRawFile(null);
+    setCropZoom(1);
+  }
+
+  function confirmCrop() {
+    if (!cropImgRef.current || !cropRawFile || !imgNat.w) return;
+    const s = Math.max(CROP_SIZE / imgNat.w, CROP_SIZE / imgNat.h) * cropZoom;
+    const canvas = document.createElement("canvas");
+    canvas.width = 400;
+    canvas.height = 400;
+    canvas.getContext("2d")!.drawImage(
+      cropImgRef.current,
+      -panOffset.x / s, -panOffset.y / s,
+      CROP_SIZE / s, CROP_SIZE / s,
+      0, 0, 400, 400,
+    );
+    canvas.toBlob(blob => {
+      if (!blob) return;
+      const file = new File([blob], "photo.jpg", { type: "image/jpeg" });
+      closeCrop();
+      void uploadPhoto(file);
+    }, "image/jpeg", 0.9);
   }
 
   // Direct-edit (saves immediately): nickname, phone
@@ -255,6 +376,7 @@ export default function StudentPage() {
   const initials = ((student.first_name[0] ?? "?") + (student.last_name[0] ?? "?")).toUpperCase();
   const isGraduated = grade.includes("จบการศึกษา");
   const isPending   = grade.includes("รอเข้าเรียน");
+  const cropScale = imgNat.w ? Math.max(CROP_SIZE / imgNat.w, CROP_SIZE / imgNat.h) * cropZoom : 1;
 
   const ADMIN_ROLE_LABEL: Record<string, string> = { superadmin: "Super Admin", admin: "Admin", staff: "Staff" };
   const ADMIN_ROLE_COLOR: Record<string, { bg: string; text: string; border: string }> = {
@@ -638,7 +760,7 @@ export default function StudentPage() {
               <div className="flex justify-center mb-4">
                 <label className="relative cursor-pointer group">
                   <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
-                  <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-slate-200 bg-slate-100 flex items-center justify-center font-bold text-slate-400 text-2xl">
+                  <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-slate-200 bg-slate-100 flex items-center justify-center font-bold text-slate-400 text-2xl">
                     {uploadingPhoto
                       ? <span className="spinner w-6 h-6 border-2 border-sky-400 border-t-transparent inline-block" />
                       : student.photo_url
@@ -674,13 +796,10 @@ export default function StudentPage() {
                   </label>
                   <div className="relative">
                     <input suppressHydrationWarning
-                      type={showEditPhone ? "text" : "password"}
+                      type="text"
                       className="w-full px-3 py-2.5 pr-10 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-none focus:border-sky-400 transition"
                       value={editPhone} onChange={(e) => setEditPhone(e.target.value)}
                       inputMode="numeric" maxLength={10} />
-                    <button type="button" onClick={() => setShowEditPhone(v => !v)} className="eye-btn">
-                      <i className={`fa-solid ${showEditPhone ? "fa-eye-slash" : "fa-eye"}`} />
-                    </button>
                   </div>
                 </div>
 
@@ -779,6 +898,88 @@ export default function StudentPage() {
           </div>
         </div>
       </div>
+
+      {portalReady && cropOpen && createPortal((
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/55 backdrop-blur-sm p-3 sm:p-4">
+          <div className="bg-white rounded-[28px] shadow-2xl w-full max-w-md max-h-[95dvh] overflow-y-auto flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <div>
+                <h3 className="font-semibold text-slate-900 text-base">เปลี่ยนรูปโปรไฟล์</h3>
+                <p className="text-xs text-slate-500 mt-0.5">ปรับรูปให้พอดีกับกรอบวงกลม</p>
+              </div>
+              <button onClick={closeCrop}
+                className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-500 transition">
+                <i className="fa-solid fa-xmark" />
+              </button>
+            </div>
+
+            <div className="px-5 py-6 flex flex-col items-center gap-5">
+              <div className="relative rounded-full overflow-hidden select-none bg-slate-950 shadow-inner"
+                style={{
+                  width: CROP_SIZE, height: CROP_SIZE,
+                  cursor: cropDragging ? "grabbing" : "grab",
+                  maxWidth: "min(280px, calc(100vw - 56px))",
+                  maxHeight: "min(280px, calc(100vw - 56px))",
+                }}
+                onMouseDown={onCropMouseDown}
+                onMouseMove={onCropMouseMove}
+                onMouseUp={stopCropDrag}
+                onMouseLeave={stopCropDrag}
+                onTouchStart={onCropTouchStart}
+                onTouchMove={onCropTouchMove}
+                onTouchEnd={stopCropDrag}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  ref={cropImgRef}
+                  src={cropRawSrc}
+                  alt="crop"
+                  onLoad={onCropLoad}
+                  draggable={false}
+                  style={{
+                    position: "absolute",
+                    left: panOffset.x,
+                    top: panOffset.y,
+                    width: imgNat.w ? imgNat.w * cropScale : "auto",
+                    height: imgNat.h ? imgNat.h * cropScale : "auto",
+                    pointerEvents: "none",
+                    userSelect: "none",
+                  }}
+                />
+                <div className="absolute inset-0 rounded-full ring-2 ring-white/95 ring-inset pointer-events-none" />
+                <div className="absolute inset-0 pointer-events-none" style={{ boxShadow: "inset 0 0 0 999px rgba(15,23,42,.14)" }} />
+              </div>
+
+              <div className="w-full flex items-center gap-3 px-1">
+                <i className="fa-solid fa-image text-slate-400 text-xs" />
+                <input
+                  aria-label="ซูมรูป"
+                  type="range"
+                  min="1"
+                  max="3"
+                  step="0.05"
+                  value={cropZoom}
+                  onChange={e => setZoomAndClamp(Number(e.target.value))}
+                  className="w-full accent-sky-500"
+                />
+                <i className="fa-solid fa-image text-slate-500 text-base" />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100">
+              <button onClick={closeCrop}
+                className="px-4 py-2 rounded-full text-sm font-semibold text-sky-600 hover:bg-sky-50 transition">
+                ยกเลิก
+              </button>
+              <button onClick={confirmCrop} disabled={uploadingPhoto}
+                className="px-5 py-2 rounded-full text-sm font-semibold text-white bg-sky-500 hover:bg-sky-600 disabled:opacity-60 transition inline-flex items-center gap-2">
+                {uploadingPhoto
+                  ? <><span className="spinner w-4 h-4 border-2 border-white border-t-transparent inline-block" />กำลังบันทึก</>
+                  : "บันทึกเป็นรูปโปรไฟล์"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ), document.body)}
 
       <Footer />
     </>

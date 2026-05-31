@@ -432,3 +432,117 @@ export function buildFeedbackFlexMessage(params: {
 
   return bubble;
 }
+
+// ─── RFID Attendance Flex Message builder ────────────────────────────────────
+
+export function buildRfidScanFlexMessage(params: {
+  action: "checkin" | "checkout";
+  studentName: string;
+  studentId: string;
+  nickname?: string | null;
+  program?: string | null;
+  department?: string | null;
+  studentPhotoUrl?: string | null;
+  location: string;
+  locationLabel: string;
+  uid: string;
+  scannedAt: string;
+  duration?: string | null;
+}) {
+  const { action, studentName, studentId, nickname, program, department, studentPhotoUrl, location, locationLabel, uid, scannedAt, duration } = params;
+  const isCheckin = action === "checkin";
+  const headerColor = isCheckin ? "#84D4FA" : "#D1FAE5";
+  const actionText = `${isCheckin ? "เข้า" : "ออก"}${locationLabel}`;
+  const statusColor = isCheckin ? "#22C55E" : "#0EA5E9";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-lb.vercel.app";
+  const timeText = new Date(scannedAt).toLocaleString("th-TH", {
+    timeZone: "Asia/Bangkok",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const infoRow = (label: string, value: string) => ({
+    type: "box" as const,
+    layout: "horizontal" as const,
+    contents: [
+      { type: "text" as const, text: label, size: "sm" as const, color: "#64748B", flex: 2 },
+      { type: "text" as const, text: value, size: "sm" as const, weight: "bold" as const, color: "#0F172A", align: "end" as const, flex: 3, wrap: true },
+    ],
+  });
+
+  return {
+    type: "bubble",
+    size: "giga",
+    header: {
+      type: "box",
+      layout: "horizontal",
+      backgroundColor: headerColor,
+      paddingAll: "20px",
+      alignItems: "center",
+      contents: [
+        {
+          type: "box" as const,
+          layout: "vertical" as const,
+          flex: 1,
+          contents: [
+            { type: "text" as const, text: isCheckin ? "ASIA-BOT Check-in" : "ASIA-BOT Check-out", weight: "bold" as const, size: "lg" as const, color: "#000000" },
+            { type: "text" as const, text: "สแกนบัตรสำเร็จ", size: "sm" as const, color: "#1E293B", margin: "sm" as const },
+          ],
+        },
+        ...(studentPhotoUrl ? [{
+          type: "box" as const,
+          layout: "vertical" as const,
+          width: "56px",
+          height: "56px",
+          cornerRadius: "8px",
+          contents: [{
+            type: "image" as const,
+            url: studentPhotoUrl,
+            size: "full" as const,
+            aspectRatio: "1:1" as const,
+            aspectMode: "cover" as const,
+          }],
+        }] : []),
+      ],
+    },
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "md",
+      contents: [
+        { type: "text", text: actionText, weight: "bold", size: "xl", color: statusColor },
+        { type: "text", text: `${studentName} (${studentId})`, size: "sm", color: "#475569", wrap: true },
+        { type: "separator", margin: "md" },
+        {
+          type: "box",
+          layout: "vertical",
+          spacing: "sm",
+          contents: [
+            infoRow("สถานที่", locationLabel),
+            infoRow("โซน", location),
+            ...(nickname ? [infoRow("ชื่อเล่น", nickname)] : []),
+            ...(program ? [infoRow("ระดับ", program)] : []),
+            ...(department ? [infoRow("สาขา", department)] : []),
+            infoRow("เวลา", timeText),
+            infoRow("UID", uid),
+            ...(duration ? [infoRow("ระยะเวลา", duration)] : []),
+          ],
+        },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      spacing: "sm",
+      contents: [{
+        type: "button",
+        style: "primary",
+        color: headerColor,
+        action: { type: "uri", label: "ดูประวัติการสแกน", uri: `${siteUrl}/student-entry-scanner` },
+      }],
+    },
+  };
+}

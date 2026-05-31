@@ -1,8 +1,9 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState, useCallback, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { CustomField } from "@/lib/config";
+import RfidConsole from "@/components/admin/RfidConsole";
 import { Chart, registerables } from "chart.js";
 import { toast } from "sonner";
 Chart.register(...registerables);
@@ -46,6 +47,7 @@ type Student = {
   id: string; student_id: string; first_name: string; last_name: string;
   nickname: string | null; program: string; department: string | null;
   entry_year: string; student_phone: string;
+  uid: string | null;
   photo_url: string | null;
   card_status: "active" | "inactive" | "lost";
   created_at: string; updated_at: string;
@@ -54,6 +56,24 @@ type Student = {
 type EntryLog = {
   id: string; student_id: string | null; action: "in" | "out"; scanned_at: string;
   students: { first_name: string; last_name: string; nickname: string | null; program: string; department: string } | null;
+};
+
+type AttendanceLog = {
+  id: string;
+  student_id: string;
+  location: "school" | "library" | "meeting";
+  checkin_time: string;
+  checkout_time: string | null;
+  duration: string | number | null;
+  students: {
+    first_name: string;
+    last_name: string;
+    nickname: string | null;
+    program: string;
+    department: string | null;
+    student_id: string;
+    photo_url: string | null;
+  } | null;
 };
 
 type Product = {
@@ -113,20 +133,20 @@ function formatDateTime(s: string) {
 
 // ─── Avatar ───────────────────────────────────────────────────────────────────
 
-const AVATAR_COLORS = ["#f85149","#ff7070","#3fb950","#a371f7","#9e9e9e","#e3b341","#0ea5e9","#ec4899","#14b8a6","#8b5cf6"];
+const ADMIN_PRIMARY = "#ff7070";
 
-function getAvatarColor(seed: string): string {
-  let h = 0;
-  for (const c of seed) h = (h * 31 + c.charCodeAt(0)) & 0xffffffff;
-  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
+function avatarInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const text = parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : (parts[0]?.slice(0, 2) ?? "?");
+  return text.toUpperCase();
 }
 
 function Avatar({ name, url, size = 32, rounded = "full", fixedColor }: {
   name: string; url?: string | null; size?: number; rounded?: "full" | "xl" | "lg"; fixedColor?: string;
 }) {
   const [err, setErr] = useState(false);
-  const initial = (name?.[0] ?? "?").toUpperCase();
-  const color = fixedColor ?? getAvatarColor(name || "?");
+  const initial = avatarInitials(name || "?");
+  const color = fixedColor ?? ADMIN_PRIMARY;
   const br = rounded === "full" ? "9999px" : rounded === "xl" ? "12px" : "8px";
   const fs = Math.round(size * 0.42);
 
@@ -138,7 +158,7 @@ function Avatar({ name, url, size = 32, rounded = "full", fixedColor }: {
     );
   }
   return (
-    <div style={{ width: size, height: size, borderRadius: br, background: color, color: "#fff", fontWeight: 700, fontSize: fs, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, userSelect: "none" }}>
+    <div style={{ width: size, height: size, borderRadius: br, background: color, color: "#fff", fontWeight: 800, fontSize: fs, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, userSelect: "none" }}>
       {initial}
     </div>
   );
@@ -157,7 +177,7 @@ function ViewToggle({ mode, onChange }: { mode: ViewMode; onChange: (m: ViewMode
         <button key={m.id} onClick={() => onChange(m.id)} title={m.label}
           className="px-2.5 py-1.5 rounded-lg text-xs transition-all"
           style={mode === m.id
-            ? { background: "#f85149", color: "#fff" }
+            ? { background: ADMIN_PRIMARY, color: "#fff" }
             : { color: "#636363" }}>
           <i className={`fa-solid ${m.icon}`} />
         </button>
@@ -185,11 +205,24 @@ const NAV_SECTIONS: NavSection[] = [
     title: "นักเรียน",
     items: [
       { id: "students",        label: "นักเรียน",            icon: "fa-graduation-cap" },
-      { id: "entrylogs",       label: "Log ทั้งหมด",          icon: "fa-list-ul",          badge: "todayEntries" },
-      { id: "checkin_school",  label: "เช็คซื่อ โรงเรียน",   icon: "fa-school" },
-      { id: "checkin_library", label: "เช็คซื่อ ห้องสมุด",    icon: "fa-book-open" },
-      { id: "checkin_meeting", label: "เช็คซื่อ ห้องประชุม",  icon: "fa-door-open" },
-      { id: "bookings",        label: "สถิติ",                icon: "fa-chart-line" },
+      { id: "name_requests",   label: "ขอเปลี่ยนชื่อ",      icon: "fa-pen-to-square" },
+      { id: "data_requests",   label: "ขอแก้ไขข้อมูล",      icon: "fa-file-pen" },
+    ],
+  },
+  {
+    title: "เช็กชื่อและอุปกรณ์",
+    items: [
+      { id: "entrylogs",       label: "เช็กชื่อ ทั้งหมด",          icon: "fa-list-ul",          badge: "todayEntries" },
+      { id: "checkin_school",  label: "เช็กชื่อ โรงเรียน",   icon: "fa-school" },
+      { id: "checkin_library", label: "เช็กชื่อ ห้องสมุด",    icon: "fa-book-open" },
+      { id: "checkin_meeting", label: "เช็กชื่อ ห้องประชุม",  icon: "fa-door-open" },
+      { id: "rfid",            label: "RFID Controller",      icon: "fa-microchip" },
+    ],
+  },
+  {
+    title: "จองห้อง",
+    items: [
+      { id: "bookings", label: "รายการจองห้อง", icon: "fa-calendar-check" },
     ],
   },
   {
@@ -304,12 +337,12 @@ function AdminLogin({ onLogin }: { onLogin: (a: AdminUser) => void }) {
       {/* Background glow */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 rounded-full opacity-10 blur-3xl"
-          style={{ background: "radial-gradient(circle, #f85149 0%, transparent 70%)" }} />
+          style={{ background: "radial-gradient(circle, #ff7070 0%, transparent 70%)" }} />
       </div>
 
       {/* ADMIN watermark */}
       <div className="absolute bottom-8 right-8 text-[120px] font-black select-none pointer-events-none"
-        style={{ color: "rgba(248,81,73,0.05)", letterSpacing: "-0.05em" }}>ADMIN</div>
+        style={{ color: "rgba(255,112,112,0.05)", letterSpacing: "-0.05em" }}>ADMIN</div>
 
       <div className="relative z-10 w-full max-w-sm px-4">
         {/* Logo */}
@@ -319,7 +352,7 @@ function AdminLogin({ onLogin }: { onLogin: (a: AdminUser) => void }) {
           <h1 className="text-2xl font-black text-white">ผู้ดูแระบบ</h1>
           <p className="text-[#9e9e9e] text-sm mt-1">ASIA-BOT Admin Portal · เข้าถึงเฉพาะผู้มีสิทธิ์เท่านั้น</p>
           <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full text-xs font-semibold"
-            style={{ background: "rgba(248,81,73,0.15)", color: "#f85149", border: "1px solid rgba(248,81,73,0.3)" }}>
+            style={{ background: "rgba(255,112,112,0.15)", color: "#ff7070", border: "1px solid rgba(255,112,112,0.3)" }}>
             <i className="fa-solid fa-lock text-[10px]" /> Secure Area · กิจกรรมทั้งหมดถูกบันทึก
           </div>
         </div>
@@ -348,7 +381,7 @@ function AdminLogin({ onLogin }: { onLogin: (a: AdminUser) => void }) {
                   suppressHydrationWarning
                   className="w-full pl-9 pr-4 py-3 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none transition-colors"
                   style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }}
-                  onFocus={(e) => e.currentTarget.style.borderColor = "#f85149"}
+                  onFocus={(e) => e.currentTarget.style.borderColor = "#ff7070"}
                   onBlur={(e) => e.currentTarget.style.borderColor = "#3e3e3e"} />
               </div>
             </div>
@@ -364,7 +397,7 @@ function AdminLogin({ onLogin }: { onLogin: (a: AdminUser) => void }) {
                   suppressHydrationWarning
                   className="w-full pl-9 pr-10 py-3 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none transition-colors"
                   style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }}
-                  onFocus={(e) => e.currentTarget.style.borderColor = "#f85149"}
+                  onFocus={(e) => e.currentTarget.style.borderColor = "#ff7070"}
                   onBlur={(e) => e.currentTarget.style.borderColor = "#3e3e3e"} />
                 <button type="button" onClick={() => setShowPw(!showPw)} suppressHydrationWarning
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9e9e9e] hover:text-white transition-colors text-sm">
@@ -375,14 +408,14 @@ function AdminLogin({ onLogin }: { onLogin: (a: AdminUser) => void }) {
 
             {error && (
               <div className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-xs"
-                style={{ background: "rgba(248,81,73,0.1)", border: "1px solid rgba(248,81,73,0.3)", color: "#f85149" }}>
+                style={{ background: "rgba(255,112,112,0.1)", border: "1px solid rgba(255,112,112,0.3)", color: "#ff7070" }}>
                 <i className="fa-solid fa-circle-xmark flex-shrink-0" /> {error}
               </div>
             )}
 
             <button type="submit" disabled={loading || attempts === 0} suppressHydrationWarning
               className="w-full py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-              style={{ background: loading ? "#636363" : "#f85149", boxShadow: loading ? "none" : "0 4px 20px rgba(248,81,73,0.3)" }}>
+              style={{ background: loading ? "#636363" : "#ff7070", boxShadow: loading ? "none" : "0 4px 20px rgba(255,112,112,0.3)" }}>
               {loading ? <><i className="fa-solid fa-spinner fa-spin" /> กำลังตรวจสอบ...</>
                 : <><i className="fa-solid fa-right-to-bracket" /> เข้าสู่ระบบผู้ดูแล</>}
             </button>
@@ -402,7 +435,7 @@ function AdminLogin({ onLogin }: { onLogin: (a: AdminUser) => void }) {
 
 // ─── Admin Shell ──────────────────────────────────────────────────────────────
 
-const VALID_TABS = new Set(["dashboard","students","entrylogs","checkin_school","checkin_library","checkin_meeting","bookings","products","shoporders","projects","evaluations","class_groups","class_schedule","teachers","feedbacks","admins","settings"]);
+const VALID_TABS = new Set(["dashboard","students","name_requests","data_requests","entrylogs","checkin_school","checkin_library","checkin_meeting","rfid","bookings","products","shoporders","projects","evaluations","class_groups","class_schedule","teachers","feedbacks","admins","settings"]);
 
 function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onLogout: () => void; onAvatarChange: (url: string | null) => void }) {
   const router = useRouter();
@@ -514,7 +547,9 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
 
           {/* Breadcrumb */}
           <div className="flex items-center gap-2 text-[13px]">
-            <span style={{ color: "#555" }}>ASIA-BOT</span>
+            <a href="/" style={{ color: "#555" }}>ASIA-BOT</a>
+            <i className="fa-solid fa-chevron-right text-[9px]" style={{ color: "#333" }} />
+            <a href="/admin" style={{ color: "#555" }}>Admin</a>
             <i className="fa-solid fa-chevron-right text-[9px]" style={{ color: "#333" }} />
             <span style={{ color: "#ededed" }}>{getPageTitle()}</span>
           </div>
@@ -559,10 +594,13 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
           <div className="p-6">
             {activeTab === "dashboard"       && <DashboardTab   adminId={admin.admin_id} stats={stats} />}
             {activeTab === "students"        && <StudentsTab    adminId={admin.admin_id} refreshKey={studentsRefreshKey} role={admin.role} />}
+            {activeTab === "name_requests"   && <AllRequestsTab adminId={admin.admin_id} kind="name" />}
+            {activeTab === "data_requests"   && <AllRequestsTab adminId={admin.admin_id} kind="data" />}
             {activeTab === "entrylogs"       && <EntryLogsTab   adminId={admin.admin_id} />}
-            {activeTab === "checkin_school"  && <EntryLogsTab   adminId={admin.admin_id} />}
-            {activeTab === "checkin_library" && <EntryLogsTab   adminId={admin.admin_id} />}
-            {activeTab === "checkin_meeting" && <EntryLogsTab   adminId={admin.admin_id} />}
+            {activeTab === "checkin_school"  && <AttendanceLocationTab adminId={admin.admin_id} location="school" />}
+            {activeTab === "checkin_library" && <AttendanceLocationTab adminId={admin.admin_id} location="library" />}
+            {activeTab === "checkin_meeting" && <AttendanceLocationTab adminId={admin.admin_id} location="meeting" />}
+            {activeTab === "rfid"            && <RfidConsole />}
             {activeTab === "bookings"        && <BookingsTab    adminId={admin.admin_id} />}
             {activeTab === "feedbacks"       && <FeedbacksTab   adminId={admin.admin_id} />}
             {activeTab === "products"        && <ProductsTab    adminId={admin.admin_id} role={admin.role} />}
@@ -729,14 +767,14 @@ function SidebarUser({ admin, onLogout, onAvatarChange }: {
               <div className="mt-2 pt-2" style={{ borderTop: "1px solid #1e1e1e" }}>
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[9px] uppercase tracking-widest" style={{ color: "#3a3a3a" }}>เซสชันหมดอายุใน</span>
-                  <span className="text-[11px] font-mono font-bold" style={{ color: timeLeft === "หมดอายุ" ? "#f85149" : "#3fb950" }}>{timeLeft}</span>
+                  <span className="text-[11px] font-mono font-bold" style={{ color: timeLeft === "หมดอายุ" ? "#ff7070" : "#3fb950" }}>{timeLeft}</span>
                 </div>
                 {timeLeft !== "หมดอายุ" && (() => {
                   const raw = sessionStorage.getItem(STORAGE_TIME_KEY);
                   const pct = raw ? Math.max(0, (new Date(raw).getTime() + SESSION_8H - Date.now()) / SESSION_8H) : 0;
                   return (
                     <div className="h-[3px] rounded-full overflow-hidden" style={{ background: "#1a1a1a" }}>
-                      <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${pct * 100}%`, background: pct > 0.25 ? "#3fb950" : "#f85149" }} />
+                      <div className="h-full rounded-full transition-all duration-1000" style={{ width: `${pct * 100}%`, background: pct > 0.25 ? "#3fb950" : "#ff7070" }} />
                     </div>
                   );
                 })()}
@@ -764,7 +802,7 @@ function SidebarUser({ admin, onLogout, onAvatarChange }: {
           <button onClick={onLogout} title="ออกจากระบบ"
             className="w-6 h-6 flex items-center justify-center rounded-lg transition-colors flex-shrink-0"
             style={{ color: "#636363" }}
-            onMouseEnter={(e) => e.currentTarget.style.color = "#f85149"}
+            onMouseEnter={(e) => e.currentTarget.style.color = "#ff7070"}
             onMouseLeave={(e) => e.currentTarget.style.color = "#636363"}>
             <i className="fa-solid fa-right-from-bracket text-xs" />
           </button>
@@ -774,12 +812,112 @@ function SidebarUser({ admin, onLogout, onAvatarChange }: {
   );
 }
 
+function StudentInfoTrigger({
+  adminId,
+  studentId,
+  fallbackName,
+  fallbackPhotoUrl,
+  children,
+  className = "",
+}: {
+  adminId: string;
+  studentId: string | null | undefined;
+  fallbackName?: string | null;
+  fallbackPhotoUrl?: string | null;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [student, setStudent] = useState<Student | null>(null);
+  const [loading, setLoading] = useState(false);
+  const displayName = student ? `${student.first_name} ${student.last_name}` : (fallbackName || studentId || "ไม่ทราบชื่อ");
+
+  async function handleOpen(e: React.MouseEvent) {
+    e.stopPropagation();
+    setOpen(true);
+    setStudent(null);
+    if (!studentId) return;
+    setLoading(true);
+    try {
+      const res = await adminFetch(`/api/admin/students?q=${encodeURIComponent(studentId)}`, adminId);
+      const json = await res.json();
+      if (json.status === "success") {
+        const exact = (json.data ?? []).find((s: Student) => s.student_id === studentId) ?? json.data?.[0] ?? null;
+        setStudent(exact);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <>
+      <button type="button" onClick={handleOpen} className={`text-left ${className}`}>
+        {children}
+      </button>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(4px)" }} onClick={() => setOpen(false)} />
+          <div className="relative w-full sm:max-w-lg sm:mx-4 sm:rounded-2xl rounded-t-2xl overflow-hidden"
+            style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+            <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid #3e3e3e" }}>
+              <div className="flex items-center gap-3 min-w-0">
+                <Avatar name={displayName} url={student?.photo_url ?? fallbackPhotoUrl} size={44} rounded="xl" />
+                <div className="min-w-0">
+                  <div className="font-black text-white truncate">{displayName}</div>
+                  <div className="text-[11px] font-mono" style={{ color: "#636363" }}>{student?.student_id ?? studentId ?? "—"}</div>
+                </div>
+              </div>
+              <button onClick={() => setOpen(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-[#9e9e9e] hover:text-white hover:bg-[#2a2a2a] transition-colors">
+                <i className="fa-solid fa-xmark" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              {loading && <div className="text-xs" style={{ color: "#9e9e9e" }}><i className="fa-solid fa-spinner fa-spin mr-1.5" />กำลังโหลดข้อมูลนักเรียน...</div>}
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  ["ชื่อเล่น", student?.nickname ?? "—", "fa-user-tag"],
+                  ["ระดับ", student?.program ?? "—", "fa-graduation-cap"],
+                  ["สาขา", student?.department ?? "—", "fa-building-columns"],
+                  ["ปีที่เข้า", student?.entry_year ?? "—", "fa-calendar"],
+                  ["เบอร์โทร", student?.student_phone ?? "—", "fa-phone"],
+                  ["สถานะบัตร", student ? CARD_STATUS[student.card_status] : "—", "fa-id-card"],
+                  ["UID บัตร", student?.uid ?? "—", "fa-fingerprint"],
+                  ["อัปเดตล่าสุด", student?.updated_at ? formatDateTime(student.updated_at) : "—", "fa-clock-rotate-left"],
+                ].map(([label, value, icon]) => (
+                  <div key={label} className="rounded-xl p-3" style={{ background: "#111111", border: "1px solid #2a2a2a" }}>
+                    <div className="text-[10px] font-semibold mb-1" style={{ color: "#636363" }}>
+                      <i className={`fa-solid ${icon} mr-1.5`} />{label}
+                    </div>
+                    <div className="text-sm font-bold text-white truncate">{value}</div>
+                  </div>
+                ))}
+              </div>
+              {!student && !loading && (
+                <div className="rounded-xl px-3 py-2 text-xs" style={{ background: "rgba(255,112,112,0.1)", color: "#ff7070", border: "1px solid rgba(255,112,112,0.25)" }}>
+                  ไม่พบข้อมูลเต็มของนักเรียนในฐานข้อมูล
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ─── Dashboard Tab ─────────────────────────────────────────────────────────────
 
 function DashboardTab({ adminId, stats }: { adminId: string; stats: Stats | null }) {
   const [logs, setLogs] = useState<EntryLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
   const [search, setSearch] = useState("");
+  const [selectedLog, setSelectedLog] = useState<EntryLog | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [studentInfoLoading, setStudentInfoLoading] = useState(false);
+  const systemChartRef = useRef<HTMLCanvasElement | null>(null);
+  const attendanceChartRef = useRef<HTMLCanvasElement | null>(null);
+  const cardsChartRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     adminFetch("/api/entry-logs", adminId)
@@ -810,11 +948,105 @@ function DashboardTab({ adminId, stats }: { adminId: string; stats: Stats | null
     { label: "อยู่ในโรงเรียน",     val: inSchool,                                              icon: "fa-right-to-bracket",    color: "#9e9e9e" },
     { label: "ออกแล้ว",             val: outSchool,                                             icon: "fa-right-from-bracket",  color: "#9e9e9e" },
     { label: "บัตร Active",         val: stats ? (stats.students - stats.inactiveCards - stats.lostCards) : null, icon: "fa-id-card", color: "#ff7070" },
-    { label: "บัตรสูญหาย",         val: stats?.lostCards,                                      icon: "fa-id-card-clip",        color: "#f85149" },
+    { label: "บัตรสูญหาย",         val: stats?.lostCards,                                      icon: "fa-id-card-clip",        color: "#ff7070" },
     { label: "ออเดอร์ชำระ",        val: stats?.paidOrders,                                     icon: "fa-cart-shopping",       color: "#9e9e9e" },
     { label: "Feedback รอดำเนินการ", val: stats?.feedbackPending,                              icon: "fa-comment-dots",        color: "#9e9e9e" },
     { label: "ห้องประชุม (รอ)",     val: stats?.pendingBookings,                               icon: "fa-calendar-check",      color: "#9e9e9e" },
   ];
+
+  async function openStudentInfo(log: EntryLog) {
+    setSelectedLog(log);
+    setSelectedStudent(null);
+    if (!log.student_id) return;
+    setStudentInfoLoading(true);
+    try {
+      const res = await adminFetch(`/api/admin/students?q=${encodeURIComponent(log.student_id)}`, adminId);
+      const json = await res.json();
+      if (json.status === "success") {
+        const exact = (json.data ?? []).find((s: Student) => s.student_id === log.student_id) ?? json.data?.[0] ?? null;
+        setSelectedStudent(exact);
+      }
+    } finally {
+      setStudentInfoLoading(false);
+    }
+  }
+
+  const activeCards = stats ? Math.max(0, stats.students - stats.inactiveCards - stats.lostCards) : 0;
+  const inactiveCards = stats?.inactiveCards ?? 0;
+  const lostCards = stats?.lostCards ?? 0;
+
+  const chartGridColor = "rgba(255,255,255,0.08)";
+  const chartTickColor = "#9e9e9e";
+  const chartFont = { family: "Kanit, Sarabun, sans-serif" };
+
+  useChart(systemChartRef, () => ({
+    type: "bar",
+    data: {
+      labels: ["นักเรียน", "เข้าวันนี้", "จองห้อง", "ออเดอร์", "Feedback"],
+      datasets: [{
+        label: "จำนวน",
+        data: [
+          stats?.students ?? 0,
+          stats?.todayEntries ?? 0,
+          stats?.totalBookings ?? 0,
+          stats?.paidOrders ?? 0,
+          stats?.feedbackTotal ?? 0,
+        ],
+        backgroundColor: ["#ff7070cc", "#ff9a9acc", "#ededed55", "#9e9e9e88", "#636363aa"],
+        borderColor: ["#ff7070", "#ff9a9a", "#ededed", "#9e9e9e", "#636363"],
+        borderWidth: 1,
+        borderRadius: 8,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: chartTickColor, font: chartFont } },
+        y: { beginAtZero: true, grid: { color: chartGridColor }, ticks: { color: chartTickColor, precision: 0, font: chartFont } },
+      },
+    },
+  }), [stats]);
+
+  useChart(attendanceChartRef, () => ({
+    type: "doughnut",
+    data: {
+      labels: ["อยู่ในโรงเรียน", "ออกแล้ว"],
+      datasets: [{
+        data: [inSchool ?? 0, outSchool ?? 0],
+        backgroundColor: ["#ff7070", "#2a2a2a"],
+        borderColor: ["#0c0c0c", "#0c0c0c"],
+        borderWidth: 4,
+        hoverOffset: 6,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "68%",
+      plugins: { legend: { position: "bottom", labels: { color: chartTickColor, font: chartFont, boxWidth: 10, usePointStyle: true } } },
+    },
+  }), [inSchool, outSchool]);
+
+  useChart(cardsChartRef, () => ({
+    type: "doughnut",
+    data: {
+      labels: ["Active", "Inactive", "Lost"],
+      datasets: [{
+        data: [activeCards, inactiveCards, lostCards],
+        backgroundColor: ["#ff7070", "#636363", "#2a2a2a"],
+        borderColor: ["#0c0c0c", "#0c0c0c", "#0c0c0c"],
+        borderWidth: 4,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "68%",
+      plugins: { legend: { position: "bottom", labels: { color: chartTickColor, font: chartFont, boxWidth: 10, usePointStyle: true } } },
+    },
+  }), [activeCards, inactiveCards, lostCards]);
 
   return (
     <div>
@@ -833,6 +1065,42 @@ function DashboardTab({ adminId, stats }: { adminId: string; stats: Stats | null
         ))}
       </div>
 
+      {/* Overview charts */}
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 mb-6">
+        <div className="xl:col-span-2 rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <i className="fa-solid fa-chart-column text-sm" style={{ color: "#ff7070" }} />
+              <span className="font-bold text-white text-sm">ภาพรวมระบบ</span>
+            </div>
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: "rgba(255,112,112,0.12)", color: "#ff7070" }}>Chart.js</span>
+          </div>
+          <div className="relative h-[240px]">
+            <canvas ref={systemChartRef} />
+          </div>
+        </div>
+
+        <div className="rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+          <div className="flex items-center gap-2 mb-3">
+            <i className="fa-solid fa-person-walking-arrow-right text-sm" style={{ color: "#ff7070" }} />
+            <span className="font-bold text-white text-sm">เข้าออกวันนี้</span>
+          </div>
+          <div className="relative h-[240px]">
+            <canvas ref={attendanceChartRef} />
+          </div>
+        </div>
+
+        <div className="rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+          <div className="flex items-center gap-2 mb-3">
+            <i className="fa-solid fa-id-card text-sm" style={{ color: "#ff7070" }} />
+            <span className="font-bold text-white text-sm">สถานะบัตร</span>
+          </div>
+          <div className="relative h-[240px]">
+            <canvas ref={cardsChartRef} />
+          </div>
+        </div>
+      </div>
+
       {/* Student realtime table */}
       <div className="rounded-2xl overflow-hidden mb-5" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid #3e3e3e" }}>
@@ -846,7 +1114,7 @@ function DashboardTab({ adminId, stats }: { adminId: string; stats: Stats | null
               <input placeholder="ค้นหาชื่อ / รหัส" value={search} onChange={(e) => setSearch(e.target.value)}
                 className="pl-7 pr-3 py-1.5 text-xs rounded-lg text-white placeholder:text-[#636363] focus:outline-none transition-colors"
                 style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", width: 160 }}
-                onFocus={(e) => e.currentTarget.style.borderColor = "#f85149"}
+                onFocus={(e) => e.currentTarget.style.borderColor = "#ff7070"}
                 onBlur={(e) => e.currentTarget.style.borderColor = "#3e3e3e"} />
             </div>
             <button className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all"
@@ -866,14 +1134,14 @@ function DashboardTab({ adminId, stats }: { adminId: string; stats: Stats | null
             <table className="w-full text-xs">
               <thead>
                 <tr style={{ borderBottom: "1px solid #3e3e3e" }}>
-                  {["รหัส", "ชื่อนักเรียน", "ระดับชั้น", "สถานะ", "SCAN ล่าสุด", "จุดสแกน"].map((h) => (
+                  {["รหัส", "ชื่อนักเรียน", "ระดับชั้น", "สถานะ", "SCAN ล่าสุด", "จุดสแกน", ""].map((h) => (
                     <th key={h} className="text-left px-4 py-3 font-semibold" style={{ color: "#9e9e9e" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {filtered.slice(0, 30).map((l) => (
-                  <tr key={l.id} className="transition-colors" style={{ borderBottom: "1px solid #2a2a2a" }}
+                  <tr key={l.id} onClick={() => openStudentInfo(l)} className="transition-colors cursor-pointer" style={{ borderBottom: "1px solid #2a2a2a" }}
                     onMouseEnter={(e) => (e.currentTarget.style.background = "#2a2a2a")}
                     onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
                     <td className="px-4 py-3 font-mono text-[#9e9e9e]">{l.student_id ?? "—"}</td>
@@ -904,6 +1172,9 @@ function DashboardTab({ adminId, stats }: { adminId: string; stats: Stats | null
                       <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold text-[#ff7070]"
                         style={{ background: "rgba(56,139,253,0.1)" }}>โรงเรียน</span>
                     </td>
+                    <td className="px-4 py-3 text-right">
+                      <i className="fa-solid fa-circle-info text-[#636363]" />
+                    </td>
                   </tr>
                 ))}
                 {filtered.length === 0 && (
@@ -914,6 +1185,83 @@ function DashboardTab({ adminId, stats }: { adminId: string; stats: Stats | null
           </div>
         )}
       </div>
+
+      {selectedLog && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(4px)" }} onClick={() => setSelectedLog(null)} />
+          <div className="relative w-full sm:max-w-lg sm:mx-4 sm:rounded-2xl rounded-t-2xl overflow-hidden"
+            style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+            <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid #3e3e3e" }}>
+              <div className="flex items-center gap-3 min-w-0">
+                <Avatar
+                  name={selectedStudent ? `${selectedStudent.first_name} ${selectedStudent.last_name}` : selectedLog.students ? `${selectedLog.students.first_name} ${selectedLog.students.last_name}` : (selectedLog.student_id ?? "?")}
+                  url={selectedStudent?.photo_url}
+                  size={44}
+                  rounded="xl"
+                />
+                <div className="min-w-0">
+                  <div className="font-black text-white truncate">
+                    {selectedStudent
+                      ? `${selectedStudent.first_name} ${selectedStudent.last_name}`
+                      : selectedLog.students
+                        ? `${selectedLog.students.first_name} ${selectedLog.students.last_name}`
+                        : "ไม่ทราบชื่อ"}
+                  </div>
+                  <div className="text-[11px] font-mono" style={{ color: "#636363" }}>{selectedLog.student_id ?? "—"}</div>
+                </div>
+              </div>
+              <button onClick={() => setSelectedLog(null)} className="w-8 h-8 rounded-lg flex items-center justify-center text-[#9e9e9e] hover:text-white hover:bg-[#2a2a2a] transition-colors">
+                <i className="fa-solid fa-xmark" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {studentInfoLoading && (
+                <div className="text-xs" style={{ color: "#9e9e9e" }}>
+                  <i className="fa-solid fa-spinner fa-spin mr-1.5" />กำลังโหลดข้อมูลนักเรียน...
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  ["ชื่อเล่น", selectedStudent?.nickname ?? selectedLog.students?.nickname ?? "—", "fa-user-tag"],
+                  ["ระดับ", selectedStudent?.program ?? selectedLog.students?.program ?? "—", "fa-graduation-cap"],
+                  ["สาขา", selectedStudent?.department ?? selectedLog.students?.department ?? "—", "fa-building-columns"],
+                  ["ปีที่เข้า", selectedStudent?.entry_year ?? "—", "fa-calendar"],
+                  ["เบอร์โทร", selectedStudent?.student_phone ?? "—", "fa-phone"],
+                  ["สถานะบัตร", selectedStudent ? CARD_STATUS[selectedStudent.card_status] : "—", "fa-id-card"],
+                ].map(([label, value, icon]) => (
+                  <div key={label} className="rounded-xl p-3" style={{ background: "#111111", border: "1px solid #2a2a2a" }}>
+                    <div className="text-[10px] font-semibold mb-1" style={{ color: "#636363" }}>
+                      <i className={`fa-solid ${icon} mr-1.5`} />{label}
+                    </div>
+                    <div className="text-sm font-bold text-white truncate">{value}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="rounded-xl p-3" style={{ background: "#111111", border: "1px solid #2a2a2a" }}>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[10px] font-semibold mb-1" style={{ color: "#636363" }}>สถานะล่าสุด</div>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold"
+                      style={{ background: selectedLog.action === "in" ? "rgba(63,185,80,0.15)" : "rgba(240,136,62,0.15)", color: selectedLog.action === "in" ? "#3fb950" : "#f0883e" }}>
+                      <i className={`fa-solid ${selectedLog.action === "in" ? "fa-right-to-bracket" : "fa-right-from-bracket"} mr-1`} />
+                      {selectedLog.action === "in" ? "อยู่โรงเรียน" : "ออกแล้ว"}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[10px] font-semibold mb-1" style={{ color: "#636363" }}>สแกนล่าสุด</div>
+                    <div className="font-mono text-xs text-[#ededed]">
+                      {new Date(selectedLog.scanned_at).toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bottom cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1005,11 +1353,11 @@ function RoomForm({ room, adminId, onClose, onSaved }: { room: Room | null; admi
             <input value={description} onChange={e => setDescription(e.target.value)} placeholder="คำอธิบายห้อง" className={inputCls} style={inputStyle} /></div>
           <div><label className="block text-xs font-semibold text-[#ededed] mb-1.5">สิ่งอำนวยความสะดวก <span className="font-normal text-[#636363]">(คั่นด้วยลูกน้ำ)</span></label>
             <input value={amenities} onChange={e => setAmenities(e.target.value)} placeholder="เช่น โปรเจคเตอร์, ไวท์บอร์ด, แอร์" className={inputCls} style={inputStyle} /></div>
-          {error && <div className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm" style={{ background: "rgba(248,81,73,0.1)", border: "1px solid rgba(248,81,73,0.3)", color: "#f85149" }}><i className="fa-solid fa-circle-xmark" /> {error}</div>}
+          {error && <div className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm" style={{ background: "rgba(255,112,112,0.1)", border: "1px solid rgba(255,112,112,0.3)", color: "#ff7070" }}><i className="fa-solid fa-circle-xmark" /> {error}</div>}
         </div>
         <div className="px-5 pb-6 flex gap-3 sticky bottom-0 pt-4" style={{ borderTop: "1px solid #3e3e3e", background: "#1c1c1c" }}>
           <button onClick={onClose} className="flex-1 py-3 text-sm font-bold rounded-xl text-[#9e9e9e] hover:text-white" style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>ยกเลิก</button>
-          <button onClick={handleSave} disabled={saving} className="flex-1 py-3 text-sm font-bold rounded-xl text-white disabled:opacity-50" style={{ background: "#f85149" }}>
+          <button onClick={handleSave} disabled={saving} className="flex-1 py-3 text-sm font-bold rounded-xl text-white disabled:opacity-50" style={{ background: "#ff7070" }}>
             {saving ? <><i className="fa-solid fa-spinner fa-spin mr-1.5" />กำลังบันทึก...</> : <><i className="fa-solid fa-floppy-disk mr-1.5" />บันทึก</>}
           </button>
         </div>
@@ -1031,6 +1379,8 @@ function BookingsTab({ adminId }: { adminId: string }) {
   const [updating, setUpdating] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [noteEdit, setNoteEdit] = useState<{ id: string; value: string } | null>(null);
+  const bookingStatusChartRef = useRef<HTMLCanvasElement | null>(null);
+  const bookingRoomsChartRef = useRef<HTMLCanvasElement | null>(null);
 
   const fetchRooms = useCallback(async () => {
     setRoomsLoading(true);
@@ -1081,7 +1431,7 @@ function BookingsTab({ adminId }: { adminId: string }) {
   const STATUS_COLOR: Record<string, { bg: string; text: string }> = {
     pending:   { bg: "rgba(227,179,65,0.15)",  text: "#e3b341" },
     approved:  { bg: "rgba(63,185,80,0.15)",   text: "#3fb950" },
-    rejected:  { bg: "rgba(248,81,73,0.15)",   text: "#f85149" },
+    rejected:  { bg: "rgba(255,112,112,0.15)",   text: "#ff7070" },
     cancelled: { bg: "rgba(72,79,88,0.3)",     text: "#9e9e9e" },
   };
 
@@ -1090,6 +1440,58 @@ function BookingsTab({ adminId }: { adminId: string }) {
     color: active ? "#fff" : "#9e9e9e",
     border: `1px solid ${active ? "#ff7070" : "#3e3e3e"}`,
   });
+
+  const bookingStatusCounts = ["pending", "approved", "rejected", "cancelled"].map(s => bookings.filter(b => b.status === s).length);
+  const bookingRoomCounts = Object.entries(
+    bookings.reduce((acc, b) => {
+      acc[b.room_name] = (acc[b.room_name] ?? 0) + 1;
+      return acc;
+    }, {} as Record<string, number>)
+  ).sort((a, b) => b[1] - a[1]).slice(0, 6);
+
+  useChart(bookingStatusChartRef, () => ({
+    type: "doughnut",
+    data: {
+      labels: ["รอดำเนินการ", "อนุมัติ", "ปฏิเสธ", "ยกเลิก"],
+      datasets: [{
+        data: bookingStatusCounts,
+        backgroundColor: ["#f59e0b", "#3fb950", "#ff7070", "#2a2a2a"],
+        borderColor: ["#0c0c0c", "#0c0c0c", "#0c0c0c", "#0c0c0c"],
+        borderWidth: 4,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "68%",
+      plugins: { legend: { position: "bottom", labels: { color: "#9e9e9e", boxWidth: 10, usePointStyle: true, font: { family: "Kanit, Sarabun, sans-serif" } } } },
+    },
+  }), [bookings, filter]);
+
+  useChart(bookingRoomsChartRef, () => ({
+    type: "bar",
+    data: {
+      labels: bookingRoomCounts.map(([room]) => room),
+      datasets: [{
+        label: "รายการจอง",
+        data: bookingRoomCounts.map(([, count]) => count),
+        backgroundColor: "#ff7070cc",
+        borderColor: "#ff7070",
+        borderWidth: 1,
+        borderRadius: 8,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: "y",
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { beginAtZero: true, grid: { color: "rgba(255,255,255,0.08)" }, ticks: { color: "#9e9e9e", precision: 0, font: { family: "Kanit, Sarabun, sans-serif" } } },
+        y: { grid: { display: false }, ticks: { color: "#9e9e9e", font: { family: "Kanit, Sarabun, sans-serif" } } },
+      },
+    },
+  }), [bookingRoomCounts]);
 
   return (
     <div>
@@ -1108,7 +1510,7 @@ function BookingsTab({ adminId }: { adminId: string }) {
         <div>
           <div className="flex items-center gap-3 mb-4">
             <DarkSectionHeader title="ห้องทั้งหมด" icon="fa-door-open" count={rooms.length} />
-            <button onClick={() => setEditRoom("new")} className="ml-auto flex items-center gap-2 text-sm font-bold px-4 py-2 rounded-xl text-white" style={{ background: "#f85149" }}>
+            <button onClick={() => setEditRoom("new")} className="ml-auto flex items-center gap-2 text-sm font-bold px-4 py-2 rounded-xl text-white" style={{ background: "#ff7070" }}>
               <i className="fa-solid fa-plus" /> เพิ่มห้อง
             </button>
           </div>
@@ -1123,7 +1525,7 @@ function BookingsTab({ adminId }: { adminId: string }) {
                       : <div className="w-full h-full flex items-center justify-center" style={{ color: "#636363" }}><i className="fa-solid fa-door-open text-3xl" /></div>
                     }
                     <div className="absolute top-2 right-2">
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: r.status === "available" ? "rgba(63,185,80,0.85)" : "rgba(248,81,73,0.85)" }}>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: r.status === "available" ? "rgba(63,185,80,0.85)" : "rgba(255,112,112,0.85)" }}>
                         {r.status === "available" ? "ว่าง" : r.status}
                       </span>
                     </div>
@@ -1146,7 +1548,7 @@ function BookingsTab({ adminId }: { adminId: string }) {
                       <button onClick={() => setEditRoom(r)} className="flex-1 text-xs font-semibold py-1.5 rounded-lg transition-all text-[#9e9e9e] hover:text-white" style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>
                         <i className="fa-solid fa-pen mr-1" /> แก้ไข
                       </button>
-                      <button onClick={() => deleteRoom(r)} className="text-xs px-2.5 py-1.5 rounded-lg" style={{ background: "rgba(248,81,73,0.08)", color: "#f85149", border: "1px solid rgba(248,81,73,0.2)" }}>
+                      <button onClick={() => deleteRoom(r)} className="text-xs px-2.5 py-1.5 rounded-lg" style={{ background: "rgba(255,112,112,0.08)", color: "#ff7070", border: "1px solid rgba(255,112,112,0.2)" }}>
                         <i className="fa-solid fa-trash" />
                       </button>
                     </div>
@@ -1165,11 +1567,29 @@ function BookingsTab({ adminId }: { adminId: string }) {
       {subTab === "bookings" && (
         <div>
           <DarkSectionHeader title="รายการจอง" icon="fa-calendar-check" count={bookings.length} />
+          {!loading && bookings.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-4 mb-4">
+              <div className="rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
+                <div className="flex items-center gap-2 mb-3">
+                  <i className="fa-solid fa-chart-pie text-xs" style={{ color: "#ff7070" }} />
+                  <span className="text-xs font-bold text-white">สถานะการจอง</span>
+                </div>
+                <div className="relative h-[220px]"><canvas ref={bookingStatusChartRef} /></div>
+              </div>
+              <div className="rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
+                <div className="flex items-center gap-2 mb-3">
+                  <i className="fa-solid fa-chart-bar text-xs" style={{ color: "#ff7070" }} />
+                  <span className="text-xs font-bold text-white">ห้องที่ถูกจองบ่อย</span>
+                </div>
+                <div className="relative h-[220px]"><canvas ref={bookingRoomsChartRef} /></div>
+              </div>
+            </div>
+          )}
           <div className="flex gap-2 flex-wrap mt-4 mb-4">
             {["all", "pending", "approved", "rejected", "cancelled"].map((s) => (
               <button key={s} onClick={() => setFilter(s)}
                 className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                style={{ background: filter === s ? "#f85149" : "#2a2a2a", color: filter === s ? "white" : "#9e9e9e", border: `1px solid ${filter === s ? "#f85149" : "#3e3e3e"}` }}>
+                style={{ background: filter === s ? "#ff7070" : "#2a2a2a", color: filter === s ? "white" : "#9e9e9e", border: `1px solid ${filter === s ? "#ff7070" : "#3e3e3e"}` }}>
                 {s === "all" ? "ทั้งหมด" : BOOKING_STATUS[s]}
               </button>
             ))}
@@ -1195,7 +1615,10 @@ function BookingsTab({ adminId }: { adminId: string }) {
                             <span className="font-bold text-white text-sm truncate">{b.room_name}</span>
                             <span className="text-xs px-1.5 py-0.5 rounded-full font-semibold" style={{ background: sc.bg, color: sc.text }}>{BOOKING_STATUS[b.status]}</span>
                           </div>
-                          <div className="text-xs text-[#9e9e9e]"><i className="fa-solid fa-user mr-1 text-[#636363]" />{b.student_name}</div>
+                          <StudentInfoTrigger adminId={adminId} studentId={b.student_id} fallbackName={b.student_name}
+                            className="text-xs text-[#9e9e9e]">
+                            <i className="fa-solid fa-user mr-1 text-[#636363]" />{b.student_name}
+                          </StudentInfoTrigger>
                           <div className="text-[11px] text-[#636363] mt-0.5 flex flex-wrap gap-x-3">
                             <span><i className="fa-solid fa-calendar mr-1" />{formatDate(b.booking_date)}</span>
                             <span>{b.slot_start?.slice(0,5)}–{b.slot_end?.slice(0,5)}</span>
@@ -1219,12 +1642,12 @@ function BookingsTab({ adminId }: { adminId: string }) {
                                 <input type="text" value={noteEdit.value} onChange={(e) => setNoteEdit({ id: b.id, value: e.target.value })}
                                   placeholder="หมายเหตุ..." className="flex-1 px-2.5 py-1 text-xs rounded-lg text-white placeholder:text-[#636363] outline-none"
                                   style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }} />
-                                <button onClick={() => saveNote(b.id)} className="text-xs px-2.5 py-1 rounded-lg font-semibold text-white" style={{ background: "#f85149" }}>บันทึก</button>
+                                <button onClick={() => saveNote(b.id)} className="text-xs px-2.5 py-1 rounded-lg font-semibold text-white" style={{ background: "#ff7070" }}>บันทึก</button>
                                 <button onClick={() => setNoteEdit(null)} className="text-xs px-2 text-[#9e9e9e]">ยกเลิก</button>
                               </div>
                             ) : (
                               <button onClick={() => setNoteEdit({ id: b.id, value: b.admin_note ?? "" })}
-                                className="text-xs hover:underline flex items-center gap-1" style={{ color: "#f85149" }}>
+                                className="text-xs hover:underline flex items-center gap-1" style={{ color: "#ff7070" }}>
                                 <i className="fa-solid fa-pen" />{b.admin_note ? `หมายเหตุ: ${b.admin_note}` : "เพิ่มหมายเหตุ"}
                               </button>
                             )}
@@ -1260,7 +1683,7 @@ const FB_STATUS: Record<string, { label: string; bg: string; text: string; icon:
   pending:     { label: "รอดำเนินการ",      bg: "rgba(245,158,11,0.15)",  text: "#f59e0b", icon: "fa-hourglass-half" },
   in_progress: { label: "กำลังดำเนินการ",   bg: "rgba(132,212,250,0.15)", text: "#84D4FA", icon: "fa-spinner" },
   resolved:    { label: "แก้ไขแล้ว",        bg: "rgba(63,185,80,0.15)",   text: "#3fb950", icon: "fa-circle-check" },
-  rejected:    { label: "ปฏิเสธ",           bg: "rgba(248,81,73,0.15)",   text: "#f85149", icon: "fa-ban" },
+  rejected:    { label: "ปฏิเสธ",           bg: "rgba(255,112,112,0.15)",   text: "#ff7070", icon: "fa-ban" },
 };
 
 function FeedbackCard({ f, adminId, onUpdated }: { f: Feedback; adminId: string; onUpdated: () => void }) {
@@ -1346,9 +1769,10 @@ function FeedbackCard({ f, adminId, onUpdated }: { f: Feedback; adminId: string;
             <div className="flex items-center gap-3 flex-wrap">
               <span className="font-semibold text-sm text-white">{f.name || <span style={{ color: "#636363" }}>ไม่ระบุชื่อ</span>}</span>
               {f.student_id && (
-                <span className="text-[11px] flex items-center gap-1" style={{ color: "#9e9e9e" }}>
+                <StudentInfoTrigger adminId={adminId} studentId={f.student_id} fallbackName={f.name}
+                  className="text-[11px] flex items-center gap-1 text-[#9e9e9e]" >
                   <i className="fa-solid fa-id-badge text-[9px]" />{f.student_id}
-                </span>
+                </StudentInfoTrigger>
               )}
               {f.email && (
                 <span className="text-[11px] flex items-center gap-1" style={{ color: "#9e9e9e" }}>
@@ -1371,7 +1795,7 @@ function FeedbackCard({ f, adminId, onUpdated }: { f: Feedback; adminId: string;
             <button onClick={deleteFeedback} disabled={updating || deleting}
               title="ลบ Feedback"
               className="w-8 h-8 rounded-lg flex items-center justify-center transition-all disabled:opacity-50"
-              style={{ background: "rgba(248,81,73,0.08)", color: "#f85149", border: "1px solid rgba(248,81,73,0.2)" }}>
+              style={{ background: "rgba(255,112,112,0.08)", color: "#ff7070", border: "1px solid rgba(255,112,112,0.2)" }}>
               <i className={`fa-solid ${deleting ? "fa-spinner fa-spin" : "fa-trash"} text-[11px]`} />
             </button>
           </div>
@@ -1425,7 +1849,7 @@ function FeedbackCard({ f, adminId, onUpdated }: { f: Feedback; adminId: string;
             </button>
             <button onClick={() => changeStatus("rejected")} disabled={updating}
               className="text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all flex items-center justify-center gap-1.5"
-              style={{ background: "rgba(248,81,73,0.08)", color: "#f85149", border: "1px solid rgba(248,81,73,0.2)" }}>
+              style={{ background: "rgba(255,112,112,0.08)", color: "#ff7070", border: "1px solid rgba(255,112,112,0.2)" }}>
               <i className="fa-solid fa-ban" />
             </button>
           </div>
@@ -1441,6 +1865,8 @@ function FeedbacksTab({ adminId }: { adminId: string }) {
   const [typeFilter,   setTypeFilter]   = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [search,       setSearch]       = useState("");
+  const fbStatusChartRef = useRef<HTMLCanvasElement | null>(null);
+  const fbTypeChartRef = useRef<HTMLCanvasElement | null>(null);
 
   const fetch_ = useCallback(async () => {
     setLoading(true);
@@ -1459,6 +1885,50 @@ function FeedbacksTab({ adminId }: { adminId: string }) {
   const inProgressCount  = byStatus("in_progress");
   const resolvedCount    = byStatus("resolved");
   const reportsCount     = feedbacks.filter(f => f.type === "report").length;
+  const commentsCount    = feedbacks.filter(f => f.type === "comment").length;
+
+  useChart(fbStatusChartRef, () => ({
+    type: "doughnut",
+    data: {
+      labels: ["รอดำเนินการ", "กำลังดำเนินการ", "แก้ไขแล้ว", "ปฏิเสธ"],
+      datasets: [{
+        data: [pendingCount, inProgressCount, resolvedCount, byStatus("rejected")],
+        backgroundColor: ["#ff7070", "#f59e0b", "#3fb950", "#2a2a2a"],
+        borderColor: ["#0c0c0c", "#0c0c0c", "#0c0c0c", "#0c0c0c"],
+        borderWidth: 4,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "68%",
+      plugins: { legend: { position: "bottom", labels: { color: "#9e9e9e", boxWidth: 10, usePointStyle: true, font: { family: "Kanit, Sarabun, sans-serif" } } } },
+    },
+  }), [pendingCount, inProgressCount, resolvedCount, feedbacks]);
+
+  useChart(fbTypeChartRef, () => ({
+    type: "bar",
+    data: {
+      labels: ["ความคิดเห็น", "รายงานปัญหา"],
+      datasets: [{
+        label: "จำนวน",
+        data: [commentsCount, reportsCount],
+        backgroundColor: ["#ff7070cc", "#9e9e9e88"],
+        borderColor: ["#ff7070", "#9e9e9e"],
+        borderWidth: 1,
+        borderRadius: 8,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: "#9e9e9e", font: { family: "Kanit, Sarabun, sans-serif" } } },
+        y: { beginAtZero: true, grid: { color: "rgba(255,255,255,0.08)" }, ticks: { color: "#9e9e9e", precision: 0, font: { family: "Kanit, Sarabun, sans-serif" } } },
+      },
+    },
+  }), [commentsCount, reportsCount]);
 
   // ── Filter ──────────────────────────────────────────────────────
   const q = search.trim().toLowerCase();
@@ -1497,6 +1967,24 @@ function FeedbacksTab({ adminId }: { adminId: string }) {
           ))}
         </div>
       )}
+      {!loading && total > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-5">
+          <div className="rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
+            <div className="flex items-center gap-2 mb-3">
+              <i className="fa-solid fa-chart-pie text-xs" style={{ color: "#ff7070" }} />
+              <span className="text-xs font-bold text-white">สถานะ Feedback</span>
+            </div>
+            <div className="relative h-[220px]"><canvas ref={fbStatusChartRef} /></div>
+          </div>
+          <div className="rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
+            <div className="flex items-center gap-2 mb-3">
+              <i className="fa-solid fa-chart-column text-xs" style={{ color: "#ff7070" }} />
+              <span className="text-xs font-bold text-white">ประเภท Feedback</span>
+            </div>
+            <div className="relative h-[220px]"><canvas ref={fbTypeChartRef} /></div>
+          </div>
+        </div>
+      )}
 
       {/* ── Toolbar ── */}
       <div className="flex flex-col gap-2 mb-4">
@@ -1506,7 +1994,7 @@ function FeedbacksTab({ adminId }: { adminId: string }) {
             {[["all","ทั้งหมด"],["comment","ความคิดเห็น"],["report","รายงานปัญหา"]].map(([v,l]) => (
               <button key={v} onClick={() => setTypeFilter(v)}
                 className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                style={{ background: typeFilter === v ? "#f85149" : "#2a2a2a", color: typeFilter === v ? "white" : "#9e9e9e", border: `1px solid ${typeFilter === v ? "#f85149" : "#3e3e3e"}` }}>
+                style={{ background: typeFilter === v ? "#ff7070" : "#2a2a2a", color: typeFilter === v ? "white" : "#9e9e9e", border: `1px solid ${typeFilter === v ? "#ff7070" : "#3e3e3e"}` }}>
                 {l}{v === "report" && reportsCount > 0 && <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: "rgba(255,255,255,0.15)" }}>{reportsCount}</span>}
               </button>
             ))}
@@ -1518,9 +2006,9 @@ function FeedbacksTab({ adminId }: { adminId: string }) {
               <button key={v} onClick={() => setStatusFilter(v)}
                 className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
                 style={{
-                  background: statusFilter === v ? (v === "all" ? "#f85149" : (FB_STATUS[v]?.bg ?? "#2a2a2a")) : "#2a2a2a",
+                  background: statusFilter === v ? (v === "all" ? "#ff7070" : (FB_STATUS[v]?.bg ?? "#2a2a2a")) : "#2a2a2a",
                   color:      statusFilter === v ? (v === "all" ? "white"    : (FB_STATUS[v]?.text ?? "#9e9e9e")) : "#9e9e9e",
-                  border:     `1px solid ${statusFilter === v ? (v === "all" ? "#f85149" : (FB_STATUS[v]?.text ?? "#3e3e3e")) : "#3e3e3e"}`,
+                  border:     `1px solid ${statusFilter === v ? (v === "all" ? "#ff7070" : (FB_STATUS[v]?.text ?? "#3e3e3e")) : "#3e3e3e"}`,
                 }}>
                 {l}
               </button>
@@ -1583,7 +2071,7 @@ const REQ_STATUS_LABEL: Record<string, string> = { pending: "รอดำเน�
 const REQ_STATUS_STYLE: Record<string, { bg: string; text: string }> = {
   pending:  { bg: "rgba(227,179,65,0.15)", text: "#e3b341" },
   approved: { bg: "rgba(63,185,80,0.15)",  text: "#3fb950" },
-  rejected: { bg: "rgba(248,81,73,0.15)",  text: "#f85149" },
+  rejected: { bg: "rgba(255,112,112,0.15)",  text: "#ff7070" },
 };
 
 function AllRequestsTab({ adminId, kind = "all" }: { adminId: string; kind?: "all" | "name" | "data" }) {
@@ -1591,6 +2079,8 @@ function AllRequestsTab({ adminId, kind = "all" }: { adminId: string; kind?: "al
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("pending");
   const [updating, setUpdating] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [viewMode, setViewMode] = useState<ViewMode>("grid");
 
   const fetch_ = useCallback(async () => {
     setLoading(true);
@@ -1646,81 +2136,117 @@ function AllRequestsTab({ adminId, kind = "all" }: { adminId: string; kind?: "al
   }
 
   const pendingCount = items.filter(i => i._status === "pending").length;
+  const q = search.trim().toLowerCase();
+  const filteredItems = q
+    ? items.filter(item => {
+        const text = [
+          item._student_id,
+          item._student_name,
+          item._kind === "name" ? "เปลี่ยนชื่อ" : "แก้ไขข้อมูล",
+          ...item._rows.flatMap(row => [row.label, row.old, row.new_val]),
+        ].join(" ").toLowerCase();
+        return text.includes(q);
+      })
+    : items;
+  const title = kind === "name" ? "คำขอเปลี่ยนชื่อ" : kind === "data" ? "คำขอแก้ไขข้อมูล" : "คำขอแก้ไข";
+
+  function RequestCard({ item, compact = false }: { item: UnifiedRequest; compact?: boolean }) {
+    const st = REQ_STATUS_STYLE[item._status] ?? { bg: "#2a2a2a", text: "#9e9e9e" };
+    const kindStyle = item._kind === "name"
+      ? { bg: "rgba(255,112,112,0.14)", text: ADMIN_PRIMARY }
+      : { bg: "rgba(255,112,112,0.10)", text: "#ff9a9a" };
+
+    return (
+      <div className={`rounded-2xl ${compact ? "p-3" : "p-4"}`} style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <StudentInfoTrigger adminId={adminId} studentId={item._student_id} fallbackName={item._student_name}
+            className="flex items-center gap-2.5 min-w-0">
+            <Avatar name={item._student_name} size={compact ? 32 : 36} rounded="xl" />
+            <div className="min-w-0">
+              <div className="font-bold text-white text-sm leading-tight truncate">{item._student_name}</div>
+              <div className="text-[11px]" style={{ color: "#636363" }}>{item._student_id}</div>
+            </div>
+          </StudentInfoTrigger>
+          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: kindStyle.bg, color: kindStyle.text }}>
+              {item._kind === "name" ? "เปลี่ยนชื่อ" : "แก้ไขข้อมูล"}
+            </span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: st.bg, color: st.text }}>{REQ_STATUS_LABEL[item._status]}</span>
+            {!compact && <span className="text-[10px]" style={{ color: "#636363" }}>{formatDateTime(item._created_at)}</span>}
+          </div>
+        </div>
+
+        <div className="rounded-xl overflow-hidden mb-3" style={{ border: "1px solid #2a2a2a" }}>
+          {!compact && (
+            <div className="grid text-[10px] font-semibold px-3 py-1.5" style={{ gridTemplateColumns: "7rem 1fr auto 1fr", color: "#636363", borderBottom: "1px solid #2a2a2a" }}>
+              <span>ฟิลด์</span><span>เดิม</span><span className="px-2"></span><span>ใหม่</span>
+            </div>
+          )}
+          {item._rows.slice(0, compact ? 2 : undefined).map((row, i) => (
+            <div key={i} className={`grid items-center px-3 ${compact ? "py-1.5" : "py-2"} text-xs`} style={{ gridTemplateColumns: compact ? "6rem 1fr" : "7rem 1fr auto 1fr", borderBottom: i < item._rows.length - 1 ? "1px solid #222" : "none" }}>
+              <span className="font-semibold" style={{ color: "#636363" }}>{row.label}</span>
+              {compact ? (
+                <span className="truncate font-semibold" style={{ color: "#ededed" }}>{row.new_val}</span>
+              ) : (
+                <>
+                  <span className="truncate" style={{ color: "#9e9e9e", textDecoration: row.old !== "—" ? "line-through" : "none" }}>{row.old}</span>
+                  <i className="fa-solid fa-arrow-right mx-2 text-[9px]" style={{ color: "#3e3e3e" }} />
+                  <span className="font-semibold truncate" style={{ color: "#ededed" }}>{row.new_val}</span>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px]" style={{ color: "#636363" }}>{formatDateTime(item._created_at)}</span>
+          {item._status === "pending" && (
+            <div className="flex gap-2">
+              <button onClick={() => handleAction(item, "approved")} disabled={updating === item._id}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50"
+                style={{ background: "rgba(63,185,80,0.15)", color: "#3fb950", border: "1px solid rgba(63,185,80,0.3)" }}>
+                <i className="fa-solid fa-check mr-1" />อนุมัติ
+              </button>
+              <button onClick={() => handleAction(item, "rejected")} disabled={updating === item._id}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50"
+                style={{ background: "rgba(255,112,112,0.1)", color: ADMIN_PRIMARY, border: "1px solid rgba(255,112,112,0.3)" }}>
+                <i className="fa-solid fa-xmark mr-1" />ปฏิเสธ
+              </button>
+            </div>
+          )}
+        </div>
+        {item._admin_note && <div className="text-[11px] mt-2" style={{ color: "#636363" }}>หมายเหตุ: {item._admin_note}</div>}
+      </div>
+    );
+  }
 
   return (
     <div>
-      <DarkSectionHeader title="คำขอแก้ไข" icon="fa-file-pen" count={pendingCount} />
-      <div className="flex gap-2 mt-4 mb-4 flex-wrap">
-        {["all","pending","approved","rejected"].map(s => (
-          <button key={s} onClick={() => setStatusFilter(s)}
-            className="px-3 py-2 rounded-xl text-xs font-semibold transition-all"
-            style={{ background: statusFilter === s ? "#f85149" : "#2a2a2a", color: statusFilter === s ? "white" : "#9e9e9e", border: `1px solid ${statusFilter === s ? "#f85149" : "#3e3e3e"}` }}>
-            {s === "all" ? "ทั้งหมด" : REQ_STATUS_LABEL[s]}
-          </button>
-        ))}
+      <DarkSectionHeader title={title} icon={kind === "name" ? "fa-pen-to-square" : "fa-file-pen"} count={filteredItems.length} />
+      <div className="flex flex-col sm:flex-row gap-3 mt-4 mb-4 flex-wrap">
+        <div className="relative flex-1 min-w-[220px]">
+          <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-[#636363] text-sm" />
+          <input placeholder="ค้นหารหัส/ชื่อ/รายละเอียดคำขอ..." value={search} onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none transition-colors"
+            style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}
+            onFocus={(e) => e.currentTarget.style.borderColor = ADMIN_PRIMARY}
+            onBlur={(e) => e.currentTarget.style.borderColor = "#3e3e3e"} />
+        </div>
+        <div className="flex gap-2 flex-wrap items-center">
+          {["all","pending","approved","rejected"].map(s => (
+            <button key={s} onClick={() => setStatusFilter(s)}
+              className="px-3 py-2 rounded-xl text-xs font-semibold transition-all"
+              style={{ background: statusFilter === s ? ADMIN_PRIMARY : "#2a2a2a", color: statusFilter === s ? "white" : "#9e9e9e", border: `1px solid ${statusFilter === s ? ADMIN_PRIMARY : "#3e3e3e"}` }}>
+              {s === "all" ? "ทั้งหมด" : REQ_STATUS_LABEL[s]}
+            </button>
+          ))}
+          <ViewToggle mode={viewMode} onChange={setViewMode} />
+        </div>
       </div>
 
-      {loading ? <DarkSpinner /> : items.length === 0 ? <DarkEmpty text="ไม่มีคำขอ" /> : (
-        <div className="space-y-3">
-          {items.map(item => {
-            const st = REQ_STATUS_STYLE[item._status] ?? { bg: "#2a2a2a", text: "#9e9e9e" };
-            const kindStyle = item._kind === "name"
-              ? { bg: "rgba(163,113,247,0.15)", text: "#a371f7" }
-              : { bg: "rgba(56,139,253,0.15)", text: "#79c0ff" };
-            return (
-              <div key={item._id} className="rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-                {/* Header */}
-                <div className="flex items-center justify-between gap-3 mb-3">
-                  <div className="flex items-center gap-2.5">
-                    <Avatar name={item._student_name} size={36} rounded="xl" />
-                    <div>
-                      <div className="font-bold text-white text-sm leading-tight">{item._student_name}</div>
-                      <div className="text-[11px]" style={{ color: "#636363" }}>{item._student_id}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: kindStyle.bg, color: kindStyle.text }}>
-                      {item._kind === "name" ? "เปลี่ยนชื่อ" : "แก้ไขข้อมูล"}
-                    </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: st.bg, color: st.text }}>{REQ_STATUS_LABEL[item._status]}</span>
-                    <span className="text-[10px]" style={{ color: "#636363" }}>{formatDateTime(item._created_at)}</span>
-                  </div>
-                </div>
-
-                {/* Old → New rows */}
-                <div className="rounded-xl overflow-hidden mb-3" style={{ border: "1px solid #2a2a2a" }}>
-                  <div className="grid text-[10px] font-semibold px-3 py-1.5" style={{ gridTemplateColumns: "7rem 1fr auto 1fr", color: "#636363", borderBottom: "1px solid #2a2a2a" }}>
-                    <span>ฟิลด์</span><span>เดิม</span><span className="px-2"></span><span>ใหม่</span>
-                  </div>
-                  {item._rows.map((row, i) => (
-                    <div key={i} className="grid items-center px-3 py-2 text-xs" style={{ gridTemplateColumns: "7rem 1fr auto 1fr", borderBottom: i < item._rows.length - 1 ? "1px solid #222" : "none" }}>
-                      <span className="font-semibold" style={{ color: "#636363" }}>{row.label}</span>
-                      <span className="truncate" style={{ color: "#9e9e9e", textDecoration: row.old !== "—" ? "line-through" : "none" }}>{row.old}</span>
-                      <i className="fa-solid fa-arrow-right mx-2 text-[9px]" style={{ color: "#3e3e3e" }} />
-                      <span className="font-semibold truncate" style={{ color: "#ededed" }}>{row.new_val}</span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Actions */}
-                {item._status === "pending" && (
-                  <div className="flex gap-2">
-                    <button onClick={() => handleAction(item, "approved")} disabled={updating === item._id}
-                      className="px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50"
-                      style={{ background: "rgba(63,185,80,0.15)", color: "#3fb950", border: "1px solid rgba(63,185,80,0.3)" }}>
-                      <i className="fa-solid fa-check mr-1" />อนุมัติ
-                    </button>
-                    <button onClick={() => handleAction(item, "rejected")} disabled={updating === item._id}
-                      className="px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50"
-                      style={{ background: "rgba(248,81,73,0.1)", color: "#f85149", border: "1px solid rgba(248,81,73,0.3)" }}>
-                      <i className="fa-solid fa-xmark mr-1" />ปฏิเสธ
-                    </button>
-                  </div>
-                )}
-                {item._admin_note && <div className="text-[11px] mt-2" style={{ color: "#636363" }}>หมายเหตุ: {item._admin_note}</div>}
-              </div>
-            );
-          })}
+      {loading ? <DarkSpinner /> : filteredItems.length === 0 ? <DarkEmpty text={search ? "ไม่พบคำขอที่ค้นหา" : "ไม่มีคำขอ"} /> : (
+        <div className={viewMode === "grid" ? "grid grid-cols-1 xl:grid-cols-2 gap-3" : viewMode === "list" ? "space-y-2" : "space-y-3"}>
+          {filteredItems.map(item => <RequestCard key={item._id} item={item} compact={viewMode === "list"} />)}
         </div>
       )}
     </div>
@@ -1731,7 +2257,6 @@ function AllRequestsTab({ adminId, kind = "all" }: { adminId: string; kind?: "al
 // ─── Students Tab ─────────────────────────────────────────────────────────────
 
 function StudentsTab({ adminId, refreshKey, role }: { adminId: string; refreshKey?: number; role?: string }) {
-  const [subTab, setSubTab] = useState<"students" | "namechange" | "datachange">("students");
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [cardFilter, setCardFilter] = useState("all");
@@ -1834,32 +2359,13 @@ function StudentsTab({ adminId, refreshKey, role }: { adminId: string; refreshKe
   const CARD_STYLE: Record<string, { bg: string; text: string }> = {
     active:   { bg: "rgba(63,185,80,0.15)",   text: "#3fb950" },
     inactive: { bg: "rgba(72,79,88,0.3)",     text: "#9e9e9e" },
-    lost:     { bg: "rgba(248,81,73,0.15)",   text: "#f85149" },
+    lost:     { bg: "rgba(255,112,112,0.15)",   text: "#ff7070" },
     suspended:{ bg: "rgba(240,136,62,0.15)",  text: "#9e9e9e" },
   };
 
 
   return (
     <div>
-      {/* Sub-tabs */}
-      <div className="flex gap-2 mt-2 mb-4">
-        {([
-          ["students","จัดการนักเรียน","fa-graduation-cap"],
-          ["namechange","คำขอเปลี่ยนชื่อ","fa-pen-to-square"],
-          ["datachange","คำขอแก้ไขข้อมูล","fa-file-pen"]
-        ] as const).map(([id,label,icon]) => (
-          <button key={id} onClick={() => setSubTab(id as "students"|"namechange"|"datachange")}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all"
-            style={subTab === id ? { background: "#f85149", color: "#fff" } : { background: "#1c1c1c", color: "#9e9e9e", border: "1px solid #3e3e3e" }}>
-            <i className={`fa-solid ${icon}`} />{label}
-          </button>
-        ))}
-      </div>
-
-      {subTab === "namechange" && <AllRequestsTab adminId={adminId} kind="name" />}
-      {subTab === "datachange" && <AllRequestsTab adminId={adminId} kind="data" />}
-
-      {subTab === "students" && (<>
         <DarkSectionHeader title="จัดการนักเรียน" icon="fa-graduation-cap" count={students.length} />
         <div className="flex flex-col sm:flex-row gap-3 mt-4 mb-4 flex-wrap">
           <div className="relative flex-1 min-w-[180px]">
@@ -1867,14 +2373,14 @@ function StudentsTab({ adminId, refreshKey, role }: { adminId: string; refreshKe
             <input placeholder="ค้นหารหัส/ชื่อ..." value={searchInput} onChange={(e) => handleSearchChange(e.target.value)}
               className="w-full pl-9 pr-4 py-2 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none transition-colors"
               style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}
-              onFocus={(e) => e.currentTarget.style.borderColor = "#f85149"}
+              onFocus={(e) => e.currentTarget.style.borderColor = "#ff7070"}
               onBlur={(e) => e.currentTarget.style.borderColor = "#3e3e3e"} />
           </div>
           <div className="flex gap-2 flex-wrap items-center">
             {["all","active","inactive","lost"].map((s) => (
               <button key={s} onClick={() => setCardFilter(s)}
                 className="px-3 py-2 rounded-xl text-xs font-semibold transition-all"
-                style={{ background: cardFilter === s ? "#f85149" : "#2a2a2a", color: cardFilter === s ? "white" : "#9e9e9e", border: `1px solid ${cardFilter === s ? "#f85149" : "#3e3e3e"}` }}>
+                style={{ background: cardFilter === s ? "#ff7070" : "#2a2a2a", color: cardFilter === s ? "white" : "#9e9e9e", border: `1px solid ${cardFilter === s ? "#ff7070" : "#3e3e3e"}` }}>
                 {s === "all" ? "บัตรทั้งหมด" : CARD_STATUS[s]}
               </button>
             ))}
@@ -1892,19 +2398,20 @@ function StudentsTab({ adminId, refreshKey, role }: { adminId: string; refreshKe
                   const isAdmin = adminStudentIds.has(s.student_id);
                   return (
                     <div key={s.id} className="rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-                      <div className="flex items-start gap-3 mb-3">
+                      <StudentInfoTrigger adminId={adminId} studentId={s.student_id} fallbackName={`${s.first_name} ${s.last_name}`} fallbackPhotoUrl={s.photo_url}
+                        className="flex items-start gap-3 mb-3 w-full">
                         <Avatar name={`${s.first_name} ${s.last_name}`} url={s.photo_url} size={40} rounded="xl" />
                         <div className="flex-1 min-w-0">
                           <div className="font-bold text-white text-sm leading-tight flex items-center gap-1.5 flex-wrap">
                             {s.first_name} {s.last_name}
                             {s.nickname && <span className="text-[#9e9e9e] font-normal text-xs">({s.nickname})</span>}
-                            {isAdmin && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ background: "rgba(248,81,73,0.15)", color: "#f85149" }}><i className="fa-solid fa-shield-halved mr-0.5" />Admin</span>}
+                            {isAdmin && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ background: "rgba(255,112,112,0.15)", color: "#ff7070" }}><i className="fa-solid fa-shield-halved mr-0.5" />Admin</span>}
                           </div>
                           <div className="flex flex-wrap gap-1 mt-1">
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: cs.bg, color: cs.text }}>{CARD_STATUS[s.card_status]}</span>
                           </div>
                         </div>
-                      </div>
+                      </StudentInfoTrigger>
                       <div className="text-[11px] text-[#9e9e9e] space-y-0.5 mb-3">
                         <div><i className="fa-solid fa-id-card mr-1.5 text-[#636363]" />{s.student_id}</div>
                         <div><i className="fa-solid fa-graduation-cap mr-1.5 text-[#636363]" />{s.program}{s.department ? ` · ${s.department}` : ""}</div>
@@ -1943,13 +2450,14 @@ function StudentsTab({ adminId, refreshKey, role }: { adminId: string; refreshKe
                         return (
                           <tr key={s.id} style={{ borderBottom: "1px solid #2a2a2a" }}>
                             <td className="px-3 py-2">
-                              <div className="flex items-center gap-2">
+                              <StudentInfoTrigger adminId={adminId} studentId={s.student_id} fallbackName={`${s.first_name} ${s.last_name}`} fallbackPhotoUrl={s.photo_url}
+                                className="flex items-center gap-2">
                                 <Avatar name={`${s.first_name} ${s.last_name}`} url={s.photo_url} size={28} rounded="lg" />
                                 <div>
                                   <div className="font-semibold text-white">{s.first_name} {s.last_name} {s.nickname ? `(${s.nickname})` : ""}</div>
-                                  {isAdmin && <span className="text-[9px] px-1 py-0.5 rounded font-bold" style={{ background: "rgba(248,81,73,0.15)", color: "#f85149" }}>Admin</span>}
+                                  {isAdmin && <span className="text-[9px] px-1 py-0.5 rounded font-bold" style={{ background: "rgba(255,112,112,0.15)", color: "#ff7070" }}>Admin</span>}
                                 </div>
-                              </div>
+                              </StudentInfoTrigger>
                             </td>
                             <td className="px-3 py-2 text-[#9e9e9e]">{s.student_id}</td>
                             <td className="px-3 py-2 text-[#9e9e9e]">{s.program}{s.department ? ` · ${s.department}` : ""}</td>
@@ -1981,14 +2489,18 @@ function StudentsTab({ adminId, refreshKey, role }: { adminId: string; refreshKe
                   const isAdmin = adminStudentIds.has(s.student_id);
                   return (
                     <div key={s.id} className="rounded-2xl p-4 flex gap-4" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-                      <Avatar name={`${s.first_name} ${s.last_name}`} url={s.photo_url} size={56} rounded="xl" />
+                      <StudentInfoTrigger adminId={adminId} studentId={s.student_id} fallbackName={`${s.first_name} ${s.last_name}`} fallbackPhotoUrl={s.photo_url}
+                        className="flex-shrink-0">
+                        <Avatar name={`${s.first_name} ${s.last_name}`} url={s.photo_url} size={56} rounded="xl" />
+                      </StudentInfoTrigger>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <StudentInfoTrigger adminId={adminId} studentId={s.student_id} fallbackName={`${s.first_name} ${s.last_name}`} fallbackPhotoUrl={s.photo_url}
+                          className="flex items-center gap-2 flex-wrap mb-1">
                           <span className="font-bold text-white">{s.first_name} {s.last_name}</span>
                           {s.nickname && <span className="text-xs text-[#9e9e9e]">({s.nickname})</span>}
-                          {isAdmin && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ background: "rgba(248,81,73,0.15)", color: "#f85149" }}><i className="fa-solid fa-shield-halved mr-0.5" />Admin</span>}
+                          {isAdmin && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ background: "rgba(255,112,112,0.15)", color: "#ff7070" }}><i className="fa-solid fa-shield-halved mr-0.5" />Admin</span>}
                           <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: cs.bg, color: cs.text }}>{CARD_STATUS[s.card_status]}</span>
-                        </div>
+                        </StudentInfoTrigger>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-0.5 text-[11px] mb-3" style={{ color: "#9e9e9e" }}>
                           <div><i className="fa-solid fa-id-card mr-1 text-[#636363]" />{s.student_id}</div>
                           <div><i className="fa-solid fa-graduation-cap mr-1 text-[#636363]" />{s.program}</div>
@@ -2013,7 +2525,6 @@ function StudentsTab({ adminId, refreshKey, role }: { adminId: string; refreshKe
             )}
           </>
         )}
-      </>)}
 
       {/* ── Edit Student Modal ─────────────────────────────────────────── */}
       {editStudent && (
@@ -2042,7 +2553,7 @@ function StudentsTab({ adminId, refreshKey, role }: { adminId: string; refreshKe
                   </div>
                 ))}
               </div>
-              {editError && <div className="text-[12px] text-[#f85149]">{editError}</div>}
+              {editError && <div className="text-[12px] text-[#ff7070]">{editError}</div>}
               <div className="flex gap-2 pt-1">
                 <button onClick={() => setEditStudent(null)}
                   className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#9e9e9e] transition-colors"
@@ -2062,14 +2573,14 @@ function StudentsTab({ adminId, refreshKey, role }: { adminId: string; refreshKe
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }} onClick={() => setConfirmDelete(null)} />
-          <div className="relative w-full max-w-sm mx-4 rounded-2xl p-6" style={{ background: "#1c1c1c", border: "1px solid #f85149" }}>
+          <div className="relative w-full max-w-sm mx-4 rounded-2xl p-6" style={{ background: "#1c1c1c", border: "1px solid #ff7070" }}>
             <div className="text-center mb-4">
-              <i className="fa-solid fa-triangle-exclamation text-[#f85149] text-3xl mb-3" />
+              <i className="fa-solid fa-triangle-exclamation text-[#ff7070] text-3xl mb-3" />
               <div className="font-bold text-white text-sm">ยืนยันการลบนักเรียน</div>
               <div className="text-[12px] text-[#9e9e9e] mt-1">
                 {confirmDelete.first_name} {confirmDelete.last_name} ({confirmDelete.student_id})
               </div>
-              <div className="text-[11px] text-[#f85149] mt-2">การกระทำนี้ไม่สามารถย้อนกลับได้</div>
+              <div className="text-[11px] text-[#ff7070] mt-2">การกระทำนี้ไม่สามารถย้อนกลับได้</div>
             </div>
             <div className="flex gap-2">
               <button onClick={() => setConfirmDelete(null)} disabled={deleting}
@@ -2077,7 +2588,7 @@ function StudentsTab({ adminId, refreshKey, role }: { adminId: string; refreshKe
                 style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>ยกเลิก</button>
               <button onClick={doDelete} disabled={deleting}
                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white"
-                style={{ background: deleting ? "#555" : "#f85149" }}>
+                style={{ background: deleting ? "#555" : "#ff7070" }}>
                 {deleting ? "กำลังลบ..." : "ลบนักเรียน"}
               </button>
             </div>
@@ -2093,6 +2604,8 @@ function StudentsTab({ adminId, refreshKey, role }: { adminId: string; refreshKe
 function EntryLogsTab({ adminId }: { adminId: string }) {
   const [logs, setLogs] = useState<EntryLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const entryActionChartRef = useRef<HTMLCanvasElement | null>(null);
+  const entryHourlyChartRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     adminFetch("/api/entry-logs", adminId)
@@ -2103,10 +2616,74 @@ function EntryLogsTab({ adminId }: { adminId: string }) {
 
   const todayStr = new Date().toDateString();
   const todayCount = logs.filter((l) => new Date(l.scanned_at).toDateString() === todayStr).length;
+  const inCount = logs.filter(l => l.action === "in").length;
+  const outCount = logs.filter(l => l.action === "out").length;
+  const hourly = Array.from({ length: 24 }, (_, h) => logs.filter(l => new Date(l.scanned_at).getHours() === h).length);
+
+  useChart(entryActionChartRef, () => ({
+    type: "doughnut",
+    data: {
+      labels: ["เข้า", "ออก"],
+      datasets: [{
+        data: [inCount, outCount],
+        backgroundColor: ["#ff7070", "#2a2a2a"],
+        borderColor: ["#0c0c0c", "#0c0c0c"],
+        borderWidth: 4,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "68%",
+      plugins: { legend: { position: "bottom", labels: { color: "#9e9e9e", boxWidth: 10, usePointStyle: true, font: { family: "Kanit, Sarabun, sans-serif" } } } },
+    },
+  }), [inCount, outCount]);
+
+  useChart(entryHourlyChartRef, () => ({
+    type: "bar",
+    data: {
+      labels: hourly.map((_, h) => `${h}:00`),
+      datasets: [{
+        label: "สแกน",
+        data: hourly,
+        backgroundColor: hourly.map((_, h) => h >= 7 && h <= 18 ? "#ff7070cc" : "#63636388"),
+        borderColor: hourly.map((_, h) => h >= 7 && h <= 18 ? "#ff7070" : "#636363"),
+        borderWidth: 1,
+        borderRadius: 6,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: "#9e9e9e", maxRotation: 0, autoSkip: true, font: { family: "Kanit, Sarabun, sans-serif" } } },
+        y: { beginAtZero: true, grid: { color: "rgba(255,255,255,0.08)" }, ticks: { color: "#9e9e9e", precision: 0, font: { family: "Kanit, Sarabun, sans-serif" } } },
+      },
+    },
+  }), [hourly]);
 
   return (
     <div>
       <DarkSectionHeader title={`บันทึกเข้า-ออก (วันนี้ ${todayCount} ครั้ง)`} icon="fa-list-ul" count={logs.length} />
+      {!loading && logs.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-4 mb-4">
+          <div className="rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
+            <div className="flex items-center gap-2 mb-3">
+              <i className="fa-solid fa-chart-pie text-xs" style={{ color: "#ff7070" }} />
+              <span className="text-xs font-bold text-white">เข้า / ออก</span>
+            </div>
+            <div className="relative h-[220px]"><canvas ref={entryActionChartRef} /></div>
+          </div>
+          <div className="lg:col-span-2 rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
+            <div className="flex items-center gap-2 mb-3">
+              <i className="fa-solid fa-chart-column text-xs" style={{ color: "#ff7070" }} />
+              <span className="text-xs font-bold text-white">ความถี่ตามช่วงเวลา</span>
+            </div>
+            <div className="relative h-[220px]"><canvas ref={entryHourlyChartRef} /></div>
+          </div>
+        </div>
+      )}
       {loading ? <DarkSpinner /> : logs.length === 0 ? <DarkEmpty text="ไม่มีบันทึก" /> : (
         <div className="mt-4 rounded-2xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
           <div className="overflow-x-auto">
@@ -2128,19 +2705,215 @@ function EntryLogsTab({ adminId }: { adminId: string }) {
                     </td>
                     <td className="px-4 py-3 text-[#9e9e9e] font-mono">{l.student_id ?? "—"}</td>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
+                      <StudentInfoTrigger adminId={adminId} studentId={l.student_id} fallbackName={l.students ? `${l.students.first_name} ${l.students.last_name}` : l.student_id}
+                        className="flex items-center gap-2">
                         <Avatar name={l.students ? `${l.students.first_name} ${l.students.last_name}` : (l.student_id ?? "?")} size={28} />
                         <span className="font-semibold text-white">
                           {l.students ? `${l.students.first_name} ${l.students.last_name}` : <span style={{ color: "#636363" }}>ไม่ทราบ</span>}
                         </span>
-                      </div>
+                      </StudentInfoTrigger>
                     </td>
                     <td className="px-4 py-3 text-[#9e9e9e]">{l.students ? `${l.students.program}` : "—"}</td>
                     <td className="px-4 py-3">
                       <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
-                        style={{ background: l.action === "in" ? "rgba(63,185,80,0.15)" : "rgba(248,81,73,0.15)", color: l.action === "in" ? "#3fb950" : "#f85149" }}>
+                        style={{ background: l.action === "in" ? "rgba(63,185,80,0.15)" : "rgba(255,112,112,0.15)", color: l.action === "in" ? "#3fb950" : "#ff7070" }}>
                         {l.action === "in" ? "เข้า" : "ออก"}
                       </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const ATTENDANCE_LOCATION_META: Record<AttendanceLog["location"], { label: string; place: string; icon: string }> = {
+  school: { label: "เช็กชื่อ โรงเรียน", place: "โรงเรียน", icon: "fa-school" },
+  library: { label: "เช็กชื่อ ห้องสมุด", place: "ห้องสมุด", icon: "fa-book-open" },
+  meeting: { label: "เช็กชื่อ ห้องประชุม", place: "ห้องประชุม", icon: "fa-users" },
+};
+
+function fmtAttendanceDuration(value: AttendanceLog["duration"]) {
+  if (typeof value === "string") return value.trim() || "—";
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return "—";
+  const h = Math.floor(value / 60);
+  const m = value % 60;
+  return h > 0 ? `${h} ชม. ${m} นาที` : `${m} นาที`;
+}
+
+function AttendanceLocationTab({ adminId, location }: { adminId: string; location: AttendanceLog["location"] }) {
+  const [rows, setRows] = useState<AttendanceLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const actionChartRef = useRef<HTMLCanvasElement | null>(null);
+  const hourlyChartRef = useRef<HTMLCanvasElement | null>(null);
+  const meta = ATTENDANCE_LOCATION_META[location];
+
+  const fetch_ = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ location, date });
+      const res = await fetch(`/api/attendance?${params.toString()}`);
+      const json = await res.json();
+      if (json.status === "success") setRows(json.data ?? []);
+    } finally {
+      setLoading(false);
+    }
+  }, [location, date]);
+
+  useEffect(() => { fetch_(); }, [fetch_]);
+
+  const q = search.trim().toLowerCase();
+  const filtered = q
+    ? rows.filter(row => {
+        const name = row.students ? `${row.students.first_name} ${row.students.last_name} ${row.students.nickname ?? ""}` : "";
+        return `${row.student_id} ${name}`.toLowerCase().includes(q);
+      })
+    : rows;
+  const openCount = rows.filter(row => !row.checkout_time).length;
+  const closedCount = rows.filter(row => row.checkout_time).length;
+  const uniqueStudents = new Set(rows.map(row => row.student_id)).size;
+  const hourly = Array.from({ length: 24 }, (_, h) => rows.filter(row => new Date(row.checkin_time).getHours() === h).length);
+
+  useChart(actionChartRef, () => ({
+    type: "doughnut",
+    data: {
+      labels: ["กำลังอยู่", "ออกแล้ว"],
+      datasets: [{
+        data: [openCount, closedCount],
+        backgroundColor: ["#ff7070", "#2a2a2a"],
+        borderColor: ["#0c0c0c", "#0c0c0c"],
+        borderWidth: 4,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "68%",
+      plugins: { legend: { position: "bottom", labels: { color: "#9e9e9e", boxWidth: 10, usePointStyle: true, font: { family: "Kanit, Sarabun, sans-serif" } } } },
+    },
+  }), [openCount, closedCount]);
+
+  useChart(hourlyChartRef, () => ({
+    type: "bar",
+    data: {
+      labels: hourly.map((_, h) => `${h}:00`),
+      datasets: [{
+        label: "เช็กอิน",
+        data: hourly,
+        backgroundColor: hourly.map((_, h) => h >= 7 && h <= 18 ? "#ff7070cc" : "#63636388"),
+        borderColor: hourly.map((_, h) => h >= 7 && h <= 18 ? "#ff7070" : "#636363"),
+        borderWidth: 1,
+        borderRadius: 6,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: "#9e9e9e", autoSkip: true, maxRotation: 0, font: { family: "Kanit, Sarabun, sans-serif" } } },
+        y: { beginAtZero: true, grid: { color: "rgba(255,255,255,0.08)" }, ticks: { color: "#9e9e9e", precision: 0, font: { family: "Kanit, Sarabun, sans-serif" } } },
+      },
+    },
+  }), [hourly]);
+
+  return (
+    <div>
+      <DarkSectionHeader title={meta.label} icon={meta.icon} count={filtered.length} />
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4 mb-4">
+        {[
+          { label: "รายการวันนี้", val: rows.length, icon: "fa-qrcode", color: "#ff7070" },
+          { label: "นักเรียน", val: uniqueStudents, icon: "fa-users", color: "#ff7070" },
+          { label: "กำลังอยู่", val: openCount, icon: "fa-person-walking-arrow-right", color: "#3fb950" },
+          { label: "ออกแล้ว", val: closedCount, icon: "fa-door-open", color: "#9e9e9e" },
+        ].map(c => (
+          <div key={c.label} className="rounded-2xl p-4 flex flex-col gap-2" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: `${c.color}20` }}>
+              <i className={`fa-solid ${c.icon} text-[10px]`} style={{ color: c.color }} />
+            </div>
+            <div className="text-2xl font-black" style={{ color: c.color }}>{c.val}</div>
+            <div className="text-[10px] font-semibold" style={{ color: "#9e9e9e" }}>{c.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {!loading && rows.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-4">
+          <div className="rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
+            <div className="flex items-center gap-2 mb-3">
+              <i className="fa-solid fa-chart-pie text-xs" style={{ color: "#ff7070" }} />
+              <span className="text-xs font-bold text-white">สถานะใน{meta.place}</span>
+            </div>
+            <div className="relative h-[220px]"><canvas ref={actionChartRef} /></div>
+          </div>
+          <div className="lg:col-span-2 rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
+            <div className="flex items-center gap-2 mb-3">
+              <i className="fa-solid fa-chart-column text-xs" style={{ color: "#ff7070" }} />
+              <span className="text-xs font-bold text-white">เช็กอินตามช่วงเวลา</span>
+            </div>
+            <div className="relative h-[220px]"><canvas ref={hourlyChartRef} /></div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+        <div className="relative flex-1 min-w-[220px]">
+          <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-[#636363] text-sm" />
+          <input placeholder={`ค้นหานักเรียนใน${meta.place}`} value={search} onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none transition-colors"
+            style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}
+            onFocus={(e) => e.currentTarget.style.borderColor = "#ff7070"}
+            onBlur={(e) => e.currentTarget.style.borderColor = "#3e3e3e"} />
+        </div>
+        <input type="date" value={date} onChange={e => setDate(e.target.value)}
+          className="px-3 py-2 rounded-xl text-sm text-white outline-none"
+          style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }} />
+        <button onClick={fetch_} className="px-3 py-2 rounded-xl text-xs font-bold text-white" style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>
+          <i className={`fa-solid fa-rotate mr-1 ${loading ? "fa-spin" : ""}`} /> รีเฟรช
+        </button>
+      </div>
+
+      {loading ? <DarkSpinner /> : filtered.length === 0 ? <DarkEmpty text={`ไม่มีข้อมูลเช็กชื่อ${meta.place}`} /> : (
+        <div className="rounded-2xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr style={{ borderBottom: "1px solid #3e3e3e" }}>
+                  {["นักเรียน", "รหัส", "เช็กอิน", "เช็กเอาท์", "เวลา", "ตำแหน่ง"].map(h => (
+                    <th key={h} className="text-left px-4 py-3 font-semibold" style={{ color: "#9e9e9e" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(row => (
+                  <tr key={row.id} className="transition-colors" style={{ borderBottom: "1px solid #2a2a2a" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "#2a2a2a")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <StudentInfoTrigger adminId={adminId} studentId={row.student_id} fallbackName={row.students ? `${row.students.first_name} ${row.students.last_name}` : row.student_id} fallbackPhotoUrl={row.students?.photo_url}
+                        className="flex items-center gap-2">
+                        <Avatar name={row.students ? `${row.students.first_name} ${row.students.last_name}` : row.student_id} url={row.students?.photo_url} size={28} rounded="lg" />
+                        <span className="font-semibold text-white">
+                          {row.students ? `${row.students.first_name} ${row.students.last_name}` : "ไม่ทราบ"}
+                          {row.students?.nickname && <span className="font-normal ml-1 text-[#9e9e9e]">({row.students.nickname})</span>}
+                        </span>
+                      </StudentInfoTrigger>
+                    </td>
+                    <td className="px-4 py-3 text-[#9e9e9e] font-mono">{row.student_id}</td>
+                    <td className="px-4 py-3 text-[#3fb950] font-mono">{new Date(row.checkin_time).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</td>
+                    <td className="px-4 py-3 font-mono" style={{ color: row.checkout_time ? "#ff7070" : "#636363" }}>
+                      {row.checkout_time ? new Date(row.checkout_time).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "ยังอยู่"}
+                    </td>
+                    <td className="px-4 py-3 text-[#9e9e9e]">{fmtAttendanceDuration(row.duration)}</td>
+                    <td className="px-4 py-3">
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold text-[#ff7070]" style={{ background: "rgba(255,112,112,0.12)" }}>{meta.place}</span>
                     </td>
                   </tr>
                 ))}
@@ -2161,6 +2934,8 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
   const [editing, setEditing] = useState<Product | "new" | null>(null);
   const [showInactive, setShowInactive] = useState(false);
   const [showDeleted,  setShowDeleted]  = useState(false);
+  const productStatusChartRef = useRef<HTMLCanvasElement | null>(null);
+  const productCategoryChartRef = useRef<HTMLCanvasElement | null>(null);
   const canEdit = role !== "staff";
 
   const fetch_ = useCallback(async () => {
@@ -2222,6 +2997,51 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
   const catMap: Record<string, number> = {};
   activeProducts.forEach(p => { const k = p.category ?? "ไม่ระบุหมวด"; catMap[k] = (catMap[k] ?? 0) + 1; });
   const categories = Object.entries(catMap).sort((a, b) => b[1] - a[1]);
+  const topCategories = categories.slice(0, 6);
+
+  useChart(productStatusChartRef, () => ({
+    type: "doughnut",
+    data: {
+      labels: ["เปิดขาย", "ปิดการขาย", "หมดสต็อก", "ลบแล้ว"],
+      datasets: [{
+        data: [activeProducts.length, inactiveProducts.length, outOfStock.length, deletedProducts.length],
+        backgroundColor: ["#ff7070", "#636363", "#f59e0b", "#2a2a2a"],
+        borderColor: ["#0c0c0c", "#0c0c0c", "#0c0c0c", "#0c0c0c"],
+        borderWidth: 4,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "68%",
+      plugins: { legend: { position: "bottom", labels: { color: "#9e9e9e", boxWidth: 10, usePointStyle: true, font: { family: "Kanit, Sarabun, sans-serif" } } } },
+    },
+  }), [activeProducts.length, inactiveProducts.length, outOfStock.length, deletedProducts.length]);
+
+  useChart(productCategoryChartRef, () => ({
+    type: "bar",
+    data: {
+      labels: topCategories.map(([cat]) => cat),
+      datasets: [{
+        label: "สินค้า",
+        data: topCategories.map(([, count]) => count),
+        backgroundColor: "#ff7070cc",
+        borderColor: "#ff7070",
+        borderWidth: 1,
+        borderRadius: 8,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: "y",
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { beginAtZero: true, grid: { color: "rgba(255,255,255,0.08)" }, ticks: { color: "#9e9e9e", precision: 0, font: { family: "Kanit, Sarabun, sans-serif" } } },
+        y: { grid: { display: false }, ticks: { color: "#9e9e9e", font: { family: "Kanit, Sarabun, sans-serif" } } },
+      },
+    },
+  }), [topCategories]);
 
   return (
     <div>
@@ -2234,7 +3054,7 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
             {[
               { label: "สินค้าเปิดขาย", val: activeProducts.length.toString(), icon: "fa-box-open", color: "#3fb950" },
               { label: "ปิดการขาย",     val: inactiveProducts.length.toString(), icon: "fa-eye-slash", color: "#f0b429" },
-              { label: "หมดสต็อก",      val: outOfStock.length.toString(), icon: "fa-triangle-exclamation", color: "#f85149" },
+              { label: "หมดสต็อก",      val: outOfStock.length.toString(), icon: "fa-triangle-exclamation", color: "#ff7070" },
               { label: "สต็อกน้อย (≤5)", val: lowStock.length.toString(), icon: "fa-circle-exclamation", color: "#fb923c" },
               { label: "มูลค่าขาย",    val: `฿${stockValue.toLocaleString("th-TH", { maximumFractionDigits: 0 })}`, icon: "fa-coins", color: "#ff7070" },
               { label: "มูลค่าต้นทุน", val: `฿${costValue.toLocaleString("th-TH", { maximumFractionDigits: 0 })}`, icon: "fa-scale-balanced", color: "#636363" },
@@ -2247,6 +3067,23 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
                 <div className="text-[10px] font-semibold leading-tight" style={{ color: "#9e9e9e" }}>{c.label}</div>
               </div>
             ))}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div className="rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
+              <div className="flex items-center gap-2 mb-3">
+                <i className="fa-solid fa-chart-pie text-xs" style={{ color: "#ff7070" }} />
+                <span className="text-xs font-bold text-white">สถานะสินค้า</span>
+              </div>
+              <div className="relative h-[220px]"><canvas ref={productStatusChartRef} /></div>
+            </div>
+            <div className="rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
+              <div className="flex items-center gap-2 mb-3">
+                <i className="fa-solid fa-chart-bar text-xs" style={{ color: "#ff7070" }} />
+                <span className="text-xs font-bold text-white">หมวดหมู่ยอดนิยม</span>
+              </div>
+              <div className="relative h-[220px]"><canvas ref={productCategoryChartRef} /></div>
+            </div>
           </div>
 
           {/* Category + Low stock row */}
@@ -2274,7 +3111,7 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
             {(outOfStock.length > 0 || lowStock.length > 0) && (
               <div className="rounded-2xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
                 <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: "1px solid #252525" }}>
-                  <i className="fa-solid fa-triangle-exclamation text-xs" style={{ color: "#f85149" }} />
+                  <i className="fa-solid fa-triangle-exclamation text-xs" style={{ color: "#ff7070" }} />
                   <span className="text-xs font-bold text-white">สต็อกต้องดูแล</span>
                 </div>
                 <div className="divide-y max-h-40 overflow-y-auto" style={{ borderColor: "#1e1e1e" }}>
@@ -2285,7 +3122,7 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
                         : <div className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: "#252525", color: "#636363", fontSize: 10 }}>🛍️</div>}
                       <div className="flex-1 min-w-0 text-xs text-white truncate">{p.name}</div>
                       <span className="text-[10px] font-black flex-shrink-0 px-2 py-0.5 rounded-lg"
-                        style={{ background: p.stock === 0 ? "rgba(248,81,73,0.15)" : "rgba(251,146,60,0.15)", color: p.stock === 0 ? "#f85149" : "#fb923c" }}>
+                        style={{ background: p.stock === 0 ? "rgba(255,112,112,0.15)" : "rgba(251,146,60,0.15)", color: p.stock === 0 ? "#ff7070" : "#fb923c" }}>
                         {p.stock === 0 ? "หมด" : `${p.stock} ${p.unit ?? "ชิ้น"}`}
                       </span>
                     </div>
@@ -2301,7 +3138,7 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
         {canEdit && (
           <button onClick={() => setEditing("new")}
             className="flex items-center gap-2 text-sm font-bold px-4 py-2 rounded-xl text-white transition-all"
-            style={{ background: "#f85149", boxShadow: "0 4px 12px rgba(248,81,73,0.3)" }}>
+            style={{ background: "#ff7070", boxShadow: "0 4px 12px rgba(255,112,112,0.3)" }}>
             <i className="fa-solid fa-plus" /> เพิ่มสินค้า
           </button>
         )}
@@ -2313,7 +3150,7 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
         </button>
         <button onClick={() => setShowDeleted(!showDeleted)}
           className="text-sm px-3 py-2 rounded-xl font-semibold transition-all"
-          style={{ background: "#2a2a2a", color: showDeleted ? "#f85149" : "#9e9e9e", border: `1px solid ${showDeleted ? "#f85149" : "#3e3e3e"}` }}>
+          style={{ background: "#2a2a2a", color: showDeleted ? "#ff7070" : "#9e9e9e", border: `1px solid ${showDeleted ? "#ff7070" : "#3e3e3e"}` }}>
           <i className="fa-solid fa-trash-can mr-1.5 text-xs" />
           {showDeleted ? "ซ่อนที่ลบแล้ว" : "แสดงที่ลบแล้ว"}
         </button>
@@ -2323,7 +3160,7 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {displayed.map((p) => (
             <div key={p.id} className={`rounded-2xl overflow-hidden transition-all ${!p.active && !p.deleted_at ? "opacity-50" : ""} ${p.deleted_at ? "opacity-40" : ""}`}
-              style={{ background: "#1c1c1c", border: `1px solid ${p.deleted_at ? "#f85149" : "#3e3e3e"}` }}>
+              style={{ background: "#1c1c1c", border: `1px solid ${p.deleted_at ? "#ff7070" : "#3e3e3e"}` }}>
               <div className="h-64 relative overflow-hidden" style={{ background: "#2a2a2a" }}>
                 {p.images?.[0] ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -2334,8 +3171,8 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
                   </div>
                 )}
                 {p.deleted_at ? (
-                  <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(248,81,73,0.18)" }}>
-                    <span className="text-xs font-bold px-2 py-1 rounded-lg text-white flex items-center gap-1" style={{ background: "rgba(248,81,73,0.7)" }}>
+                  <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(255,112,112,0.18)" }}>
+                    <span className="text-xs font-bold px-2 py-1 rounded-lg text-white flex items-center gap-1" style={{ background: "rgba(255,112,112,0.7)" }}>
                       <i className="fa-solid fa-trash text-[10px]" /> ลบแล้ว
                     </span>
                   </div>
@@ -2353,9 +3190,9 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
               <div className="p-3">
                 <div className="font-bold text-white text-sm leading-tight mb-1">{p.name}</div>
                 <div className="flex items-center gap-2 text-xs mb-3">
-                  <span className="font-black" style={{ color: "#f85149" }}>฿{p.price.toFixed(2)}</span>
+                  <span className="font-black" style={{ color: "#ff7070" }}>฿{p.price.toFixed(2)}</span>
                   {p.cost != null && <span style={{ color: "#636363" }}>ต้นทุน ฿{p.cost.toFixed(2)}</span>}
-                  <span className={`font-semibold ml-auto`} style={{ color: p.stock <= 3 ? "#f85149" : "#3fb950" }}>
+                  <span className={`font-semibold ml-auto`} style={{ color: p.stock <= 3 ? "#ff7070" : "#3fb950" }}>
                     {p.stock} {p.unit ?? "ชิ้น"}
                   </span>
                 </div>
@@ -2376,12 +3213,12 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
                         </button>
                         <button onClick={() => toggleActive(p)}
                           className="text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-all"
-                          style={{ background: p.active ? "rgba(248,81,73,0.1)" : "rgba(63,185,80,0.1)", color: p.active ? "#f85149" : "#3fb950", border: `1px solid ${p.active ? "rgba(248,81,73,0.3)" : "rgba(63,185,80,0.3)"}` }}>
+                          style={{ background: p.active ? "rgba(255,112,112,0.1)" : "rgba(63,185,80,0.1)", color: p.active ? "#ff7070" : "#3fb950", border: `1px solid ${p.active ? "rgba(255,112,112,0.3)" : "rgba(63,185,80,0.3)"}` }}>
                           {p.active ? "ปิด" : "เปิด"}
                         </button>
                         <button onClick={() => deleteProduct(p)}
                           className="text-xs font-semibold px-2 py-1.5 rounded-lg transition-all"
-                          style={{ background: "rgba(248,81,73,0.08)", color: "#f85149", border: "1px solid rgba(248,81,73,0.2)" }}>
+                          style={{ background: "rgba(255,112,112,0.08)", color: "#ff7070", border: "1px solid rgba(255,112,112,0.2)" }}>
                           <i className="fa-solid fa-trash" />
                         </button>
                       </>
@@ -2494,14 +3331,14 @@ function ProductForm({ product, adminId, onClose, onSaved }: { product: Product 
             <label className="text-sm font-semibold text-[#ededed]">เปิดจำหน่าย</label>
             <button type="button" onClick={() => setActive(!active)}
               className="w-12 h-6 rounded-full relative transition-colors"
-              style={{ background: active ? "#f85149" : "#3e3e3e" }}>
+              style={{ background: active ? "#ff7070" : "#3e3e3e" }}>
               <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${active ? "left-6" : "left-0.5"}`} />
             </button>
           </div>
 
           {error && (
             <div className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm"
-              style={{ background: "rgba(248,81,73,0.1)", border: "1px solid rgba(248,81,73,0.3)", color: "#f85149" }}>
+              style={{ background: "rgba(255,112,112,0.1)", border: "1px solid rgba(255,112,112,0.3)", color: "#ff7070" }}>
               <i className="fa-solid fa-circle-xmark" /> {error}
             </div>
           )}
@@ -2513,7 +3350,7 @@ function ProductForm({ product, adminId, onClose, onSaved }: { product: Product 
           </button>
           <button onClick={handleSave} disabled={saving}
             className="flex-1 py-3 text-sm font-bold rounded-xl text-white transition-all disabled:opacity-50"
-            style={{ background: "#f85149" }}>
+            style={{ background: "#ff7070" }}>
             {saving ? <><i className="fa-solid fa-spinner fa-spin mr-1.5" />กำลังบันทึก...</> : <><i className="fa-solid fa-floppy-disk mr-1.5" />บันทึก</>}
           </button>
         </div>
@@ -2529,7 +3366,7 @@ const ORDER_STYLE: Record<string, { bg: string; text: string }> = {
   pending:   { bg: "rgba(227,179,65,0.15)",  text: "#e3b341" },
   paid:      { bg: "rgba(63,185,80,0.15)",   text: "#3fb950" },
   cancelled: { bg: "rgba(72,79,88,0.3)",     text: "#9e9e9e" },
-  refunded:  { bg: "rgba(248,81,73,0.15)",   text: "#f85149" },
+  refunded:  { bg: "rgba(255,112,112,0.15)",   text: "#ff7070" },
   delivered: { bg: "rgba(255,112,112,0.15)", text: "#ff7070" },
 };
 
@@ -2540,6 +3377,8 @@ function ShopOrdersTab({ adminId }: { adminId: string }) {
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list" | "card">("grid");
   const [confirming, setConfirming] = useState<string | null>(null);
+  const orderStatusChartRef = useRef<HTMLCanvasElement | null>(null);
+  const orderTopItemsChartRef = useRef<HTMLCanvasElement | null>(null);
 
   const fetch_ = useCallback(async () => {
     setLoading(true);
@@ -2589,6 +3428,50 @@ function ShopOrdersTab({ adminId }: { adminId: string }) {
   });
   const topItems = Object.values(itemSales).sort((a, b) => b.qty - a.qty).slice(0, 5);
 
+  useChart(orderStatusChartRef, () => ({
+    type: "doughnut",
+    data: {
+      labels: ["รอชำระ", "ชำระแล้ว", "ยกเลิก"],
+      datasets: [{
+        data: [pendingOrders.length, paidOrders_.length, cancelledOrders.length],
+        backgroundColor: ["#f59e0b", "#ff7070", "#2a2a2a"],
+        borderColor: ["#0c0c0c", "#0c0c0c", "#0c0c0c"],
+        borderWidth: 4,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "68%",
+      plugins: { legend: { position: "bottom", labels: { color: "#9e9e9e", boxWidth: 10, usePointStyle: true, font: { family: "Kanit, Sarabun, sans-serif" } } } },
+    },
+  }), [pendingOrders.length, paidOrders_.length, cancelledOrders.length]);
+
+  useChart(orderTopItemsChartRef, () => ({
+    type: "bar",
+    data: {
+      labels: topItems.map(i => i.name),
+      datasets: [{
+        label: "ชิ้น",
+        data: topItems.map(i => i.qty),
+        backgroundColor: "#ff7070cc",
+        borderColor: "#ff7070",
+        borderWidth: 1,
+        borderRadius: 8,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: "y",
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { beginAtZero: true, grid: { color: "rgba(255,255,255,0.08)" }, ticks: { color: "#9e9e9e", precision: 0, font: { family: "Kanit, Sarabun, sans-serif" } } },
+        y: { grid: { display: false }, ticks: { color: "#9e9e9e", font: { family: "Kanit, Sarabun, sans-serif" } } },
+      },
+    },
+  }), [topItems]);
+
   return (
     <div>
       <DarkSectionHeader title="ออเดอร์สหกรณ์" icon="fa-receipt" count={filtered.length} />
@@ -2617,6 +3500,23 @@ function ShopOrdersTab({ adminId }: { adminId: string }) {
                 </div>
               </div>
             ))}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div className="rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
+              <div className="flex items-center gap-2 mb-3">
+                <i className="fa-solid fa-chart-pie text-xs" style={{ color: "#ff7070" }} />
+                <span className="text-xs font-bold text-white">สถานะออเดอร์</span>
+              </div>
+              <div className="relative h-[220px]"><canvas ref={orderStatusChartRef} /></div>
+            </div>
+            <div className="rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
+              <div className="flex items-center gap-2 mb-3">
+                <i className="fa-solid fa-chart-bar text-xs" style={{ color: "#ff7070" }} />
+                <span className="text-xs font-bold text-white">ยอดขายตามสินค้า</span>
+              </div>
+              <div className="relative h-[220px]"><canvas ref={orderTopItemsChartRef} /></div>
+            </div>
           </div>
 
           {/* Top selling */}
@@ -2654,7 +3554,7 @@ function ShopOrdersTab({ adminId }: { adminId: string }) {
             {["all", "pending", "paid", "delivered", "cancelled"].map((s) => (
               <button key={s} onClick={() => setFilter(s)}
                 className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                style={{ background: filter === s ? "#f85149" : "#2a2a2a", color: filter === s ? "white" : "#9e9e9e", border: `1px solid ${filter === s ? "#f85149" : "#3e3e3e"}` }}>
+                style={{ background: filter === s ? "#ff7070" : "#2a2a2a", color: filter === s ? "white" : "#9e9e9e", border: `1px solid ${filter === s ? "#ff7070" : "#3e3e3e"}` }}>
                 {s === "all" ? "ทั้งหมด" : ORDER_STATUS[s]}
               </button>
             ))}
@@ -2664,7 +3564,7 @@ function ShopOrdersTab({ adminId }: { adminId: string }) {
             {([["grid","fa-table-cells-large"],["list","fa-list"],["card","fa-rectangle-list"]] as const).map(([mode, icon]) => (
               <button key={mode} onClick={() => setViewMode(mode)}
                 className="w-8 h-8 flex items-center justify-center transition-all"
-                style={{ background: viewMode === mode ? "#f85149" : "#2a2a2a", color: viewMode === mode ? "white" : "#636363" }}
+                style={{ background: viewMode === mode ? "#ff7070" : "#2a2a2a", color: viewMode === mode ? "white" : "#636363" }}
                 title={mode}>
                 <i className={`fa-solid ${icon} text-xs`} />
               </button>
@@ -2698,10 +3598,11 @@ function ShopOrdersTab({ adminId }: { adminId: string }) {
           </button>
         );
         const Avatar = ({ o, size = 10 }: { o: ShopOrder; size?: number }) => {
-          const sc = ORDER_STYLE[o.status] ?? { text: "#9e9e9e" };
+          const px = size * 4;
+          const fs = Math.max(10, Math.round(px * 0.38));
           return o.student_photo_url
-            ? <img src={o.student_photo_url} alt="" className={`w-${size} h-${size} object-cover flex-shrink-0`} style={{ borderRadius: 8, border: `2px solid ${sc.text}55` }} />
-            : <div className={`w-${size} h-${size} flex items-center justify-center flex-shrink-0`} style={{ borderRadius: 8, background: "#2a2a2a", color: "#636363", fontSize: size * 1.5 }}><i className="fa-solid fa-user" /></div>;
+            ? <img src={o.student_photo_url} alt={o.student_name} className="object-cover flex-shrink-0" style={{ width: px, height: px, borderRadius: 8, border: "2px solid rgba(255,112,112,0.45)" }} />
+            : <div className="flex items-center justify-center flex-shrink-0 font-black text-white" style={{ width: px, height: px, borderRadius: 8, background: ADMIN_PRIMARY, fontSize: fs }}>{avatarInitials(o.student_name || o.student_id)}</div>;
         };
 
         // ══ GRID ══════════════════════════════════════════════════════
@@ -2719,12 +3620,15 @@ function ShopOrdersTab({ adminId }: { adminId: string }) {
                         <span className="font-mono text-[11px] font-bold text-[#636363]">#{o.order_id.slice(-8).toUpperCase()}</span>
                         <span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: sc.bg, color: sc.text }}>{ORDER_STATUS[o.status]}</span>
                       </div>
-                      <div className="font-bold text-white text-sm truncate">{o.student_name}</div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[10px] font-mono text-[#636363]">{o.student_id}</span>
-                        <span className="text-[#3e3e3e]">·</span>
-                        <span className="text-[10px] text-[#636363]">{formatDateTime(o.created_at)}</span>
-                      </div>
+                      <StudentInfoTrigger adminId={adminId} studentId={o.student_id} fallbackName={o.student_name} fallbackPhotoUrl={o.student_photo_url}
+                        className="block max-w-full">
+                        <div className="font-bold text-white text-sm truncate">{o.student_name}</div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[10px] font-mono text-[#636363]">{o.student_id}</span>
+                          <span className="text-[#3e3e3e]">·</span>
+                          <span className="text-[10px] text-[#636363]">{formatDateTime(o.created_at)}</span>
+                        </div>
+                      </StudentInfoTrigger>
                     </div>
                     <div className="flex flex-col items-end gap-2 flex-shrink-0">
                       <div className="text-xl font-black" style={{ color: sc.text }}>฿{o.total.toFixed(2)}</div>
@@ -2774,11 +3678,12 @@ function ShopOrdersTab({ adminId }: { adminId: string }) {
                   style={{ borderBottom: idx < filtered.length - 1 ? "1px solid #232323" : "none", background: "#1c1c1c", borderLeft: `3px solid ${sc.text}` }}>
                   <Avatar o={o} size={9} />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <StudentInfoTrigger adminId={adminId} studentId={o.student_id} fallbackName={o.student_name} fallbackPhotoUrl={o.student_photo_url}
+                      className="flex items-center gap-2 flex-wrap">
                       <span className="font-bold text-white text-sm truncate">{o.student_name}</span>
                       <span className="text-[10px] font-mono text-[#636363]">{o.student_id}</span>
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ background: sc.bg, color: sc.text }}>{ORDER_STATUS[o.status]}</span>
-                    </div>
+                    </StudentInfoTrigger>
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       <span className="font-mono text-[10px] text-[#636363]">#{o.order_id.slice(-8).toUpperCase()}</span>
                       <span className="text-[#3e3e3e]">·</span>
@@ -2821,13 +3726,14 @@ function ShopOrdersTab({ adminId }: { adminId: string }) {
                   <div className="px-5 py-3 flex items-center justify-between gap-4" style={{ background: "#161616" }}>
                     <div className="flex items-center gap-3">
                       {o.student_photo_url
-                        ? <img src={o.student_photo_url} alt="" className="object-cover flex-shrink-0"
-                            style={{ width: 64, height: 64, maxWidth: 64, borderRadius: 8, border: `2px solid ${sc.text}55` }} />
-                        : <div className="flex items-center justify-center flex-shrink-0"
-                            style={{ width: 64, height: 64, maxWidth: 64, borderRadius: 8, background: "#2a2a2a", color: "#636363", fontSize: 24 }}>
-                            <i className="fa-solid fa-user" />
+                        ? <img src={o.student_photo_url} alt={o.student_name} className="object-cover flex-shrink-0"
+                            style={{ width: 64, height: 64, maxWidth: 64, borderRadius: 8, border: "2px solid rgba(255,112,112,0.45)" }} />
+                        : <div className="flex items-center justify-center flex-shrink-0 font-black text-white"
+                            style={{ width: 64, height: 64, maxWidth: 64, borderRadius: 8, background: ADMIN_PRIMARY, fontSize: 24 }}>
+                            {avatarInitials(o.student_name || o.student_id)}
                           </div>}
-                      <div>
+                      <StudentInfoTrigger adminId={adminId} studentId={o.student_id} fallbackName={o.student_name} fallbackPhotoUrl={o.student_photo_url}
+                        className="block">
                         <div className="font-bold text-white">{o.student_name}</div>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-[11px] font-mono text-[#636363]">{o.student_id}</span>
@@ -2835,7 +3741,7 @@ function ShopOrdersTab({ adminId }: { adminId: string }) {
                           <span className="text-[11px] font-mono text-[#636363]">#{o.order_id.slice(-8).toUpperCase()}</span>
                           <span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: sc.bg, color: sc.text }}>{ORDER_STATUS[o.status]}</span>
                         </div>
-                      </div>
+                      </StudentInfoTrigger>
                     </div>
                     <div className="text-right flex-shrink-0">
                       <div className="text-2xl font-black" style={{ color: sc.text }}>฿{o.total.toFixed(2)}</div>
@@ -2960,7 +3866,7 @@ function AddStudentModal({ adminId, onClose, onSaved }: { adminId: string; onClo
           </div>
           {error && (
             <div className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm"
-              style={{ background: "rgba(248,81,73,0.1)", border: "1px solid rgba(248,81,73,0.3)", color: "#f85149" }}>
+              style={{ background: "rgba(255,112,112,0.1)", border: "1px solid rgba(255,112,112,0.3)", color: "#ff7070" }}>
               <i className="fa-solid fa-circle-xmark" /> {error}
             </div>
           )}
@@ -2971,7 +3877,7 @@ function AddStudentModal({ adminId, onClose, onSaved }: { adminId: string; onClo
           </button>
           <button onClick={handleSave} disabled={saving}
             className="flex-1 py-3 text-sm font-bold rounded-xl text-white transition-all disabled:opacity-50"
-            style={{ background: "#f85149" }}>
+            style={{ background: "#ff7070" }}>
             {saving ? <><i className="fa-solid fa-spinner fa-spin mr-1.5" />กำลังบันทึก...</> : <><i className="fa-solid fa-floppy-disk mr-1.5" />เพิ่มนักเรียน</>}
           </button>
         </div>
@@ -2992,7 +3898,7 @@ type AdminRecord = {
 
 const ROLE_LABELS: Record<string, string> = { superadmin: "Super Admin", admin: "Admin", staff: "Staff" };
 const ROLE_STYLE: Record<string, { bg: string; text: string }> = {
-  superadmin: { bg: "rgba(248,81,73,0.15)", text: "#f85149" },
+  superadmin: { bg: "rgba(255,112,112,0.15)", text: "#ff7070" },
   admin:      { bg: "rgba(56,139,253,0.15)", text: "#ff7070" },
   staff:      { bg: "rgba(255,255,255,0.05)", text: "#9e9e9e" },
 };
@@ -3131,7 +4037,7 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
   const inp = { className: "w-full px-2.5 py-1.5 rounded-lg text-xs outline-none", style: { background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" } };
 
   return (
-    <div className="rounded-xl overflow-hidden" style={{ background: "#1c1c1c", border: `1px solid ${isMe ? "rgba(248,81,73,0.3)" : "#3e3e3e"}` }}>
+    <div className="rounded-xl overflow-hidden" style={{ background: "#1c1c1c", border: `1px solid ${isMe ? "rgba(255,112,112,0.3)" : "#3e3e3e"}` }}>
       {/* ── Main row ── */}
       <div className="flex items-center gap-3 p-4">
         {/* Avatar */}
@@ -3150,7 +4056,7 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
           {canUpload && a.avatar && !busy && (
             <button type="button" onClick={handleDeleteAvatar} title="ลบ Avatar"
               className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center transition-transform hover:scale-110"
-              style={{ background: "#f85149", color: "#fff", fontSize: 8 }}>
+              style={{ background: "#ff7070", color: "#fff", fontSize: 8 }}>
               <i className="fa-solid fa-xmark" />
             </button>
           )}
@@ -3164,7 +4070,7 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
               {a.first_name || a.last_name ? `${a.first_name ?? ""} ${a.last_name ?? ""}`.trim() : displayName}
             </span>
             {a.nickname && a.first_name && <span className="text-xs text-[#9e9e9e]">({a.nickname})</span>}
-            {isMe && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ background: "rgba(248,81,73,0.15)", color: "#f85149" }}>คุณ</span>}
+            {isMe && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ background: "rgba(255,112,112,0.15)", color: "#ff7070" }}>คุณ</span>}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <code className="text-[11px]" style={{ color: "#636363" }}>@{a.username}</code>
@@ -3210,12 +4116,12 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
             </select>
             <button onClick={() => onToggleStatus(a)} disabled={updating === a.admin_id}
               className="text-[11px] px-2.5 py-1.5 rounded-lg font-semibold disabled:opacity-50"
-              style={{ background: a.admin_status === "active" ? "rgba(248,81,73,0.1)" : "rgba(255,112,112,0.1)", color: a.admin_status === "active" ? "#f85149" : "#ff7070", border: `1px solid ${a.admin_status === "active" ? "rgba(248,81,73,0.3)" : "rgba(255,112,112,0.3)"}` }}>
+              style={{ background: a.admin_status === "active" ? "rgba(255,112,112,0.1)" : "rgba(255,112,112,0.1)", color: a.admin_status === "active" ? "#ff7070" : "#ff7070", border: `1px solid ${a.admin_status === "active" ? "rgba(255,112,112,0.3)" : "rgba(255,112,112,0.3)"}` }}>
               {a.admin_status === "active" ? "ปิดใช้" : "เปิดใช้"}
             </button>
             <button onClick={() => onDelete(a)} disabled={updating === a.admin_id}
               className="text-[11px] px-2.5 py-1.5 rounded-lg font-semibold disabled:opacity-50"
-              style={{ background: "rgba(248,81,73,0.1)", color: "#f85149", border: "1px solid rgba(248,81,73,0.3)" }}>
+              style={{ background: "rgba(255,112,112,0.1)", color: "#ff7070", border: "1px solid rgba(255,112,112,0.3)" }}>
               <i className="fa-solid fa-trash text-[10px]" />
             </button>
           </>)}
@@ -3308,7 +4214,7 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
               </div>
             </div>
           </div>
-          {pfMsg && <p className="text-xs mt-2" style={{ color: "#f85149" }}>{pfMsg}</p>}
+          {pfMsg && <p className="text-xs mt-2" style={{ color: "#ff7070" }}>{pfMsg}</p>}
           <div className="mt-2.5">
             <button onClick={saveProfile} disabled={pfSaving}
               className="px-4 py-1.5 rounded-lg text-xs font-bold text-white disabled:opacity-50"
@@ -3527,7 +4433,7 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
               <p className="text-xs font-semibold text-[#ededed]">Avatar <span className="font-normal text-[#636363]">(ไม่บังคับ)</span></p>
               {avatarPreview
                 ? <button type="button" onClick={() => { setAvatarFile(null); setAvatarPreview(null); }}
-                    className="text-[11px] mt-0.5" style={{ color: "#f85149" }}>
+                    className="text-[11px] mt-0.5" style={{ color: "#ff7070" }}>
                     <i className="fa-solid fa-xmark mr-1" />ลบรูป
                   </button>
                 : <p className="text-[11px] mt-0.5" style={{ color: "#636363" }}>คลิกที่รูปเพื่อเลือก</p>}
@@ -3580,7 +4486,7 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
               <input value={form.entry_year} onChange={e => setForm(f => ({ ...f, entry_year: e.target.value }))} {...inp} placeholder="เช่น 2024" />
             </div>
           </div>
-          {msg && <p className="text-xs" style={{ color: "#f85149" }}>{msg}</p>}
+          {msg && <p className="text-xs" style={{ color: "#ff7070" }}>{msg}</p>}
           <div className="flex gap-2 pt-1">
             <button onClick={addAdmin} disabled={saving}
               className="px-4 py-2 rounded-lg text-xs font-bold text-white hover:opacity-80 disabled:opacity-50"
@@ -3645,7 +4551,7 @@ function SettingsTab({ adminId, stats }: { adminId: string; stats: Stats | null 
     { label: "วันที่ตรวจสอบ", val: new Date().toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" }) },
   ];
 
-  const pingStyle = { idle: { color: "#636363", bg: "#2a2a2a" }, checking: { color: "#e3b341", bg: "rgba(227,179,65,0.1)" }, ok: { color: "#3fb950", bg: "rgba(63,185,80,0.1)" }, error: { color: "#f85149", bg: "rgba(248,81,73,0.1)" } };
+  const pingStyle = { idle: { color: "#636363", bg: "#2a2a2a" }, checking: { color: "#e3b341", bg: "rgba(227,179,65,0.1)" }, ok: { color: "#3fb950", bg: "rgba(63,185,80,0.1)" }, error: { color: "#ff7070", bg: "rgba(255,112,112,0.1)" } };
   const ps = pingStyle[ping];
 
   return (
@@ -3717,8 +4623,8 @@ function SettingsTab({ adminId, stats }: { adminId: string; stats: Stats | null 
 function DarkSectionHeader({ title, icon, count }: { title: string; icon: string; count?: number }) {
   return (
     <div className="flex items-center gap-3 mb-1">
-      <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "rgba(248,81,73,0.15)", border: "1px solid rgba(248,81,73,0.3)" }}>
-        <i className={`fa-solid ${icon} text-sm`} style={{ color: "#f85149" }} />
+      <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "rgba(255,112,112,0.15)", border: "1px solid rgba(255,112,112,0.3)" }}>
+        <i className={`fa-solid ${icon} text-sm`} style={{ color: "#ff7070" }} />
       </div>
       <h2 className="text-lg font-black text-white">{title}</h2>
       {count !== undefined && (
@@ -3731,7 +4637,7 @@ function DarkSectionHeader({ title, icon, count }: { title: string; icon: string
 function DarkSpinner() {
   return (
     <div className="flex items-center justify-center py-16 text-sm" style={{ color: "#636363" }}>
-      <i className="fa-solid fa-spinner fa-spin text-2xl mr-2" style={{ color: "#f85149" }} /> กำลังโหลด...
+      <i className="fa-solid fa-spinner fa-spin text-2xl mr-2" style={{ color: "#ff7070" }} /> กำลังโหลด...
     </div>
   );
 }
@@ -3751,7 +4657,7 @@ function DarkAction({ onClick, loading, color, icon, label, small }: {
 }) {
   const styles: Record<string, { bg: string; text: string; border: string }> = {
     green: { bg: "rgba(63,185,80,0.15)",   text: "#3fb950", border: "rgba(63,185,80,0.3)" },
-    red:   { bg: "rgba(248,81,73,0.15)",   text: "#f85149", border: "rgba(248,81,73,0.3)" },
+    red:   { bg: "rgba(255,112,112,0.15)",   text: "#ff7070", border: "rgba(255,112,112,0.3)" },
     gray:  { bg: "rgba(72,79,88,0.3)",     text: "#9e9e9e", border: "#3e3e3e" },
     blue:  { bg: "rgba(56,139,253,0.15)",  text: "#ff7070", border: "rgba(56,139,253,0.3)" },
   };
@@ -3867,13 +4773,13 @@ function ImgUpload({ value, onChange, placeholder, adminId, endpoint = "/api/adm
           <button type="button" onClick={onDelete} disabled={uploading || deleting}
             title={isOwned ? "ลบไฟล์จาก Storage" : "ล้างค่า"}
             className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center disabled:opacity-50 transition-colors"
-            style={{ background: "#2a2a2a", border: "1px solid #3e3e3e", color: deleting ? "#f85149" : "#9e9e9e" }}>
+            style={{ background: "#2a2a2a", border: "1px solid #3e3e3e", color: deleting ? "#ff7070" : "#9e9e9e" }}>
             {deleting ? <i className="fa-solid fa-spinner fa-spin text-xs" /> : <i className="fa-solid fa-trash text-xs" />}
           </button>
         )}
         <input ref={ref} type="file" accept={IMG_ACCEPT} className="hidden" onChange={onFile} />
       </div>
-      {err && <p className="text-[11px]" style={{ color: "#f85149" }}>{err}</p>}
+      {err && <p className="text-[11px]" style={{ color: "#ff7070" }}>{err}</p>}
     </div>
   );
 }
@@ -3926,7 +4832,7 @@ function CustomFieldsEditor({ fields, onChange }: { fields: CustomField[]; onCha
               </div>
               <button onClick={() => onChange(fields.filter(x => x.key !== f.key))}
                 className="text-[10px] px-1.5 py-0.5 rounded flex-shrink-0"
-                style={{ background: "#da363322", color: "#f85149" }}>ลบ</button>
+                style={{ background: "#da363322", color: "#ff7070" }}>ลบ</button>
             </div>
           ))}
         </div>
@@ -4199,7 +5105,7 @@ function ProjectsTab({ adminId, onViewEvals }: { adminId: string; onViewEvals: (
               <CustomFieldsEditor fields={form.custom_fields} onChange={cfs => setForm(f => ({ ...f, custom_fields: cfs }))} />
             </div>
 
-            {msg && <p className="text-xs" style={{ color: "#f85149" }}>{msg}</p>}
+            {msg && <p className="text-xs" style={{ color: "#ff7070" }}>{msg}</p>}
             <div className="flex gap-2 pt-1">
               <DarkAction onClick={save} loading={saving} color="green" icon="fa-floppy-disk" label={saving ? "กำลังบันทึก..." : "บันทึก"} />
               <DarkAction onClick={() => setShowForm(false)} loading={false} color="gray" icon="fa-xmark" label="ยกเลิก" />
@@ -4299,11 +5205,11 @@ function useChart(ref: React.RefObject<HTMLCanvasElement | null>, getConfig: () 
 const CJ_GRID  = { color: "#2a2a2a" };
 const CJ_TICKS = { color: "#9e9e9e", font: { size: 10 } };
 const CJ_LEGEND = { labels: { color: "#9e9e9e", boxWidth: 12, font: { size: 10 } } };
-const PALETTE = ["#ff7070","#f85149","#3fb950","#e3b341","#a371f7","#0ea5e9","#ec4899","#14b8a6"];
+const PALETTE = ["#ff7070","#ff7070","#3fb950","#e3b341","#a371f7","#0ea5e9","#ec4899","#14b8a6"];
 
 const CRITERIA_KEYS  = ["overall","creative","content","presentation","usability"] as const;
 const CRITERIA_LABELS = ["โดยรวม","ความคิดสร้างสรรค์","ความเหมาะสม","การนำเสนอ","การนำไปใช้"];
-const CRITERIA_COLORS = ["#3fb950","#a371f7","#ff7070","#e3b341","#f85149"];
+const CRITERIA_COLORS = ["#3fb950","#a371f7","#ff7070","#e3b341","#ff7070"];
 
 function EvalAnalytics({ rows }: { rows: EvalRow[] }) {
 
@@ -4358,8 +5264,8 @@ function EvalAnalytics({ rows }: { rows: EvalRow[] }) {
       datasets: [{
         label: "จำนวน",
         data: [1, 2, 3, 4, 5].map(v => rows.filter(r => r.overall === v).length),
-        backgroundColor: ["#f8514988", "#e3b34188", "#e3b34188", "#3fb95088", "#3fb95088"],
-        borderColor:     ["#f85149",   "#e3b341",   "#e3b341",   "#3fb950",   "#3fb950"  ],
+        backgroundColor: ["#ff707088", "#e3b34188", "#e3b34188", "#3fb95088", "#3fb95088"],
+        borderColor:     ["#ff7070",   "#e3b341",   "#e3b341",   "#3fb950",   "#3fb950"  ],
         borderWidth: 1, borderRadius: 4,
       }],
     },
@@ -4370,7 +5276,7 @@ function EvalAnalytics({ rows }: { rows: EvalRow[] }) {
     type: "doughnut",
     data: {
       labels: ["😄 ชอบมาก", "😐 เฉยๆ", "😞 ไม่ชอบ"],
-      datasets: [{ data: [3, 2, 1].map(v => rows.filter(r => r.emoji === v).length), backgroundColor: ["#3fb95099", "#e3b34199", "#f8514999"], borderColor: ["#3fb950", "#e3b341", "#f85149"], borderWidth: 1 }],
+      datasets: [{ data: [3, 2, 1].map(v => rows.filter(r => r.emoji === v).length), backgroundColor: ["#3fb95099", "#e3b34199", "#ff707099"], borderColor: ["#3fb950", "#e3b341", "#ff7070"], borderWidth: 1 }],
     },
     options: { ...MA, cutout: "65%", plugins: { legend: CJ_LEGEND } },
   }), [dataKey]);
@@ -4431,7 +5337,7 @@ function EvalAnalytics({ rows }: { rows: EvalRow[] }) {
         label: "การประเมิน", data: days.map(d => byday[d]?.length ?? 0),
         borderColor: "#ff7070", backgroundColor: "rgba(56,139,253,0.1)",
         fill: true, tension: 0.35, pointRadius: 3,
-        pointBackgroundColor: days.map(d => d === todayStr ? "#f85149" : "#ff7070"),
+        pointBackgroundColor: days.map(d => d === todayStr ? "#ff7070" : "#ff7070"),
         pointBorderColor: "transparent",
       }],
     },
@@ -4453,8 +5359,8 @@ function EvalAnalytics({ rows }: { rows: EvalRow[] }) {
       labels: Array.from({ length: 24 }, (_, h) => `${h}:00`),
       datasets: [{
         label: "การประเมิน", data: hourly,
-        backgroundColor: hourly.map((_, h) => h >= 7 && h <= 20 ? "#ff707088" : "#f8514966"),
-        borderColor:      hourly.map((_, h) => h >= 7 && h <= 20 ? "#ff7070"   : "#f85149"  ),
+        backgroundColor: hourly.map((_, h) => h >= 7 && h <= 20 ? "#ff707088" : "#ff707066"),
+        borderColor:      hourly.map((_, h) => h >= 7 && h <= 20 ? "#ff7070"   : "#ff7070"  ),
         borderWidth: 1, borderRadius: 3,
       }],
     },
@@ -4506,7 +5412,7 @@ function EvalAnalytics({ rows }: { rows: EvalRow[] }) {
 
 
 const EVAL_SCORE_COLOR = (v: number | null) =>
-  !v ? "#636363" : v >= 4 ? "#3fb950" : v >= 3 ? "#e3b341" : "#f85149";
+  !v ? "#636363" : v >= 4 ? "#3fb950" : v >= 3 ? "#e3b341" : "#ff7070";
 const EVAL_EMOJI: Record<number, string> = { 3: "😄", 2: "😐", 1: "😞" };
 const EVAL_SCORE_KEYS  = ["creative", "content", "presentation", "usability"] as const;
 const EVAL_SCORE_LABEL = ["สร้างสรรค์", "เนื้อหา", "นำเสนอ", "นำไปใช้"];
@@ -4860,7 +5766,7 @@ function TeachersTab({ adminId }: { adminId: string }) {
                 </div>
               </div>
               <button onClick={() => startEdit(t)} className="text-[11px] px-2 py-1 rounded flex-shrink-0" style={{ background: "#1f6feb22", color: "#58a6ff" }}>แก้ไข</button>
-              <button onClick={() => del(t.id, t.name)} className="text-[11px] px-2 py-1 rounded flex-shrink-0" style={{ background: "#da363322", color: "#f85149" }}>ลบ</button>
+              <button onClick={() => del(t.id, t.name)} className="text-[11px] px-2 py-1 rounded flex-shrink-0" style={{ background: "#da363322", color: "#ff7070" }}>ลบ</button>
             </div>
           ))}
         </div>
@@ -5062,7 +5968,7 @@ function ClassGroupsTab({ adminId }: { adminId: string }) {
                 {g.department && <div className="text-[11px] truncate" style={{ color: "#636363" }}>{g.department}</div>}
               </div>
               <button onClick={() => startEdit(g)} className="text-[11px] px-2 py-1 rounded" style={{ background: "#1f6feb22", color: "#58a6ff" }}>แก้ไข</button>
-              <button onClick={() => del(g.id, g.name)} className="text-[11px] px-2 py-1 rounded" style={{ background: "#da363322", color: "#f85149" }}>ลบ</button>
+              <button onClick={() => del(g.id, g.name)} className="text-[11px] px-2 py-1 rounded" style={{ background: "#da363322", color: "#ff7070" }}>ลบ</button>
             </div>
           ))}
         </div>
@@ -5321,7 +6227,7 @@ function ClassScheduleTab({ adminId }: { adminId: string }) {
                         </div>
                         <button onClick={() => delSchedule(s.id)}
                           className="text-[11px] px-2 py-1 rounded flex-shrink-0"
-                          style={{ background: "#da363322", color: "#f85149" }}>ลบ</button>
+                          style={{ background: "#da363322", color: "#ff7070" }}>ลบ</button>
                       </div>
                     );
                   })}
@@ -5380,7 +6286,7 @@ function ClassScheduleTab({ adminId }: { adminId: string }) {
                         {/* Show override or normal room */}
                         {ov ? (
                           ov.room_name === null ? (
-                            <span className="text-xs font-bold" style={{ color: "#f85149" }}>
+                            <span className="text-xs font-bold" style={{ color: "#ff7070" }}>
                               <i className="fa-solid fa-ban mr-1" />ยกเลิกเรียน
                             </span>
                           ) : (
@@ -5397,7 +6303,7 @@ function ClassScheduleTab({ adminId }: { adminId: string }) {
                       <div className="flex gap-1.5 flex-shrink-0">
                         {ov && (
                           <button onClick={() => delOverride(ov.id)}
-                            className="text-[11px] px-2 py-1 rounded" style={{ background: "#da363322", color: "#f85149" }}>
+                            className="text-[11px] px-2 py-1 rounded" style={{ background: "#da363322", color: "#ff7070" }}>
                             <i className="fa-solid fa-trash text-[10px]" />
                           </button>
                         )}

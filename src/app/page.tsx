@@ -7,6 +7,7 @@ import Footer from "@/components/Footer";
 import TeamSection from "@/components/TeamSection";
 import QuickLinksList from "@/components/QuickLinksList";
 import ProjectsGrid from "@/components/ProjectsGrid";
+import StudentAvatar from "@/components/StudentAvatar";
 import { getStudentSession } from "@/lib/session";
 
 type Stats = {
@@ -49,25 +50,38 @@ export default function HomePage() {
 
         {/* ── Overview stats bar ── */}
         {stats && (
-          <div data-aos="fade-down" className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
-            {[
-              { icon: "fa-users",          label: "นักเรียน",        val: stats.students,        color: "var(--primary-color)", bg: "var(--primary-light)" },
-              { icon: "fa-right-to-bracket", label: "เข้าวันนี้",    val: stats.todayEntries,    color: "#059669", bg: "#ECFDF5" },
-              { icon: "fa-calendar-check", label: "การจองทั้งหมด",  val: stats.rooms,           color: "#F59E0B", bg: "#FFFBEB" },
-              { icon: "fa-comment-dots",   label: "ความคิดเห็น",    val: stats.feedbackTotal,   color: "var(--primary-dark)", bg: "var(--primary-light)" },
-            ].map(s => (
-              <div key={s.label} className="rounded-2xl border p-4 flex items-center gap-3"
-                style={{ background: s.bg, borderColor: s.color + "30" }}>
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                  style={{ background: s.color + "20" }}>
-                  <i className={`fa-solid ${s.icon} text-sm`} style={{ color: s.color }} />
-                </div>
+          <div data-aos="fade-down" className="mb-8 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
+            <div className="relative px-4 py-4 sm:px-5">
+              <div className="absolute inset-x-0 top-0 h-1 bg-[var(--primary-color)]" />
+              <div className="flex items-center gap-3">
+                <span className="grid h-11 w-11 place-items-center rounded-2xl border border-[var(--primary-color)] bg-white text-[var(--primary-dark)] shadow-[0_8px_24px_rgba(132,212,250,0.22)]">
+                  <i className="fa-solid fa-chart-line" />
+                </span>
                 <div>
-                  <div className="text-xl font-extrabold" style={{ color: s.color }}>{s.val.toLocaleString()}</div>
-                  <div className="text-[10px] font-bold" style={{ color: s.color + "cc" }}>{s.label}</div>
+                  <div className="text-base font-extrabold text-slate-900">ภาพรวมระบบ</div>
+                  <p className="mt-0.5 text-xs text-slate-500">ข้อมูลล่าสุดจาก ASIA-BOT Dashboard</p>
                 </div>
               </div>
+            </div>
+            <div className="grid grid-cols-2 border-t border-slate-100 sm:grid-cols-4">
+            {[
+              { icon: "fa-users",            label: "นักเรียน",       val: stats.students,      color: "var(--primary-dark)" },
+              { icon: "fa-right-to-bracket", label: "เข้าวันนี้",     val: stats.todayEntries,  color: "#059669" },
+              { icon: "fa-calendar-check",   label: "การจองทั้งหมด", val: stats.rooms,         color: "#F59E0B" },
+              { icon: "fa-comment-dots",     label: "ความคิดเห็น",   val: stats.feedbackTotal, color: "#14B8A6" },
+            ].map(s => (
+              <div key={s.label} className="group relative border-b border-r border-slate-100 p-4 transition-colors hover:bg-slate-50/70 last:border-r-0 sm:border-b-0">
+                <div className="absolute left-0 top-4 h-8 w-1 rounded-r-full bg-[var(--primary-color)] opacity-0 transition-opacity group-hover:opacity-100" />
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div className="text-xs font-bold text-slate-500">{s.label}</div>
+                  <span className="grid h-8 w-8 place-items-center rounded-xl border border-slate-100 bg-white shadow-sm">
+                    <i className={`fa-solid ${s.icon} text-sm`} style={{ color: s.color }} />
+                  </span>
+                </div>
+                <div className="text-3xl font-extrabold tracking-tight text-slate-900">{s.val.toLocaleString()}</div>
+              </div>
             ))}
+            </div>
           </div>
         )}
 
@@ -78,15 +92,13 @@ export default function HomePage() {
 
               {/* Greeting */}
               {session ? (
-                <div className="flex items-center gap-3 mb-5 p-3 rounded-xl bg-sky-50 border border-sky-100">
-                  <div className="w-10 h-10 rounded-xl bg-sky-500 flex items-center justify-center text-white font-bold text-base flex-shrink-0">
-                    {session.first_name?.[0]?.toUpperCase()}
-                  </div>
+                <div className="flex items-center gap-3 mb-5 p-3 rounded-xl bg-[rgba(132,212,250,0.12)] border border-[rgba(132,212,250,0.45)]">
+                  <StudentAvatar src={session.photo_url} name={`${session.first_name} ${session.last_name}`} size={40} rounded="xl" />
                   <div>
-                    <div className="text-sm font-bold text-sky-700">สวัสดี, {session.nickname || session.first_name}! 👋</div>
-                    <div className="text-[10px] text-sky-500">{session.program} · {session.department}</div>
+                    <div className="text-sm font-bold text-[var(--primary-dark)]">สวัสดี, {session.nickname || session.first_name}! 👋</div>
+                    <div className="text-[10px] text-slate-500">{session.program} · {session.department}</div>
                   </div>
-                  <Link href="/student" className="ml-auto text-xs text-sky-500 hover:text-sky-700 font-bold flex items-center gap-1">
+                  <Link href="/student" className="ml-auto text-xs text-[var(--primary-dark)] hover:text-slate-900 font-bold flex items-center gap-1">
                     บัตรของฉัน <i className="fa-solid fa-arrow-right text-[9px]" />
                   </Link>
                 </div>
@@ -127,16 +139,15 @@ export default function HomePage() {
               {/* Feature cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {[
-                  { href: "/class-track-room",      icon: "fa-chalkboard-user",  color: "var(--primary-color)", bg: "var(--primary-light)", label: "Class Track Room",      desc: "สถานะห้องเรียนแบบเรียลไทม์" },
-                  { href: "/student-entry-scanner", icon: "fa-qrcode",           color: "#059669", bg: "#ECFDF5", label: "Entry Scanner",         desc: "บันทึกการเข้า-ออกนักเรียน" },
-                  { href: "/roomly",                icon: "fa-calendar-check",   color: "#F59E0B", bg: "#FFFBEB", label: "จองห้องประชุม",          desc: "ระบบจองห้องออนไลน์" },
-                  { href: "/feedback",              icon: "fa-comment-dots",     color: "#14B8A6", bg: "#F0FDFA", label: "ความคิดเห็น",             desc: "ส่งข้อเสนอแนะและรายงาน" },
+                  { href: "/class-track-room",      icon: "fa-chalkboard-user", color: "var(--primary-dark)", label: "Class Track Room", desc: "สถานะห้องเรียนแบบเรียลไทม์" },
+                  { href: "/student-entry-scanner", icon: "fa-qrcode",          color: "#059669",              label: "Entry Scanner",    desc: "บันทึกการเข้า-ออกนักเรียน" },
+                  { href: "/roomly",                icon: "fa-calendar-check",  color: "#F59E0B",              label: "จองห้องประชุม",     desc: "ระบบจองห้องออนไลน์" },
+                  { href: "/feedback",              icon: "fa-comment-dots",    color: "#14B8A6",              label: "ความคิดเห็น",        desc: "ส่งข้อเสนอแนะและรายงาน" },
                 ].map(f => (
                   <Link key={f.href} href={f.href}
-                    className="flex items-center gap-3 p-3 rounded-xl border hover:shadow-sm transition-all group"
-                    style={{ background: f.bg, borderColor: f.color + "30" }}>
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                      style={{ background: f.color + "20" }}>
+                    className="group relative flex items-center gap-3 overflow-hidden rounded-xl border border-slate-100 bg-white p-3 transition-all hover:-translate-y-0.5 hover:border-slate-200 hover:shadow-sm">
+                    <span className="absolute inset-y-3 left-0 w-1 rounded-r-full bg-[var(--primary-color)] opacity-0 transition-opacity group-hover:opacity-100" />
+                    <div className="w-9 h-9 rounded-xl border border-slate-100 bg-white flex items-center justify-center flex-shrink-0 shadow-sm">
                       <i className={`fa-solid ${f.icon} text-sm`} style={{ color: f.color }} />
                     </div>
                     <div className="flex-1 min-w-0">

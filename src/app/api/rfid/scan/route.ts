@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { buildRfidScanFlexMessage, sendLineFlexMessage } from "@/lib/line";
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -30,6 +31,22 @@ function normalizeUid(uid: string) {
   return uid.trim().replace(/[\s:-]/g, "").toUpperCase();
 }
 
+function displayUid(uid: string) {
+  return uid.trim().replace(/\s/g, "").toUpperCase();
+}
+
+function colonUid(uid: string) {
+  const normalized = normalizeUid(uid);
+  return normalized.match(/.{1,2}/g)?.join(":") ?? normalized;
+}
+
+function uidCandidates(uid: string) {
+  const raw = uid.trim().replace(/\s/g, "").toUpperCase();
+  const compact = normalizeUid(uid);
+  const prefixed = raw.includes("-") ? raw : null;
+  return Array.from(new Set([raw, compact, colonUid(uid), prefixed].filter(Boolean) as string[]));
+}
+
 function bangkokDate() {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Bangkok",
@@ -48,10 +65,13 @@ function bangkokTime() {
 }
 
 function durationText(fromIso: string, toIso: string) {
-  const minutes = Math.max(0, Math.round((new Date(toIso).getTime() - new Date(fromIso).getTime()) / 60000));
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return h > 0 ? `${h} ชม. ${m} นาที` : `${m} นาที`;
+  const seconds = Math.max(0, Math.round((new Date(toIso).getTime() - new Date(fromIso).getTime()) / 1000));
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h} ชม. ${m} นาที ${s} วินาที`;
+  if (m > 0) return `${m} นาที ${s} วินาที`;
+  return `${s} วินาที`;
 }
 
 function durationMinutes(fromIso: string, toIso: string) {
@@ -85,6 +105,8 @@ type StudentForScan = {
   program: string;
   department: string | null;
   card_status: string | null;
+  photo_url?: string | null;
+  line_user_id?: string | null;
 };
 
 type CardLookupResult = {
@@ -102,23 +124,24 @@ type AttendanceLogSession = {
 };
 
 async function findStudentByUid(uid: string): Promise<CardLookupResult> {
+  const candidates = uidCandidates(uid);
   const rfidCardResult = await (supabase as any)
     .from("rfid_cards")
     .select("student_id, uid, status")
-    .eq("uid", uid)
+    .in("uid", candidates)
     .maybeSingle();
 
   if (!rfidCardResult.error && rfidCardResult.data) {
-    const { data: student, error: studentError } = await supabase
+    const { data: student, error: studentError } = await (supabase as any)
       .from("students")
-      .select("student_id, first_name, last_name, nickname, program, department")
+      .select("student_id, first_name, last_name, nickname, program, department, photo_url, line_user_id")
       .eq("student_id", rfidCardResult.data.student_id)
       .maybeSingle();
 
     if (studentError) throw new Error(studentError.message);
 
     return {
-      student: student ? { ...student, card_status: rfidCardResult.data.status } : null,
+      student: student ? ({ ...student, card_status: rfidCardResult.data.status } as StudentForScan) : null,
       cardStatus: rfidCardResult.data.status ?? null,
       source: "rfid_cards",
     };
@@ -132,20 +155,20 @@ async function findStudentByUid(uid: string): Promise<CardLookupResult> {
   const cardResult = await (supabase as any)
     .from("student_cards")
     .select("student_id, uid, card_status")
-    .eq("uid", uid)
+    .in("uid", candidates)
     .maybeSingle();
 
   if (!cardResult.error && cardResult.data) {
-    const { data: student, error: studentError } = await supabase
+    const { data: student, error: studentError } = await (supabase as any)
       .from("students")
-      .select("student_id, first_name, last_name, nickname, program, department")
+      .select("student_id, first_name, last_name, nickname, program, department, photo_url, line_user_id")
       .eq("student_id", cardResult.data.student_id)
       .maybeSingle();
 
     if (studentError) throw new Error(studentError.message);
 
     return {
-      student: student ? { ...student, card_status: cardResult.data.card_status } : null,
+      student: student ? ({ ...student, card_status: cardResult.data.card_status } as StudentForScan) : null,
       cardStatus: cardResult.data.card_status ?? null,
       source: "student_cards",
     };
@@ -156,17 +179,17 @@ async function findStudentByUid(uid: string): Promise<CardLookupResult> {
     throw new Error(cardResult.error.message);
   }
 
-  const { data: student, error } = await supabase
+  const { data: student, error } = await (supabase as any)
     .from("students")
-    .select("student_id, first_name, last_name, nickname, program, department, card_status")
-    .eq("uid", uid)
+    .select("student_id, first_name, last_name, nickname, program, department, card_status, photo_url, line_user_id")
+    .in("uid", candidates)
     .maybeSingle();
 
   if (error) throw new Error(error.message);
 
   return {
     student: student as StudentForScan | null,
-    cardStatus: student?.card_status ?? null,
+    cardStatus: (student as StudentForScan | null)?.card_status ?? null,
     source: "students",
   };
 }
@@ -311,7 +334,7 @@ async function verifyDevice(req: NextRequest, deviceId?: string | null, stationS
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({})) as ScanBody;
-    const uid = body.uid ? normalizeUid(body.uid) : "";
+    const uid = body.uid ? displayUid(body.uid) : "";
     const location = body.location && VALID_LOCATIONS.has(body.location) ? body.location : "school";
 
     if (!await verifyDevice(req, body.device_id ?? null, body.station_secret ?? null)) {
@@ -410,6 +433,26 @@ export async function POST(req: NextRequest) {
     const action = publicAction(session.action);
     const actionLabel = action === "checkin" ? "CHECK IN" : "CHECK OUT";
     const fullName = `${student.first_name} ${student.last_name}`.trim();
+    const flex = buildRfidScanFlexMessage({
+      action,
+      studentName: fullName,
+      studentId: student.student_id,
+      nickname: student.nickname,
+      program: student.program,
+      department: student.department,
+      studentPhotoUrl: student.photo_url ?? null,
+      location,
+      locationLabel: LOCATION_LABEL[location],
+      uid,
+      scannedAt: now,
+      duration: session.duration,
+    });
+    const nicknameText = student.nickname ? ` (${student.nickname})` : "";
+    const flexAltText = `แจ้งเตือน${action === "checkin" ? "เข้า" : "ออก"}${LOCATION_LABEL[location]} ${fullName}${nicknameText} รหัส ${student.student_id}`;
+    await Promise.allSettled([
+      process.env.LINE_GROUP_ATTEND ? sendLineFlexMessage(process.env.LINE_GROUP_ATTEND, flexAltText, flex) : Promise.resolve(),
+      student.line_user_id ? sendLineFlexMessage(student.line_user_id, flexAltText, flex) : Promise.resolve(),
+    ]);
 
     return NextResponse.json({
       status: "ok",

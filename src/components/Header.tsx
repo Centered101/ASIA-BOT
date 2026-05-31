@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { QUICK_LINKS, SITE_NAME, type QuickLink } from "@/lib/config";
 import { getStudentSession, clearStudentSession, type StudentSession } from "@/lib/session";
+import StudentAvatar from "@/components/StudentAvatar";
 
 export default function Header({ subtitle = "Overview" }: { subtitle?: string }) {
   const pathname = usePathname();
@@ -100,14 +101,9 @@ export default function Header({ subtitle = "Overview" }: { subtitle?: string })
               {session ? (
                 <>
                   <Link href="/student"
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-sky-100 bg-sky-50 hover:bg-sky-100 transition">
-                    <div className="w-6 h-6 rounded-lg bg-sky-500 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 overflow-hidden">
-                      {session.photo_url
-                        // eslint-disable-next-line @next/next/no-img-element
-                        ? <img src={session.photo_url} alt="" className="w-full h-full object-cover" />
-                        : (session.first_name?.[0]?.toUpperCase() ?? "S")}
-                    </div>
-                    <span className="text-sm font-bold text-sky-700 max-w-[100px] truncate">
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-[rgba(132,212,250,0.45)] bg-[rgba(132,212,250,0.12)] hover:bg-[rgba(132,212,250,0.2)] transition">
+                    <StudentAvatar src={session.photo_url} name={`${session.first_name} ${session.last_name}`} size={24} />
+                    <span className="text-sm font-bold text-[var(--primary-dark)] max-w-[100px] truncate">
                       {session.nickname || session.first_name}
                     </span>
                   </Link>
@@ -171,16 +167,11 @@ export default function Header({ subtitle = "Overview" }: { subtitle?: string })
 
           {/* Session info in mobile */}
           {session && (
-            <div className="mx-4 mb-3 flex items-center gap-3 px-3 py-2.5 rounded-2xl bg-sky-50 border border-sky-100">
-              <div className="w-9 h-9 rounded-xl bg-sky-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 overflow-hidden">
-                {session.photo_url
-                  // eslint-disable-next-line @next/next/no-img-element
-                  ? <img src={session.photo_url} alt="" className="w-full h-full object-cover" />
-                  : (session.first_name?.[0]?.toUpperCase() ?? "S")}
-              </div>
+            <div className="mx-4 mb-3 flex items-center gap-3 px-3 py-2.5 rounded-2xl bg-[rgba(132,212,250,0.12)] border border-[rgba(132,212,250,0.45)]">
+              <StudentAvatar src={session.photo_url} name={`${session.first_name} ${session.last_name}`} size={36} rounded="xl" />
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-bold text-sky-700 truncate">{session.first_name} {session.last_name}</div>
-                <div className="text-[10px] text-sky-500">{session.program} · {session.department}</div>
+                <div className="text-sm font-bold text-[var(--primary-dark)] truncate">{session.first_name} {session.last_name}</div>
+                <div className="text-[10px] text-slate-500">{session.program} · {session.department}</div>
               </div>
               <button onClick={handleLogout} className="text-red-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition">
                 <i className="fa-solid fa-arrow-right-from-bracket text-xs" />

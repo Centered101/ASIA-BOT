@@ -4,8 +4,9 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import StudentAvatar from "@/components/StudentAvatar";
 import { toast } from "sonner";
-import { getStudentSession } from "@/lib/session";
+import { getStudentSession, type StudentSession } from "@/lib/session";
 
 type Location = "school" | "library" | "meeting";
 type AttendanceRow = {
@@ -14,8 +15,16 @@ type AttendanceRow = {
   location: Location;
   checkin_time: string;
   checkout_time: string | null;
-  duration: number | null;
-  students?: { first_name: string; last_name: string; program: string; department: string; student_id: string } | null;
+  duration: string | number | null;
+  students?: {
+    first_name: string;
+    last_name: string;
+    nickname: string | null;
+    program: string;
+    department: string | null;
+    student_id: string;
+    photo_url: string | null;
+  } | null;
 };
 
 const LOC_CFG: Record<Location, { label: string; icon: string; color: string; bg: string; border: string }> = {
@@ -30,18 +39,27 @@ function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
 }
 function fmtDuration(min: number | null) {
-  if (!min) return "—";
+  if (min === null || min === undefined) return "—";
+  if (!Number.isFinite(min)) return "—";
+  if (min <= 0) return "—";
   const h = Math.floor(min / 60);
   const m = min % 60;
   return h > 0 ? `${h} ชม. ${m} นาที` : `${m} นาที`;
+}
+
+function durationLabel(value: AttendanceRow["duration"]) {
+  if (typeof value === "string") return value.trim() || "—";
+  return fmtDuration(value);
 }
 
 export default function StudentEntryScannerPage() {
   const router = useRouter();
 
   const [authed,    setAuthed]    = useState<boolean | null>(null); // null = checking
+  const [student,   setStudent]   = useState<StudentSession | null>(null);
   const [tab,       setTab]       = useState<Location>("school");
   const [date,      setDate]      = useState(todayISO());
+  const [search,    setSearch]    = useState("");
   const [data,      setData]      = useState<AttendanceRow[]>([]);
   const [loading,   setLoading]   = useState(false);
   const [lastUpdate, setLastUpdate] = useState("");
@@ -49,6 +67,7 @@ export default function StudentEntryScannerPage() {
   // Auth check
   useEffect(() => {
     const s = getStudentSession();
+    setStudent(s);
     setAuthed(!!s);
   }, []);
 
@@ -56,11 +75,17 @@ export default function StudentEntryScannerPage() {
     if (!authed) return;
     setLoading(true);
     try {
-      const res  = await fetch(`/api/attendance?date=${date}&location=${tab}`);
+      const params = new URLSearchParams({
+        date,
+        location: tab,
+      });
+      const res  = await fetch(`/api/attendance?${params.toString()}`);
       const json = await res.json();
       if (json.status === "success") {
         setData(json.data);
         setLastUpdate(new Date().toLocaleTimeString("th-TH"));
+      } else {
+        toast.error(json.message ?? "ไม่สามารถโหลดข้อมูลได้");
       }
     } catch {
       toast.error("ไม่สามารถโหลดข้อมูลได้");
@@ -113,6 +138,18 @@ export default function StudentEntryScannerPage() {
 
   const present = new Set(data.map(r => r.student_id)).size;
   const cfg = LOC_CFG[tab];
+  const openCount = data.filter(r => !r.checkout_time).length;
+  const checkedOutCount = data.filter(r => r.checkout_time).length;
+  const myRows = student ? data.filter(r => r.student_id === student.student_id) : [];
+  const myLatest = myRows[0] ?? null;
+  const q = search.trim().toLowerCase();
+  const filteredData = q
+    ? data.filter(row => {
+        const name = row.students ? `${row.students.first_name} ${row.students.last_name} ${row.students.nickname ?? ""}` : "";
+        return `${row.student_id} ${name}`.toLowerCase().includes(q);
+      })
+    : data;
+  const studentName = student ? `${student.first_name} ${student.last_name}`.trim() : "";
 
   return (
     <>
@@ -126,35 +163,91 @@ export default function StudentEntryScannerPage() {
         <div data-aos="fade-right" className="flex flex-col sm:flex-row sm:items-end gap-4 mb-6">
           <div className="flex-1">
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-800 leading-tight flex items-center gap-2">
-              <i className="fa-solid fa-qrcode text-sky-400 text-xl" />
+              <i className="fa-solid fa-qrcode text-[var(--primary-dark)] text-xl" />
               Student Entry Scanner
             </h1>
             <p className="text-sm text-slate-500 mt-1">ระบบแสดงผลการเข้าออกนักเรียนแบบเรียลไทม์</p>
+            {student && (
+              <div className="mt-3 inline-flex items-center gap-2 rounded-2xl border border-[var(--primary-color)] bg-[rgba(132,212,250,0.14)] px-3 py-2 text-xs text-slate-600 shadow-sm">
+                <StudentAvatar src={student.photo_url} name={studentName} size={32} />
+                <span>
+                  <b className="text-slate-800">{studentName || student.student_id}</b>
+                  <span className="ml-1 text-slate-400">({student.student_id}{student.nickname ? ` · ${student.nickname}` : ""})</span>
+                </span>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <input type="date" value={date} onChange={e => setDate(e.target.value)} max={todayISO()}
-              className="text-sm border border-slate-200 rounded-xl px-3 py-1.5 bg-white outline-none focus:border-sky-400 transition font-[inherit]" />
+              className="text-sm border border-slate-200 rounded-xl px-3 py-1.5 bg-white outline-none focus:border-[var(--primary-color)] transition font-[inherit]" />
             <button onClick={fetchData}
-              className="flex items-center gap-1.5 text-xs text-sky-500 bg-white border border-sky-100 px-3 py-1.5 rounded-xl hover:bg-sky-50 transition">
+              className="flex items-center gap-1.5 text-xs text-[var(--primary-dark)] bg-white border border-[rgba(132,212,250,0.45)] px-3 py-1.5 rounded-xl hover:bg-[rgba(132,212,250,0.12)] transition">
               <i className={`fa-solid fa-arrows-rotate${loading ? " fa-spin" : ""}`} />
             </button>
           </div>
         </div>
 
-        {/* ── Stats overview ── */}
-        <div data-aos="fade-up" className="grid grid-cols-3 gap-3 mb-6">
-          {(Object.entries(LOC_CFG) as [Location, typeof LOC_CFG[Location]][]).map(([loc, c]) => {
-            const cnt = data.filter(r => r.location === loc);
-            const uniq = new Set(cnt.map(r => r.student_id)).size;
-            return (
-              <div key={loc} className="rounded-2xl border p-3 sm:p-4 text-center"
-                style={{ background: c.bg, borderColor: c.border }}>
-                <i className={`fa-solid ${c.icon} text-lg mb-1`} style={{ color: c.color }} />
-                <div className="text-xl sm:text-2xl font-extrabold" style={{ color: c.color }}>{uniq}</div>
-                <div className="text-[10px] sm:text-xs font-bold" style={{ color: c.color }}>{c.label}</div>
+        <div data-aos="fade-up" className="mb-5 rounded-2xl border border-slate-100 bg-white p-3 shadow-sm">
+          <label className="mb-1.5 block text-xs font-bold text-slate-500">ค้นหารายชื่อ</label>
+          <div className="flex items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+            <i className="fa-solid fa-magnifying-glass text-xs text-slate-400" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="ค้นหาด้วยชื่อ ชื่อเล่น หรือรหัสนักเรียน"
+              className="w-full bg-transparent text-sm outline-none"
+            />
+            {search && (
+              <button onClick={() => setSearch("")} className="text-slate-300 hover:text-slate-500" aria-label="ล้างคำค้นหา">
+                <i className="fa-solid fa-xmark" />
+              </button>
+            )}
+          </div>
+          <p className="mt-1.5 text-[11px] text-slate-400">แสดงรายชื่อทุกคน และมีป้าย “ฉัน” กำกับบัญชีที่เข้าสู่ระบบอยู่</p>
+        </div>
+
+        {/* ── Overview ── */}
+        <div data-aos="fade-up" className="mb-6 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
+          <div className="relative px-4 py-4 sm:px-5">
+            <div className="absolute inset-x-0 top-0 h-1 bg-[var(--primary-color)]" />
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <span className="grid h-11 w-11 place-items-center rounded-2xl border border-[var(--primary-color)] bg-white text-[var(--primary-dark)] shadow-[0_8px_24px_rgba(132,212,250,0.22)]">
+                  <i className="fa-solid fa-chart-simple" />
+                </span>
+                <div>
+                  <div className="text-base font-extrabold text-slate-900">ภาพรวมการเข้าออก</div>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {cfg.label} · {new Date(date).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })}
+                  </p>
+                </div>
               </div>
-            );
-          })}
+              <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 shadow-sm">
+                <span className="h-2.5 w-2.5 rounded-full bg-[var(--primary-color)] shadow-[0_0_0_4px_rgba(132,212,250,0.2)]" />
+                สถานะของฉัน
+                <b className="text-slate-900">{myLatest ? (myLatest.checkout_time ? "ออกแล้ว" : "กำลังอยู่") : "ยังไม่มีรายการ"}</b>
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 border-t border-slate-100 sm:grid-cols-4">
+            {[
+              { label: "รายชื่อทั้งหมด", value: present, icon: "fa-users", color: "var(--primary-dark)" },
+              { label: "รายการสแกน", value: data.length, icon: "fa-qrcode", color: "#64748B" },
+              { label: "กำลังอยู่", value: openCount, icon: "fa-person-walking-arrow-right", color: "#16A34A" },
+              { label: "ออกแล้ว", value: checkedOutCount, icon: "fa-door-open", color: "#F97316" },
+            ].map((item) => (
+              <div key={item.label} className="group relative border-b border-r border-slate-100 p-4 transition-colors hover:bg-slate-50/70 last:border-r-0 sm:border-b-0">
+                <div className="absolute left-0 top-4 h-8 w-1 rounded-r-full bg-[var(--primary-color)] opacity-0 transition-opacity group-hover:opacity-100" />
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div className="text-xs font-bold text-slate-500">{item.label}</div>
+                  <span className="grid h-8 w-8 place-items-center rounded-xl border border-slate-100 bg-white shadow-sm">
+                    <i className={`fa-solid ${item.icon}`} style={{ color: item.color }} />
+                  </span>
+                </div>
+                <div className="text-3xl font-extrabold tracking-tight text-slate-900">{item.value}</div>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* ── Location tabs ── */}
@@ -189,8 +282,13 @@ export default function StudentEntryScannerPage() {
           ) : data.length === 0 ? (
             <div className="text-center py-16">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/status_room/mascot-greens.svg" alt="empty" className="w-20 h-20 mx-auto mb-4 opacity-60" />
+              <img src="/mascot/mascot-search.svg" alt="empty" className="w-20 h-20 mx-auto mb-4 opacity-60" />
               <p className="text-slate-400 text-sm">ไม่มีข้อมูลการเข้า{cfg.label}ในวันที่เลือก</p>
+            </div>
+          ) : filteredData.length === 0 ? (
+            <div className="text-center py-16">
+              <i className="fa-solid fa-magnifying-glass text-3xl text-slate-200 mb-4" />
+              <p className="text-slate-400 text-sm">ไม่พบข้อมูลที่ตรงกับคำค้นหา</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -198,8 +296,8 @@ export default function StudentEntryScannerPage() {
                 <thead>
                   <tr className="text-left text-xs text-slate-500 border-b border-slate-50">
                     <th className="px-4 py-2.5 font-bold">#</th>
+                    <th className="px-4 py-2.5 font-bold">นักเรียน</th>
                     <th className="px-4 py-2.5 font-bold">รหัสนักเรียน</th>
-                    <th className="px-4 py-2.5 font-bold">ชื่อ - นามสกุล</th>
                     <th className="px-4 py-2.5 font-bold hidden sm:table-cell">สาขา</th>
                     <th className="px-4 py-2.5 font-bold">เช็กอิน</th>
                     <th className="px-4 py-2.5 font-bold">เช็กเอาท์</th>
@@ -207,15 +305,33 @@ export default function StudentEntryScannerPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {data.map((row, i) => (
-                    <tr key={row.id} className="hover:bg-slate-50 transition-colors">
+                  {filteredData.map((row, i) => {
+                    const isMe = student?.student_id === row.student_id;
+                    return (
+                    <tr
+                      key={row.id}
+                      className="transition-colors hover:bg-slate-50"
+                    >
                       <td className="px-4 py-3 text-slate-400 text-xs">{i + 1}</td>
-                      <td className="px-4 py-3 font-mono text-xs text-slate-600">{row.student_id}</td>
                       <td className="px-4 py-3">
-                        <div className="font-bold text-slate-800 leading-tight text-xs">
+                        <div className="flex items-center gap-3">
+                          <StudentAvatar
+                            src={row.students?.photo_url}
+                            name={row.students ? `${row.students.first_name} ${row.students.last_name}` : row.student_id}
+                            size={36}
+                          />
+                          <div className="flex items-center gap-2 font-bold text-slate-800 leading-tight text-xs">
+                          {isMe && (
+                            <span className="rounded-full bg-[var(--primary-color)] px-2 py-0.5 text-[10px] font-extrabold text-slate-900">ฉัน</span>
+                          )}
+                          <span>
                           {row.students ? `${row.students.first_name} ${row.students.last_name}` : "—"}
+                          {row.students?.nickname ? ` (${row.students.nickname})` : ""}
+                          </span>
+                          </div>
                         </div>
                       </td>
+                      <td className="px-4 py-3 font-mono text-xs text-slate-600">{row.student_id}</td>
                       <td className="px-4 py-3 hidden sm:table-cell">
                         <span className="text-[10px] text-slate-500">
                           {row.students?.program ?? ""} {row.students?.department ?? ""}
@@ -236,10 +352,11 @@ export default function StudentEntryScannerPage() {
                         )}
                       </td>
                       <td className="px-4 py-3 hidden sm:table-cell text-xs text-slate-500">
-                        {fmtDuration(row.duration)}
+                        {durationLabel(row.duration)}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

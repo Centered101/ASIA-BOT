@@ -19,6 +19,17 @@ function normalizeUid(uid: string) {
   return uid.trim().replace(/[\s:-]/g, "").toUpperCase();
 }
 
+function displayUid(uid: string) {
+  return uid.trim().replace(/\s/g, "").toUpperCase();
+}
+
+function uidCandidates(uid: string) {
+  const raw = displayUid(uid);
+  const compact = normalizeUid(uid);
+  const colon = compact.match(/.{1,2}/g)?.join(":") ?? compact;
+  return Array.from(new Set([raw, compact, colon].filter(Boolean)));
+}
+
 async function verifyDevice(req: NextRequest, deviceId?: string | null, stationSecret?: string | null) {
   const envSecret = process.env.RFID_STATION_SECRET;
   const providedSecret = req.headers.get("x-device-key") ?? stationSecret ?? null;
@@ -44,7 +55,8 @@ async function verifyDevice(req: NextRequest, deviceId?: string | null, stationS
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({})) as ResetBody;
-    const uid = body.uid ? normalizeUid(body.uid) : "";
+    const uid = body.uid ? displayUid(body.uid) : "";
+    const candidates = uid ? uidCandidates(uid) : [];
     const studentId = body.student_id?.trim() ?? "";
     const status = body.status === "lost" ? "lost" : "inactive";
 
@@ -64,7 +76,7 @@ export async function POST(req: NextRequest) {
       .select("student_id");
 
     const result = uid
-      ? await query.eq("uid", uid)
+      ? await query.in("uid", candidates)
       : await query.eq("student_id", studentId).eq("status", "active");
 
     const missingRfidCardsTable = result.error?.code === "42P01" || /rfid_cards/i.test(result.error?.message ?? "");
@@ -80,7 +92,7 @@ export async function POST(req: NextRequest) {
       const { data: student } = await supabase
         .from("students")
         .select("student_id")
-        .eq("uid", uid)
+        .in("uid", candidates)
         .maybeSingle();
       if (student?.student_id) resolvedStudentId = student.student_id;
     }

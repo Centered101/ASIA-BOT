@@ -17,7 +17,6 @@ export const QUICK_LINKS: QuickLink[] = [
   { name: "โปรเจคนักเรียน",           path: "/projects",            icon: "fa-solid fa-folder-open",      desc: "ผลงานนักเรียน",       color: "#6366F1" },
   { name: "Class Track Room",          path: "/class-track-room",    icon: "fa-solid fa-chalkboard-user",  desc: "ติดตามห้องเรียน",     color: "#7C3AED" },
   { name: "Student Entry Scanner",     path: "/student-entry-scanner", icon: "fa-solid fa-qrcode",         desc: "สแกนเข้าโรงเรียน",   color: "#059669" },
-  { name: "RFID Station",              path: "/rfid",                icon: "fa-solid fa-microchip",        desc: "ESP32 RFID Console",  color: "#0F766E" },
   { name: "จองห้อง",                  path: "/roomly",               icon: "fa-solid fa-calendar-check",  desc: "จองห้องประชุม",       color: "#F59E0B" },
   { name: "สหกรณ์โรงเรียน",          path: "/shop",    role: "shop", icon: "fa-solid fa-store",           desc: "ซื้อสินค้าสหกรณ์",   color: "#EC4899" },
   { name: "เข้าสู่ระบบนักเรียน",    path: "/student", role: "student", icon: "fa-solid fa-id-card",      desc: "บัตรนักเรียนดิจิทัล", color: "#0EA5E9" },

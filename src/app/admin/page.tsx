@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, Suspense } from "react";
+import { memo, useEffect, useState, useCallback, useMemo, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { CustomField } from "@/lib/config";
+import { AMENITY_OPTIONS, getAmenityInfo } from "@/lib/amenities";
 import RfidConsole from "@/components/admin/RfidConsole";
 import { Chart, registerables } from "chart.js";
+import { Bar, Doughnut, Line, Radar } from "react-chartjs-2";
 import { toast } from "sonner";
 Chart.register(...registerables);
 
@@ -23,6 +25,8 @@ type Stats = {
   students: number; pendingBookings: number; totalBookings: number;
   feedbackTotal: number; feedbackPending: number; todayEntries: number;
   inactiveCards: number; lostCards: number; paidOrders: number;
+  pendingOrders: number; orderUpdates: number; pendingDataRequests: number;
+  rfidIssues: number; lowStockProducts: number;
 };
 
 type Booking = {
@@ -30,6 +34,16 @@ type Booking = {
   slot_id: number; slot_label: string; slot_start: string; slot_end: string;
   booking_date: string; student_id: string; student_name: string;
   student_phone: string | null; purpose: string; attendees: number | null;
+  purpose_clean?: string | null;
+  student_photo_url?: string | null; student_nickname?: string | null; student_program?: string | null; student_department?: string | null;
+  participants?: {
+    student_id: string;
+    name: string;
+    nickname?: string | null;
+    program?: string | null;
+    department?: string | null;
+    photo_url?: string | null;
+  }[];
   status: "pending" | "approved" | "rejected" | "cancelled";
   admin_note: string | null; created_at: string;
 };
@@ -55,7 +69,7 @@ type Student = {
 
 type EntryLog = {
   id: string; student_id: string | null; action: "in" | "out"; scanned_at: string;
-  students: { first_name: string; last_name: string; nickname: string | null; program: string; department: string } | null;
+  students: { first_name: string; last_name: string; nickname: string | null; program: string; department: string | null; photo_url?: string | null } | null;
 };
 
 type AttendanceLog = {
@@ -102,6 +116,7 @@ type NameChangeRequest = {
   reason: string | null; status: "pending" | "approved" | "rejected";
   admin_note: string | null; reviewed_by: string | null;
   created_at: string; updated_at: string;
+  students?: { first_name: string; last_name: string; nickname: string | null; program: string; department: string | null; photo_url?: string | null } | null;
 };
 
 type Room = {
@@ -129,6 +144,14 @@ function formatDate(s: string) {
 }
 function formatDateTime(s: string) {
   return new Date(s).toLocaleString("th-TH", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+function todayISODate() {
+  return new Date().toISOString().slice(0, 10);
+}
+function shiftISODate(date: string, days: number) {
+  const d = new Date(`${date}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
 // ─── Avatar ───────────────────────────────────────────────────────────────────
@@ -172,13 +195,13 @@ function ViewToggle({ mode, onChange }: { mode: ViewMode; onChange: (m: ViewMode
     { id: "card", icon: "fa-id-card", label: "Card" },
   ];
   return (
-    <div className="flex gap-1 p-0.5 rounded-xl" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+    <div className="flex gap-1 p-1 rounded-xl shadow-inner" style={{ background: "#111111", border: "1px solid #2a2a2a" }}>
       {modes.map((m) => (
         <button key={m.id} onClick={() => onChange(m.id)} title={m.label}
-          className="px-2.5 py-1.5 rounded-lg text-xs transition-all"
+          className="w-9 h-8 inline-flex items-center justify-center rounded-lg text-xs transition-all"
           style={mode === m.id
-            ? { background: ADMIN_PRIMARY, color: "#fff" }
-            : { color: "#636363" }}>
+            ? { background: ADMIN_PRIMARY, color: "#fff", boxShadow: "0 8px 18px rgba(255,112,112,0.25)" }
+            : { color: "#636363", background: "transparent" }}>
           <i className={`fa-solid ${m.icon}`} />
         </button>
       ))}
@@ -193,7 +216,8 @@ const CARD_STATUS: Record<string, string> = { active: "บัตรใช้ง�
 
 // ─── Navigation Config ────────────────────────────────────────────────────────
 
-type NavItem = { id: string; label: string; icon: string; badge?: string };
+type AdminRole = "superadmin" | "admin" | "staff";
+type NavItem = { id: string; label: string; icon: string; badge?: string; children?: NavItem[] };
 type NavSection = { title: string | null; items: NavItem[] };
 
 const NAV_SECTIONS: NavSection[] = [
@@ -205,8 +229,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: "นักเรียน",
     items: [
       { id: "students",        label: "นักเรียน",            icon: "fa-graduation-cap" },
-      { id: "name_requests",   label: "ขอเปลี่ยนชื่อ",      icon: "fa-pen-to-square" },
-      { id: "data_requests",   label: "ขอแก้ไขข้อมูล",      icon: "fa-file-pen" },
+      { id: "data_requests",   label: "คำขอข้อมูลนักเรียน",  icon: "fa-id-card", badge: "pendingDataRequests" },
     ],
   },
   {
@@ -216,20 +239,21 @@ const NAV_SECTIONS: NavSection[] = [
       { id: "checkin_school",  label: "เช็กชื่อ โรงเรียน",   icon: "fa-school" },
       { id: "checkin_library", label: "เช็กชื่อ ห้องสมุด",    icon: "fa-book-open" },
       { id: "checkin_meeting", label: "เช็กชื่อ ห้องประชุม",  icon: "fa-door-open" },
-      { id: "rfid",            label: "RFID Controller",      icon: "fa-microchip" },
+      { id: "rfid",            label: "RFID Controller",      icon: "fa-microchip", badge: "rfidIssues" },
     ],
   },
   {
     title: "จองห้อง",
     items: [
-      { id: "bookings", label: "รายการจองห้อง", icon: "fa-calendar-check" },
+      { id: "bookings", label: "รายการจองห้อง", icon: "fa-calendar-check", badge: "pendingBookings" },
+      { id: "rooms",    label: "จัดการห้อง",     icon: "fa-door-open" },
     ],
   },
   {
     title: "สหกรณ์ โรงเรียน",
     items: [
-      { id: "products",   label: "สินค้า",  icon: "fa-box" },
-      { id: "shoporders", label: "ออเดอร์", icon: "fa-receipt" },
+      { id: "products",   label: "สินค้า",  icon: "fa-box", badge: "lowStockProducts" },
+      { id: "shoporders", label: "ออเดอร์", icon: "fa-receipt", badge: "orderUpdates" },
     ],
   },
   {
@@ -243,7 +267,15 @@ const NAV_SECTIONS: NavSection[] = [
     title: "การเรียนการสอน",
     items: [
       { id: "class_groups",   label: "กลุ่มเรียน",  icon: "fa-users-rectangle" },
-      { id: "class_schedule", label: "ตารางเรียน",  icon: "fa-calendar-days"   },
+      {
+        id: "class_schedule",
+        label: "ตารางเรียน",
+        icon: "fa-calendar-days",
+        children: [
+          { id: "class_schedule_weekly", label: "ตารางสัปดาห์", icon: "fa-calendar-week" },
+          { id: "class_schedule_override", label: "แก้วันพิเศษ", icon: "fa-calendar-xmark" },
+        ],
+      },
       { id: "teachers",       label: "ครูผู้สอน",   icon: "fa-chalkboard-user" },
     ],
   },
@@ -256,6 +288,54 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
 ];
+
+const TAB_ACCESS: Record<string, AdminRole[]> = {
+  dashboard: ["superadmin", "admin", "staff"],
+  students: ["superadmin", "admin", "staff"],
+  data_requests: ["superadmin", "admin"],
+  entrylogs: ["superadmin", "admin", "staff"],
+  checkin_school: ["superadmin", "admin", "staff"],
+  checkin_library: ["superadmin", "admin", "staff"],
+  checkin_meeting: ["superadmin", "admin", "staff"],
+  rfid: ["superadmin", "admin"],
+  bookings: ["superadmin", "admin", "staff"],
+  rooms: ["superadmin", "admin"],
+  products: ["superadmin", "admin", "staff"],
+  shoporders: ["superadmin", "admin", "staff"],
+  projects: ["superadmin", "admin", "staff"],
+  evaluations: ["superadmin", "admin", "staff"],
+  class_groups: ["superadmin", "admin"],
+  class_schedule: ["superadmin", "admin"],
+  class_schedule_weekly: ["superadmin", "admin"],
+  class_schedule_override: ["superadmin", "admin"],
+  teachers: ["superadmin", "admin"],
+  feedbacks: ["superadmin", "admin", "staff"],
+  admins: ["superadmin", "admin", "staff"],
+  settings: ["superadmin", "admin", "staff"],
+};
+
+function normalizeAdminRole(role: string): AdminRole {
+  return role === "superadmin" || role === "admin" || role === "staff" ? role : "staff";
+}
+
+function canAccessTab(role: string, tab: string) {
+  const allowed = TAB_ACCESS[tab];
+  if (!allowed) return false;
+  return allowed.includes(normalizeAdminRole(role));
+}
+
+function visibleNavSections(role: string): NavSection[] {
+  return NAV_SECTIONS
+    .map(sec => ({
+      ...sec,
+      items: sec.items
+        .filter(item => canAccessTab(role, item.id))
+        .map(item => item.children
+          ? { ...item, children: item.children.filter(child => canAccessTab(role, child.id)) }
+          : item),
+    }))
+    .filter(sec => sec.items.length > 0);
+}
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
@@ -435,21 +515,28 @@ function AdminLogin({ onLogin }: { onLogin: (a: AdminUser) => void }) {
 
 // ─── Admin Shell ──────────────────────────────────────────────────────────────
 
-const VALID_TABS = new Set(["dashboard","students","name_requests","data_requests","entrylogs","checkin_school","checkin_library","checkin_meeting","rfid","bookings","products","shoporders","projects","evaluations","class_groups","class_schedule","teachers","feedbacks","admins","settings"]);
+const VALID_TABS = new Set(["dashboard","students","data_requests","entrylogs","checkin_school","checkin_library","checkin_meeting","rfid","bookings","rooms","products","shoporders","projects","evaluations","class_groups","class_schedule","class_schedule_weekly","class_schedule_override","teachers","feedbacks","admins","settings"]);
 
 function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onLogout: () => void; onAvatarChange: (url: string | null) => void }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const rawTab = searchParams.get("tab") ?? "dashboard";
-  const activeTab = VALID_TABS.has(rawTab) ? rawTab : "dashboard";
+  const rawTabParam = searchParams.get("tab") ?? "dashboard";
+  const rawTab = rawTabParam === "name_requests" || rawTabParam === "name_change_requests" ? "data_requests" : rawTabParam;
+  const requestedTab = VALID_TABS.has(rawTab) ? rawTab : "dashboard";
+  const activeTab = canAccessTab(admin.role, requestedTab) ? requestedTab : "dashboard";
+  const navSections = useMemo(() => visibleNavSections(admin.role), [admin.role]);
 
   function setActiveTab(tab: string) {
+    if (!canAccessTab(admin.role, tab)) return;
+    setSidebarOpen(false);
     router.push(`/admin?tab=${tab}`, { scroll: false });
   }
   const [stats, setStats] = useState<Stats | null>(null);
   const [now, setNow] = useState(new Date());
   const [showAddStudent, setShowAddStudent] = useState(false);
   const [studentsRefreshKey, setStudentsRefreshKey] = useState(0);
+  const [refreshingStats, setRefreshingStats] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     adminFetch("/api/admin/stats", admin.admin_id)
@@ -462,21 +549,44 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
     return () => clearInterval(t);
   }, []);
 
+  useEffect(() => {
+    if (requestedTab !== activeTab) router.replace(`/admin?tab=${activeTab}`, { scroll: false });
+  }, [activeTab, requestedTab, router]);
+
   const displayName = admin.nickname ?? admin.first_name ?? admin.username;
   const roleLabel = admin.role === "superadmin" ? "Super Administrator" : admin.role === "admin" ? "Administrator" : "Staff";
 
+  async function refreshStats() {
+    if (refreshingStats) return;
+    setRefreshingStats(true);
+    try {
+      const res = await adminFetch("/api/admin/stats", admin.admin_id);
+      const j = await res.json();
+      if (j.status === "success") setStats(j.data);
+    } finally {
+      setRefreshingStats(false);
+    }
+  }
+
   function getPageTitle() {
-    for (const sec of NAV_SECTIONS)
+    if (activeTab === "class_schedule_weekly") return "ตารางสัปดาห์";
+    if (activeTab === "class_schedule_override") return "แก้วันพิเศษ";
+    for (const sec of navSections)
       for (const item of sec.items)
         if (item.id === activeTab) return item.label;
     return "Dashboard";
   }
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: "#0c0c0c" }}>
+    <div className="flex h-[100dvh] overflow-hidden" style={{ background: "#0c0c0c" }}>
+
+      <div
+        className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity lg:hidden ${sidebarOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+        onClick={() => setSidebarOpen(false)}
+      />
 
       {/* ── Sidebar ── */}
-      <aside className="flex flex-col w-[240px] flex-shrink-0 h-screen overflow-hidden"
+      <aside className={`fixed lg:static inset-y-0 left-0 z-50 flex flex-col w-[280px] sm:w-[300px] lg:w-[240px] flex-shrink-0 h-[100dvh] overflow-hidden transition-transform duration-300 ease-out lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
         style={{ background: "#111111", borderRight: "1px solid #1f1f1f" }}>
 
         {/* Logo / org selector */}
@@ -491,11 +601,18 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
           <div className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0" style={{ color: "#636363" }}>
             <i className="fa-solid fa-chevron-up-down text-[9px]" />
           </div>
+          <button
+            className="lg:hidden w-8 h-8 rounded-md flex items-center justify-center"
+            style={{ color: "#888", background: "#1a1a1a", border: "1px solid #252525" }}
+            onClick={() => setSidebarOpen(false)}
+            aria-label="ปิดเมนู">
+            <i className="fa-solid fa-xmark text-xs" />
+          </button>
         </div>
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-2">
-          {NAV_SECTIONS.map((sec, si) => (
+          {navSections.map((sec, si) => (
             <div key={si} className={si > 0 ? "mt-3" : ""}>
               {sec.title && (
                 <div className="px-4 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-widest"
@@ -504,28 +621,53 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
                 </div>
               )}
               {sec.items.map((item) => {
-                const isActive = activeTab === item.id;
+                const isActive = activeTab === item.id || (item.id === "class_schedule" && activeTab.startsWith("class_schedule_"));
                 const badgeCount = item.badge && stats ? (stats as Record<string, number>)[item.badge] ?? 0 : 0;
                 return (
-                  <button key={item.id} onClick={() => setActiveTab(item.id)}
-                    className="w-full flex items-center gap-2.5 px-4 py-[7px] text-left text-[13px] transition-colors relative"
-                    style={{
-                      color: isActive ? "#ededed" : "#888",
-                      background: isActive ? "rgba(255,255,255,0.05)" : "transparent",
-                      boxShadow: isActive ? "inset 2px 0 0 #ff7070" : "none",
-                    }}
-                    onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "rgba(255,255,255,0.03)"; }}
-                    onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}>
-                    <i className={`fa-solid ${item.icon} w-[14px] text-center text-[11px] flex-shrink-0`}
-                      style={{ color: isActive ? "#ff7070" : "#555" }} />
-                    <span className="flex-1 truncate font-[450]">{item.label}</span>
-                    {item.badge && badgeCount > 0 && (
-                      <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full"
-                        style={{ background: "#ff707022", color: "#ff7070" }}>
-                        {badgeCount > 99 ? "99+" : badgeCount}
-                      </span>
+                  <div key={item.id}>
+                    <button onClick={() => setActiveTab(item.id)}
+                      className="w-full flex items-center gap-2.5 px-4 py-[7px] text-left text-[13px] transition-colors relative"
+                      style={{
+                        color: isActive ? "#ededed" : "#888",
+                        background: isActive ? "rgba(255,255,255,0.05)" : "transparent",
+                        boxShadow: isActive ? "inset 2px 0 0 #ff7070" : "none",
+                      }}
+                      onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "rgba(255,255,255,0.03)"; }}
+                      onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}>
+                      <i className={`fa-solid ${item.icon} w-[14px] text-center text-[11px] flex-shrink-0`}
+                        style={{ color: isActive ? "#ff7070" : "#555" }} />
+                      <span className="flex-1 truncate font-[450]">{item.label}</span>
+                      {item.children && (
+                        <i className={`fa-solid fa-chevron-${isActive ? "down" : "right"} text-[9px]`} style={{ color: "#555" }} />
+                      )}
+                      {item.badge && badgeCount > 0 && (
+                        <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                          style={{ background: "#ff707022", color: "#ff7070" }}>
+                          {badgeCount > 99 ? "99+" : badgeCount}
+                        </span>
+                      )}
+                    </button>
+                    {item.children && isActive && (
+                      <div className="py-1 pl-7 pr-2">
+                        {item.children.map(sub => {
+                          const subActive = activeTab === sub.id || (item.id === "class_schedule" && activeTab === "class_schedule" && sub.id === "class_schedule_weekly");
+                          return (
+                            <button key={sub.id} onClick={() => setActiveTab(sub.id)}
+                              className="w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-left text-[12px] transition-colors"
+                              style={{
+                                color: subActive ? "#ededed" : "#777",
+                                background: subActive ? "rgba(255,112,112,0.12)" : "transparent",
+                              }}
+                              onMouseEnter={e => { if (!subActive) e.currentTarget.style.background = "rgba(255,255,255,0.03)"; }}
+                              onMouseLeave={e => { if (!subActive) e.currentTarget.style.background = "transparent"; }}>
+                              <i className={`fa-solid ${sub.icon} w-[12px] text-center text-[10px]`} style={{ color: subActive ? "#ff7070" : "#555" }} />
+                              <span className="truncate">{sub.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     )}
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -539,44 +681,53 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
       </aside>
 
       {/* ── Right panel ── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
         {/* Topbar */}
-        <header className="flex-shrink-0 flex items-center justify-between px-6 h-[52px]"
+        <header className="flex-shrink-0 flex items-center justify-between gap-2 px-3 sm:px-4 lg:px-6 h-[52px]"
           style={{ borderBottom: "1px solid #1f1f1f", background: "#0c0c0c" }}>
 
           {/* Breadcrumb */}
-          <div className="flex items-center gap-2 text-[13px]">
-            <a href="/" style={{ color: "#555" }}>ASIA-BOT</a>
-            <i className="fa-solid fa-chevron-right text-[9px]" style={{ color: "#333" }} />
-            <a href="/admin" style={{ color: "#555" }}>Admin</a>
-            <i className="fa-solid fa-chevron-right text-[9px]" style={{ color: "#333" }} />
-            <span style={{ color: "#ededed" }}>{getPageTitle()}</span>
+          <div className="flex items-center gap-2 min-w-0 text-[13px]">
+            <button
+              className="lg:hidden w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0"
+              style={{ color: "#ededed", background: "#1a1a1a", border: "1px solid #252525" }}
+              onClick={() => setSidebarOpen(true)}
+              aria-label="เปิดเมนู">
+              <i className="fa-solid fa-bars text-xs" />
+            </button>
+            <a href="/" className="hidden sm:inline" style={{ color: "#555" }}>ASIA-BOT</a>
+            <i className="fa-solid fa-chevron-right text-[9px] hidden sm:inline" style={{ color: "#333" }} />
+            <a href="/admin" className="hidden sm:inline" style={{ color: "#555" }}>Admin</a>
+            <i className="fa-solid fa-chevron-right text-[9px] hidden sm:inline" style={{ color: "#333" }} />
+            <span className="truncate font-semibold" style={{ color: "#ededed" }}>{getPageTitle()}</span>
           </div>
 
           {/* Right actions */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
             <span className="text-[12px] font-mono tabular-nums hidden md:block" style={{ color: "#555" }}>
               {now.toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "numeric" })}
               {" "}{now.toLocaleTimeString("th-TH")}
             </span>
 
             <button
-              onClick={() => adminFetch("/api/admin/stats", admin.admin_id).then(r => r.json()).then(j => j.status === "success" && setStats(j.data))}
+              onClick={refreshStats}
+              disabled={refreshingStats}
               className="w-8 h-8 flex items-center justify-center rounded-md transition-colors"
-              style={{ color: "#555" }}
+              style={{ color: refreshingStats ? "#ff7070" : "#555", opacity: refreshingStats ? 0.85 : 1 }}
               onMouseEnter={e => { e.currentTarget.style.background = "#1f1f1f"; e.currentTarget.style.color = "#ededed"; }}
-              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#555"; }}>
-              <i className="fa-solid fa-rotate text-xs" />
+              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = refreshingStats ? "#ff7070" : "#555"; }}>
+              <i className={`fa-solid fa-rotate text-xs ${refreshingStats ? "animate-spin" : ""}`} />
             </button>
 
             {activeTab === "students" && admin.role !== "staff" && (
               <button onClick={() => setShowAddStudent(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold text-white transition-colors"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-[12px] font-semibold text-white transition-colors"
                 style={{ background: "#ff7070" }}
                 onMouseEnter={e => { e.currentTarget.style.background = "#ff8585"; }}
                 onMouseLeave={e => { e.currentTarget.style.background = "#ff7070"; }}>
-                <i className="fa-solid fa-user-plus text-[11px]" /> เพิ่มนักเรียน
+                <i className="fa-solid fa-user-plus text-[11px]" />
+                <span className="hidden sm:inline">เพิ่มนักเรียน</span>
               </button>
             )}
 
@@ -591,27 +742,33 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
 
         {/* Page content */}
         <main className="flex-1 overflow-auto" style={{ background: "#0c0c0c" }}>
-          <div className="p-6">
+          <div className="p-3 sm:p-4 lg:p-6 min-w-0">
             {activeTab === "dashboard"       && <DashboardTab   adminId={admin.admin_id} stats={stats} />}
             {activeTab === "students"        && <StudentsTab    adminId={admin.admin_id} refreshKey={studentsRefreshKey} role={admin.role} />}
-            {activeTab === "name_requests"   && <AllRequestsTab adminId={admin.admin_id} kind="name" />}
-            {activeTab === "data_requests"   && <AllRequestsTab adminId={admin.admin_id} kind="data" />}
+            {activeTab === "data_requests"   && <AllRequestsTab adminId={admin.admin_id} />}
             {activeTab === "entrylogs"       && <EntryLogsTab   adminId={admin.admin_id} />}
             {activeTab === "checkin_school"  && <AttendanceLocationTab adminId={admin.admin_id} location="school" />}
             {activeTab === "checkin_library" && <AttendanceLocationTab adminId={admin.admin_id} location="library" />}
             {activeTab === "checkin_meeting" && <AttendanceLocationTab adminId={admin.admin_id} location="meeting" />}
             {activeTab === "rfid"            && <RfidConsole />}
-            {activeTab === "bookings"        && <BookingsTab    adminId={admin.admin_id} />}
+            {activeTab === "bookings"        && <BookingsTab    adminId={admin.admin_id} view="bookings" />}
+            {activeTab === "rooms"           && <BookingsTab    adminId={admin.admin_id} view="rooms" />}
             {activeTab === "feedbacks"       && <FeedbacksTab   adminId={admin.admin_id} />}
             {activeTab === "products"        && <ProductsTab    adminId={admin.admin_id} role={admin.role} />}
             {activeTab === "shoporders"      && <ShopOrdersTab  adminId={admin.admin_id} />}
-            {activeTab === "projects"        && <ProjectsTab    adminId={admin.admin_id} onViewEvals={tab => setActiveTab(tab)} />}
+            {activeTab === "projects"        && <ProjectsTab    adminId={admin.admin_id} role={admin.role} onViewEvals={tab => setActiveTab(tab)} />}
             {activeTab === "evaluations"     && <EvaluationsTab adminId={admin.admin_id} />}
             {activeTab === "class_groups"    && <ClassGroupsTab adminId={admin.admin_id} />}
-            {activeTab === "class_schedule"  && <ClassScheduleTab adminId={admin.admin_id} />}
+            {(activeTab === "class_schedule" || activeTab === "class_schedule_weekly" || activeTab === "class_schedule_override") && (
+              <ClassScheduleTab
+                adminId={admin.admin_id}
+                activeView={activeTab === "class_schedule_override" ? "override" : "weekly"}
+                onViewChange={v => setActiveTab(v === "override" ? "class_schedule_override" : "class_schedule_weekly")}
+              />
+            )}
             {activeTab === "teachers"        && <TeachersTab    adminId={admin.admin_id} />}
             {activeTab === "admins"          && <AdminsTab      adminId={admin.admin_id} role={admin.role} onAvatarChange={onAvatarChange} />}
-            {activeTab === "settings"        && <SettingsTab    adminId={admin.admin_id} stats={stats} />}
+            {activeTab === "settings"        && <SettingsTab    adminId={admin.admin_id} adminName={[admin.first_name, admin.last_name].filter(Boolean).join(" ") || admin.admin_id} adminRole={admin.role} adminAvatar={admin.avatar} stats={stats} />}
           </div>
         </main>
 
@@ -912,6 +1069,7 @@ function DashboardTab({ adminId, stats }: { adminId: string; stats: Stats | null
   const [logs, setLogs] = useState<EntryLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
   const [search, setSearch] = useState("");
+  const [date, setDate] = useState(todayISODate());
   const [selectedLog, setSelectedLog] = useState<EntryLog | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [studentInfoLoading, setStudentInfoLoading] = useState(false);
@@ -920,11 +1078,12 @@ function DashboardTab({ adminId, stats }: { adminId: string; stats: Stats | null
   const cardsChartRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
-    adminFetch("/api/entry-logs", adminId)
+    setLoadingLogs(true);
+    adminFetch(`/api/entry-logs?date=${date}`, adminId)
       .then((r) => r.json())
       .then((j) => { if (j.status === "success") setLogs(j.data ?? []); })
       .finally(() => setLoadingLogs(false));
-  }, [adminId]);
+  }, [adminId, date]);
 
   const filtered = logs.filter((l) => {
     if (!search) return true;
@@ -933,7 +1092,7 @@ function DashboardTab({ adminId, stats }: { adminId: string; stats: Stats | null
     return (l.student_id ?? "").toLowerCase().includes(q) || name.toLowerCase().includes(q);
   });
 
-  // Compute real-time school presence from loaded logs (ordered newest-first)
+  // Compute daily school presence from loaded logs (ordered newest-first).
   const latestByStudent = new Map<string, "in" | "out">();
   for (const l of logs) {
     if (l.student_id && !latestByStudent.has(l.student_id)) {
@@ -982,7 +1141,7 @@ function DashboardTab({ adminId, stats }: { adminId: string; stats: Stats | null
   useChart(systemChartRef, () => ({
     type: "bar",
     data: {
-      labels: ["นักเรียน", "เข้าวันนี้", "จองห้อง", "ออเดอร์", "Feedback"],
+      labels: ["นักเรียน", "เข้าออกวันที่เลือก", "จองห้อง", "ออเดอร์", "Feedback"],
       datasets: [{
         label: "จำนวน",
         data: [
@@ -1083,7 +1242,7 @@ function DashboardTab({ adminId, stats }: { adminId: string; stats: Stats | null
         <div className="rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
           <div className="flex items-center gap-2 mb-3">
             <i className="fa-solid fa-person-walking-arrow-right text-sm" style={{ color: "#ff7070" }} />
-            <span className="font-bold text-white text-sm">เข้าออกวันนี้</span>
+            <span className="font-bold text-white text-sm">เข้าออกตามวันที่เลือก</span>
           </div>
           <div className="relative h-[240px]">
             <canvas ref={attendanceChartRef} />
@@ -1106,9 +1265,24 @@ function DashboardTab({ adminId, stats }: { adminId: string; stats: Stats | null
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid #3e3e3e" }}>
           <div className="flex items-center gap-2">
             <i className="fa-solid fa-wave-square text-sm" style={{ color: "#9e9e9e" }} />
-            <span className="font-bold text-white text-sm">สถานะนักเรียน Real-time</span>
+            <span className="font-bold text-white text-sm">สถานะนักเรียนรายวัน</span>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "#2a2a2a", color: "#9e9e9e", border: "1px solid #3e3e3e" }}>
+              {new Date(`${date}T00:00:00`).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })}
+            </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <button onClick={() => setDate(shiftISODate(date, -1))} className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-[#9e9e9e]" style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }}>
+              <i className="fa-solid fa-chevron-left" />
+            </button>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-mono text-white outline-none"
+              style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }} />
+            <button onClick={() => setDate(todayISODate())} className="px-3 py-1.5 rounded-lg text-xs font-bold text-white" style={{ background: "#ff7070" }}>
+              วันนี้
+            </button>
+            <button onClick={() => setDate(shiftISODate(date, 1))} disabled={date >= todayISODate()} className="px-2.5 py-1.5 rounded-lg text-xs font-bold disabled:opacity-40 text-[#9e9e9e]" style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }}>
+              <i className="fa-solid fa-chevron-right" />
+            </button>
             <div className="relative">
               <i className="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-[#636363] text-xs" />
               <input placeholder="ค้นหาชื่อ / รหัส" value={search} onChange={(e) => setSearch(e.target.value)}
@@ -1131,54 +1305,55 @@ function DashboardTab({ adminId, stats }: { adminId: string; stats: Stats | null
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="w-full min-w-[1040px] text-xs">
               <thead>
                 <tr style={{ borderBottom: "1px solid #3e3e3e" }}>
-                  {["รหัส", "ชื่อนักเรียน", "ระดับชั้น", "สถานะ", "SCAN ล่าสุด", "จุดสแกน", ""].map((h) => (
-                    <th key={h} className="text-left px-4 py-3 font-semibold" style={{ color: "#9e9e9e" }}>{h}</th>
+                  {["รหัส", "นักเรียน", "ชื่อเล่น", "ระดับ/สาขา", "สถานะ", "SCAN ล่าสุด", "จุดสแกน", ""].map((h) => (
+                    <th key={h} className="text-left px-4 py-3 font-semibold whitespace-nowrap" style={{ color: "#9e9e9e" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {filtered.slice(0, 30).map((l) => (
+                {filtered.slice(0, 100).map((l) => (
                   <tr key={l.id} onClick={() => openStudentInfo(l)} className="transition-colors cursor-pointer" style={{ borderBottom: "1px solid #2a2a2a" }}
                     onMouseEnter={(e) => (e.currentTarget.style.background = "#2a2a2a")}
                     onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
-                    <td className="px-4 py-3 font-mono text-[#9e9e9e]">{l.student_id ?? "—"}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="px-4 py-3 font-mono text-[#9e9e9e] whitespace-nowrap w-[90px]">{l.student_id ?? "—"}</td>
+                    <td className="px-4 py-3 whitespace-nowrap w-[280px]">
                       <div className="flex items-center gap-2">
-                        <Avatar name={l.students ? `${l.students.first_name} ${l.students.last_name}` : (l.student_id ?? "?")} size={28} />
-                        <span className="font-semibold text-white">
+                        <Avatar name={l.students ? `${l.students.first_name} ${l.students.last_name}` : (l.student_id ?? "?")} url={l.students?.photo_url} size={32} rounded="lg" />
+                        <span className="font-semibold text-white whitespace-nowrap">
                           {l.students
                             ? <>{l.students.first_name} {l.students.last_name}{l.students.nickname && <span className="text-[#9e9e9e] font-normal ml-1">({l.students.nickname})</span>}</>
                             : <span style={{ color: "#636363" }}>ไม่ทราบ</span>}
                         </span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-[#9e9e9e]">
-                      {l.students ? l.students.program : "—"}
+                    <td className="px-4 py-3 text-[#9e9e9e] whitespace-nowrap w-[120px]">{l.students?.nickname ?? "—"}</td>
+                    <td className="px-4 py-3 text-[#9e9e9e] whitespace-nowrap w-[220px]">
+                      {l.students ? `${l.students.program}${l.students.department ? ` · ${l.students.department}` : ""}` : "—"}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap w-[120px]">
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${l.action === "in" ? "text-green-400" : "text-[#f0883e]"}`}
                         style={{ background: l.action === "in" ? "rgba(63,185,80,0.15)" : "rgba(240,136,62,0.15)" }}>
                         <i className={`fa-solid ${l.action === "in" ? "fa-right-to-bracket" : "fa-right-from-bracket"} mr-1 text-[9px]`} />
                         {l.action === "in" ? "อยู่โรงเรียน" : "ออกแล้ว"}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-[#9e9e9e] font-mono text-[10px] whitespace-nowrap">
+                    <td className="px-4 py-3 text-[#9e9e9e] font-mono text-[10px] whitespace-nowrap w-[150px]">
                       {new Date(l.scanned_at).toLocaleString("th-TH", { hour: "2-digit", minute: "2-digit", second: "2-digit", day: "numeric", month: "short" })}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 whitespace-nowrap w-[100px]">
                       <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold text-[#ff7070]"
                         style={{ background: "rgba(56,139,253,0.1)" }}>โรงเรียน</span>
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right whitespace-nowrap w-[48px]">
                       <i className="fa-solid fa-circle-info text-[#636363]" />
                     </td>
                   </tr>
                 ))}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={6} className="text-center py-10 text-[#636363]">ไม่มีข้อมูล</td></tr>
+                  <tr><td colSpan={8} className="text-center py-10 text-[#636363]">ไม่มีข้อมูล</td></tr>
                 )}
               </tbody>
             </table>
@@ -1299,12 +1474,22 @@ function RoomForm({ room, adminId, onClose, onSaved }: { room: Room | null; admi
   const [capacity,    setCapacity]    = useState(String(room?.capacity ?? "0"));
   const [location,    setLocation]    = useState(room?.location ?? "");
   const [imageUrl,    setImageUrl]    = useState(room?.image_url ?? "");
-  const [amenities,   setAmenities]   = useState((room?.amenities ?? []).join(", "));
+  const [amenities,   setAmenities]   = useState<string[]>(room?.amenities ?? []);
   const [saving,      setSaving]      = useState(false);
   const [error,       setError]       = useState("");
 
   const inputCls = "w-full px-3 py-2.5 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none";
   const inputStyle = { background: "#0c0c0c", border: "1px solid #3e3e3e" };
+  const availableAmenityOptions = AMENITY_OPTIONS.filter(opt => !amenities.includes(opt.value));
+
+  function addAmenity(value: string) {
+    if (!value || amenities.includes(value)) return;
+    setAmenities(prev => [...prev, value]);
+  }
+
+  function removeAmenity(value: string) {
+    setAmenities(prev => prev.filter(item => item !== value));
+  }
 
   async function handleSave() {
     if (!name.trim()) { setError("กรุณาระบุชื่อห้อง"); return; }
@@ -1315,7 +1500,7 @@ function RoomForm({ room, adminId, onClose, onSaved }: { room: Room | null; admi
       capacity: parseInt(capacity) || 0,
       location: location.trim() || null,
       image_url: imageUrl.trim() || null,
-      amenities: amenities.trim() ? amenities.split(",").map(s => s.trim()).filter(Boolean) : null,
+      amenities: amenities.length > 0 ? amenities : null,
     };
     const url  = room ? `/api/admin/rooms/${room.id}` : "/api/admin/rooms";
     const res  = await adminFetch(url, adminId, { method: room ? "PATCH" : "POST", body: JSON.stringify(body) });
@@ -1351,8 +1536,40 @@ function RoomForm({ room, adminId, onClose, onSaved }: { room: Room | null; admi
           </div>
           <div><label className="block text-xs font-semibold text-[#ededed] mb-1.5">รายละเอียด</label>
             <input value={description} onChange={e => setDescription(e.target.value)} placeholder="คำอธิบายห้อง" className={inputCls} style={inputStyle} /></div>
-          <div><label className="block text-xs font-semibold text-[#ededed] mb-1.5">สิ่งอำนวยความสะดวก <span className="font-normal text-[#636363]">(คั่นด้วยลูกน้ำ)</span></label>
-            <input value={amenities} onChange={e => setAmenities(e.target.value)} placeholder="เช่น โปรเจคเตอร์, ไวท์บอร์ด, แอร์" className={inputCls} style={inputStyle} /></div>
+          <div>
+            <label className="block text-xs font-semibold text-[#ededed] mb-1.5">
+              สิ่งอำนวยความสะดวก <span className="font-normal text-[#636363]">(เลือกจากรายการ)</span>
+            </label>
+            <select
+              value=""
+              onChange={e => addAmenity(e.target.value)}
+              className={inputCls}
+              style={inputStyle}>
+              <option value="">เลือกสิ่งอำนวยความสะดวกเพื่อเพิ่ม</option>
+              {availableAmenityOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            {amenities.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {amenities.map(item => {
+                  const info = getAmenityInfo(item);
+                  return (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => removeAmenity(item)}
+                      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[11px] font-semibold transition-colors"
+                      style={{ background: "#2a2a2a", color: "#ededed", border: "1px solid #3e3e3e" }}>
+                      <i className={info.icon} style={{ color: "#ff7070" }} />
+                      {info.label}
+                      <i className="fa-solid fa-xmark text-[10px]" style={{ color: "#636363" }} />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           {error && <div className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm" style={{ background: "rgba(255,112,112,0.1)", border: "1px solid rgba(255,112,112,0.3)", color: "#ff7070" }}><i className="fa-solid fa-circle-xmark" /> {error}</div>}
         </div>
         <div className="px-5 pb-6 flex gap-3 sticky bottom-0 pt-4" style={{ borderTop: "1px solid #3e3e3e", background: "#1c1c1c" }}>
@@ -1368,14 +1585,16 @@ function RoomForm({ room, adminId, onClose, onSaved }: { room: Room | null; admi
 
 // ─── Bookings Tab ─────────────────────────────────────────────────────────────
 
-function BookingsTab({ adminId }: { adminId: string }) {
-  const [subTab,    setSubTab]    = useState<"rooms" | "bookings">("bookings");
+function BookingsTab({ adminId, view }: { adminId: string; view: "rooms" | "bookings" }) {
+  const subTab = view;
   const [rooms,     setRooms]     = useState<Room[]>([]);
   const [roomsLoading, setRoomsLoading] = useState(true);
   const [editRoom,  setEditRoom]  = useState<Room | "new" | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
+  const [bookingSearch, setBookingSearch] = useState("");
+  const [roomSearch, setRoomSearch] = useState("");
   const [updating, setUpdating] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [noteEdit, setNoteEdit] = useState<{ id: string; value: string } | null>(null);
@@ -1435,19 +1654,48 @@ function BookingsTab({ adminId }: { adminId: string }) {
     cancelled: { bg: "rgba(72,79,88,0.3)",     text: "#9e9e9e" },
   };
 
-  const subBtnStyle = (active: boolean) => ({
-    background: active ? "#ff7070" : "#2a2a2a",
-    color: active ? "#fff" : "#9e9e9e",
-    border: `1px solid ${active ? "#ff7070" : "#3e3e3e"}`,
+  const filteredRooms = rooms.filter(r => {
+    const q = roomSearch.trim().toLowerCase();
+    if (!q) return true;
+    return r.name.toLowerCase().includes(q) ||
+      (r.location ?? "").toLowerCase().includes(q) ||
+      (r.description ?? "").toLowerCase().includes(q);
   });
 
-  const bookingStatusCounts = ["pending", "approved", "rejected", "cancelled"].map(s => bookings.filter(b => b.status === s).length);
-  const bookingRoomCounts = Object.entries(
-    bookings.reduce((acc, b) => {
-      acc[b.room_name] = (acc[b.room_name] ?? 0) + 1;
-      return acc;
-    }, {} as Record<string, number>)
-  ).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const filteredBookings = bookings.filter(b => {
+    const q = bookingSearch.trim().toLowerCase();
+    if (!q) return true;
+    return b.room_name.toLowerCase().includes(q) ||
+      b.student_name.toLowerCase().includes(q) ||
+      b.student_id.toLowerCase().includes(q) ||
+      b.purpose.toLowerCase().includes(q) ||
+      (b.student_phone ?? "").toLowerCase().includes(q) ||
+      (b.participants ?? []).some(p =>
+        p.student_id.toLowerCase().includes(q) ||
+        p.name.toLowerCase().includes(q) ||
+        (p.nickname ?? "").toLowerCase().includes(q)
+      );
+  });
+
+  const pendingCount = bookings.filter(b => b.status === "pending").length;
+  const approvedCount = bookings.filter(b => b.status === "approved").length;
+  const today = new Date().toISOString().slice(0, 10);
+  const todayCount = bookings.filter(b => b.booking_date === today).length;
+  const availableRooms = rooms.filter(r => r.status === "active" || r.status === "available").length;
+
+  const bookingStatusCounts = useMemo(
+    () => ["pending", "approved", "rejected", "cancelled"].map(s => bookings.filter(b => b.status === s).length),
+    [bookings]
+  );
+  const bookingRoomCounts = useMemo(
+    () => Object.entries(
+      bookings.reduce((acc, b) => {
+        acc[b.room_name] = (acc[b.room_name] ?? 0) + 1;
+        return acc;
+      }, {} as Record<string, number>)
+    ).sort((a, b) => b[1] - a[1]).slice(0, 6),
+    [bookings]
+  );
 
   useChart(bookingStatusChartRef, () => ({
     type: "doughnut",
@@ -1466,7 +1714,7 @@ function BookingsTab({ adminId }: { adminId: string }) {
       cutout: "68%",
       plugins: { legend: { position: "bottom", labels: { color: "#9e9e9e", boxWidth: 10, usePointStyle: true, font: { family: "Kanit, Sarabun, sans-serif" } } } },
     },
-  }), [bookings, filter]);
+  }), [bookingStatusCounts]);
 
   useChart(bookingRoomsChartRef, () => ({
     type: "bar",
@@ -1495,38 +1743,74 @@ function BookingsTab({ adminId }: { adminId: string }) {
 
   return (
     <div>
-      {/* Sub-tab toggle */}
-      <div className="flex gap-2 mb-5">
-        <button onClick={() => setSubTab("bookings")} className="px-4 py-2 rounded-xl text-sm font-semibold transition-all" style={subBtnStyle(subTab === "bookings")}>
-          <i className="fa-solid fa-calendar-check mr-1.5" />การจอง
-        </button>
-        <button onClick={() => setSubTab("rooms")} className="px-4 py-2 rounded-xl text-sm font-semibold transition-all" style={subBtnStyle(subTab === "rooms")}>
-          <i className="fa-solid fa-door-open mr-1.5" />จัดการห้อง
-        </button>
+      <div className="rounded-2xl p-4 mb-5" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${ADMIN_PRIMARY}18`, color: ADMIN_PRIMARY }}>
+                <i className={`fa-solid ${view === "rooms" ? "fa-door-open" : "fa-calendar-check"}`} />
+              </div>
+              <div>
+                <h2 className="text-lg font-black text-white leading-tight">{view === "rooms" ? "จัดการห้อง" : "รายการจองห้อง"}</h2>
+                <p className="text-xs mt-0.5" style={{ color: "#636363" }}>
+                  {view === "rooms" ? "เพิ่ม แก้ไข และจัดการสถานะห้องที่เปิดให้จอง" : "อนุมัติคำขอ ดูรายการจอง และภาพรวมการใช้งานห้อง"}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
+          {[
+            { label: "รอดำเนินการ", value: pendingCount, icon: "fa-hourglass-half", color: "#f59e0b" },
+            { label: "อนุมัติแล้ว", value: approvedCount, icon: "fa-circle-check", color: "#3fb950" },
+            { label: "วันนี้", value: todayCount, icon: "fa-calendar-day", color: ADMIN_PRIMARY },
+            { label: "ห้องพร้อมใช้", value: `${availableRooms}/${rooms.length}`, icon: "fa-door-open", color: "#84D4FA" },
+          ].map(k => (
+            <div key={k.label} className="rounded-xl p-3 flex items-center gap-3" style={{ background: "#0c0c0c", border: "1px solid #2a2a2a" }}>
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: `${k.color}18`, color: k.color }}>
+                <i className={`fa-solid ${k.icon} text-sm`} />
+              </div>
+              <div>
+                <div className="text-lg font-black text-white leading-none">{k.value}</div>
+                <div className="text-[10px] mt-1" style={{ color: "#9e9e9e" }}>{k.label}</div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* ── Room management ── */}
       {subTab === "rooms" && (
         <div>
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
             <DarkSectionHeader title="ห้องทั้งหมด" icon="fa-door-open" count={rooms.length} />
+            <div className="relative sm:w-72 sm:ml-auto">
+              <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: "#636363" }} />
+              <input value={roomSearch} onChange={e => setRoomSearch(e.target.value)}
+                placeholder="ค้นหาห้อง สถานที่ รายละเอียด..."
+                className="w-full pl-8 pr-3 py-2 rounded-xl text-sm text-white outline-none"
+                style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }} />
+            </div>
             <button onClick={() => setEditRoom("new")} className="ml-auto flex items-center gap-2 text-sm font-bold px-4 py-2 rounded-xl text-white" style={{ background: "#ff7070" }}>
               <i className="fa-solid fa-plus" /> เพิ่มห้อง
             </button>
           </div>
-          {roomsLoading ? <DarkSpinner /> : rooms.length === 0 ? <DarkEmpty text="ยังไม่มีห้อง" /> : (
+          {roomsLoading ? <DarkSpinner /> : filteredRooms.length === 0 ? <DarkEmpty text="ยังไม่มีห้อง" /> : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {rooms.map(r => (
-                <div key={r.id} className="rounded-2xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-                  <div className="h-36 relative overflow-hidden" style={{ background: "#2a2a2a" }}>
+              {filteredRooms.map(r => {
+                const isOpen = r.status === "active" || r.status === "available";
+                return (
+                <div key={r.id} className="rounded-2xl overflow-hidden group" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+                  <div className="h-72 relative overflow-hidden" style={{ background: "#2a2a2a" }}>
                     {r.image_url
                       // eslint-disable-next-line @next/next/no-img-element
-                      ? <img src={r.image_url} alt={r.name} className="w-full h-full object-cover" />
+                      ? <img src={r.image_url} alt={r.name} className="w-full h-full object-cover aspect-video" />
                       : <div className="w-full h-full flex items-center justify-center" style={{ color: "#636363" }}><i className="fa-solid fa-door-open text-3xl" /></div>
                     }
                     <div className="absolute top-2 right-2">
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: r.status === "available" ? "rgba(63,185,80,0.85)" : "rgba(255,112,112,0.85)" }}>
-                        {r.status === "available" ? "ว่าง" : r.status}
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: isOpen ? "rgba(63,185,80,0.85)" : "rgba(255,112,112,0.85)" }}>
+                        {isOpen ? "เปิดให้จอง" : "ปิด/ไม่พร้อม"}
                       </span>
                     </div>
                   </div>
@@ -1537,9 +1821,14 @@ function BookingsTab({ adminId }: { adminId: string }) {
                       <div><i className="fa-solid fa-users mr-1.5 text-[#636363]" />{r.capacity} คน</div>
                       {r.amenities && r.amenities.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1">
-                          {r.amenities.slice(0, 3).map((a, i) => (
-                            <span key={i} className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: "#2a2a2a", color: "#9e9e9e" }}>{a}</span>
-                          ))}
+                          {r.amenities.slice(0, 3).map((a, i) => {
+                            const info = getAmenityInfo(a);
+                            return (
+                              <span key={i} className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: "#2a2a2a", color: "#9e9e9e" }}>
+                                <i className={info.icon} /> {info.label}
+                              </span>
+                            );
+                          })}
                           {r.amenities.length > 3 && <span className="text-[9px]" style={{ color: "#636363" }}>+{r.amenities.length - 3}</span>}
                         </div>
                       )}
@@ -1554,7 +1843,7 @@ function BookingsTab({ adminId }: { adminId: string }) {
                     </div>
                   </div>
                 </div>
-              ))}
+              );})}
             </div>
           )}
           {editRoom !== null && (
@@ -1566,7 +1855,16 @@ function BookingsTab({ adminId }: { adminId: string }) {
       {/* ── Booking list ── */}
       {subTab === "bookings" && (
         <div>
-          <DarkSectionHeader title="รายการจอง" icon="fa-calendar-check" count={bookings.length} />
+          <div className="flex flex-col lg:flex-row lg:items-center gap-3 mb-4">
+            <DarkSectionHeader title="รายการจอง" icon="fa-calendar-check" count={filteredBookings.length} />
+            <div className="relative lg:w-80 lg:ml-auto">
+              <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: "#636363" }} />
+              <input value={bookingSearch} onChange={e => setBookingSearch(e.target.value)}
+                placeholder="ค้นหาผู้จอง ห้อง รหัส หรือวัตถุประสงค์..."
+                className="w-full pl-8 pr-3 py-2 rounded-xl text-sm text-white outline-none"
+                style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }} />
+            </div>
+          </div>
           {!loading && bookings.length > 0 && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-4 mb-4">
               <div className="rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
@@ -1595,34 +1893,53 @@ function BookingsTab({ adminId }: { adminId: string }) {
             ))}
           </div>
 
-          {loading ? <DarkSpinner /> : bookings.length === 0 ? <DarkEmpty text="ไม่มีการจอง" /> : (
+          {loading ? <DarkSpinner /> : filteredBookings.length === 0 ? <DarkEmpty text="ไม่มีการจอง" /> : (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-              {bookings.map((b) => {
+              {filteredBookings.map((b) => {
                 const sc = STATUS_COLOR[b.status] ?? { bg: "#2a2a2a", text: "#9e9e9e" };
                 const room = rooms.find(r => r.name === b.room_name);
                 return (
-                  <div key={b.id} className="rounded-2xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+                  <div key={b.id} className="rounded-2xl overflow-hidden" style={{ background: "#1c1c1c", border: `1px solid ${b.status === "pending" ? "rgba(245,158,11,.45)" : "#3e3e3e"}` }}>
                     {room?.image_url && (
-                      <div className="h-24 overflow-hidden">
+                      <div className="h-28 overflow-hidden relative">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={room.image_url} alt={b.room_name} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#1c1c1c] via-transparent to-transparent" />
                       </div>
                     )}
                     <div className="p-4">
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
-                            <span className="font-bold text-white text-sm truncate">{b.room_name}</span>
+                            <span className="font-bold text-white text-base truncate">{b.room_name}</span>
                             <span className="text-xs px-1.5 py-0.5 rounded-full font-semibold" style={{ background: sc.bg, color: sc.text }}>{BOOKING_STATUS[b.status]}</span>
                           </div>
                           <StudentInfoTrigger adminId={adminId} studentId={b.student_id} fallbackName={b.student_name}
-                            className="text-xs text-[#9e9e9e]">
-                            <i className="fa-solid fa-user mr-1 text-[#636363]" />{b.student_name}
+                            className="mt-3 flex items-center gap-3 rounded-xl p-2 transition-colors text-left bg-[#0c0c0c] border border-[#2a2a2a] hover:border-[#3e3e3e]">
+                            <Avatar name={b.student_name} url={b.student_photo_url} size={42} rounded="xl" />
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-sm font-bold text-white truncate">{b.student_name}</span>
+                              <span className="block text-[11px] truncate" style={{ color: "#636363" }}>
+                                {b.student_id}{b.student_nickname ? ` · ${b.student_nickname}` : ""}{b.student_department ? ` · ${b.student_department}` : ""}
+                              </span>
+                            </span>
+                            <span className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: "#1c1c1c", color: ADMIN_PRIMARY }}>
+                              <i className="fa-solid fa-circle-info text-xs" />
+                            </span>
                           </StudentInfoTrigger>
-                          <div className="text-[11px] text-[#636363] mt-0.5 flex flex-wrap gap-x-3">
-                            <span><i className="fa-solid fa-calendar mr-1" />{formatDate(b.booking_date)}</span>
-                            <span>{b.slot_start?.slice(0,5)}–{b.slot_end?.slice(0,5)}</span>
+                          <div className="mt-2 grid grid-cols-2 gap-2">
+                            <div className="rounded-xl px-2.5 py-2" style={{ background: "#0c0c0c", border: "1px solid #2a2a2a" }}>
+                              <div className="text-[9px]" style={{ color: "#636363" }}>วันที่</div>
+                              <div className="text-[11px] font-bold text-white"><i className="fa-solid fa-calendar mr-1 text-[#636363]" />{formatDate(b.booking_date)}</div>
+                            </div>
+                            <div className="rounded-xl px-2.5 py-2" style={{ background: "#0c0c0c", border: "1px solid #2a2a2a" }}>
+                              <div className="text-[9px]" style={{ color: "#636363" }}>เวลา</div>
+                              <div className="text-[11px] font-bold text-white"><i className="fa-solid fa-clock mr-1 text-[#636363]" />{b.slot_start?.slice(0,5)}–{b.slot_end?.slice(0,5)}</div>
+                            </div>
+                          </div>
+                          <div className="text-[11px] text-[#636363] mt-2 flex flex-wrap gap-x-3">
                             {b.attendees && <span><i className="fa-solid fa-users mr-1" />{b.attendees} คน</span>}
+                            <span><i className="fa-solid fa-hashtag mr-1" />{b.student_id}</span>
                           </div>
                         </div>
                         <button onClick={() => setExpanded(expanded === b.id ? null : b.id)}
@@ -1633,9 +1950,37 @@ function BookingsTab({ adminId }: { adminId: string }) {
 
                       {expanded === b.id && (
                         <div className="space-y-1.5 text-xs text-[#9e9e9e] mb-2 pb-2" style={{ borderBottom: "1px solid #2a2a2a" }}>
-                          <div>{b.purpose}</div>
+                          <div>{b.purpose_clean ?? b.purpose}</div>
                           <div><i className="fa-solid fa-id-card mr-1.5 text-[#636363]" />{b.student_id}</div>
+                          {(b.student_program || b.student_department) && (
+                            <div><i className="fa-solid fa-graduation-cap mr-1.5 text-[#636363]" />{[b.student_program, b.student_department].filter(Boolean).join(" · ")}</div>
+                          )}
                           {b.student_phone && <div><i className="fa-solid fa-phone mr-1.5 text-[#636363]" />{b.student_phone}</div>}
+                          {(b.participants?.length ?? 0) > 0 && (
+                            <div className="pt-2">
+                              <div className="text-[10px] font-bold mb-2" style={{ color: "#636363" }}>
+                                <i className="fa-solid fa-user-group mr-1.5" />สมาชิกกลุ่ม
+                              </div>
+                              <div className="grid grid-cols-1 gap-1.5">
+                                {b.participants!.map((p) => (
+                                  <StudentInfoTrigger key={p.student_id} adminId={adminId} studentId={p.student_id} fallbackName={p.name} fallbackPhotoUrl={p.photo_url}
+                                    className="flex items-center gap-2 rounded-xl p-2 transition-colors text-left bg-[#0c0c0c] border border-[#2a2a2a] hover:border-[#3e3e3e]">
+                                    <Avatar name={p.name} url={p.photo_url} size={34} rounded="lg" />
+                                    <span className="min-w-0 flex-1">
+                                      <span className="block text-xs font-bold text-white truncate">
+                                        {p.name}
+                                        {p.student_id === b.student_id && <span className="ml-1 text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: `${ADMIN_PRIMARY}18`, color: ADMIN_PRIMARY }}>ผู้จอง</span>}
+                                      </span>
+                                      <span className="block text-[10px] truncate" style={{ color: "#636363" }}>
+                                        {p.student_id}{p.nickname ? ` · ${p.nickname}` : ""}{p.department ? ` · ${p.department}` : ""}
+                                      </span>
+                                    </span>
+                                    <i className="fa-solid fa-circle-info text-[11px]" style={{ color: ADMIN_PRIMARY }} />
+                                  </StudentInfoTrigger>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                           <div className="pt-1">
                             {noteEdit?.id === b.id ? (
                               <div className="flex gap-1.5">
@@ -2050,20 +2395,21 @@ type ChangeRequest = {
   status: "pending" | "approved" | "rejected";
   admin_note: string | null; reviewed_by: string | null;
   created_at: string; updated_at: string;
-  students?: { first_name: string; last_name: string; nickname: string | null; program: string; department: string | null; student_phone?: string; entry_year?: string; nickname_val?: string } | null;
+  students?: { first_name: string; last_name: string; nickname: string | null; program: string; department: string | null; photo_url?: string | null; student_phone?: string; entry_year?: string; nickname_val?: string } | null;
   _current?: Record<string, string>;
 };
 
 type UnifiedRequest = {
   _id: string; _kind: "name" | "data"; _status: "pending" | "approved" | "rejected";
   _student_id: string; _student_name: string; _created_at: string;
-  _admin_note: string | null;
+  _admin_note: string | null; _student_photo_url?: string | null; _student_meta?: string;
   _rows: Array<{ label: string; old: string; new_val: string }>;
   _raw_id: string;
 };
 
 const CHANGE_FIELD_LABELS: Record<string, string> = {
   first_name: "ชื่อ", last_name: "นามสกุล", nickname: "ชื่อเล่น",
+  program: "ระดับ", student_id: "รหัสนักเรียน",
   student_phone: "เบอร์โทร", entry_year: "ปีที่เข้า", department: "สาขาวิชา",
 };
 
@@ -2084,7 +2430,7 @@ function AllRequestsTab({ adminId, kind = "all" }: { adminId: string; kind?: "al
 
   const fetch_ = useCallback(async () => {
     setLoading(true);
-    const qs = `status=${statusFilter}`;
+    const qs = "status=all";
     const [r1, r2] = await Promise.all([
       adminFetch(`/api/admin/change-requests?${qs}`, adminId).then(r => r.json()),
       adminFetch(`/api/admin/name-change-requests?${qs}`, adminId).then(r => r.json()),
@@ -2099,13 +2445,20 @@ function AllRequestsTab({ adminId, kind = "all" }: { adminId: string; kind?: "al
         const oldVal = stu ? ((stu as Record<string, string | null>)[field] ?? "—") : "—";
         return { label: CHANGE_FIELD_LABELS[field] ?? field, old: String(oldVal ?? "—"), new_val: String(newVal) };
       });
+      const meta = stu ? [stu.program, stu.department].filter(Boolean).join(" · ") : "";
       unified.push({ _id: `data-${cr.id}`, _kind: "data", _status: cr.status, _student_id: cr.student_id,
-        _student_name: stuName, _created_at: cr.created_at, _admin_note: cr.admin_note, _rows: rows, _raw_id: cr.id });
+        _student_name: stuName, _created_at: cr.created_at, _admin_note: cr.admin_note,
+        _student_photo_url: stu?.photo_url ?? null, _student_meta: meta,
+        _rows: rows, _raw_id: cr.id });
     }
 
     for (const nr of (r2.data ?? []) as NameChangeRequest[]) {
+      const stu = nr.students;
+      const stuName = stu ? `${stu.first_name} ${stu.last_name}${stu.nickname ? ` (${stu.nickname})` : ""}` : nr.student_id;
+      const meta = stu ? [stu.program, stu.department].filter(Boolean).join(" · ") : "";
       unified.push({ _id: `name-${nr.id}`, _kind: "name", _status: nr.status, _student_id: nr.student_id,
-        _student_name: nr.student_id, _created_at: nr.created_at, _admin_note: nr.admin_note,
+        _student_name: stuName, _created_at: nr.created_at, _admin_note: nr.admin_note,
+        _student_photo_url: stu?.photo_url ?? null, _student_meta: meta,
         _rows: [{ label: "ชื่อ-นามสกุล", old: `${nr.old_first_name} ${nr.old_last_name}`, new_val: `${nr.new_first_name} ${nr.new_last_name}` },
                 ...(nr.reason ? [{ label: "เหตุผล", old: "—", new_val: nr.reason }] : [])],
         _raw_id: nr.id });
@@ -2114,7 +2467,7 @@ function AllRequestsTab({ adminId, kind = "all" }: { adminId: string; kind?: "al
     unified.sort((a, b) => new Date(b._created_at).getTime() - new Date(a._created_at).getTime());
     setItems(kind === "all" ? unified : unified.filter(u => u._kind === kind));
     setLoading(false);
-  }, [adminId, statusFilter, kind]);
+  }, [adminId, kind]);
 
   useEffect(() => { fetch_(); }, [fetch_]);
 
@@ -2137,34 +2490,46 @@ function AllRequestsTab({ adminId, kind = "all" }: { adminId: string; kind?: "al
 
   const pendingCount = items.filter(i => i._status === "pending").length;
   const q = search.trim().toLowerCase();
+  const statusItems = statusFilter === "all"
+    ? items
+    : items.filter(item => item._status === statusFilter);
   const filteredItems = q
-    ? items.filter(item => {
+    ? statusItems.filter(item => {
         const text = [
           item._student_id,
           item._student_name,
+          item._student_meta ?? "",
           item._kind === "name" ? "เปลี่ยนชื่อ" : "แก้ไขข้อมูล",
           ...item._rows.flatMap(row => [row.label, row.old, row.new_val]),
         ].join(" ").toLowerCase();
         return text.includes(q);
       })
-    : items;
-  const title = kind === "name" ? "คำขอเปลี่ยนชื่อ" : kind === "data" ? "คำขอแก้ไขข้อมูล" : "คำขอแก้ไข";
+    : statusItems;
+  const title = kind === "name" ? "คำขอเปลี่ยนชื่อ" : kind === "data" ? "คำขอแก้ไขข้อมูล" : "คำขอข้อมูลนักเรียน";
+  const nameCount = items.filter(i => i._kind === "name").length;
+  const dataCount = items.filter(i => i._kind === "data").length;
+  const approvedCount = items.filter(i => i._status === "approved").length;
+  const rejectedCount = items.filter(i => i._status === "rejected").length;
 
   function RequestCard({ item, compact = false }: { item: UnifiedRequest; compact?: boolean }) {
     const st = REQ_STATUS_STYLE[item._status] ?? { bg: "#2a2a2a", text: "#9e9e9e" };
     const kindStyle = item._kind === "name"
       ? { bg: "rgba(255,112,112,0.14)", text: ADMIN_PRIMARY }
       : { bg: "rgba(255,112,112,0.10)", text: "#ff9a9a" };
+    const accent = item._status === "pending" ? "#e3b341" : item._status === "approved" ? "#3fb950" : "#ff7070";
 
     return (
-      <div className={`rounded-2xl ${compact ? "p-3" : "p-4"}`} style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+      <div className={`relative overflow-hidden rounded-2xl ${compact ? "p-3" : "p-4"}`} style={{ background: "linear-gradient(180deg,#1c1c1c,#141414)", border: `1px solid ${item._status === "pending" ? "rgba(227,179,65,.42)" : "#3e3e3e"}` }}>
+        <div className="absolute left-0 top-0 h-full w-1" style={{ background: accent }} />
         <div className="flex items-center justify-between gap-3 mb-3">
           <StudentInfoTrigger adminId={adminId} studentId={item._student_id} fallbackName={item._student_name}
             className="flex items-center gap-2.5 min-w-0">
-            <Avatar name={item._student_name} size={compact ? 32 : 36} rounded="xl" />
+            <Avatar name={item._student_name} url={item._student_photo_url} size={compact ? 36 : 44} rounded="xl" />
             <div className="min-w-0">
               <div className="font-bold text-white text-sm leading-tight truncate">{item._student_name}</div>
-              <div className="text-[11px]" style={{ color: "#636363" }}>{item._student_id}</div>
+              <div className="text-[11px] truncate" style={{ color: "#636363" }}>
+                {[item._student_name === item._student_id ? null : item._student_id, item._student_meta].filter(Boolean).join(" · ")}
+              </div>
             </div>
           </StudentInfoTrigger>
           <div className="flex items-center gap-1.5 flex-wrap justify-end">
@@ -2196,6 +2561,9 @@ function AllRequestsTab({ adminId, kind = "all" }: { adminId: string; kind?: "al
               )}
             </div>
           ))}
+          {compact && item._rows.length > 2 && (
+            <div className="px-3 py-1.5 text-[10px]" style={{ color: "#636363" }}>+ อีก {item._rows.length - 2} รายการ</div>
+          )}
         </div>
 
         <div className="flex items-center justify-between gap-2">
@@ -2203,12 +2571,12 @@ function AllRequestsTab({ adminId, kind = "all" }: { adminId: string; kind?: "al
           {item._status === "pending" && (
             <div className="flex gap-2">
               <button onClick={() => handleAction(item, "approved")} disabled={updating === item._id}
-                className="px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50"
+                className="px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50 transition-transform active:scale-95"
                 style={{ background: "rgba(63,185,80,0.15)", color: "#3fb950", border: "1px solid rgba(63,185,80,0.3)" }}>
                 <i className="fa-solid fa-check mr-1" />อนุมัติ
               </button>
               <button onClick={() => handleAction(item, "rejected")} disabled={updating === item._id}
-                className="px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50"
+                className="px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50 transition-transform active:scale-95"
                 style={{ background: "rgba(255,112,112,0.1)", color: ADMIN_PRIMARY, border: "1px solid rgba(255,112,112,0.3)" }}>
                 <i className="fa-solid fa-xmark mr-1" />ปฏิเสธ
               </button>
@@ -2222,8 +2590,44 @@ function AllRequestsTab({ adminId, kind = "all" }: { adminId: string; kind?: "al
 
   return (
     <div>
-      <DarkSectionHeader title={title} icon={kind === "name" ? "fa-pen-to-square" : "fa-file-pen"} count={filteredItems.length} />
-      <div className="flex flex-col sm:flex-row gap-3 mt-4 mb-4 flex-wrap">
+      <div className="rounded-2xl p-4 mb-4" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: `${ADMIN_PRIMARY}18`, color: ADMIN_PRIMARY }}>
+              <i className={`fa-solid ${kind === "name" ? "fa-pen-to-square" : kind === "data" ? "fa-file-pen" : "fa-id-card"}`} />
+            </div>
+            <div>
+              <h2 className="text-lg font-black text-white leading-tight">{title}</h2>
+              <p className="text-xs mt-0.5" style={{ color: "#636363" }}>ตรวจสอบคำขอจากนักเรียนพร้อมรูป โปรไฟล์ และรายการข้อมูลที่ต้องการเปลี่ยน</p>
+            </div>
+          </div>
+          <button onClick={fetch_} className="w-fit px-3 py-2 rounded-xl text-xs font-bold transition-colors"
+            style={{ background: "#2a2a2a", border: "1px solid #3e3e3e", color: "#9e9e9e" }}>
+            <i className="fa-solid fa-rotate mr-1.5" />รีเฟรช
+          </button>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 mt-4">
+          {[
+            { label: "ทั้งหมด", value: items.length, icon: "fa-layer-group", color: ADMIN_PRIMARY },
+            { label: "รอดำเนินการ", value: pendingCount, icon: "fa-hourglass-half", color: "#e3b341" },
+            { label: "อนุมัติแล้ว", value: approvedCount, icon: "fa-circle-check", color: "#3fb950" },
+            { label: "ปฏิเสธแล้ว", value: rejectedCount, icon: "fa-circle-xmark", color: "#ff7070" },
+            { label: kind === "name" ? "เปลี่ยนชื่อ" : kind === "data" ? "แก้ไขข้อมูล" : "ชื่อ/ข้อมูล", value: kind === "name" ? nameCount : kind === "data" ? dataCount : `${nameCount}/${dataCount}`, icon: "fa-id-card", color: "#84D4FA" },
+          ].map(card => (
+            <div key={card.label} className="rounded-xl p-3 flex items-center gap-3" style={{ background: "#0c0c0c", border: "1px solid #2a2a2a" }}>
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: `${card.color}18`, color: card.color }}>
+                <i className={`fa-solid ${card.icon} text-sm`} />
+              </div>
+              <div className="min-w-0">
+                <div className="font-black text-white leading-none">{card.value}</div>
+                <div className="text-[10px] mt-1 truncate" style={{ color: "#9e9e9e" }}>{card.label}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3 mb-4 flex-wrap">
         <div className="relative flex-1 min-w-[220px]">
           <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-[#636363] text-sm" />
           <input placeholder="ค้นหารหัส/ชื่อ/รายละเอียดคำขอ..." value={search} onChange={(e) => setSearch(e.target.value)}
@@ -2435,11 +2839,11 @@ function StudentsTab({ adminId, refreshKey, role }: { adminId: string; refreshKe
             {viewMode === "list" && (
               <div className="rounded-2xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full min-w-[960px] text-xs">
                     <thead>
                       <tr style={{ borderBottom: "1px solid #3e3e3e" }}>
                         {["นักเรียน","รหัส","ประเภท/สาขา","บัตร","เพิ่มเมื่อ",""].map(h => (
-                          <th key={h} className="px-3 py-2.5 text-left font-semibold" style={{ color: "#636363" }}>{h}</th>
+                          <th key={h} className="px-3 py-2.5 text-left font-semibold whitespace-nowrap" style={{ color: "#636363" }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -2449,20 +2853,20 @@ function StudentsTab({ adminId, refreshKey, role }: { adminId: string; refreshKe
                         const isAdmin = adminStudentIds.has(s.student_id);
                         return (
                           <tr key={s.id} style={{ borderBottom: "1px solid #2a2a2a" }}>
-                            <td className="px-3 py-2">
+                            <td className="px-3 py-2 w-[300px]">
                               <StudentInfoTrigger adminId={adminId} studentId={s.student_id} fallbackName={`${s.first_name} ${s.last_name}`} fallbackPhotoUrl={s.photo_url}
                                 className="flex items-center gap-2">
                                 <Avatar name={`${s.first_name} ${s.last_name}`} url={s.photo_url} size={28} rounded="lg" />
                                 <div>
-                                  <div className="font-semibold text-white">{s.first_name} {s.last_name} {s.nickname ? `(${s.nickname})` : ""}</div>
+                                  <div className="font-semibold text-white whitespace-nowrap">{s.first_name} {s.last_name} {s.nickname ? `(${s.nickname})` : ""}</div>
                                   {isAdmin && <span className="text-[9px] px-1 py-0.5 rounded font-bold" style={{ background: "rgba(255,112,112,0.15)", color: "#ff7070" }}>Admin</span>}
                                 </div>
                               </StudentInfoTrigger>
                             </td>
-                            <td className="px-3 py-2 text-[#9e9e9e]">{s.student_id}</td>
-                            <td className="px-3 py-2 text-[#9e9e9e]">{s.program}{s.department ? ` · ${s.department}` : ""}</td>
-                            <td className="px-3 py-2"><span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: cs.bg, color: cs.text }}>{CARD_STATUS[s.card_status]}</span></td>
-                            <td className="px-3 py-2 text-[#636363]">{formatDate(s.created_at)}</td>
+                            <td className="px-3 py-2 text-[#9e9e9e] whitespace-nowrap font-mono">{s.student_id}</td>
+                            <td className="px-3 py-2 text-[#9e9e9e] whitespace-nowrap">{s.program}{s.department ? ` · ${s.department}` : ""}</td>
+                            <td className="px-3 py-2 whitespace-nowrap"><span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: cs.bg, color: cs.text }}>{CARD_STATUS[s.card_status]}</span></td>
+                            <td className="px-3 py-2 text-[#636363] whitespace-nowrap">{formatDate(s.created_at)}</td>
                             <td className="px-3 py-2">
                               <div className="flex gap-1">
                                 {s.card_status !== "active"   && <DarkAction onClick={() => updateCard(s.id, "active")}   loading={updating === s.id} color="green" icon="fa-check"                label="" small />}
@@ -2488,7 +2892,7 @@ function StudentsTab({ adminId, refreshKey, role }: { adminId: string; refreshKe
                   const cs = CARD_STYLE[s.card_status] ?? { bg: "#2a2a2a", text: "#9e9e9e" };
                   const isAdmin = adminStudentIds.has(s.student_id);
                   return (
-                    <div key={s.id} className="rounded-2xl p-4 flex gap-4" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+                    <div key={s.id} className="rounded-2xl p-4 flex flex-col sm:flex-row gap-4" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
                       <StudentInfoTrigger adminId={adminId} studentId={s.student_id} fallbackName={`${s.first_name} ${s.last_name}`} fallbackPhotoUrl={s.photo_url}
                         className="flex-shrink-0">
                         <Avatar name={`${s.first_name} ${s.last_name}`} url={s.photo_url} size={56} rounded="xl" />
@@ -2501,14 +2905,14 @@ function StudentsTab({ adminId, refreshKey, role }: { adminId: string; refreshKe
                           {isAdmin && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ background: "rgba(255,112,112,0.15)", color: "#ff7070" }}><i className="fa-solid fa-shield-halved mr-0.5" />Admin</span>}
                           <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: cs.bg, color: cs.text }}>{CARD_STATUS[s.card_status]}</span>
                         </StudentInfoTrigger>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-0.5 text-[11px] mb-3" style={{ color: "#9e9e9e" }}>
-                          <div><i className="fa-solid fa-id-card mr-1 text-[#636363]" />{s.student_id}</div>
-                          <div><i className="fa-solid fa-graduation-cap mr-1 text-[#636363]" />{s.program}</div>
-                          {s.department && <div><i className="fa-solid fa-building mr-1 text-[#636363]" />{s.department}</div>}
-                          <div><i className="fa-solid fa-calendar mr-1 text-[#636363]" />รุ่น {s.entry_year}</div>
-                          <div><i className="fa-solid fa-phone mr-1 text-[#636363]" />{s.student_phone}</div>
-                          <div><i className="fa-solid fa-clock mr-1 text-[#636363]" />เพิ่ม {formatDate(s.created_at)}</div>
-                          {s.updated_at && s.updated_at !== s.created_at && <div><i className="fa-solid fa-rotate mr-1 text-[#636363]" />อัพเดต {formatDate(s.updated_at)}</div>}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-4 gap-y-1 text-[11px] mb-3" style={{ color: "#9e9e9e" }}>
+                          <div className="whitespace-nowrap"><i className="fa-solid fa-id-card mr-1 text-[#636363]" />{s.student_id}</div>
+                          <div className="whitespace-nowrap"><i className="fa-solid fa-graduation-cap mr-1 text-[#636363]" />{s.program}</div>
+                          {s.department && <div className="whitespace-nowrap"><i className="fa-solid fa-building mr-1 text-[#636363]" />{s.department}</div>}
+                          <div className="whitespace-nowrap"><i className="fa-solid fa-calendar mr-1 text-[#636363]" />รุ่น {s.entry_year}</div>
+                          <div className="whitespace-nowrap"><i className="fa-solid fa-phone mr-1 text-[#636363]" />{s.student_phone}</div>
+                          <div className="whitespace-nowrap"><i className="fa-solid fa-clock mr-1 text-[#636363]" />เพิ่ม {formatDate(s.created_at)}</div>
+                          {s.updated_at && s.updated_at !== s.created_at && <div className="whitespace-nowrap"><i className="fa-solid fa-rotate mr-1 text-[#636363]" />อัพเดต {formatDate(s.updated_at)}</div>}
                         </div>
                         <div className="flex gap-1.5 flex-wrap">
                           {s.card_status !== "active"   && <DarkAction onClick={() => updateCard(s.id, "active")}   loading={updating === s.id} color="green" icon="fa-check"                label="เปิดบัตร"  small />}
@@ -2604,21 +3008,23 @@ function StudentsTab({ adminId, refreshKey, role }: { adminId: string; refreshKe
 function EntryLogsTab({ adminId }: { adminId: string }) {
   const [logs, setLogs] = useState<EntryLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [date, setDate] = useState(todayISODate());
   const entryActionChartRef = useRef<HTMLCanvasElement | null>(null);
   const entryHourlyChartRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
-    adminFetch("/api/entry-logs", adminId)
+    setLoading(true);
+    adminFetch(`/api/entry-logs?date=${date}`, adminId)
       .then((r) => r.json())
       .then((j) => { if (j.status === "success") setLogs(j.data ?? []); })
       .finally(() => setLoading(false));
-  }, [adminId]);
+  }, [adminId, date]);
 
-  const todayStr = new Date().toDateString();
-  const todayCount = logs.filter((l) => new Date(l.scanned_at).toDateString() === todayStr).length;
+  const todayCount = logs.length;
   const inCount = logs.filter(l => l.action === "in").length;
   const outCount = logs.filter(l => l.action === "out").length;
   const hourly = Array.from({ length: 24 }, (_, h) => logs.filter(l => new Date(l.scanned_at).getHours() === h).length);
+  const hourlyKey = hourly.join(",");
 
   useChart(entryActionChartRef, () => ({
     type: "doughnut",
@@ -2661,11 +3067,26 @@ function EntryLogsTab({ adminId }: { adminId: string }) {
         y: { beginAtZero: true, grid: { color: "rgba(255,255,255,0.08)" }, ticks: { color: "#9e9e9e", precision: 0, font: { family: "Kanit, Sarabun, sans-serif" } } },
       },
     },
-  }), [hourly]);
+  }), [hourlyKey]);
 
   return (
     <div>
-      <DarkSectionHeader title={`บันทึกเข้า-ออก (วันนี้ ${todayCount} ครั้ง)`} icon="fa-list-ul" count={logs.length} />
+      <DarkSectionHeader title={`บันทึกเข้า-ออก (${new Date(`${date}T00:00:00`).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })})`} icon="fa-list-ul" count={logs.length} />
+      <div className="flex flex-wrap items-center gap-2 mt-4 mb-4">
+        <button onClick={() => setDate(shiftISODate(date, -1))} className="px-3 py-2 rounded-xl text-xs font-bold text-[#9e9e9e]" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+          <i className="fa-solid fa-chevron-left mr-1" /> วันก่อนหน้า
+        </button>
+        <input type="date" value={date} onChange={e => setDate(e.target.value)}
+          className="px-3 py-2 rounded-xl text-sm text-white outline-none"
+          style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }} />
+        <button onClick={() => setDate(todayISODate())} className="px-3 py-2 rounded-xl text-xs font-bold text-white" style={{ background: "#ff7070" }}>
+          วันนี้
+        </button>
+        <button onClick={() => setDate(shiftISODate(date, 1))} disabled={date >= todayISODate()} className="px-3 py-2 rounded-xl text-xs font-bold disabled:opacity-40 text-[#9e9e9e]" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+          วันถัดไป <i className="fa-solid fa-chevron-right ml-1" />
+        </button>
+        <span className="text-xs text-[#636363] ml-auto">แสดงข้อมูลวันต่อวัน · {todayCount} รายการ</span>
+      </div>
       {!loading && logs.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-4 mb-4">
           <div className="rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
@@ -2687,11 +3108,11 @@ function EntryLogsTab({ adminId }: { adminId: string }) {
       {loading ? <DarkSpinner /> : logs.length === 0 ? <DarkEmpty text="ไม่มีบันทึก" /> : (
         <div className="mt-4 rounded-2xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="w-full min-w-[980px] text-xs">
               <thead>
                 <tr style={{ borderBottom: "1px solid #3e3e3e" }}>
-                  {["เวลา", "รหัส", "ชื่อ", "สาขา", "สถานะ"].map((h) => (
-                    <th key={h} className="text-left px-4 py-3 font-semibold" style={{ color: "#9e9e9e" }}>{h}</th>
+                  {["เวลา", "รหัส", "นักเรียน", "ชื่อเล่น", "ระดับ/สาขา", "สถานะ", ""].map((h) => (
+                    <th key={h} className="text-left px-4 py-3 font-semibold whitespace-nowrap" style={{ color: "#9e9e9e" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -2703,22 +3124,29 @@ function EntryLogsTab({ adminId }: { adminId: string }) {
                     <td className="px-4 py-3 font-mono text-[#9e9e9e] whitespace-nowrap">
                       {new Date(l.scanned_at).toLocaleString("th-TH", { hour: "2-digit", minute: "2-digit", second: "2-digit", day: "numeric", month: "short" })}
                     </td>
-                    <td className="px-4 py-3 text-[#9e9e9e] font-mono">{l.student_id ?? "—"}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <StudentInfoTrigger adminId={adminId} studentId={l.student_id} fallbackName={l.students ? `${l.students.first_name} ${l.students.last_name}` : l.student_id}
+                    <td className="px-4 py-3 text-[#9e9e9e] font-mono whitespace-nowrap">{l.student_id ?? "—"}</td>
+                    <td className="px-4 py-3 whitespace-nowrap w-[260px]">
+                      <StudentInfoTrigger adminId={adminId} studentId={l.student_id} fallbackName={l.students ? `${l.students.first_name} ${l.students.last_name}` : l.student_id} fallbackPhotoUrl={l.students?.photo_url}
                         className="flex items-center gap-2">
-                        <Avatar name={l.students ? `${l.students.first_name} ${l.students.last_name}` : (l.student_id ?? "?")} size={28} />
+                        <Avatar name={l.students ? `${l.students.first_name} ${l.students.last_name}` : (l.student_id ?? "?")} url={l.students?.photo_url} size={32} rounded="lg" />
                         <span className="font-semibold text-white">
                           {l.students ? `${l.students.first_name} ${l.students.last_name}` : <span style={{ color: "#636363" }}>ไม่ทราบ</span>}
                         </span>
                       </StudentInfoTrigger>
                     </td>
-                    <td className="px-4 py-3 text-[#9e9e9e]">{l.students ? `${l.students.program}` : "—"}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 text-[#9e9e9e] whitespace-nowrap">{l.students?.nickname ?? "—"}</td>
+                    <td className="px-4 py-3 text-[#9e9e9e] whitespace-nowrap">{l.students ? `${l.students.program}${l.students.department ? ` · ${l.students.department}` : ""}` : "—"}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">
                       <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
                         style={{ background: l.action === "in" ? "rgba(63,185,80,0.15)" : "rgba(255,112,112,0.15)", color: l.action === "in" ? "#3fb950" : "#ff7070" }}>
                         {l.action === "in" ? "เข้า" : "ออก"}
                       </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <StudentInfoTrigger adminId={adminId} studentId={l.student_id} fallbackName={l.students ? `${l.students.first_name} ${l.students.last_name}` : l.student_id} fallbackPhotoUrl={l.students?.photo_url}
+                        className="text-[#636363] hover:text-white">
+                        <i className="fa-solid fa-circle-info" />
+                      </StudentInfoTrigger>
                     </td>
                   </tr>
                 ))}
@@ -2749,7 +3177,7 @@ function AttendanceLocationTab({ adminId, location }: { adminId: string; locatio
   const [rows, setRows] = useState<AttendanceLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayISODate);
   const actionChartRef = useRef<HTMLCanvasElement | null>(null);
   const hourlyChartRef = useRef<HTMLCanvasElement | null>(null);
   const meta = ATTENDANCE_LOCATION_META[location];
@@ -2779,6 +3207,7 @@ function AttendanceLocationTab({ adminId, location }: { adminId: string; locatio
   const closedCount = rows.filter(row => row.checkout_time).length;
   const uniqueStudents = new Set(rows.map(row => row.student_id)).size;
   const hourly = Array.from({ length: 24 }, (_, h) => rows.filter(row => new Date(row.checkin_time).getHours() === h).length);
+  const hourlyKey = hourly.join(",");
 
   useChart(actionChartRef, () => ({
     type: "doughnut",
@@ -2821,7 +3250,7 @@ function AttendanceLocationTab({ adminId, location }: { adminId: string; locatio
         y: { beginAtZero: true, grid: { color: "rgba(255,255,255,0.08)" }, ticks: { color: "#9e9e9e", precision: 0, font: { family: "Kanit, Sarabun, sans-serif" } } },
       },
     },
-  }), [hourly]);
+  }), [hourlyKey]);
 
   return (
     <div>
@@ -2872,9 +3301,18 @@ function AttendanceLocationTab({ adminId, location }: { adminId: string; locatio
             onFocus={(e) => e.currentTarget.style.borderColor = "#ff7070"}
             onBlur={(e) => e.currentTarget.style.borderColor = "#3e3e3e"} />
         </div>
+        <button onClick={() => setDate(shiftISODate(date, -1))} className="px-3 py-2 rounded-xl text-xs font-bold text-[#9e9e9e]" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+          <i className="fa-solid fa-chevron-left mr-1" /> ก่อนหน้า
+        </button>
         <input type="date" value={date} onChange={e => setDate(e.target.value)}
           className="px-3 py-2 rounded-xl text-sm text-white outline-none"
           style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }} />
+        <button onClick={() => setDate(todayISODate())} className="px-3 py-2 rounded-xl text-xs font-bold text-white" style={{ background: "#ff7070" }}>
+          วันนี้
+        </button>
+        <button onClick={() => setDate(shiftISODate(date, 1))} disabled={date >= todayISODate()} className="px-3 py-2 rounded-xl text-xs font-bold disabled:opacity-40 text-[#9e9e9e]" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+          ถัดไป <i className="fa-solid fa-chevron-right ml-1" />
+        </button>
         <button onClick={fetch_} className="px-3 py-2 rounded-xl text-xs font-bold text-white" style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>
           <i className={`fa-solid fa-rotate mr-1 ${loading ? "fa-spin" : ""}`} /> รีเฟรช
         </button>
@@ -2883,11 +3321,11 @@ function AttendanceLocationTab({ adminId, location }: { adminId: string; locatio
       {loading ? <DarkSpinner /> : filtered.length === 0 ? <DarkEmpty text={`ไม่มีข้อมูลเช็กชื่อ${meta.place}`} /> : (
         <div className="rounded-2xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="w-full min-w-[940px] text-xs">
               <thead>
                 <tr style={{ borderBottom: "1px solid #3e3e3e" }}>
                   {["นักเรียน", "รหัส", "เช็กอิน", "เช็กเอาท์", "เวลา", "ตำแหน่ง"].map(h => (
-                    <th key={h} className="text-left px-4 py-3 font-semibold" style={{ color: "#9e9e9e" }}>{h}</th>
+                    <th key={h} className="text-left px-4 py-3 font-semibold whitespace-nowrap" style={{ color: "#9e9e9e" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -2896,7 +3334,7 @@ function AttendanceLocationTab({ adminId, location }: { adminId: string; locatio
                   <tr key={row.id} className="transition-colors" style={{ borderBottom: "1px solid #2a2a2a" }}
                     onMouseEnter={(e) => (e.currentTarget.style.background = "#2a2a2a")}
                     onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td className="px-4 py-3 whitespace-nowrap w-[280px]">
                       <StudentInfoTrigger adminId={adminId} studentId={row.student_id} fallbackName={row.students ? `${row.students.first_name} ${row.students.last_name}` : row.student_id} fallbackPhotoUrl={row.students?.photo_url}
                         className="flex items-center gap-2">
                         <Avatar name={row.students ? `${row.students.first_name} ${row.students.last_name}` : row.student_id} url={row.students?.photo_url} size={28} rounded="lg" />
@@ -2906,13 +3344,13 @@ function AttendanceLocationTab({ adminId, location }: { adminId: string; locatio
                         </span>
                       </StudentInfoTrigger>
                     </td>
-                    <td className="px-4 py-3 text-[#9e9e9e] font-mono">{row.student_id}</td>
-                    <td className="px-4 py-3 text-[#3fb950] font-mono">{new Date(row.checkin_time).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</td>
-                    <td className="px-4 py-3 font-mono" style={{ color: row.checkout_time ? "#ff7070" : "#636363" }}>
+                    <td className="px-4 py-3 text-[#9e9e9e] font-mono whitespace-nowrap">{row.student_id}</td>
+                    <td className="px-4 py-3 text-[#3fb950] font-mono whitespace-nowrap">{new Date(row.checkin_time).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</td>
+                    <td className="px-4 py-3 font-mono whitespace-nowrap" style={{ color: row.checkout_time ? "#ff7070" : "#636363" }}>
                       {row.checkout_time ? new Date(row.checkout_time).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "ยังอยู่"}
                     </td>
-                    <td className="px-4 py-3 text-[#9e9e9e]">{fmtAttendanceDuration(row.duration)}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 text-[#9e9e9e] whitespace-nowrap">{fmtAttendanceDuration(row.duration)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">
                       <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold text-[#ff7070]" style={{ background: "rgba(255,112,112,0.12)" }}>{meta.place}</span>
                     </td>
                   </tr>
@@ -2936,7 +3374,7 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
   const [showDeleted,  setShowDeleted]  = useState(false);
   const productStatusChartRef = useRef<HTMLCanvasElement | null>(null);
   const productCategoryChartRef = useRef<HTMLCanvasElement | null>(null);
-  const canEdit = role !== "staff";
+  const canEdit = canAccessTab(role, "products");
 
   const fetch_ = useCallback(async () => {
     setLoading(true);
@@ -2994,10 +3432,17 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
   const costValue        = activeProducts.reduce((s, p) => s + p.stock * (p.cost ?? p.price), 0);
 
   // Category breakdown
-  const catMap: Record<string, number> = {};
-  activeProducts.forEach(p => { const k = p.category ?? "ไม่ระบุหมวด"; catMap[k] = (catMap[k] ?? 0) + 1; });
-  const categories = Object.entries(catMap).sort((a, b) => b[1] - a[1]);
-  const topCategories = categories.slice(0, 6);
+  const categories = useMemo(() => {
+    const catMap: Record<string, number> = {};
+    products
+      .filter(p => !p.deleted_at && p.active)
+      .forEach(p => {
+        const k = p.category ?? "ไม่ระบุหมวด";
+        catMap[k] = (catMap[k] ?? 0) + 1;
+      });
+    return Object.entries(catMap).sort((a, b) => b[1] - a[1]);
+  }, [products]);
+  const topCategories = useMemo(() => categories.slice(0, 6), [categories]);
 
   useChart(productStatusChartRef, () => ({
     type: "doughnut",
@@ -3251,7 +3696,9 @@ function ProductForm({ product, adminId, onClose, onSaved }: { product: Product 
   const [active,   setActive]   = useState(product?.active ?? true);
   const [imgUrl,   setImgUrl]   = useState(product?.images?.[0] ?? "");
   const [saving,    setSaving]    = useState(false);
+  const [imageBusy, setImageBusy] = useState(false);
   const [error,     setError]     = useState("");
+  const originalImgUrl = product?.images?.[0] ?? "";
 
   const inputCls = "w-full px-3 py-2.5 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none transition-colors";
   const inputStyle = { background: "#0c0c0c", border: "1px solid #3e3e3e" };
@@ -3262,11 +3709,23 @@ function ProductForm({ product, adminId, onClose, onSaved }: { product: Product 
     setError("");
     const body = { name: name.trim(), price: parseFloat(price), cost: cost ? parseFloat(cost) : null, stock: parseInt(stock) || 0, unit: unit.trim() || null, category: category.trim() || null, tag: tag.trim() || null, images: imgUrl.trim() ? [imgUrl.trim()] : null, active };
     const url = product ? `/api/admin/products/${product.id}` : "/api/admin/products";
-    const res = await adminFetch(url, adminId, { method: product ? "PATCH" : "POST", body: JSON.stringify(body) });
-    const json = await res.json();
-    setSaving(false);
-    if (json.status === "success") onSaved();
-    else setError(json.message ?? "บันทึกไม่สำเร็จ");
+    try {
+      const res = await adminFetch(url, adminId, { method: product ? "PATCH" : "POST", body: JSON.stringify(body) });
+      const json = await res.json();
+      if (json.status === "success") {
+        const nextImgUrl = imgUrl.trim();
+        if (product && originalImgUrl && originalImgUrl !== nextImgUrl) {
+          await deleteStorageFile(originalImgUrl, adminId, "/api/admin/upload");
+        }
+        onSaved();
+      } else {
+        setError(json.message ?? "บันทึกไม่สำเร็จ");
+      }
+    } catch {
+      setError("เชื่อมต่อ API ไม่ได้");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -3286,7 +3745,13 @@ function ProductForm({ product, adminId, onClose, onSaved }: { product: Product 
           <div>
             <label className="block text-xs font-semibold text-[#ededed] mb-2">รูปสินค้า</label>
             <ImgUpload value={imgUrl} onChange={setImgUrl} adminId={adminId}
+              onBusyChange={setImageBusy}
               endpoint="/api/admin/upload" placeholder="https://... หรืออัปโหลดไฟล์ (jpg, png, svg, ico…)" />
+            {imageBusy && (
+              <p className="mt-1 text-[11px]" style={{ color: "#e3b341" }}>
+                <i className="fa-solid fa-spinner fa-spin mr-1" />กำลังจัดการรูปสินค้า กรุณารอให้เสร็จก่อนบันทึก
+              </p>
+            )}
           </div>
 
           <div>
@@ -3348,10 +3813,14 @@ function ProductForm({ product, adminId, onClose, onSaved }: { product: Product 
           <button onClick={onClose} className="flex-1 py-3 text-sm font-bold rounded-xl transition-all text-[#9e9e9e] hover:text-white" style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>
             ยกเลิก
           </button>
-          <button onClick={handleSave} disabled={saving}
-            className="flex-1 py-3 text-sm font-bold rounded-xl text-white transition-all disabled:opacity-50"
+          <button onClick={handleSave} disabled={saving || imageBusy}
+            className="flex-1 py-3 text-sm font-bold rounded-xl text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ background: "#ff7070" }}>
-            {saving ? <><i className="fa-solid fa-spinner fa-spin mr-1.5" />กำลังบันทึก...</> : <><i className="fa-solid fa-floppy-disk mr-1.5" />บันทึก</>}
+            {saving
+              ? <><i className="fa-solid fa-spinner fa-spin mr-1.5" />กำลังบันทึก...</>
+              : imageBusy
+                ? <><i className="fa-solid fa-spinner fa-spin mr-1.5" />กำลังอัปโหลดรูป...</>
+                : <><i className="fa-solid fa-floppy-disk mr-1.5" />บันทึก</>}
           </button>
         </div>
       </div>
@@ -3418,15 +3887,17 @@ function ShopOrdersTab({ adminId }: { adminId: string }) {
   const pendingRevenue  = pendingOrders.reduce((s, o) => s + o.total, 0);
 
   // Top-selling from paid orders
-  const itemSales: Record<string, { name: string; qty: number; revenue: number; imageUrl?: string | null }> = {};
-  paidOrders_.forEach(o => {
-    ((o.items_json as OrderItem[]) ?? []).forEach(i => {
-      if (!itemSales[i.id]) itemSales[i.id] = { name: i.name, qty: 0, revenue: 0, imageUrl: i.imageUrl };
-      itemSales[i.id].qty     += i.qty;
-      itemSales[i.id].revenue += i.price * i.qty;
+  const topItems = useMemo(() => {
+    const itemSales: Record<string, { name: string; qty: number; revenue: number; imageUrl?: string | null }> = {};
+    orders.filter(o => o.status === "paid").forEach(o => {
+      ((o.items_json as OrderItem[]) ?? []).forEach(i => {
+        if (!itemSales[i.id]) itemSales[i.id] = { name: i.name, qty: 0, revenue: 0, imageUrl: i.imageUrl };
+        itemSales[i.id].qty     += i.qty;
+        itemSales[i.id].revenue += i.price * i.qty;
+      });
     });
-  });
-  const topItems = Object.values(itemSales).sort((a, b) => b.qty - a.qty).slice(0, 5);
+    return Object.values(itemSales).sort((a, b) => b.qty - a.qty).slice(0, 5);
+  }, [orders]);
 
   useChart(orderStatusChartRef, () => ({
     type: "doughnut",
@@ -3924,10 +4395,11 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
   const [newPassword, setNewPassword] = useState("");
   const [pfSaving, setPfSaving] = useState(false);
   const [pfMsg, setPfMsg] = useState("");
+  const [studentAvatarUrl, setStudentAvatarUrl] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [pickerType, setPickerType] = useState<"student" | "teacher" | null>(null);
   const [pickerSearch, setPickerSearch] = useState("");
-  const [pickerResults, setPickerResults] = useState<Array<{ id: string; label: string; sub: string; phone?: string; department?: string; entry_year?: string; first_name: string; last_name: string; nickname?: string | null }>>([]);
+  const [pickerResults, setPickerResults] = useState<Array<{ id: string; label: string; sub: string; phone?: string; department?: string; entry_year?: string; first_name: string; last_name: string; nickname?: string | null; photo_url?: string | null }>>([]);
   const [pickerLoading, setPickerLoading] = useState(false);
 
   async function searchPicker(q: string, type: "student" | "teacher") {
@@ -3940,7 +4412,7 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
           id: s.student_id, label: `${s.first_name} ${s.last_name}`,
           sub: `${s.student_id} · ${s.program}${s.department ? ` · ${s.department}` : ""}`,
           phone: s.student_phone ?? "", department: s.department ?? "", entry_year: s.entry_year ?? "",
-          first_name: s.first_name, last_name: s.last_name, nickname: s.nickname,
+          first_name: s.first_name, last_name: s.last_name, nickname: s.nickname, photo_url: s.photo_url ?? null,
         })));
       } else {
         const res = await fetch(`/api/admin/teachers?q=${encodeURIComponent(q)}`, { headers: { "x-admin-id": adminId } });
@@ -3966,6 +4438,7 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
       department: item.department ?? "", entry_year: item.entry_year ?? "",
       linked_student_id: pickerType === "student" ? item.id : p.linked_student_id,
     }));
+    if (pickerType === "student" && item.photo_url) setStudentAvatarUrl(item.photo_url);
     setPickerType(null); setPickerSearch(""); setPickerResults([]);
   }
   const rs = ROLE_STYLE[a.role] ?? { bg: "#2a2a2a", text: "#9e9e9e" };
@@ -3981,7 +4454,7 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
       email: a.email ?? "", phone: a.phone ?? "", entry_year: a.entry_year ?? "", department: a.department ?? "",
       linked_student_id: a.linked_student_id ?? "",
     });
-    setNewUsername(""); setNewPassword("");
+    setNewUsername(""); setNewPassword(""); setStudentAvatarUrl(null);
     setPfMsg(""); setEditing(true);
   }
 
@@ -3990,6 +4463,7 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
     const payload: Record<string, string> = { ...pf };
     if (newUsername.trim()) payload.username = newUsername.trim();
     if (newPassword) payload.new_password = newPassword;
+    if (studentAvatarUrl) payload.avatar = studentAvatarUrl;
     const res = await fetch(`/api/admin/admins/${a.admin_id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json", "x-admin-id": adminId },
@@ -3997,7 +4471,10 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
     });
     const j = await res.json();
     setPfSaving(false);
-    if (j.status === "success") { setEditing(false); setNewUsername(""); setNewPassword(""); onProfileSaved(); }
+    if (j.status === "success") {
+      if (studentAvatarUrl) onAvatarUploaded(studentAvatarUrl);
+      setEditing(false); setNewUsername(""); setNewPassword(""); setStudentAvatarUrl(null); onProfileSaved();
+    }
     else setPfMsg(j.message ?? "เกิดข้อผิดพลาด");
   }
 
@@ -4039,13 +4516,13 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
   return (
     <div className="rounded-xl overflow-hidden" style={{ background: "#1c1c1c", border: `1px solid ${isMe ? "rgba(255,112,112,0.3)" : "#3e3e3e"}` }}>
       {/* ── Main row ── */}
-      <div className="flex items-center gap-3 p-4">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4">
         {/* Avatar */}
         <div className="relative flex-shrink-0">
           <button type="button" onClick={() => canUpload && !busy && fileRef.current?.click()}
             className={`relative block ${canUpload ? "group cursor-pointer" : "cursor-default"}`}
             disabled={busy} title={canUpload ? "เปลี่ยน Avatar" : undefined}>
-            <Avatar name={displayName} url={a.avatar} size={44} rounded="xl" />
+            <Avatar name={displayName} url={studentAvatarUrl ?? a.avatar} size={44} rounded="xl" />
             {canUpload && (
               <div className="absolute inset-0 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                 style={{ background: "rgba(0,0,0,0.55)" }}>
@@ -4064,7 +4541,7 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
         <input ref={fileRef} type="file" accept={IMG_ACCEPT} className="hidden" onChange={handleFile} />
 
         {/* Info */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 w-full">
           <div className="flex items-center gap-2 flex-wrap mb-0.5">
             <span className="font-bold text-white">
               {a.first_name || a.last_name ? `${a.first_name ?? ""} ${a.last_name ?? ""}`.trim() : displayName}
@@ -4088,7 +4565,7 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
         </div>
 
         {/* Action buttons */}
-        <div className="flex gap-1.5 flex-shrink-0 flex-wrap justify-end">
+        <div className="flex gap-1.5 flex-shrink-0 flex-wrap justify-start sm:justify-end w-full sm:w-auto">
           {canEdit && (
             <button onClick={() => editing ? setEditing(false) : openEdit()}
               className="text-[11px] px-2.5 py-1.5 rounded-lg font-semibold"
@@ -4131,17 +4608,17 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
       {/* ── Edit profile panel ── */}
       {editing && (
         <div className="px-4 pb-4 pt-1" style={{ borderTop: "1px solid #2a2a2a" }}>
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
             <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#636363" }}>แก้ไขข้อมูลส่วนตัว</p>
-            <div className="flex gap-1.5">
+            <div className="flex gap-1.5 flex-wrap">
               <button type="button" onClick={() => { setPickerType("student"); setPickerSearch(""); setPickerResults([]); }}
                 className="text-[10px] px-2 py-1 rounded-lg font-semibold"
-                style={{ background: "rgba(56,139,253,0.1)", color: "#58a6ff", border: "1px solid rgba(56,139,253,0.25)" }}>
+                style={{ background: "rgba(255,112,112,0.12)", color: "#ff7070", border: "1px solid rgba(255,112,112,0.35)" }}>
                 <i className="fa-solid fa-graduation-cap mr-1" />จากนักเรียน
               </button>
               <button type="button" onClick={() => { setPickerType("teacher"); setPickerSearch(""); setPickerResults([]); }}
                 className="text-[10px] px-2 py-1 rounded-lg font-semibold"
-                style={{ background: "rgba(163,113,247,0.1)", color: "#a371f7", border: "1px solid rgba(163,113,247,0.25)" }}>
+                style={{ background: "rgba(255,112,112,0.08)", color: "#ff9a9a", border: "1px solid rgba(255,112,112,0.24)" }}>
                 <i className="fa-solid fa-chalkboard-user mr-1" />จากครู
               </button>
             </div>
@@ -4170,7 +4647,7 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
               {pickerResults.map(item => (
                 <button key={item.id} type="button" onClick={() => applyPicker(item)}
                   className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left hover:bg-white/5 transition-colors">
-                  <Avatar name={item.label} size={24} rounded="lg" />
+                  <Avatar name={item.label} url={item.photo_url} size={24} rounded="lg" />
                   <div className="flex-1 min-w-0">
                     <div className="text-[11px] font-semibold text-white truncate">{item.label}</div>
                     <div className="text-[10px] truncate" style={{ color: "#636363" }}>{item.sub}</div>
@@ -4183,7 +4660,21 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
             </div>
           )}
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div className="col-span-2 sm:col-span-3">
+              <label className="block text-[10px] text-[#9e9e9e] mb-1">
+                <i className="fa-solid fa-link mr-1" />Avatar URL
+              </label>
+              <input
+                value={studentAvatarUrl ?? ""}
+                onChange={e => setStudentAvatarUrl(e.target.value.trim() || null)}
+                placeholder={a.avatar || "https://..."}
+                {...inp}
+              />
+              <p className="text-[10px] mt-1" style={{ color: "#636363" }}>
+                ใส่ URL แล้วกดบันทึกเพื่อเปลี่ยน avatar หรือใช้ปุ่มจากนักเรียนเพื่อดึงรูปอัตโนมัติ
+              </p>
+            </div>
             <div><label className="block text-[10px] text-[#9e9e9e] mb-1">ชื่อ</label>
               <input value={pf.first_name} onChange={e => setPf(p => ({ ...p, first_name: e.target.value }))} placeholder="ชื่อ" {...inp} /></div>
             <div><label className="block text-[10px] text-[#9e9e9e] mb-1">นามสกุล</label>
@@ -4201,7 +4692,7 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
           </div>
           <div className="mt-2 pt-2" style={{ borderTop: "1px solid #2a2a2a" }}>
             <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#636363" }}>บัญชีผู้ใช้</p>
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div>
                 <label className="block text-[10px] text-[#9e9e9e] mb-1">
                   <i className="fa-solid fa-at mr-1" />Username ใหม่ {a.username_changed_at && <span style={{ color: "#636363" }}>(เปลี่ยนล่าสุด {new Date(a.username_changed_at).toLocaleDateString("th-TH")})</span>}
@@ -4236,12 +4727,13 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
   const [form, setForm] = useState(BLANK_ADMIN_FORM);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarSourceUrl, setAvatarSourceUrl] = useState<string | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
   const [pickerType, setPickerType] = useState<"student" | "teacher" | null>(null);
   const [pickerSearch, setPickerSearch] = useState("");
-  const [pickerResults, setPickerResults] = useState<Array<{ id: string; label: string; sub: string; phone?: string; department?: string; entry_year?: string; first_name: string; last_name: string; nickname?: string | null }>>([]);
+  const [pickerResults, setPickerResults] = useState<Array<{ id: string; label: string; sub: string; phone?: string; department?: string; entry_year?: string; first_name: string; last_name: string; nickname?: string | null; photo_url?: string | null }>>([]);
   const [pickerLoading, setPickerLoading] = useState(false);
   const isSuperAdmin = role === "superadmin";
 
@@ -4264,7 +4756,7 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
         setPickerResults((j.data ?? []).slice(0, 10).map((s: Student) => ({
           id: s.student_id, label: `${s.first_name} ${s.last_name}`, sub: `${s.student_id} · ${s.program}${s.department ? ` · ${s.department}` : ""}`,
           phone: s.student_phone, department: s.department ?? "", entry_year: s.entry_year,
-          first_name: s.first_name, last_name: s.last_name, nickname: s.nickname,
+          first_name: s.first_name, last_name: s.last_name, nickname: s.nickname, photo_url: s.photo_url ?? null,
         })));
       } else {
         const res = await adminFetch(`/api/admin/teachers?q=${encodeURIComponent(q)}`, adminId);
@@ -4281,18 +4773,25 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
   function applyPicker(item: typeof pickerResults[0]) {
     setForm(f => ({
       ...f,
+      username: pickerType === "student" && !f.username ? item.id.toLowerCase() : f.username,
+      password: pickerType === "student" && !f.password ? (item.phone ?? "") : f.password,
       first_name: item.first_name, last_name: item.last_name,
       nickname: item.nickname ?? "", phone: item.phone ?? "",
       department: item.department ?? "", entry_year: item.entry_year ?? "",
       linked_student_id: pickerType === "student" ? item.id : "",
     }));
+    if (pickerType === "student" && item.photo_url) {
+      setAvatarFile(null);
+      setAvatarPreview(item.photo_url);
+      setAvatarSourceUrl(item.photo_url);
+    }
     setPickerType(null); setPickerSearch(""); setPickerResults([]);
   }
 
   async function addAdmin() {
     if (!form.username.trim() || !form.password) { setMsg("กรุณากรอก username และรหัสผ่าน"); return; }
     setSaving(true); setMsg("");
-    const res = await adminFetch("/api/admin/admins", adminId, { method: "POST", body: JSON.stringify(form) });
+    const res = await adminFetch("/api/admin/admins", adminId, { method: "POST", body: JSON.stringify({ ...form, avatar: avatarFile ? null : avatarSourceUrl }) });
     const j = await res.json();
     if (j.status !== "success") { setSaving(false); setMsg(j.message ?? "เกิดข้อผิดพลาด"); return; }
 
@@ -4315,6 +4814,7 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
     setForm(BLANK_ADMIN_FORM);
     setAvatarFile(null);
     setAvatarPreview(null);
+    setAvatarSourceUrl(null);
     load();
   }
 
@@ -4352,7 +4852,7 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
 
       {isSuperAdmin && (
         <div className="mt-4 mb-4">
-          <DarkAction onClick={() => { setShowForm(!showForm); setMsg(""); if (showForm) { setAvatarFile(null); setAvatarPreview(null); setForm(BLANK_ADMIN_FORM); } }} loading={false}
+          <DarkAction onClick={() => { setShowForm(!showForm); setMsg(""); if (showForm) { setAvatarFile(null); setAvatarPreview(null); setAvatarSourceUrl(null); setForm(BLANK_ADMIN_FORM); } }} loading={false}
             color={showForm ? "gray" : "green"} icon={showForm ? "fa-xmark" : "fa-plus"}
             label={showForm ? "ยกเลิก" : "เพิ่ม Admin"} />
         </div>
@@ -4360,17 +4860,17 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
 
       {showForm && (
         <div className="mb-5 rounded-xl p-4 space-y-3" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="text-xs font-bold text-white">เพิ่ม Admin ใหม่ <span className="font-normal text-[#636363]">(เฉพาะ Superadmin เท่านั้น)</span></div>
-            <div className="flex gap-1.5">
+            <div className="flex gap-1.5 flex-wrap">
               <button type="button" onClick={() => { setPickerType("student"); setPickerSearch(""); setPickerResults([]); }}
                 className="text-[11px] px-2.5 py-1.5 rounded-lg font-semibold"
-                style={{ background: "rgba(56,139,253,0.1)", color: "#ff7070", border: "1px solid rgba(56,139,253,0.3)" }}>
+                style={{ background: "rgba(255,112,112,0.12)", color: "#ff7070", border: "1px solid rgba(255,112,112,0.35)" }}>
                 <i className="fa-solid fa-graduation-cap mr-1" />จากนักเรียน
               </button>
               <button type="button" onClick={() => { setPickerType("teacher"); setPickerSearch(""); setPickerResults([]); }}
                 className="text-[11px] px-2.5 py-1.5 rounded-lg font-semibold"
-                style={{ background: "rgba(163,113,247,0.1)", color: "#a371f7", border: "1px solid rgba(163,113,247,0.3)" }}>
+                style={{ background: "rgba(255,112,112,0.08)", color: "#ff9a9a", border: "1px solid rgba(255,112,112,0.24)" }}>
                 <i className="fa-solid fa-chalkboard-user mr-1" />จากครู
               </button>
             </div>
@@ -4395,7 +4895,7 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
               {pickerResults.map((item) => (
                 <button key={item.id} type="button" onClick={() => applyPicker(item)}
                   className="w-full flex items-start gap-2 p-2 rounded-lg text-left transition-colors hover:bg-white/5">
-                  <Avatar name={item.label} size={28} rounded="xl" />
+                  <Avatar name={item.label} url={item.photo_url} size={28} rounded="xl" />
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-semibold text-white truncate">{item.label}</div>
                     <div className="text-[10px] truncate" style={{ color: "#636363" }}>{item.sub}</div>
@@ -4427,12 +4927,13 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
                 if (!f) return;
                 setAvatarFile(f);
                 setAvatarPreview(URL.createObjectURL(f));
+                setAvatarSourceUrl(null);
                 e.target.value = "";
               }} />
             <div>
               <p className="text-xs font-semibold text-[#ededed]">Avatar <span className="font-normal text-[#636363]">(ไม่บังคับ)</span></p>
               {avatarPreview
-                ? <button type="button" onClick={() => { setAvatarFile(null); setAvatarPreview(null); }}
+                ? <button type="button" onClick={() => { setAvatarFile(null); setAvatarPreview(null); setAvatarSourceUrl(null); }}
                     className="text-[11px] mt-0.5" style={{ color: "#ff7070" }}>
                     <i className="fa-solid fa-xmark mr-1" />ลบรูป
                   </button>
@@ -4440,7 +4941,27 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-[11px] text-[#9e9e9e] mb-1">
+              <i className="fa-solid fa-link mr-1" />Avatar URL
+            </label>
+            <input
+              value={avatarSourceUrl ?? ""}
+              onChange={e => {
+                const url = e.target.value.trim();
+                setAvatarSourceUrl(url || null);
+                setAvatarPreview(url || null);
+                if (url) setAvatarFile(null);
+              }}
+              {...inp}
+              placeholder="https://... หรือเลือกจากนักเรียน"
+            />
+            <p className="text-[10px] mt-1" style={{ color: "#636363" }}>
+              ใช้ได้ทั้ง URL รูปจากนักเรียน, Supabase Storage หรือรูปภายนอกที่ LINE/Browser เปิดได้
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-[11px] text-[#9e9e9e] mb-1">Username * <span className="text-[#636363]">(a-z 0-9 _)</span></label>
               <input value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} {...inp} placeholder="เช่น admin01" />
@@ -4530,8 +5051,21 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
 
 // ─── Settings Tab ─────────────────────────────────────────────────────────────
 
-function SettingsTab({ adminId, stats }: { adminId: string; stats: Stats | null }) {
+function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { adminId: string; adminName: string; adminRole: string; adminAvatar: string | null; stats: Stats | null }) {
   const [ping, setPing] = useState<"idle" | "checking" | "ok" | "error">("idle");
+  const [lineTest, setLineTest] = useState<{
+    state: "idle" | "sending" | "ok" | "error";
+    message: string;
+    detail?: string;
+  }>({ state: "idle", message: "" });
+  const [lineCooldown, setLineCooldown] = useState(0);
+  const [lineTargetId, setLineTargetId] = useState("");
+  const [lineMode, setLineMode] = useState<"order_flex" | "feedback_flex" | "attendance_flex" | "booking_flex" | "data_change_flex" | "custom_json">("order_flex");
+  const [lineStudentId, setLineStudentId] = useState("");
+  const [lineJson, setLineJson] = useState(`{
+  "type": "text",
+  "text": "ทดสอบส่งจาก JSON ของ ASIA-BOT"
+}`);
 
   async function testApi() {
     setPing("checking");
@@ -4541,6 +5075,59 @@ function SettingsTab({ adminId, stats }: { adminId: string; stats: Stats | null 
     } catch { setPing("error"); }
     setTimeout(() => setPing("idle"), 3000);
   }
+
+  async function testLineFlex() {
+    if (lineCooldown > 0) return;
+    const target = lineTargetId.trim();
+    let payload: unknown = undefined;
+    if (lineMode === "custom_json") {
+      try {
+        payload = JSON.parse(lineJson);
+      } catch {
+        setLineTest({ state: "error", message: "JSON ไม่ถูกต้อง", detail: "ตรวจสอบวงเล็บ, comma, และเครื่องหมายคำพูดก่อนส่ง" });
+        return;
+      }
+    }
+
+    setLineTest({ state: "sending", message: `กำลังส่ง LINE test ไปยัง ${target || "LINE_GROUP_ADMIN"}...` });
+    try {
+      const res = await adminFetch("/api/line/test", adminId, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: target || undefined,
+          mode: lineMode,
+          student_id: lineStudentId.trim() || undefined,
+          payload,
+          altText: "ASIA-BOT custom LINE test",
+        }),
+      });
+      const j = await res.json();
+      if (res.ok && (j.status === "success" || j.ok)) {
+        setLineCooldown(Number(j.cooldown_seconds ?? 15));
+        setLineTest({
+          state: "ok",
+          message: "ส่ง LINE test สำเร็จ",
+          detail: `${j.sent_count ?? 1} message · ${j.mode ?? lineMode}${j.admin ? ` · ส่งโดย ${j.admin}` : ""}${j.student ? ` · นักเรียน ${j.student}` : ""}`,
+        });
+      } else {
+        if (j.cooldown_seconds) setLineCooldown(Number(j.cooldown_seconds));
+        setLineTest({
+          state: "error",
+          message: j.message || j.error || "ส่ง LINE test ไม่สำเร็จ",
+          detail: [j.step, j.http_status ? `HTTP ${j.http_status}` : "", j.body].filter(Boolean).join(" · "),
+        });
+      }
+    } catch (err) {
+      setLineTest({ state: "error", message: "เชื่อมต่อ API LINE test ไม่ได้", detail: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  useEffect(() => {
+    if (lineCooldown <= 0) return;
+    const timer = window.setTimeout(() => setLineCooldown(v => Math.max(0, v - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [lineCooldown]);
 
   const infoRows = [
     { label: "ระบบ", val: "ASIA-BOT Admin Panel" },
@@ -4553,9 +5140,138 @@ function SettingsTab({ adminId, stats }: { adminId: string; stats: Stats | null 
 
   const pingStyle = { idle: { color: "#636363", bg: "#2a2a2a" }, checking: { color: "#e3b341", bg: "rgba(227,179,65,0.1)" }, ok: { color: "#3fb950", bg: "rgba(63,185,80,0.1)" }, error: { color: "#ff7070", bg: "rgba(255,112,112,0.1)" } };
   const ps = pingStyle[ping];
+  const lineStyle = {
+    idle: { color: "#636363", bg: "#2a2a2a", icon: "fa-paper-plane" },
+    sending: { color: "#e3b341", bg: "rgba(227,179,65,0.1)", icon: "fa-spinner fa-spin" },
+    ok: { color: "#3fb950", bg: "rgba(63,185,80,0.1)", icon: "fa-circle-check" },
+    error: { color: "#ff7070", bg: "rgba(255,112,112,0.1)", icon: "fa-triangle-exclamation" },
+  }[lineTest.state];
+  const linePreview = useMemo(() => {
+    const studentImage = adminAvatar || "/admin/favicon.ico";
+    const dummyProductImage = "https://dummyimage.com/240x240/eaf7ff/0f172a.png&text=240x240";
+    const dummyFeedbackImage = "https://dummyimage.com/1000x450/84d4fa/0f172a.png&text=1000+x+450+px+-+20:9";
+    const nowText = new Date().toLocaleString("th-TH", {
+      timeZone: "Asia/Bangkok",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    const baseRows = [
+      ["นักเรียน", `${adminName} (เทสต์)`],
+      ["รหัส", adminId],
+      ["ชั้น/สาขา", `${adminRole} · 555 ASIA-BOT Test`],
+    ] as [string, string][];
+
+    if (lineMode === "feedback_flex") return {
+      header: "ข้อเสนอแนะ ASIA-BOT",
+      subheader: "รับเรื่องใหม่จากผู้ใช้งาน",
+      color: "#FF7070",
+      title: "สถานะ: รอรับเรื่อง",
+      titleColor: "#FF7070",
+      badge: "ประเภท: รายงานปัญหา",
+      image: dummyFeedbackImage,
+      avatar: studentImage,
+      rows: [
+        ["ชื่อ", adminName],
+        ["รหัสนักเรียน", adminId],
+        ["หมวดหมู่", "ทดสอบระบบ"],
+      ] as [string, string][],
+      noteTitle: "ข้อความ",
+      note: `นี่คือ Feedback Flex สำหรับแจ้งเตือนแอดมิน\nส่งทดสอบโดย: ${adminName}`,
+      button: "เปิด Feedback",
+    };
+    if (lineMode === "booking_flex") return {
+      header: "จองห้อง ASIA-BOT",
+      subheader: "คำขอจองห้องจากนักเรียน",
+      color: "#F59E0B",
+      title: "คำขอจองห้อง ห้องประชุม",
+      titleColor: "#F59E0B",
+      avatar: studentImage,
+      rows: [
+        ["ผู้จอง", `${adminName} (เทสต์)`],
+        ["รหัสนักเรียน", adminId],
+        ["ชั้น/สาขา", `${adminRole} · 555 ASIA-BOT Test`],
+        ["ห้อง", "ห้องประชุม"],
+        ["วันที่", new Date().toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", year: "numeric" })],
+        ["เวลา", "10:15-12:15"],
+        ["จำนวน", "3 คน"],
+        ["เบอร์", "08x-xxx-xxxx"],
+      ] as [string, string][],
+      note: `ทดสอบรูปแบบแจ้งเตือนการจองห้อง\nส่งทดสอบโดย: ${adminName}`,
+      button: "เปิดรายการจอง",
+    };
+    if (lineMode === "data_change_flex") return {
+      header: "แก้ไขข้อมูล ASIA-BOT",
+      subheader: "คำขอแก้ไขข้อมูลนักเรียน",
+      color: "#6366F1",
+      title: "รอแอดมินตรวจสอบ",
+      titleColor: "#2563EB",
+      avatar: studentImage,
+      rows: baseRows,
+      noteTitle: "รายการที่ขอแก้ไข",
+      note: `ชื่อ-นามสกุล\nชื่อเดิม นามสกุลเดิม → ชื่อใหม่ นามสกุลใหม่\n\nแผนก/สาขา\nคอมพิวเตอร์ → เทคโนโลยี\n\nหมายเหตุ\n- → ส่งทดสอบโดย: ${adminName}`,
+      button: "เปิดคำขอแก้ไขข้อมูล",
+    };
+    if (lineMode === "attendance_flex") return {
+      header: "ASIA-BOT",
+      subheader: "สแกนบัตรสำเร็จ",
+      color: "#84D4FA",
+      title: "เข้าโรงเรียน",
+      titleColor: "#22C55E",
+      avatar: studentImage,
+      rows: [
+        ["สถานที่", "โรงเรียน"],
+        ["โซน", "school"],
+        ["ชื่อเล่น", lineStudentId.trim() ? "ตามข้อมูลนักเรียน" : "ทดสอบ"],
+        ["ระดับ", lineStudentId.trim() ? "ตามข้อมูลนักเรียน" : adminRole],
+        ["สาขา", lineStudentId.trim() ? "ตามข้อมูลนักเรียน" : "555 ASIA-BOT Test"],
+        ["เวลา", nowText],
+        ["UID", lineStudentId.trim() ? `${lineStudentId.trim()}-TESTLINE` : `${adminId}-TESTLINE`],
+      ] as [string, string][],
+      button: "ดูประวัติการสแกน",
+    };
+    if (lineMode === "custom_json") return {
+      header: "ASIA-BOT JSON",
+      subheader: "ตัวอย่าง payload ที่จะส่ง",
+      color: "#9CA3AF",
+      title: "Custom JSON",
+      titleColor: "#111827",
+      avatar: null as string | null,
+      rows: [["Target", lineTargetId.trim() || "LINE_GROUP_ADMIN"]] as [string, string][],
+      noteTitle: "JSON",
+      note: lineJson.trim().slice(0, 240),
+      button: "ส่งตาม JSON",
+    };
+    return {
+      header: "สหกรณ์โรงเรียน ASIA-BOT",
+      subheader: nowText,
+      color: "#EC4899",
+      statusColor: "#F59E0B",
+      title: "test-order-id-12345678",
+      statusLabel: "⏳ รอชำระเงิน",
+      titleColor: "#111827",
+      avatar: studentImage,
+      rows: [["นักเรียน", `${adminName} (${adminId})`]] as [string, string][],
+      product: "ขนมปัง x2",
+      productImage: dummyProductImage,
+      productMeta: "15฿ / ชิ้น",
+      productTotal: "30฿",
+      summaryRows: [
+        ["ยอดสินค้า", "30฿"],
+        ["ค่าธรรมเนียม Stripe (2%)", "0.6฿"],
+        ["ค่าดำเนินการ (1%)", "0.3฿"],
+      ] as [string, string][],
+      totalLabel: "30.9฿",
+      note: "🏪 รับเองที่สหกรณ์",
+      buttonColor: "#EC4899",
+      button: "ดูออเดอร์",
+    };
+  }, [adminAvatar, adminId, adminName, adminRole, lineJson, lineMode, lineStudentId, lineTargetId]);
 
   return (
-    <div className="max-w-2xl space-y-5">
+    <div className="max-w-5xl space-y-5">
       <DarkSectionHeader title="ตั้งค่าระบบ" icon="fa-gear" />
 
       {/* System info */}
@@ -4612,6 +5328,267 @@ function SettingsTab({ adminId, stats }: { adminId: string; stats: Stats | null 
             style={{ background: "#1f6feb" }}>
             <i className="fa-solid fa-plug-circle-check mr-1.5" />ทดสอบ
           </button>
+        </div>
+      </div>
+
+      {/* Notification tools */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="rounded-xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+          <div className="px-4 py-3 flex items-center gap-2" style={{ borderBottom: "1px solid #3e3e3e" }}>
+            <i className="fa-brands fa-line text-sm" style={{ color: "#3fb950" }} />
+            <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "#9e9e9e" }}>LINE Notify Test</span>
+          </div>
+          <div className="p-4 space-y-4">
+            <div>
+              <div className="text-sm font-bold text-white">ทดสอบ LINE Flex Message</div>
+              <div className="text-xs mt-1 leading-relaxed" style={{ color: "#636363" }}>
+                เลือกทดสอบ Flex ตามประเภทงานจริง หรือวาง JSON ของ LINE แล้วส่งไปยัง UID / Group ID ได้
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#9e9e9e" }}>
+                รูปแบบการทดสอบ
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                {[
+                  ["order_flex", "Order Flex"],
+                  ["feedback_flex", "Feedback Flex"],
+                  ["attendance_flex", "Student Flex"],
+                  ["booking_flex", "Booking Flex"],
+                  ["data_change_flex", "Data Change"],
+                  ["custom_json", "JSON"],
+                ].map(([value, label]) => (
+                  <button key={value} type="button" onClick={() => setLineMode(value as typeof lineMode)}
+                    className="px-2.5 py-2 rounded-lg text-[11px] font-bold"
+                    style={lineMode === value
+                      ? { background: "rgba(255,112,112,0.18)", color: "#ff7070", border: "1px solid rgba(255,112,112,0.45)" }
+                      : { background: "#0c0c0c", color: "#9e9e9e", border: "1px solid #3e3e3e" }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#9e9e9e" }}>
+                Target LINE ID
+              </label>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  value={lineTargetId}
+                  onChange={e => setLineTargetId(e.target.value)}
+                  placeholder="เช่น Uxxxxxxxx หรือ Cxxxxxxxx (เว้นว่าง = LINE_GROUP_ADMIN)"
+                  className="flex-1 px-3 py-2 rounded-lg text-xs font-mono outline-none"
+                  style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}
+                />
+                {lineTargetId && (
+                  <button type="button" onClick={() => setLineTargetId("")}
+                    className="px-3 py-2 rounded-lg text-xs font-bold"
+                    style={{ background: "#2a2a2a", color: "#9e9e9e", border: "1px solid #3e3e3e" }}>
+                    ใช้กลุ่มแอดมิน
+                  </button>
+                )}
+              </div>
+              <p className="text-[10px] mt-1" style={{ color: "#636363" }}>
+                หมายเหตุ: UID ส่วนตัวต้องเคย add friend/ผูกกับ LINE Bot แล้ว ไม่งั้น LINE จะปฏิเสธการ push message
+              </p>
+            </div>
+
+            {lineMode === "attendance_flex" && (
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#9e9e9e" }}>
+                  รหัสนักเรียนสำหรับดึงข้อมูลจริง
+                </label>
+                <input
+                  value={lineStudentId}
+                  onChange={e => setLineStudentId(e.target.value)}
+                  placeholder="เช่น 3130 (เว้นว่าง = ใช้ข้อมูลทดสอบ)"
+                  className="w-full px-3 py-2 rounded-lg text-xs font-mono outline-none"
+                  style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}
+                />
+                <p className="text-[10px] mt-1" style={{ color: "#636363" }}>
+                  ระบบจะดึงชื่อ, ชื่อเล่น, รูป, แผนก และ UID จากตารางนักเรียนมาสร้าง Flex เช็กชื่อ
+                </p>
+              </div>
+            )}
+
+            {lineMode === "custom_json" && (
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#9e9e9e" }}>
+                  LINE JSON Payload
+                </label>
+                <textarea
+                  value={lineJson}
+                  onChange={e => setLineJson(e.target.value)}
+                  spellCheck={false}
+                  className="w-full min-h-[180px] px-3 py-2 rounded-lg text-[11px] font-mono outline-none resize-y"
+                  style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}
+                />
+                <p className="text-[10px] mt-1" style={{ color: "#636363" }}>
+                  รองรับ LINE message object, Flex contents หรือ <code className="text-[#9e9e9e]">{"{ messages: [...] }"}</code>
+                </p>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {[
+                { label: "LINE_TOKEN", ok: "ต้องตั้งค่าใน env" },
+                { label: "Target ID", ok: lineTargetId.trim() ? "กำหนดปลายทางเอง" : "ใช้กลุ่มแอดมิน" },
+                { label: "Test Mode", ok: lineMode === "attendance_flex" ? "ดึงข้อมูลนักเรียน" : lineMode === "custom_json" ? "ส่งตาม JSON" : "ใช้ Flex ตามประเภทงาน" },
+              ].map(item => (
+                <div key={item.label} className="rounded-lg px-3 py-2" style={{ background: "#0c0c0c", border: "1px solid #2a2a2a" }}>
+                  <div className="text-[10px] font-mono" style={{ color: "#9e9e9e" }}>{item.label}</div>
+                  <div className="text-[10px] mt-0.5" style={{ color: "#636363" }}>{item.ok}</div>
+                </div>
+              ))}
+            </div>
+
+            {lineTest.state !== "idle" && (
+              <div className="rounded-lg px-3 py-2 text-xs" style={{ background: lineStyle.bg, color: lineStyle.color, border: `1px solid ${lineStyle.color}33` }}>
+                <div className="font-bold flex items-center gap-2">
+                  <i className={`fa-solid ${lineStyle.icon}`} />
+                  {lineTest.message}
+                </div>
+                {lineTest.detail && <div className="mt-1 break-words opacity-80">{lineTest.detail}</div>}
+              </div>
+            )}
+
+            <button onClick={testLineFlex} disabled={lineTest.state === "sending" || lineCooldown > 0}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold text-white disabled:opacity-50"
+              style={{ background: "#ff7070" }}>
+              <i className={`fa-solid ${lineTest.state === "sending" ? "fa-spinner fa-spin" : "fa-paper-plane"}`} />
+              {lineCooldown > 0 ? `รอ ${lineCooldown}s` : "ส่ง LINE Test"}
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+        <div className="rounded-xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+          <div className="px-4 py-3 flex items-center justify-between gap-2" style={{ borderBottom: "1px solid #3e3e3e" }}>
+            <div className="flex items-center gap-2">
+              <i className="fa-solid fa-eye text-sm" style={{ color: "#3fb950" }} />
+              <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "#9e9e9e" }}>LINE Flex Preview</span>
+            </div>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full" style={{ background: "#0c0c0c", color: "#636363", border: "1px solid #2a2a2a" }}>
+              {lineMode.replace("_", " ")}
+            </span>
+          </div>
+          <div className="p-4" style={{ background: "#101010" }}>
+            <div className="mx-auto max-w-[420px] overflow-hidden rounded" style={{ background: "#ffffff", border: "1px solid #d9d9d9" }}>
+              <div className="p-4 flex items-start justify-between gap-4" style={{ background: linePreview.color }}>
+                <div className="min-w-0">
+                  <div className="text-base font-black text-black leading-tight">{linePreview.header}</div>
+                  <div className="text-xs mt-2 text-black">{linePreview.subheader}</div>
+                </div>
+                {typeof linePreview.avatar === "string" && linePreview.avatar && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={linePreview.avatar} alt="" className="w-14 h-14 rounded-lg object-cover flex-shrink-0" />
+                )}
+              </div>
+
+              {"image" in linePreview && typeof linePreview.image === "string" && linePreview.image && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={linePreview.image} alt="" className="w-full h-44 object-cover" />
+              )}
+
+              <div className="p-4 space-y-4 text-[#0f172a]">
+                <div>
+                  {"statusLabel" in linePreview && linePreview.statusLabel && (
+                    <div className="inline-flex mb-3 rounded-full px-4 py-1 text-xs font-black text-white" style={{ background: linePreview.statusColor }}>
+                      {linePreview.statusLabel}
+                    </div>
+                  )}
+                  <div className="text-xl font-black leading-tight" style={{ color: linePreview.titleColor }}>{linePreview.title}</div>
+                  {"badge" in linePreview && linePreview.badge && (
+                    <div className="text-xs mt-3">{linePreview.badge}</div>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  {linePreview.rows.map(([label, value]) => (
+                    <div key={label} className="grid grid-cols-[110px_1fr] gap-3 text-xs">
+                      <div className="text-slate-500">{label}</div>
+                      <div className="font-black text-right break-words text-black">{value}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {"product" in linePreview && linePreview.product && (
+                  <div className="flex gap-3 pt-3" style={{ borderTop: "1px solid #e5e7eb" }}>
+                    {"productImage" in linePreview && typeof linePreview.productImage === "string" ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={linePreview.productImage} alt="" className="w-16 h-16 rounded object-cover flex-shrink-0 bg-slate-100" />
+                    ) : (
+                      <div className="w-16 h-16 rounded bg-slate-100 flex items-center justify-center text-[#84D4FA] flex-shrink-0">
+                        <span className="text-xl">🛍️</span>
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <div className="text-xs font-black text-black">{linePreview.product}</div>
+                      <div className="text-xs mt-1 text-slate-500">{"productMeta" in linePreview ? linePreview.productMeta : "40฿ / ด้าม"}</div>
+                      <div className="text-base font-black mt-1" style={{ color: "#84D4FA" }}>{"productTotal" in linePreview ? linePreview.productTotal : "40฿"}</div>
+                    </div>
+                  </div>
+                )}
+
+                {"summaryRows" in linePreview && linePreview.summaryRows && (
+                  <div className="space-y-1.5 pt-3" style={{ borderTop: "1px solid #e5e7eb" }}>
+                    {linePreview.summaryRows.map(([label, value]) => (
+                      <div key={label} className="flex items-center justify-between gap-3 text-xs text-slate-500">
+                        <span>{label}</span>
+                        <span>{value}</span>
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between gap-3 pt-2 text-sm font-black text-black" style={{ borderTop: "1px solid #e5e7eb" }}>
+                      <span>รวมทั้งหมด</span>
+                      <span className="text-xl" style={{ color: "#84D4FA" }}>{"totalLabel" in linePreview ? linePreview.totalLabel : ""}</span>
+                    </div>
+                  </div>
+                )}
+
+                {linePreview.note && (
+                  <div className="rounded-xl p-3 text-xs whitespace-pre-line" style={{ background: "#eaf7ff" }}>
+                    {"noteTitle" in linePreview && linePreview.noteTitle && (
+                      <div className="font-black mb-2 text-black">{linePreview.noteTitle}</div>
+                    )}
+                    <div className="leading-relaxed text-slate-800">{linePreview.note}</div>
+                  </div>
+                )}
+
+                <div className="rounded-lg py-3 text-center text-sm font-bold text-white" style={{ background: "buttonColor" in linePreview ? linePreview.buttonColor : linePreview.color }}>
+                  {linePreview.button}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+          <div className="px-4 py-3 flex items-center gap-2" style={{ borderBottom: "1px solid #3e3e3e" }}>
+            <i className="fa-solid fa-clipboard-check text-sm" style={{ color: "#ff7070" }} />
+            <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "#9e9e9e" }}>รายการตรวจระบบ</span>
+          </div>
+          <div className="p-4 space-y-2">
+            {[
+              { icon: "fa-database", label: "ฐานข้อมูลพร้อมใช้งาน", text: "ระบบต้องเชื่อมกับฐานข้อมูลได้ จึงจะดูรายชื่อนักเรียน บันทึกการเช็กชื่อ และข้อมูลแอดมินได้" },
+              { icon: "fa-user-shield", label: "จำกัดสิทธิ์เฉพาะผู้ดูแล", text: "เครื่องมือในหน้านี้ควรใช้ได้เฉพาะแอดมิน เพื่อป้องกันคนทั่วไปส่งข้อความหรือแก้ข้อมูลระบบ" },
+              { icon: "fa-bell", label: "แจ้งเตือน LINE ถูกช่อง", text: "แยกช่องแจ้งเตือนให้ชัด เช่น กลุ่มแอดมินสำหรับคำสั่งซื้อ และกลุ่มเช็กชื่อสำหรับเข้า-ออกนักเรียน" },
+              { icon: "fa-shield-halved", label: "ป้องกันการกดส่งซ้ำ", text: "การทดสอบ LINE จะแสดงชื่อแอดมินที่กดส่ง และต้องรอสักครู่ก่อนส่งซ้ำ เพื่อลดการรบกวนในกลุ่ม" },
+              { icon: "fa-rotate", label: "ถ้าหน้าเว็บแสดงผลแปลก", text: "ให้ลองรีเฟรชหน้าเว็บก่อน หากยังผิดปกติค่อยให้ผู้ดูแลระบบตรวจเซิร์ฟเวอร์" },
+            ].map(item => (
+              <div key={item.label} className="flex items-start gap-3 rounded-lg px-3 py-2" style={{ background: "#0c0c0c", border: "1px solid #2a2a2a" }}>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "rgba(255,112,112,0.12)", color: "#ff7070" }}>
+                  <i className={`fa-solid ${item.icon} text-xs`} />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-white">{item.label}</div>
+                  <div className="text-[11px] mt-0.5" style={{ color: "#636363" }}>{item.text}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
         </div>
       </div>
     </div>
@@ -4712,8 +5689,8 @@ async function deleteStorageFile(url: string, adminId: string, endpoint = "/api/
   }).catch(() => {});
 }
 
-function ImgUpload({ value, onChange, placeholder, adminId, endpoint = "/api/admin/upload-project", folder }: {
-  value: string; onChange: (v: string) => void; placeholder?: string; adminId: string; endpoint?: string; folder?: string;
+function ImgUpload({ value, onChange, placeholder, adminId, endpoint = "/api/admin/upload-project", folder, onBusyChange }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; adminId: string; endpoint?: string; folder?: string; onBusyChange?: (busy: boolean) => void;
 }) {
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting]   = useState(false);
@@ -4721,6 +5698,10 @@ function ImgUpload({ value, onChange, placeholder, adminId, endpoint = "/api/adm
   const ref = useRef<HTMLInputElement>(null);
 
   const isOwned = STORAGE_MARKERS.some(m => value.includes(m));
+
+  useEffect(() => {
+    onBusyChange?.(uploading || deleting);
+  }, [uploading, deleting, onBusyChange]);
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -4889,7 +5870,7 @@ function CustomFieldsEditor({ fields, onChange }: { fields: CustomField[]; onCha
 
 // ── ProjectsTab ───────────────────────────────────────────────────────────────
 
-function ProjectsTab({ adminId, onViewEvals }: { adminId: string; onViewEvals: (tab: string) => void }) {
+function ProjectsTab({ adminId, role, onViewEvals }: { adminId: string; role: string; onViewEvals: (tab: string) => void }) {
   const [projects, setProjects] = useState<DBProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -4897,6 +5878,9 @@ function ProjectsTab({ adminId, onViewEvals }: { adminId: string; onViewEvals: (
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<PForm>(BLANK_P);
   const [msg, setMsg] = useState("");
+  const [search, setSearch] = useState("");
+  const [view, setView] = useState<"grid" | "list">("grid");
+  const canManageProjects = role === "superadmin" || role === "admin";
 
   const load = useCallback(() => {
     setLoading(true);
@@ -4963,15 +5947,70 @@ function ProjectsTab({ adminId, onViewEvals }: { adminId: string; onViewEvals: (
   const darkInput = "w-full px-3 py-2 rounded-lg text-sm focus:outline-none";
   const darkStyle = { background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" };
   const labelCls = "text-[10px] font-bold uppercase tracking-widest block mb-1";
+  const q = search.trim().toLowerCase();
+  const filteredProjects = q
+    ? projects.filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        p.slug.toLowerCase().includes(q) ||
+        p.project_date?.toLowerCase().includes(q)
+      )
+    : projects;
+  const withPoster = projects.filter(p => p.poster_url).length;
+  const withQuestions = projects.filter(p => Array.isArray(p.custom_fields) && p.custom_fields.length > 0).length;
+  const latestProject = [...projects].sort((a, b) => String(b.project_date ?? "").localeCompare(String(a.project_date ?? "")))[0];
+  const projectKpis = [
+    { label: "โปรเจคทั้งหมด", value: projects.length, sub: "รายการ", icon: "fa-folder-open" },
+    { label: "มีโปสเตอร์", value: withPoster, sub: "โปรเจค", icon: "fa-image" },
+    { label: "มีคำถามพิเศษ", value: withQuestions, sub: "โปรเจค", icon: "fa-list-check" },
+    { label: "ล่าสุด", value: latestProject?.project_date ? new Date(latestProject.project_date).getFullYear() : "-", sub: latestProject?.name ?? "ยังไม่มีข้อมูล", icon: "fa-calendar-day" },
+  ];
 
   return (
     <div>
       <DarkSectionHeader title="จัดการโปรเจค" icon="fa-folder-open" count={projects.length} />
 
-      <div className="flex gap-2 mb-4 flex-wrap">
-        <DarkAction onClick={openNew} loading={false} color="green" icon="fa-plus" label="เพิ่มโปรเจค" />
-        <DarkAction onClick={() => onViewEvals("evaluations")} loading={false} color="blue" icon="fa-chart-bar" label="ดูผลประเมิน" />
-        <DarkAction onClick={load} loading={loading} color="gray" icon="fa-rotate" label="รีเฟรช" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        {projectKpis.map(k => (
+          <div key={k.label} className="rounded-xl p-4 flex items-center gap-3" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${ADMIN_PRIMARY}18` }}>
+              <i className={`fa-solid ${k.icon} text-sm`} style={{ color: ADMIN_PRIMARY }} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-lg font-extrabold leading-none text-white truncate">
+                {k.value}
+                <span className="text-[10px] font-normal ml-1" style={{ color: "#636363" }}>{k.sub}</span>
+              </div>
+              <div className="text-[10px] mt-0.5 truncate" style={{ color: "#9e9e9e" }}>{k.label}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-xl p-3 mb-4" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+        <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
+          <div className="relative flex-1 min-w-0">
+            <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-[11px]" style={{ color: "#636363" }} />
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="ค้นหาโปรเจค, slug, วันที่..."
+              className="w-full pl-8 pr-3 py-2.5 rounded-lg text-sm outline-none"
+              style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }} />
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {([["grid", "fa-grip", "Grid"], ["list", "fa-list", "List"]] as const).map(([v, icon, label]) => (
+              <button key={v} onClick={() => setView(v)}
+                className="w-9 h-8 rounded-lg text-xs font-bold inline-flex items-center justify-center transition-all"
+                title={label}
+                style={view === v
+                  ? { background: ADMIN_PRIMARY, color: "#fff", border: `1px solid ${ADMIN_PRIMARY}`, boxShadow: "0 8px 18px rgba(255,112,112,0.25)" }
+                  : { background: "#0c0c0c", color: "#636363", border: "1px solid #3e3e3e" }}>
+                <i className={`fa-solid ${icon}`} />
+              </button>
+            ))}
+            {canManageProjects && <DarkAction onClick={openNew} loading={false} color="green" icon="fa-plus" label="เพิ่มโปรเจค" />}
+            <DarkAction onClick={() => onViewEvals("evaluations")} loading={false} color="gray" icon="fa-chart-bar" label="ผลประเมิน" />
+            <DarkAction onClick={load} loading={loading} color="gray" icon="fa-rotate" label="รีเฟรช" />
+          </div>
+        </div>
       </div>
 
       {showForm && (
@@ -5114,10 +6153,10 @@ function ProjectsTab({ adminId, onViewEvals }: { adminId: string; onViewEvals: (
         </div>
       )}
 
-      {loading ? <DarkEmpty text="กำลังโหลด..." /> : projects.length === 0 ? <DarkEmpty text="ยังไม่มีโปรเจค" /> : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {projects.map(p => (
-            <div key={p.id} className="rounded-xl overflow-hidden" style={{ background: "#1c1c1c", border: `1px solid ${p.primary_color ?? "#3e3e3e"}44` }}>
+      {loading ? <DarkEmpty text="กำลังโหลด..." /> : projects.length === 0 ? <DarkEmpty text="ยังไม่มีโปรเจค" /> : filteredProjects.length === 0 ? <DarkEmpty text="ไม่พบโปรเจคที่ค้นหา" /> : view === "grid" ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          {filteredProjects.map(p => (
+            <div key={p.id} className="rounded-xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
               {/* Poster — clickable to open project */}
               <a href={`/project/${p.slug}`} target="_blank" rel="noreferrer" className="block relative group">
                 {p.poster_url
@@ -5125,8 +6164,8 @@ function ProjectsTab({ adminId, onViewEvals }: { adminId: string; onViewEvals: (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={p.poster_url} alt={p.name} className="w-full h-auto block" onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
                   ) : (
-                    <div className="w-full h-20 flex items-center justify-center" style={{ background: `${p.primary_color ?? "#6366f1"}22` }}>
-                      <i className="fa-solid fa-folder-open text-2xl" style={{ color: p.primary_color ?? "#6366f1", opacity: 0.5 }} />
+                    <div className="w-full h-28 flex items-center justify-center" style={{ background: `${ADMIN_PRIMARY}12` }}>
+                      <i className="fa-solid fa-folder-open text-2xl" style={{ color: ADMIN_PRIMARY, opacity: 0.7 }} />
                     </div>
                   )}
                 <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
@@ -5139,7 +6178,7 @@ function ProjectsTab({ adminId, onViewEvals }: { adminId: string; onViewEvals: (
 
               <div className="p-3">
                 <div className="flex items-center gap-2 mb-1.5">
-                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: p.primary_color ?? "#6366f1" }} />
+                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: ADMIN_PRIMARY }} />
                   <a href={`/project/${p.slug}`} target="_blank" rel="noreferrer"
                     className="text-sm font-bold truncate hover:underline" style={{ color: "#ededed" }}>{p.name}</a>
                   <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: "#2a2a2a", color: "#9e9e9e" }}>{p.project_date ? new Date(p.project_date).getFullYear() : "—"}</span>
@@ -5153,16 +6192,69 @@ function ProjectsTab({ adminId, onViewEvals }: { adminId: string; onViewEvals: (
                 <div className="flex gap-1.5 flex-wrap">
                   <a href={`/project/${p.slug}`} target="_blank" rel="noreferrer"
                     className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-opacity hover:opacity-80"
-                    style={{ background: `${p.primary_color ?? "#6366f1"}22`, color: p.primary_color ?? "#a371f7", border: `1px solid ${p.primary_color ?? "#6366f1"}44` }}>
+                    style={{ background: `${ADMIN_PRIMARY}18`, color: ADMIN_PRIMARY, border: `1px solid ${ADMIN_PRIMARY}44` }}>
                     <i className="fa-solid fa-arrow-up-right-from-square text-[9px]" /> ดูโปรเจค
                   </a>
-                  <DarkAction onClick={() => openEdit(p)} loading={false} color="blue" icon="fa-pen" label="แก้ไข" small />
-                  <DarkAction onClick={() => del(p)} loading={false} color="red" icon="fa-trash" label="ลบ" small />
+                  {canManageProjects && <DarkAction onClick={() => openEdit(p)} loading={false} color="blue" icon="fa-pen" label="แก้ไข" small />}
+                  {canManageProjects && <DarkAction onClick={() => del(p)} loading={false} color="red" icon="fa-trash" label="ลบ" small />}
                   <DarkAction onClick={() => onViewEvals("evaluations")} loading={false} color="gray" icon="fa-chart-bar" label="ประเมิน" small />
                 </div>
               </div>
             </div>
           ))}
+        </div>
+      ) : (
+        <div className="rounded-xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] text-sm">
+            <thead style={{ background: "#0c0c0c", color: "#9e9e9e" }}>
+              <tr>
+                {["โปรเจค", "วันที่", "Slug", "ไฟล์", "คำถาม", ""].map(h => (
+                  <th key={h} className="text-left px-3 py-2 text-[11px] font-bold">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filteredProjects.map((p, i) => (
+                <tr key={p.id} style={{ borderTop: i > 0 ? "1px solid #2a2a2a" : undefined }}>
+                  <td className="px-3 py-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      {p.poster_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={p.poster_url} alt={p.name} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${ADMIN_PRIMARY}18`, color: ADMIN_PRIMARY }}>
+                          <i className="fa-solid fa-folder-open" />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <a href={`/project/${p.slug}`} target="_blank" rel="noreferrer" className="font-bold text-white hover:underline truncate block">{p.name}</a>
+                        <div className="text-[10px] truncate" style={{ color: "#636363" }}>{p.demo_url || "ยังไม่มี demo url"}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 text-[12px]" style={{ color: "#9e9e9e" }}>{p.project_date ? new Date(p.project_date).toLocaleDateString("th-TH") : "-"}</td>
+                  <td className="px-3 py-3"><code className="text-[11px]" style={{ color: "#9e9e9e" }}>/project/{p.slug}</code></td>
+                  <td className="px-3 py-3 text-[11px]" style={{ color: "#9e9e9e" }}>
+                    {[p.poster_url && "Poster", p.logo_url && "Logo", p.bg_image_url && "BG"].filter(Boolean).join(", ") || "-"}
+                  </td>
+                  <td className="px-3 py-3 text-[12px]" style={{ color: "#9e9e9e" }}>{Array.isArray(p.custom_fields) ? p.custom_fields.length : 0}</td>
+                  <td className="px-3 py-3">
+                    <div className="flex gap-1.5 justify-end flex-wrap">
+                      <a href={`/project/${p.slug}`} target="_blank" rel="noreferrer"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold"
+                        style={{ background: `${ADMIN_PRIMARY}18`, color: ADMIN_PRIMARY, border: `1px solid ${ADMIN_PRIMARY}44` }}>
+                        <i className="fa-solid fa-arrow-up-right-from-square text-[9px]" /> ดู
+                      </a>
+                      {canManageProjects && <DarkAction onClick={() => openEdit(p)} loading={false} color="blue" icon="fa-pen" label="แก้ไข" small />}
+                      {canManageProjects && <DarkAction onClick={() => del(p)} loading={false} color="red" icon="fa-trash" label="ลบ" small />}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          </div>
         </div>
       )}
     </div>
@@ -5191,12 +6283,36 @@ function groupBy<T>(arr: T[], key: (x: T) => string): Record<string, T[]> {
 function useChart(ref: React.RefObject<HTMLCanvasElement | null>, getConfig: () => object, deps: React.DependencyList) {
   const inst = useRef<Chart | null>(null);
   useEffect(() => {
-    const canvas = ref.current;
-    if (!canvas) return;
-    inst.current?.destroy();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    inst.current = new Chart(canvas, getConfig() as any);
-    return () => { inst.current?.destroy(); inst.current = null; };
+    let raf = 0;
+    const draw = () => {
+      const canvas = ref.current;
+      if (!canvas) return;
+      const box = canvas.parentElement?.getBoundingClientRect();
+      if (!box?.width || !box?.height) {
+        raf = requestAnimationFrame(draw);
+        return;
+      }
+      inst.current?.destroy();
+      canvas.style.display = "block";
+      canvas.style.width = "100%";
+      canvas.style.height = "100%";
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        inst.current = new Chart(canvas, getConfig() as any);
+        inst.current.resize();
+      } catch (err) {
+        console.error("[admin/chartjs] render failed", err);
+      }
+    };
+    raf = requestAnimationFrame(draw);
+    const onResize = () => inst.current?.resize();
+    window.addEventListener("resize", onResize);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", onResize);
+      inst.current?.destroy();
+      inst.current = null;
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 }
@@ -5211,54 +6327,48 @@ const CRITERIA_KEYS  = ["overall","creative","content","presentation","usability
 const CRITERIA_LABELS = ["โดยรวม","ความคิดสร้างสรรค์","ความเหมาะสม","การนำเสนอ","การนำไปใช้"];
 const CRITERIA_COLORS = ["#3fb950","#a371f7","#ff7070","#e3b341","#ff7070"];
 
-function EvalAnalytics({ rows }: { rows: EvalRow[] }) {
+const EvalAnalytics = memo(function EvalAnalytics({ rows }: { rows: EvalRow[] }) {
 
   // ── Derived data ──────────────────────────────────────────────────────────
-  const dataKey = rows.map(r => r.id).join(",");
+  const avgScores = useMemo(
+    () => CRITERIA_KEYS.map(k => numAvg(rows.map(r => r[k as keyof EvalRow] as number | null)) ?? 0),
+    [rows]
+  );
+  const byGender = useMemo(
+    () => Object.entries(groupBy(rows, r => r.gender ?? "ไม่ระบุ")).sort((a, b) => b[1].length - a[1].length),
+    [rows]
+  );
+  const byEval = useMemo(
+    () => Object.entries(groupBy(rows, r => r.evaluator ?? "ไม่ระบุ")).sort((a, b) => b[1].length - a[1].length),
+    [rows]
+  );
 
-  const avgScores = CRITERIA_KEYS.map(k => numAvg(rows.map(r => r[k as keyof EvalRow] as number | null)) ?? 0);
-  const byGender  = Object.entries(groupBy(rows, r => r.gender    ?? "ไม่ระบุ")).sort((a, b) => b[1].length - a[1].length);
-  const byEval    = Object.entries(groupBy(rows, r => r.evaluator ?? "ไม่ระบุ")).sort((a, b) => b[1].length - a[1].length);
-
-  const days = Array.from({ length: 30 }, (_, i) => {
+  const days = useMemo(() => Array.from({ length: 30 }, (_, i) => {
     const d = new Date(); d.setDate(d.getDate() - (29 - i)); return d.toISOString().slice(0, 10);
-  });
-  const byday    = groupBy(rows, r => r.created_at.slice(0, 10));
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const hourly   = Array.from({ length: 24 }, (_, h) => rows.filter(r => new Date(r.created_at).getHours() === h).length);
+  }), []);
+  const byday = useMemo(() => groupBy(rows, r => r.created_at.slice(0, 10)), [rows]);
+  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const hourly = useMemo(
+    () => Array.from({ length: 24 }, (_, h) => rows.filter(r => new Date(r.created_at).getHours() === h).length),
+    [rows]
+  );
 
   function weekKey(iso: string) { const d = new Date(iso); d.setDate(d.getDate() - d.getDay()); return d.toISOString().slice(0, 10); }
-  const byWeek   = groupBy(rows, r => weekKey(r.created_at));
-  const weekKeys = [...new Set(Object.keys(byWeek))].sort().slice(-12);
-
-  // ── Canvas refs ───────────────────────────────────────────────────────────
-  const radarRef     = useRef<HTMLCanvasElement>(null);
-  const distRef      = useRef<HTMLCanvasElement>(null);
-  const emojiRef     = useRef<HTMLCanvasElement>(null);
-  const genderPieRef = useRef<HTMLCanvasElement>(null);
-  const genderBarRef = useRef<HTMLCanvasElement>(null);
-  const evalCntRef   = useRef<HTMLCanvasElement>(null);
-  const evalScrRef   = useRef<HTMLCanvasElement>(null);
-  const dailyRef     = useRef<HTMLCanvasElement>(null);
-  const weeklyRef    = useRef<HTMLCanvasElement>(null);
-  const hourlyRef    = useRef<HTMLCanvasElement>(null);
+  const byWeek = useMemo(() => groupBy(rows, r => weekKey(r.created_at)), [rows]);
+  const weekKeys = useMemo(() => [...new Set(Object.keys(byWeek))].sort().slice(-12), [byWeek]);
 
   // ── Charts ────────────────────────────────────────────────────────────────
 
-  const MA = { responsive: true, maintainAspectRatio: false };
-
-  useChart(radarRef, () => ({
-    type: "radar",
+  const MA = useMemo(() => ({ responsive: true, maintainAspectRatio: false, animation: false as const }), []);
+  const radarChart = useMemo(() => ({
     data: {
       labels: CRITERIA_LABELS,
       datasets: [{ label: "เฉลี่ย", data: avgScores, borderColor: "#ff7070", backgroundColor: "rgba(56,139,253,0.15)", pointBackgroundColor: CRITERIA_COLORS, pointRadius: 4, borderWidth: 2 }],
     },
     options: { ...MA, scales: { r: { min: 0, max: 5, grid: CJ_GRID, angleLines: { color: "#2a2a2a" }, pointLabels: { color: "#9e9e9e", font: { size: 10 } }, ticks: { stepSize: 1, color: "#636363", backdropColor: "transparent", font: { size: 9 } } } }, plugins: { legend: CJ_LEGEND } },
-  }), [dataKey]);
+  }), [MA, avgScores]);
 
-  // Bar — overall score distribution
-  useChart(distRef, () => ({
-    type: "bar",
+  const distChart = useMemo(() => ({
     data: {
       labels: ["⭐ 1", "⭐ 2", "⭐ 3", "⭐ 4", "⭐ 5"],
       datasets: [{
@@ -5270,28 +6380,25 @@ function EvalAnalytics({ rows }: { rows: EvalRow[] }) {
       }],
     },
     options: { ...MA, scales: { x: { grid: CJ_GRID, ticks: CJ_TICKS }, y: { grid: CJ_GRID, ticks: { ...CJ_TICKS, stepSize: 1 }, min: 0 } }, plugins: { legend: { display: false } } },
-  }), [dataKey]);
+  }), [MA, rows]);
 
-  useChart(emojiRef, () => ({
-    type: "doughnut",
+  const emojiChart = useMemo(() => ({
     data: {
       labels: ["😄 ชอบมาก", "😐 เฉยๆ", "😞 ไม่ชอบ"],
       datasets: [{ data: [3, 2, 1].map(v => rows.filter(r => r.emoji === v).length), backgroundColor: ["#3fb95099", "#e3b34199", "#ff707099"], borderColor: ["#3fb950", "#e3b341", "#ff7070"], borderWidth: 1 }],
     },
     options: { ...MA, cutout: "65%", plugins: { legend: CJ_LEGEND } },
-  }), [dataKey]);
+  }), [MA, rows]);
 
-  useChart(genderPieRef, () => ({
-    type: "doughnut",
+  const genderPieChart = useMemo(() => ({
     data: {
       labels: byGender.map(([g]) => g),
       datasets: [{ data: byGender.map(([, v]) => v.length), backgroundColor: PALETTE.map(c => c + "99"), borderColor: PALETTE, borderWidth: 1 }],
     },
     options: { ...MA, cutout: "60%", plugins: { legend: CJ_LEGEND } },
-  }), [dataKey]);
+  }), [MA, byGender]);
 
-  useChart(genderBarRef, () => ({
-    type: "bar",
+  const genderBarChart = useMemo(() => ({
     data: {
       labels: CRITERIA_LABELS,
       datasets: byGender.map(([g, gRows], i) => ({
@@ -5303,19 +6410,17 @@ function EvalAnalytics({ rows }: { rows: EvalRow[] }) {
       })),
     },
     options: { ...MA, scales: { x: { grid: CJ_GRID, ticks: CJ_TICKS }, y: { min: 0, max: 5, grid: CJ_GRID, ticks: CJ_TICKS } }, plugins: { legend: CJ_LEGEND } },
-  }), [dataKey]);
+  }), [MA, byGender]);
 
-  useChart(evalCntRef, () => ({
-    type: "bar",
+  const evalCntChart = useMemo(() => ({
     data: {
       labels: byEval.map(([e]) => e),
       datasets: [{ label: "จำนวน", data: byEval.map(([, v]) => v.length), backgroundColor: PALETTE.map(c => c + "88"), borderColor: PALETTE, borderWidth: 1, borderRadius: 4 }],
     },
     options: { ...MA, indexAxis: "y" as const, scales: { x: { grid: CJ_GRID, ticks: CJ_TICKS }, y: { grid: { display: false }, ticks: CJ_TICKS } }, plugins: { legend: { display: false } } },
-  }), [dataKey]);
+  }), [MA, byEval]);
 
-  useChart(evalScrRef, () => ({
-    type: "bar",
+  const evalScrChart = useMemo(() => ({
     data: {
       labels: CRITERIA_LABELS,
       datasets: byEval.map(([ev, evRows], i) => ({
@@ -5327,10 +6432,9 @@ function EvalAnalytics({ rows }: { rows: EvalRow[] }) {
       })),
     },
     options: { ...MA, scales: { x: { grid: CJ_GRID, ticks: CJ_TICKS }, y: { min: 0, max: 5, grid: CJ_GRID, ticks: CJ_TICKS } }, plugins: { legend: CJ_LEGEND } },
-  }), [dataKey]);
+  }), [MA, byEval]);
 
-  useChart(dailyRef, () => ({
-    type: "line",
+  const dailyChart = useMemo(() => ({
     data: {
       labels: days.map(d => d.slice(5)),
       datasets: [{
@@ -5342,19 +6446,17 @@ function EvalAnalytics({ rows }: { rows: EvalRow[] }) {
       }],
     },
     options: { ...MA, scales: { x: { grid: CJ_GRID, ticks: { ...CJ_TICKS, maxTicksLimit: 8 } }, y: { grid: CJ_GRID, ticks: { ...CJ_TICKS, stepSize: 1 }, min: 0 } }, plugins: { legend: { display: false } } },
-  }), [dataKey]);
+  }), [MA, byday, days, todayStr]);
 
-  useChart(weeklyRef, () => ({
-    type: "bar",
+  const weeklyChart = useMemo(() => ({
     data: {
       labels: weekKeys.map(w => "สัปดาห์ " + w.slice(5)),
       datasets: [{ label: "การประเมิน", data: weekKeys.map(w => byWeek[w].length), backgroundColor: "#ff707088", borderColor: "#ff7070", borderWidth: 1, borderRadius: 4 }],
     },
     options: { ...MA, scales: { x: { grid: { display: false }, ticks: { ...CJ_TICKS, maxRotation: 45 } }, y: { grid: CJ_GRID, ticks: { ...CJ_TICKS, stepSize: 1 }, min: 0 } }, plugins: { legend: { display: false } } },
-  }), [dataKey]);
+  }), [MA, byWeek, weekKeys]);
 
-  useChart(hourlyRef, () => ({
-    type: "bar",
+  const hourlyChart = useMemo(() => ({
     data: {
       labels: Array.from({ length: 24 }, (_, h) => `${h}:00`),
       datasets: [{
@@ -5365,12 +6467,12 @@ function EvalAnalytics({ rows }: { rows: EvalRow[] }) {
       }],
     },
     options: { ...MA, scales: { x: { grid: { display: false }, ticks: { ...CJ_TICKS, maxTicksLimit: 12 } }, y: { grid: CJ_GRID, ticks: { ...CJ_TICKS, stepSize: 1 }, min: 0 } }, plugins: { legend: { display: false } } },
-  }), [dataKey]);
+  }), [MA, hourly]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  function ChartCard({ title, icon, canvasRef, cols = 1, h = 220 }: {
-    title: string; icon: string; canvasRef: React.RefObject<HTMLCanvasElement | null>; cols?: 1 | 2 | 3; h?: number;
+  function ChartCard({ title, icon, children, cols = 1, h = 220 }: {
+    title: string; icon: string; children: React.ReactNode; cols?: 1 | 2 | 3; h?: number;
   }) {
     const span = cols === 3 ? "md:col-span-3" : cols === 2 ? "md:col-span-2" : "";
     return (
@@ -5379,8 +6481,10 @@ function EvalAnalytics({ rows }: { rows: EvalRow[] }) {
           <i className={`fa-solid ${icon} text-[11px]`} style={{ color: "#ff7070" }} />
           <span className="text-[11px] font-bold text-white">{title}</span>
         </div>
-        <div className="p-3" style={{ background: "#0c0c0c", position: "relative", height: h }}>
-          <canvas ref={canvasRef} style={{ position: "absolute", inset: 12 }} />
+        <div className="p-3" style={{ background: "#0c0c0c" }}>
+          <div style={{ position: "relative", height: h }}>
+            {children}
+          </div>
         </div>
       </div>
     );
@@ -5395,20 +6499,40 @@ function EvalAnalytics({ rows }: { rows: EvalRow[] }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <ChartCard title="เฉลี่ยแต่ละด้าน (Radar)"              icon="fa-circle-nodes"    canvasRef={radarRef}     cols={2} h={240} />
-        <ChartCard title="การกระจายคะแนนโดยรวม"                 icon="fa-chart-bar"        canvasRef={distRef}               h={240} />
-        <ChartCard title="ความรู้สึกรวม (Emoji)"                 icon="fa-face-smile"       canvasRef={emojiRef}              h={200} />
-        <ChartCard title="สัดส่วนแยกเพศ"                         icon="fa-venus-mars"       canvasRef={genderPieRef}          h={200} />
-        <ChartCard title="คะแนนเฉลี่ยแยกเพศ"                    icon="fa-chart-column"     canvasRef={genderBarRef}          h={200} />
-        <ChartCard title="จำนวนแยกผู้ประเมิน"                   icon="fa-user-tag"         canvasRef={evalCntRef}            h={200} />
-        <ChartCard title="คะแนนเฉลี่ยแยกผู้ประเมิน"            icon="fa-star-half-stroke" canvasRef={evalScrRef}   cols={2} h={200} />
-        <ChartCard title="การส่งประเมิน 30 วันล่าสุด"           icon="fa-calendar-days"   canvasRef={dailyRef}     cols={3} h={180} />
-        <ChartCard title="รายสัปดาห์"                            icon="fa-calendar-week"    canvasRef={weeklyRef}    cols={2} h={180} />
-        <ChartCard title="ช่วงเวลา (น้ำเงิน=เวลาเรียน·แดง=นอก)" icon="fa-clock"           canvasRef={hourlyRef}             h={180} />
+        <ChartCard title="เฉลี่ยแต่ละด้าน (Radar)" icon="fa-circle-nodes" cols={2} h={240}>
+          <Radar data={radarChart.data} options={radarChart.options} />
+        </ChartCard>
+        <ChartCard title="การกระจายคะแนนโดยรวม" icon="fa-chart-bar" h={240}>
+          <Bar data={distChart.data} options={distChart.options} />
+        </ChartCard>
+        <ChartCard title="ความรู้สึกรวม (Emoji)" icon="fa-face-smile" h={200}>
+          <Doughnut data={emojiChart.data} options={emojiChart.options} />
+        </ChartCard>
+        <ChartCard title="สัดส่วนแยกเพศ" icon="fa-venus-mars" h={200}>
+          <Doughnut data={genderPieChart.data} options={genderPieChart.options} />
+        </ChartCard>
+        <ChartCard title="คะแนนเฉลี่ยแยกเพศ" icon="fa-chart-column" h={200}>
+          <Bar data={genderBarChart.data} options={genderBarChart.options} />
+        </ChartCard>
+        <ChartCard title="จำนวนแยกผู้ประเมิน" icon="fa-user-tag" h={200}>
+          <Bar data={evalCntChart.data} options={evalCntChart.options} />
+        </ChartCard>
+        <ChartCard title="คะแนนเฉลี่ยแยกผู้ประเมิน" icon="fa-star-half-stroke" cols={2} h={200}>
+          <Bar data={evalScrChart.data} options={evalScrChart.options} />
+        </ChartCard>
+        <ChartCard title="การส่งประเมิน 30 วันล่าสุด" icon="fa-calendar-days" cols={3} h={180}>
+          <Line data={dailyChart.data} options={dailyChart.options} />
+        </ChartCard>
+        <ChartCard title="รายสัปดาห์" icon="fa-calendar-week" cols={2} h={180}>
+          <Bar data={weeklyChart.data} options={weeklyChart.options} />
+        </ChartCard>
+        <ChartCard title="ช่วงเวลา (น้ำเงิน=เวลาเรียน·แดง=นอก)" icon="fa-clock" h={180}>
+          <Bar data={hourlyChart.data} options={hourlyChart.options} />
+        </ChartCard>
       </div>
     </div>
   );
-}
+});
 
 
 const EVAL_SCORE_COLOR = (v: number | null) =>
@@ -5557,8 +6681,14 @@ function EvaluationsTab({ adminId }: { adminId: string }) {
       .catch(() => {}).finally(() => setLoading(false));
   }, [adminId]);
 
-  const projectNames = [...new Set(rows.map(r => r.projects?.name).filter(Boolean))] as string[];
-  const filtered = projectFilter === "all" ? rows : rows.filter(r => r.projects?.name === projectFilter);
+  const projectNames = useMemo(
+    () => [...new Set(rows.map(r => r.projects?.name).filter(Boolean))] as string[],
+    [rows]
+  );
+  const filtered = useMemo(
+    () => projectFilter === "all" ? rows : rows.filter(r => r.projects?.name === projectFilter),
+    [projectFilter, rows]
+  );
 
   const numAvgFmt = (arr: (number | null)[]) => {
     const v = arr.filter((x): x is number => x !== null);
@@ -5570,38 +6700,40 @@ function EvaluationsTab({ adminId }: { adminId: string }) {
     ? Math.round(filtered.filter(r => r.emoji === 3).length / filtered.length * 100)
     : 0;
 
-  const kpis = [
+  const kpis = useMemo(() => [
     { label: "ทั้งหมด",        val: String(filtered.length), sub: "รายการ",  icon: "fa-list-check",    color: "#ff7070" },
     { label: "เฉลี่ยโดยรวม",   val: avgOverall ?? "-",       sub: "/ 5",     icon: "fa-star",           color: "#9e9e9e" },
     { label: "ความคิดสร้างสรรค์", val: avgCreative ?? "-",   sub: "/ 5",     icon: "fa-lightbulb",      color: "#9e9e9e" },
     { label: "😄 ชอบมาก",      val: `${moodGoodPct}%`,       sub: "ของทั้งหมด", icon: "fa-face-smile",  color: "#9e9e9e" },
-  ];
+  ], [avgCreative, avgOverall, filtered.length, moodGoodPct]);
 
   return (
     <div>
-      {/* ── Header ── */}
-      <div className="flex flex-wrap items-start gap-3 mb-5">
-        <div>
-          <h2 className="text-sm font-bold text-white flex items-center gap-2">
-            <i className="fa-solid fa-chart-bar" style={{ color: "#ff7070" }} />
-            ผลการประเมิน
-          </h2>
-          <p className="text-[11px] mt-0.5" style={{ color: "#636363" }}>
-            {filtered.length} รายการ · อัปเดตอัตโนมัติ
-          </p>
-        </div>
-        <div className="flex-1" />
-        {/* Project filter pills */}
-        <div className="flex flex-wrap gap-1.5">
-          {["all", ...projectNames].map(p => (
-            <button key={p} onClick={() => setProjectFilter(p)}
-              className="px-3 py-1 rounded-full text-[11px] font-semibold transition-all"
-              style={projectFilter === p
-                ? { background: "#ff7070", color: "#fff" }
-                : { background: "#1c1c1c", color: "#9e9e9e", border: "1px solid #3e3e3e" }}>
-              {p === "all" ? "ทั้งหมด" : p}
-            </button>
-          ))}
+      <DarkSectionHeader title="ผลการประเมิน" icon="fa-chart-bar" count={filtered.length} />
+
+      <div className="rounded-xl p-3 mb-5" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+        <div className="flex flex-col xl:flex-row gap-3 xl:items-center">
+          <div className="min-w-0">
+            <div className="text-xs font-bold text-white flex items-center gap-2">
+              <i className="fa-solid fa-filter" style={{ color: ADMIN_PRIMARY }} />
+              ตัวกรองผลประเมิน
+            </div>
+            <p className="text-[11px] mt-0.5" style={{ color: "#636363" }}>
+              เลือกโปรเจคเพื่อดูภาพรวมและรายการเฉพาะชุดข้อมูลนั้น
+            </p>
+          </div>
+          <div className="flex-1" />
+          <div className="flex flex-wrap gap-1.5">
+            {["all", ...projectNames].map(p => (
+              <button key={p} onClick={() => setProjectFilter(p)}
+                className="px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all max-w-[180px] truncate"
+                style={projectFilter === p
+                  ? { background: `${ADMIN_PRIMARY}20`, color: ADMIN_PRIMARY, border: `1px solid ${ADMIN_PRIMARY}55` }
+                  : { background: "#0c0c0c", color: "#9e9e9e", border: "1px solid #3e3e3e" }}>
+                {p === "all" ? "ทั้งหมด" : p}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -5611,7 +6743,7 @@ function EvaluationsTab({ adminId }: { adminId: string }) {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
             {kpis.map(k => (
               <div key={k.label} className="rounded-xl p-4 flex items-center gap-3"
-                style={{ background: "#1c1c1c", border: `1px solid ${k.color}22` }}>
+                style={{ background: "#1c1c1c", border: `1px solid ${k.color === "#ff7070" ? ADMIN_PRIMARY : "#3e3e3e"}44` }}>
                 <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
                   style={{ background: k.color + "18" }}>
                   <i className={`fa-solid ${k.icon} text-sm`} style={{ color: k.color }} />
@@ -5633,12 +6765,12 @@ function EvaluationsTab({ adminId }: { adminId: string }) {
               <button key={v} onClick={() => setView(v)}
                 className="px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5"
                 style={view === v
-                  ? { background: "#2a2a2a", color: "#ededed", border: "1px solid #ff7070" }
-                  : { background: "transparent", color: "#636363", border: "1px solid #2a2a2a" }}>
+                  ? { background: `${ADMIN_PRIMARY}20`, color: ADMIN_PRIMARY, border: `1px solid ${ADMIN_PRIMARY}55` }
+                  : { background: "#1c1c1c", color: "#9e9e9e", border: "1px solid #3e3e3e" }}>
                 <i className={`fa-solid ${ico}`} />
                 {label}
                 {v === "list" && <span className="ml-0.5 px-1.5 py-0.5 rounded-full text-[9px]"
-                  style={{ background: "#ff707022", color: "#ff7070" }}>{filtered.length}</span>}
+                  style={{ background: `${ADMIN_PRIMARY}22`, color: ADMIN_PRIMARY }}>{filtered.length}</span>}
               </button>
             ))}
           </div>
@@ -5666,6 +6798,8 @@ function TeachersTab({ adminId }: { adminId: string }) {
   const [editId, setEditId]     = useState<string | null>(null);
   const [form, setForm]         = useState(BLANK_TEACHER);
   const [msg, setMsg]           = useState("");
+  const [search, setSearch]     = useState("");
+  const [view, setView]         = useState<"grid" | "list">("grid");
 
   const inp = { className: "w-full px-3 py-2 rounded-lg text-sm outline-none", style: { background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" } };
 
@@ -5702,16 +6836,52 @@ function TeachersTab({ adminId }: { adminId: string }) {
     load();
   }
 
+  const teacherQuery = search.trim().toLowerCase();
+  const filteredTeachers = teacherQuery
+    ? teachers.filter(t =>
+        t.name.toLowerCase().includes(teacherQuery) ||
+        t.nickname?.toLowerCase().includes(teacherQuery) ||
+        t.subject?.toLowerCase().includes(teacherQuery) ||
+        t.phone?.toLowerCase().includes(teacherQuery)
+      )
+    : teachers;
+  const teacherSubjects = [...new Set(teachers.map(t => t.subject).filter(Boolean))].length;
+  const activeTeachers = teachers.filter(t => t.active !== false).length;
+
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h2 className="text-base font-bold text-white mb-0.5">ครูผู้สอน</h2>
-        <p className="text-xs" style={{ color: "#636363" }}>จัดการรายชื่อครู ใช้เลือกในตารางเรียน</p>
+    <div className="space-y-5">
+      <DarkSectionHeader title="ครูผู้สอน" icon="fa-chalkboard-user" count={teachers.length} />
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          { label: "ครูทั้งหมด", value: teachers.length, icon: "fa-users" },
+          { label: "พร้อมใช้งาน", value: activeTeachers, icon: "fa-circle-check" },
+          { label: "วิชาที่ระบุ", value: teacherSubjects, icon: "fa-book-open" },
+          { label: "ผลการค้นหา", value: filteredTeachers.length, icon: "fa-magnifying-glass" },
+        ].map(k => (
+          <div key={k.label} className="rounded-xl p-4 flex items-center gap-3" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: `${ADMIN_PRIMARY}18`, color: ADMIN_PRIMARY }}>
+              <i className={`fa-solid ${k.icon} text-sm`} />
+            </div>
+            <div>
+              <div className="text-lg font-black text-white leading-none">{k.value}</div>
+              <div className="text-[10px] mt-1" style={{ color: "#9e9e9e" }}>{k.label}</div>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Form */}
       <div className="rounded-xl p-4 space-y-3" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-        <div className="text-xs font-bold text-white">{editId ? "แก้ไขครู" : "เพิ่มครูใหม่"}</div>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-xs font-bold text-white">{editId ? "แก้ไขครู" : "เพิ่มครูใหม่"}</div>
+            <div className="text-[11px] mt-0.5" style={{ color: "#636363" }}>ข้อมูลนี้จะใช้ในตารางเรียนและรายการคาบเรียน</div>
+          </div>
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center font-black text-white" style={{ background: ADMIN_PRIMARY }}>
+            {(form.name.trim() || "ค").charAt(0)}
+          </div>
+        </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="col-span-2">
             <label className="block text-[11px] text-[#9e9e9e] mb-1">ชื่อ-นามสกุล *</label>
@@ -5741,18 +6911,72 @@ function TeachersTab({ adminId }: { adminId: string }) {
         </div>
       </div>
 
+      <div className="rounded-xl p-3" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+        <div className="flex flex-col md:flex-row gap-3 md:items-center">
+          <div className="relative flex-1">
+            <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-[11px]" style={{ color: "#636363" }} />
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="ค้นหาครู, ชื่อเล่น, วิชา, เบอร์โทร..."
+              className="w-full pl-8 pr-3 py-2.5 rounded-lg text-sm outline-none"
+              style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }} />
+          </div>
+          <div className="flex gap-2">
+            {([["grid", "fa-grip", "Grid"], ["list", "fa-list", "List"]] as const).map(([v, icon, label]) => (
+              <button key={v} onClick={() => setView(v)}
+                className="px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5"
+                style={view === v
+                  ? { background: `${ADMIN_PRIMARY}20`, color: ADMIN_PRIMARY, border: `1px solid ${ADMIN_PRIMARY}55` }
+                  : { background: "#0c0c0c", color: "#9e9e9e", border: "1px solid #3e3e3e" }}>
+                <i className={`fa-solid ${icon}`} />{label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* List */}
       {loading ? (
-        <div className="text-center py-8"><span className="spinner w-8 h-8 border-2" /></div>
+        <DarkSpinner />
       ) : teachers.length === 0 ? (
         <div className="text-center py-8 text-[#636363]">ยังไม่มีรายชื่อครู</div>
+      ) : filteredTeachers.length === 0 ? (
+        <DarkEmpty text="ไม่พบครูที่ค้นหา" />
+      ) : view === "grid" ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          {filteredTeachers.map(t => (
+            <div key={t.id} className="rounded-xl p-4" style={{ background: "#1c1c1c", borderWidth: 1, borderStyle: "solid", borderColor: "#3e3e3e" }}>
+              <div className="flex items-start gap-3">
+                <div className="w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0 text-base font-black text-white" style={{ background: ADMIN_PRIMARY }}>
+                  {t.name.charAt(0)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-bold text-white truncate">{t.name}</div>
+                  <div className="text-[11px] mt-0.5" style={{ color: "#9e9e9e" }}>{t.nickname ? `ชื่อเล่น ${t.nickname}` : "ยังไม่มีชื่อเล่น"}</div>
+                  <div className="flex gap-2 flex-wrap mt-3 text-[11px]" style={{ color: "#636363" }}>
+                    {t.subject && <span className="px-2 py-1 rounded-lg" style={{ background: "#0c0c0c", border: "1px solid #2a2a2a" }}><i className="fa-solid fa-book mr-1" />{t.subject}</span>}
+                    {t.phone && <span className="px-2 py-1 rounded-lg" style={{ background: "#0c0c0c", border: "1px solid #2a2a2a" }}><i className="fa-solid fa-phone mr-1" />{t.phone}</span>}
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-2 mt-4">
+                <button onClick={() => startEdit(t)} className="flex-1 text-[11px] px-2 py-1.5 rounded-lg font-bold" style={{ background: `${ADMIN_PRIMARY}18`, color: ADMIN_PRIMARY }}>แก้ไข</button>
+                <button onClick={() => del(t.id, t.name)} className="text-[11px] px-3 py-1.5 rounded-lg font-bold" style={{ background: "#da363322", color: "#ff7070" }}>ลบ</button>
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="rounded-xl overflow-hidden" style={{ border: "1px solid #3e3e3e" }}>
-          {teachers.map((t, i) => (
+          {filteredTeachers.map((t, i) => (
             <div key={t.id} className="flex items-center gap-3 px-4 py-3"
-              style={{ background: "#1c1c1c", borderTop: i > 0 ? "1px solid #2a2a2a" : undefined }}>
+              style={{
+                background: "#1c1c1c",
+                borderTopWidth: i > 0 ? 1 : 0,
+                borderTopStyle: "solid",
+                borderTopColor: "#2a2a2a",
+              }}>
               <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold"
-                style={{ background: "#1f6feb22", color: "#58a6ff" }}>
+                style={{ background: ADMIN_PRIMARY, color: "#fff" }}>
                 {t.name.charAt(0)}
               </div>
               <div className="flex-1 min-w-0">
@@ -5765,7 +6989,7 @@ function TeachersTab({ adminId }: { adminId: string }) {
                   {t.phone && <span><i className="fa-solid fa-phone mr-1" />{t.phone}</span>}
                 </div>
               </div>
-              <button onClick={() => startEdit(t)} className="text-[11px] px-2 py-1 rounded flex-shrink-0" style={{ background: "#1f6feb22", color: "#58a6ff" }}>แก้ไข</button>
+              <button onClick={() => startEdit(t)} className="text-[11px] px-2 py-1 rounded flex-shrink-0" style={{ background: `${ADMIN_PRIMARY}18`, color: ADMIN_PRIMARY }}>แก้ไข</button>
               <button onClick={() => del(t.id, t.name)} className="text-[11px] px-2 py-1 rounded flex-shrink-0" style={{ background: "#da363322", color: "#ff7070" }}>ลบ</button>
             </div>
           ))}
@@ -5780,10 +7004,10 @@ function TeachersTab({ adminId }: { adminId: string }) {
 type ClassGroup = { id: string; name: string; program: string | null; grade: number | null; section: number | null; department: string | null; color: string | null; created_at: string; };
 
 const DEPT_BY_SECTION: Record<number, string> = {
-  1: "สาขาบัญชี",
+  1: "การบัญชี",
   2: "เทคโนโลยีธุรกิจดิจิทัล",
-  3: "ค้าปลีก",
-  4: "ช่างไฟฟ้า",
+  3: "ธุรกิจค้าปลีก",
+  4: "ช่างไฟฟ้ากำลัง",
   5: "ช่างยนต์",
 };
 
@@ -5804,6 +7028,7 @@ function ClassGroupsTab({ adminId }: { adminId: string }) {
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(BLANK_GROUP);
   const [msg, setMsg] = useState("");
+  const [search, setSearch] = useState("");
 
   const previewName = autoGroupName(form.program, form.grade, form.section);
 
@@ -5851,11 +7076,41 @@ function ClassGroupsTab({ adminId }: { adminId: string }) {
     load();
   }
 
+  const groupQuery = search.trim().toLowerCase();
+  const filteredGroups = groupQuery
+    ? groups.filter(g =>
+        g.name.toLowerCase().includes(groupQuery) ||
+        g.program?.toLowerCase().includes(groupQuery) ||
+        g.department?.toLowerCase().includes(groupQuery) ||
+        String(g.grade ?? "").includes(groupQuery) ||
+        String(g.section ?? "").includes(groupQuery)
+      )
+    : groups;
+  const vocational = groups.filter(g => g.program === "ปวช").length;
+  const higherVocational = groups.filter(g => g.program === "ปวส").length;
+  const departments = [...new Set(groups.map(g => g.department).filter(Boolean))].length;
+
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h2 className="text-base font-bold text-white mb-0.5">กลุ่มเรียน</h2>
-        <p className="text-xs" style={{ color: "#636363" }}>ชื่อกลุ่มสร้างอัตโนมัติจาก ระดับ · ชั้นปี · หมู่</p>
+    <div className="space-y-5">
+      <DarkSectionHeader title="กลุ่มเรียน" icon="fa-users-rectangle" count={groups.length} />
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          { label: "กลุ่มทั้งหมด", value: groups.length, icon: "fa-layer-group" },
+          { label: "ระดับ ปวช", value: vocational, icon: "fa-graduation-cap" },
+          { label: "ระดับ ปวส", value: higherVocational, icon: "fa-user-graduate" },
+          { label: "สาขาวิชา", value: departments, icon: "fa-sitemap" },
+        ].map(k => (
+          <div key={k.label} className="rounded-xl p-4 flex items-center gap-3" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: `${ADMIN_PRIMARY}18`, color: ADMIN_PRIMARY }}>
+              <i className={`fa-solid ${k.icon} text-sm`} />
+            </div>
+            <div>
+              <div className="text-lg font-black text-white leading-none">{k.value}</div>
+              <div className="text-[10px] mt-1" style={{ color: "#9e9e9e" }}>{k.label}</div>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Form */}
@@ -5952,25 +7207,54 @@ function ClassGroupsTab({ adminId }: { adminId: string }) {
         </div>
       </div>
 
+      <div className="rounded-xl p-3" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+        <div className="flex flex-col md:flex-row gap-3 md:items-center">
+          <div className="relative flex-1">
+            <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-[11px]" style={{ color: "#636363" }} />
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="ค้นหากลุ่มเรียน, ระดับ, ชั้นปี, สาขา..."
+              className="w-full pl-8 pr-3 py-2.5 rounded-lg text-sm outline-none"
+              style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }} />
+          </div>
+          <span className="text-[11px] px-3 py-2 rounded-lg" style={{ background: "#0c0c0c", border: "1px solid #2a2a2a", color: "#9e9e9e" }}>
+            แสดง {filteredGroups.length} จาก {groups.length} กลุ่ม
+          </span>
+        </div>
+      </div>
+
       {/* List */}
       {loading ? (
-        <div className="text-center py-8"><span className="spinner w-8 h-8 border-2" /></div>
+        <DarkSpinner />
       ) : groups.length === 0 ? (
         <div className="text-center py-8 text-[#636363]">ยังไม่มีกลุ่มเรียน</div>
+      ) : filteredGroups.length === 0 ? (
+        <DarkEmpty text="ไม่พบกลุ่มเรียนที่ค้นหา" />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {groups.map(g => (
-            <div key={g.id} className="flex items-center gap-3 p-3 rounded-xl"
-              style={{ background: "#1c1c1c", border: `1px solid ${g.color ?? "#3e3e3e"}33` }}>
-              <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: g.color ?? "#6366f1" }} />
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-bold text-white truncate">{g.name}</div>
-                {g.department && <div className="text-[11px] truncate" style={{ color: "#636363" }}>{g.department}</div>}
+          {filteredGroups.map(g => {
+            const color = g.color ?? ADMIN_PRIMARY;
+            return (
+            <div key={g.id} className="rounded-xl p-4"
+              style={{ background: "#1c1c1c", border: `1px solid ${color}44` }}>
+              <div className="flex items-start gap-3">
+                <div className="w-11 h-11 rounded-lg flex items-center justify-center font-black text-white flex-shrink-0" style={{ background: color }}>
+                  {g.section ? `/${g.section}` : g.name.charAt(0)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-bold text-white truncate">{g.name}</div>
+                  <div className="text-[11px] mt-0.5 truncate" style={{ color: "#9e9e9e" }}>{g.department || "ยังไม่ระบุสาขา"}</div>
+                  <div className="flex gap-1.5 flex-wrap mt-3">
+                    {g.program && <span className="px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ background: "#0c0c0c", color: "#9e9e9e", border: "1px solid #2a2a2a" }}>{g.program}</span>}
+                    {g.grade && <span className="px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ background: "#0c0c0c", color: "#9e9e9e", border: "1px solid #2a2a2a" }}>ปี {g.grade}</span>}
+                  </div>
+                </div>
               </div>
-              <button onClick={() => startEdit(g)} className="text-[11px] px-2 py-1 rounded" style={{ background: "#1f6feb22", color: "#58a6ff" }}>แก้ไข</button>
-              <button onClick={() => del(g.id, g.name)} className="text-[11px] px-2 py-1 rounded" style={{ background: "#da363322", color: "#ff7070" }}>ลบ</button>
+              <div className="flex gap-2 mt-4">
+                <button onClick={() => startEdit(g)} className="flex-1 text-[11px] px-2 py-1.5 rounded-lg font-bold" style={{ background: `${ADMIN_PRIMARY}18`, color: ADMIN_PRIMARY }}>แก้ไข</button>
+                <button onClick={() => del(g.id, g.name)} className="text-[11px] px-3 py-1.5 rounded-lg font-bold" style={{ background: "#da363322", color: "#ff7070" }}>ลบ</button>
+              </div>
             </div>
-          ))}
+          );})}
         </div>
       )}
     </div>
@@ -5993,7 +7277,11 @@ function dateToDoW(ds: string): number { const j = new Date(ds + "T12:00:00").ge
 
 const BLANK_SCHED = { class_group_id: "", room_name: "", subject: "", teacher: "", day_of_week: 1, start_time: "08:00", end_time: "10:00" };
 
-function ClassScheduleTab({ adminId }: { adminId: string }) {
+function ClassScheduleTab({ adminId, activeView, onViewChange }: {
+  adminId: string;
+  activeView: "weekly" | "override";
+  onViewChange: (view: "weekly" | "override") => void;
+}) {
   const [groups, setGroups]       = useState<ClassGroup[]>([]);
   const [teacherList, setTeacherList] = useState<Teacher[]>([]);
   const [schedules, setSchedules] = useState<ScheduleRow[]>([]);
@@ -6002,9 +7290,10 @@ function ClassScheduleTab({ adminId }: { adminId: string }) {
   const [filterGroup, setFilterGroup] = useState("all");
   const [form, setForm]           = useState(BLANK_SCHED);
   const [msg, setMsg]             = useState("");
+  const [editScheduleId, setEditScheduleId] = useState<string | null>(null);
 
   // ── Override view state ───────────────────────────────────────
-  const [view, setView]           = useState<"weekly" | "override">("weekly");
+  const view = activeView;
   const [oDate, setODate]         = useState(getTodayTH);
   const [overrides, setOverrides] = useState<OverrideRow[]>([]);
   const [oLoading, setOLoading]   = useState(false);
@@ -6052,26 +7341,58 @@ function ClassScheduleTab({ adminId }: { adminId: string }) {
 
   function changeFilter(gid: string) {
     setFilterGroup(gid); loadSchedules(gid);
-    setForm(f => ({ ...f, class_group_id: gid === "all" ? "" : gid }));
+    if (!editScheduleId) setForm(f => ({ ...f, class_group_id: gid === "all" ? "" : gid }));
   }
 
-  async function addSchedule() {
+  function startEditSchedule(s: ScheduleRow) {
+    setEditScheduleId(s.id);
+    setMsg("");
+    setForm({
+      class_group_id: s.class_group_id,
+      room_name: s.room_name,
+      subject: s.subject ?? "",
+      teacher: s.teacher ?? "",
+      day_of_week: s.day_of_week,
+      start_time: s.start_time.slice(0, 5),
+      end_time: s.end_time.slice(0, 5),
+    });
+  }
+
+  function resetScheduleForm() {
+    setEditScheduleId(null);
+    setMsg("");
+    setForm(f => ({
+      ...BLANK_SCHED,
+      class_group_id: filterGroup === "all" ? "" : filterGroup,
+      day_of_week: f.day_of_week,
+      start_time: f.start_time,
+      end_time: f.end_time,
+    }));
+  }
+
+  async function saveSchedule() {
     if (!form.class_group_id) { setMsg("กรุณาเลือกกลุ่มเรียน"); return; }
     if (!form.room_name.trim()) { setMsg("กรุณากรอกชื่อห้อง"); return; }
     if (form.start_time >= form.end_time) { setMsg("เวลาเริ่มต้องน้อยกว่าเวลาสิ้นสุด"); return; }
     setSaving(true); setMsg("");
     try {
-      const res = await adminFetch("/api/admin/class-schedules", adminId, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form),
+      const res = await adminFetch(editScheduleId ? `/api/admin/class-schedules/${editScheduleId}` : "/api/admin/class-schedules", adminId, {
+        method: editScheduleId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form),
       });
       const j = await res.json();
-      if (j.status === "success") { loadSchedules(filterGroup); setForm(f => ({ ...f, room_name: "", subject: "", teacher: "" })); }
+      if (j.status === "success") {
+        loadSchedules(filterGroup);
+        if (view === "override") loadAllScheds();
+        setEditScheduleId(null);
+        setForm(f => ({ ...f, room_name: "", subject: "", teacher: "" }));
+      }
       else setMsg(j.message ?? "เกิดข้อผิดพลาด");
     } finally { setSaving(false); }
   }
 
   async function delSchedule(id: string) {
     await adminFetch(`/api/admin/class-schedules/${id}`, adminId, { method: "DELETE" });
+    if (editScheduleId === id) resetScheduleForm();
     loadSchedules(filterGroup);
   }
 
@@ -6110,24 +7431,57 @@ function ClassScheduleTab({ adminId }: { adminId: string }) {
   const oDow = dateToDoW(oDate);
   const oSchedules = allScheds.filter(s => s.day_of_week === oDow);
   const overrideMap = new Map(overrides.map(o => [`${o.class_group_id}:${o.start_time}`, o]));
+  const scheduleRooms = [...new Set(schedules.map(s => s.room_name).filter(Boolean))].length;
+  const scheduleSubjects = [...new Set(schedules.map(s => s.subject).filter(Boolean))].length;
+  const scheduleGroups = [...new Set(schedules.map(s => s.class_group_id).filter(Boolean))].length;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-5">
+      <DarkSectionHeader title="ตารางเรียน" icon="fa-calendar-days" count={schedules.length} />
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          { label: "คาบเรียน", value: schedules.length, icon: "fa-calendar-check" },
+          { label: "กลุ่มที่มีตาราง", value: scheduleGroups, icon: "fa-users-rectangle" },
+          { label: "ห้องเรียน", value: scheduleRooms, icon: "fa-door-open" },
+          { label: "รายวิชา", value: scheduleSubjects, icon: "fa-book" },
+        ].map(k => (
+          <div key={k.label} className="rounded-xl p-4 flex items-center gap-3" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: `${ADMIN_PRIMARY}18`, color: ADMIN_PRIMARY }}>
+              <i className={`fa-solid ${k.icon} text-sm`} />
+            </div>
+            <div>
+              <div className="text-lg font-black text-white leading-none">{k.value}</div>
+              <div className="text-[10px] mt-1" style={{ color: "#9e9e9e" }}>{k.label}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-base font-bold text-white mb-0.5">ตารางเรียน</h2>
-          <p className="text-xs" style={{ color: "#636363" }}>กำหนดตารางประจำสัปดาห์ และแก้เฉพาะวัน</p>
+          <h3 className="text-sm font-bold text-white mb-0.5">จัดการตารางสอน</h3>
+          <p className="text-xs" style={{ color: "#636363" }}>กำหนดตารางประจำสัปดาห์ แก้คาบเรียน และแก้เฉพาะวัน</p>
         </div>
-        {/* View toggle */}
-        <div className="flex rounded-lg overflow-hidden flex-shrink-0" style={{ border: "1px solid #3e3e3e" }}>
-          {([["weekly","ตารางสัปดาห์","fa-calendar-week"],["override","แก้วันพิเศษ","fa-calendar-xmark"]] as const).map(([k, lbl, icon]) => (
-            <button key={k} onClick={() => setView(k)}
-              className="px-3 py-1.5 text-[11px] font-bold flex items-center gap-1.5"
-              style={{ background: view === k ? "#1f6feb" : "#1c1c1c", color: view === k ? "#fff" : "#9e9e9e" }}>
-              <i className={`fa-solid ${icon}`} />{lbl}
-            </button>
-          ))}
-        </div>
+      </div>
+
+      <div className="rounded-xl p-1.5 flex gap-1.5" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+        {([["weekly","ตารางสัปดาห์","จัดการคาบเรียนประจำทุกสัปดาห์","fa-calendar-week"],["override","แก้วันพิเศษ","เปลี่ยนห้องหรือยกเลิกเฉพาะวันที่เลือก","fa-calendar-xmark"]] as const).map(([k, lbl, desc, icon]) => (
+          <button key={k} onClick={() => onViewChange(k)}
+            className="flex-1 flex items-center gap-3 px-3 py-3 rounded-lg text-left transition-colors"
+            style={view === k
+              ? { background: `${ADMIN_PRIMARY}18`, color: "#fff", border: `1px solid ${ADMIN_PRIMARY}55` }
+              : { background: "#0c0c0c", color: "#9e9e9e", border: "1px solid #2a2a2a" }}>
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+              style={{ background: view === k ? ADMIN_PRIMARY : "#1c1c1c", color: view === k ? "#fff" : "#636363" }}>
+              <i className={`fa-solid ${icon} text-sm`} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs font-bold">{lbl}</div>
+              <div className="text-[10px] mt-0.5 truncate" style={{ color: view === k ? "#ffb0b0" : "#636363" }}>{desc}</div>
+            </div>
+          </button>
+        ))}
       </div>
 
       {/* ═══════════════ WEEKLY VIEW ═══════════════ */}
@@ -6148,8 +7502,20 @@ function ClassScheduleTab({ adminId }: { adminId: string }) {
 
         {/* Add form */}
         <div className="rounded-xl p-4 space-y-3" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-          <div className="text-xs font-bold text-white mb-1">เพิ่มคาบเรียน</div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="flex items-center justify-between gap-3 mb-1">
+            <div>
+              <div className="text-xs font-bold text-white">{editScheduleId ? "แก้ไขคาบเรียน" : "เพิ่มคาบเรียน"}</div>
+              <div className="text-[11px] mt-0.5" style={{ color: "#636363" }}>
+                {editScheduleId ? "กำลังแก้ไขคาบที่เลือก กดบันทึกเพื่ออัปเดตตาราง" : "เพิ่มคาบเรียนประจำสัปดาห์"}
+              </div>
+            </div>
+            {editScheduleId && (
+              <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold" style={{ background: `${ADMIN_PRIMARY}18`, color: ADMIN_PRIMARY, border: `1px solid ${ADMIN_PRIMARY}44` }}>
+                โหมดแก้ไข
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-[11px] text-[#9e9e9e] mb-1">กลุ่มเรียน *</label>
               <select value={form.class_group_id} onChange={e => setForm(f => ({ ...f, class_group_id: e.target.value }))} {...inp}>
@@ -6192,11 +7558,20 @@ function ClassScheduleTab({ adminId }: { adminId: string }) {
             </div>
           </div>
           {msg && <p className="text-xs text-red-400">{msg}</p>}
-          <button onClick={addSchedule} disabled={saving}
-            className="px-4 py-2 rounded-lg text-xs font-bold text-white transition-opacity hover:opacity-80"
-            style={{ background: "#ff7070" }}>
-            {saving ? "กำลังบันทึก..." : "+ เพิ่มคาบเรียน"}
-          </button>
+          <div className="flex gap-2">
+            <button onClick={saveSchedule} disabled={saving}
+              className="px-4 py-2 rounded-lg text-xs font-bold text-white transition-opacity hover:opacity-80 disabled:opacity-50"
+              style={{ background: "#ff7070" }}>
+              {saving ? "กำลังบันทึก..." : editScheduleId ? "บันทึกการแก้ไข" : "+ เพิ่มคาบเรียน"}
+            </button>
+            {editScheduleId && (
+              <button onClick={resetScheduleForm}
+                className="px-4 py-2 rounded-lg text-xs font-bold transition-opacity hover:opacity-80"
+                style={{ background: "#2a2a2a", color: "#9e9e9e" }}>
+                ยกเลิก
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Schedule list grouped by day */}
@@ -6225,6 +7600,9 @@ function ClassScheduleTab({ adminId }: { adminId: string }) {
                           {s.subject && <span className="text-xs truncate" style={{ color: "#9e9e9e" }}>{s.subject}</span>}
                           {s.teacher && <span className="text-xs hidden sm:block" style={{ color: "#636363" }}>— {s.teacher}</span>}
                         </div>
+                        <button onClick={() => startEditSchedule(s)}
+                          className="text-[11px] px-2 py-1 rounded flex-shrink-0"
+                          style={{ background: `${ADMIN_PRIMARY}18`, color: ADMIN_PRIMARY }}>แก้ไข</button>
                         <button onClick={() => delSchedule(s.id)}
                           className="text-[11px] px-2 py-1 rounded flex-shrink-0"
                           style={{ background: "#da363322", color: "#ff7070" }}>ลบ</button>

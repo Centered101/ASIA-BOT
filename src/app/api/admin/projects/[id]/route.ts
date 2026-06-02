@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
-import { checkAdminAuth } from "@/lib/admin-auth";
+import { checkAdminAuth, hasAdminRole } from "@/lib/admin-auth";
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -9,7 +9,9 @@ const supabase = createClient<Database>(
 );
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!await checkAdminAuth(req)) return NextResponse.json({ status: "error" }, { status: 401 });
+  const session = await checkAdminAuth(req);
+  if (!session) return NextResponse.json({ status: "error" }, { status: 401 });
+  if (!hasAdminRole(session, ["superadmin", "admin"])) return NextResponse.json({ status: "error", message: "forbidden" }, { status: 403 });
   const { id } = await params;
   const body = await req.json();
   const update: Database["public"]["Tables"]["projects"]["Update"] = {};
@@ -38,7 +40,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!await checkAdminAuth(req)) return NextResponse.json({ status: "error" }, { status: 401 });
+  const session = await checkAdminAuth(req);
+  if (!session) return NextResponse.json({ status: "error" }, { status: 401 });
+  if (!hasAdminRole(session, ["superadmin", "admin"])) return NextResponse.json({ status: "error", message: "forbidden" }, { status: 403 });
   const { id } = await params;
   const { error } = await supabase.from("projects").delete().eq("id", id);
   if (error) return NextResponse.json({ status: "error", message: error.message }, { status: 500 });

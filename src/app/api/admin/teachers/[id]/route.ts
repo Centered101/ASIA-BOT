@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { checkAdminAuth } from "@/lib/admin-auth";
+import { checkAdminAuth, hasAdminRole } from "@/lib/admin-auth";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -8,7 +8,9 @@ const supabase = createClient(
 );
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!await checkAdminAuth(req)) return NextResponse.json({ status: "error" }, { status: 401 });
+  const session = await checkAdminAuth(req);
+  if (!session) return NextResponse.json({ status: "error" }, { status: 401 });
+  if (!hasAdminRole(session, ["superadmin", "admin"])) return NextResponse.json({ status: "error", message: "forbidden" }, { status: 403 });
   const { id } = await params;
   const { name, nickname, subject, phone, active } = await req.json();
   if (!name?.trim()) return NextResponse.json({ status: "error", message: "กรุณากรอกชื่อครู" }, { status: 400 });
@@ -21,7 +23,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!await checkAdminAuth(req)) return NextResponse.json({ status: "error" }, { status: 401 });
+  const session = await checkAdminAuth(req);
+  if (!session) return NextResponse.json({ status: "error" }, { status: 401 });
+  if (!hasAdminRole(session, ["superadmin", "admin"])) return NextResponse.json({ status: "error", message: "forbidden" }, { status: 403 });
   const { id } = await params;
   const { error } = await supabase.from("teachers").delete().eq("id", id);
   if (error) return NextResponse.json({ status: "error", message: error.message }, { status: 500 });

@@ -33,7 +33,20 @@ const LOC_CFG: Record<Location, { label: string; icon: string; color: string; bg
   meeting: { label: "ห้องประชุม", icon: "fa-users",         color: "#059669", bg: "#ECFDF5", border: "#A7F3D0" },
 };
 
-function todayISO() { return new Date().toISOString().slice(0, 10); }
+function toDateInputValue(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function todayISO() { return toDateInputValue(new Date()); }
+
+function shiftDate(date: string, days: number) {
+  const d = new Date(`${date}T12:00:00`);
+  d.setDate(d.getDate() + days);
+  return toDateInputValue(d);
+}
 
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
@@ -67,9 +80,12 @@ export default function StudentEntryScannerPage() {
   // Auth check
   useEffect(() => {
     const s = getStudentSession();
+    if (!s) {
+      router.replace("/login?next=/student-entry-scanner");
+    }
     setStudent(s);
     setAuthed(!!s);
-  }, []);
+  }, [router]);
 
   const fetchData = useCallback(async () => {
     if (!authed) return;
@@ -121,7 +137,7 @@ export default function StudentEntryScannerPage() {
           <h2 className="text-2xl font-extrabold text-slate-800 mb-2">ต้องเข้าสู่ระบบก่อน</h2>
           <p className="text-slate-500 text-sm mb-8 max-w-xs">ข้อมูลการสแกนบัตรนักเรียนสามารถดูได้เฉพาะเมื่อเข้าสู่ระบบเท่านั้น</p>
           <div className="flex gap-3">
-            <button onClick={() => router.push("/login")}
+            <button onClick={() => router.push("/login?next=/student-entry-scanner")}
               className="btn-primary flex items-center gap-2 px-6 py-2.5">
               <i className="fa-solid fa-id-card" /> เข้าสู่ระบบ
             </button>
@@ -138,6 +154,8 @@ export default function StudentEntryScannerPage() {
 
   const present = new Set(data.map(r => r.student_id)).size;
   const cfg = LOC_CFG[tab];
+  const today = todayISO();
+  const isToday = date === today;
   const openCount = data.filter(r => !r.checkout_time).length;
   const checkedOutCount = data.filter(r => r.checkout_time).length;
   const myRows = student ? data.filter(r => r.student_id === student.student_id) : [];
@@ -178,8 +196,23 @@ export default function StudentEntryScannerPage() {
             )}
           </div>
           <div className="flex items-center gap-2">
+            <button onClick={() => setDate(shiftDate(date, -1))}
+              className="flex items-center gap-1.5 text-xs text-slate-600 bg-white border border-slate-200 px-3 py-1.5 rounded-xl hover:border-[var(--primary-color)] hover:text-[var(--primary-dark)] transition">
+              <i className="fa-solid fa-chevron-left text-[10px]" /> วันก่อนหน้า
+            </button>
+            <button onClick={() => setDate(today)}
+              disabled={isToday}
+              className="flex items-center gap-1.5 text-xs bg-white border px-3 py-1.5 rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ borderColor: isToday ? "rgba(132,212,250,0.6)" : "#E2E8F0", color: isToday ? "var(--primary-dark)" : "#475569", background: isToday ? "rgba(132,212,250,0.12)" : "#fff" }}>
+              <i className="fa-solid fa-calendar-day text-[10px]" /> วันนี้
+            </button>
             <input type="date" value={date} onChange={e => setDate(e.target.value)} max={todayISO()}
               className="text-sm border border-slate-200 rounded-xl px-3 py-1.5 bg-white outline-none focus:border-[var(--primary-color)] transition font-[inherit]" />
+            <button onClick={() => setDate(shiftDate(date, 1))}
+              disabled={isToday}
+              className="flex items-center gap-1.5 text-xs text-slate-600 bg-white border border-slate-200 px-3 py-1.5 rounded-xl hover:border-[var(--primary-color)] hover:text-[var(--primary-dark)] transition disabled:opacity-50 disabled:cursor-not-allowed">
+              วันถัดไป <i className="fa-solid fa-chevron-right text-[10px]" />
+            </button>
             <button onClick={fetchData}
               className="flex items-center gap-1.5 text-xs text-[var(--primary-dark)] bg-white border border-[rgba(132,212,250,0.45)] px-3 py-1.5 rounded-xl hover:bg-[rgba(132,212,250,0.12)] transition">
               <i className={`fa-solid fa-arrows-rotate${loading ? " fa-spin" : ""}`} />

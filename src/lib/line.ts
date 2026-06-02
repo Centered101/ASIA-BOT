@@ -60,6 +60,48 @@ type FlexOrderItem = {
   imageUrl?: string | null;
 };
 
+function buildLineFlexHeader(params: {
+  title: string;
+  subtitle: string;
+  backgroundColor: string;
+  photoUrl?: string | null;
+  subtitleColor?: string;
+}) {
+  const { title, subtitle, backgroundColor, photoUrl, subtitleColor = "#000000" } = params;
+  return {
+    type: "box" as const,
+    layout: "horizontal" as const,
+    backgroundColor,
+    paddingAll: "20px",
+    alignItems: "center" as const,
+    contents: [
+      {
+        type: "box" as const,
+        layout: "vertical" as const,
+        flex: 1,
+        contents: [
+          { type: "text" as const, text: title, color: "#000000", weight: "bold" as const, size: "lg" as const },
+          { type: "text" as const, text: subtitle, color: subtitleColor, size: "sm" as const, margin: "sm" as const },
+        ],
+      },
+      ...(photoUrl ? [{
+        type: "box" as const,
+        layout: "vertical" as const,
+        width: "56px",
+        height: "56px",
+        cornerRadius: "8px",
+        contents: [{
+          type: "image" as const,
+          url: photoUrl,
+          size: "full" as const,
+          aspectRatio: "1:1",
+          aspectMode: "cover" as const,
+        }],
+      }] : []),
+    ],
+  };
+}
+
 export function buildOrderFlexMessage(params: {
   orderId: string;
   studentName: string;
@@ -70,10 +112,11 @@ export function buildOrderFlexMessage(params: {
   deliveryMode: string;
   deliveryLoc?: string | null;
   deliverySlot?: string | null;
-  status?: "pending" | "paid";
+  status?: "pending" | "paid" | "cancelled";
 }) {
   const { orderId, studentName, studentId, studentPhotoUrl, items, total, deliveryMode, deliveryLoc, deliverySlot, status = "paid" } = params;
   const isPending = status === "pending";
+  const isCancelled = status === "cancelled";
   const isDelivery = deliveryMode === "delivery";
   const deliveryText = isDelivery
     ? `🚚 จัดส่ง: ${deliveryLoc ?? ""} ช่วง ${deliverySlot ?? ""}`
@@ -88,74 +131,52 @@ export function buildOrderFlexMessage(params: {
   return {
     type: "bubble",
     size: "giga",
-    header: {
-      type: "box",
-      layout: "vertical",
-      backgroundColor: isPending ? "#FEF3C7" : "#84D4FA",
-      paddingAll: "20px",
-      contents: [
-        {
-          type: "box",
-          layout: "horizontal",
-          alignItems: "center",
-          contents: [
-            {
-              type: "box",
-              layout: "vertical",
-              flex: 1,
-              contents: [
-                { type: "text", text: "สหกรณ์โรงเรียน ASIA-BOT", color: "#000000", weight: "bold", size: "lg" },
-                { type: "text", text: now, color: "#1E293B", size: "sm", margin: "sm" },
-                {
-                  type: "box" as const,
-                  layout: "horizontal" as const,
-                  width: isPending ? "120px" : "90px",
-                  backgroundColor: isPending ? "#F59E0B" : "#22C55E",
-                  cornerRadius: "20px",
-                  paddingAll: "4px",
-                  margin: "sm" as const,
-                  contents: [{
-                    type: "text" as const,
-                    text: isPending ? "⏳ รอชำระเงิน" : "✅ ชำระแล้ว",
-                    color: "#FFFFFF",
-                    size: "xs" as const,
-                    align: "center" as const,
-                    weight: "bold" as const,
-                  }],
-                },
-              ],
-            },
-            ...(studentPhotoUrl ? [{
-              type: "box" as const,
-              layout: "vertical" as const,
-              width: "56px",
-              height: "56px",
-              cornerRadius: "8px",
-              contents: [{
-                type: "image" as const,
-                url: studentPhotoUrl,
-                size: "full",
-                aspectRatio: "1:1",
-                aspectMode: "cover" as const,
-              }],
-            }] : []),
-          ],
-        },
-      ],
-    },
+    header: buildLineFlexHeader({
+      title: "สหกรณ์โรงเรียน ASIA-BOT",
+      subtitle: now,
+      backgroundColor: "#EC4899",
+      photoUrl: studentPhotoUrl,
+      subtitleColor: "#1E293B",
+    }),
     body: {
       type: "box",
       layout: "vertical",
       spacing: "md",
       paddingAll: "20px",
       contents: [
+        {
+          type: "box" as const,
+          layout: "horizontal" as const,
+          width: isCancelled ? "90px" : isPending ? "120px" : "90px",
+          backgroundColor: isCancelled ? "#EF4444" : isPending ? "#F59E0B" : "#22C55E",
+          cornerRadius: "20px",
+          paddingAll: "4px",
+          contents: [{
+            type: "text" as const,
+            text: isCancelled ? "❌ ยกเลิก" : isPending ? "⏳ รอชำระเงิน" : "✅ ชำระแล้ว",
+            color: "#FFFFFF",
+            size: "xs" as const,
+            align: "center" as const,
+            weight: "bold" as const,
+          }],
+        },
         { type: "text", text: orderId, weight: "bold", size: "xl", color: "#0F172A" },
         {
-          type: "text",
-          text: studentId ? `นักเรียน: ${studentName} (${studentId})` : `นักเรียน: ${studentName}`,
-          size: "sm",
-          color: "#475569",
-          wrap: true,
+          type: "box" as const,
+          layout: "horizontal" as const,
+          contents: [
+            { type: "text" as const, text: "นักเรียน", size: "sm" as const, color: "#64748B", flex: 2 },
+            {
+              type: "text" as const,
+              text: studentId ? `${studentName} (${studentId})` : studentName,
+              size: "sm" as const,
+              color: "#0F172A",
+              weight: "bold" as const,
+              align: "end" as const,
+              flex: 3,
+              wrap: true,
+            },
+          ],
         },
         { type: "separator", margin: "md" },
         {
@@ -257,7 +278,7 @@ export function buildOrderFlexMessage(params: {
         {
           type: "button",
           style: "primary",
-          color: isPending ? "#FEF3C7" : "#84D4FA",
+          color: isCancelled ? "#EF4444" : isPending ? "#EC4899" : "#84D4FA",
           action: {
             type: "uri",
             label: "ดูออเดอร์",
@@ -287,7 +308,7 @@ export function buildFeedbackFlexMessage(params: {
   const { type, name, studentId, studentPhotoUrl, email, contact, category, reportUrl, message, imageUrls } = params;
   const siteUrl     = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-lb.web.app";
   const typeLabel   = type === "comment" ? "ความคิดเห็น" : "รายงานปัญหา";
-  const headerColor = type === "comment" ? "#84D4FA" : "#FDE68A";
+  const headerColor = type === "comment" ? "#84D4FA" : "#FF7070";
   const imgs        = (imageUrls ?? []).filter(Boolean);
   const heroUrl     = imgs[0] ?? null;
   const extraImgs   = imgs.slice(1, 3);
@@ -306,38 +327,13 @@ export function buildFeedbackFlexMessage(params: {
   }
 
   // ── Header (with optional student photo) ───────────────────────
-  bubble.header = {
-    type: "box",
-    layout: "horizontal",
+  bubble.header = buildLineFlexHeader({
+    title: "ASIA-BOT Feedback",
+    subtitle: "รับเรื่องใหม่จากผู้ใช้งาน",
     backgroundColor: headerColor,
-    paddingAll: "20px",
-    alignItems: "center",
-    contents: [
-      {
-        type: "box" as const,
-        layout: "vertical" as const,
-        flex: 1,
-        contents: [
-          { type: "text" as const, text: "ASIA-BOT Feedback", color: "#000000", weight: "bold" as const, size: "lg" as const },
-          { type: "text" as const, text: "รับเรื่องใหม่จากผู้ใช้งาน", color: "#1E293B", size: "sm" as const, margin: "sm" as const },
-        ],
-      },
-      ...(studentPhotoUrl ? [{
-        type: "box" as const,
-        layout: "vertical" as const,
-        width: "56px",
-        height: "56px",
-        cornerRadius: "8px",
-        contents: [{
-          type: "image" as const,
-          url: studentPhotoUrl,
-          size: "full" as const,
-          aspectRatio: "1:1",
-          aspectMode: "cover" as const,
-        }],
-      }] : []),
-    ],
-  };
+    photoUrl: studentPhotoUrl,
+    subtitleColor: "#1E293B",
+  });
 
   // ── Body ────────────────────────────────────────────────────────
   const bodyContents: object[] = [
@@ -346,12 +342,12 @@ export function buildFeedbackFlexMessage(params: {
   ];
 
   // Info rows — shown only when field has a value
-  const infoRow = (label: string, value: string) => ({
+  const infoRow = (label: string, value?: string | null) => ({
     type: "box" as const,
     layout: "horizontal" as const,
     contents: [
       { type: "text" as const, text: label, size: "sm" as const, color: "#64748B", flex: 2 },
-      { type: "text" as const, text: value, size: "sm" as const, color: "#0F172A", weight: "bold" as const, align: "end" as const, flex: 3, wrap: true },
+      { type: "text" as const, text: value ?? "-", size: "sm" as const, color: "#0F172A", weight: "bold" as const, align: "end" as const, flex: 3, wrap: true },
     ],
   });
   const infoRows = [
@@ -433,6 +429,187 @@ export function buildFeedbackFlexMessage(params: {
   return bubble;
 }
 
+// ─── Booking Flex Message builder ────────────────────────────────────────────
+
+export function buildBookingFlexMessage(params: {
+  bookingId?: string | null;
+  roomName: string;
+  studentName: string;
+  studentId: string;
+  studentPhotoUrl?: string | null;
+  nickname?: string | null;
+  program?: string | null;
+  department?: string | null;
+  bookingDate: string;
+  startTime: string;
+  endTime: string;
+  attendees?: number | null;
+  phone?: string | null;
+  purpose: string;
+  status?: "pending" | "approved" | "rejected" | "cancelled";
+}) {
+  const { bookingId, roomName, studentName, studentId, studentPhotoUrl, nickname, program, department, bookingDate, startTime, endTime, attendees, phone, purpose, status = "pending" } = params;
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-lb.vercel.app";
+  const cfg = {
+    pending: { header: "#F59E0B", badge: "#F59E0B", label: "รออนุมัติ", icon: "📅" },
+    approved: { header: "#F59E0B", badge: "#22C55E", label: "อนุมัติแล้ว", icon: "✅" },
+    rejected: { header: "#F59E0B", badge: "#EF4444", label: "ไม่อนุมัติ", icon: "🚫" },
+    cancelled: { header: "#F59E0B", badge: "#64748B", label: "ยกเลิก", icon: "❌" },
+  }[status];
+  const dateText = new Date(`${bookingDate}T12:00:00`).toLocaleDateString("th-TH", {
+    timeZone: "Asia/Bangkok",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+  const row = (label: string, value?: string | number | null) => value ? ({
+    type: "box" as const,
+    layout: "horizontal" as const,
+    contents: [
+      { type: "text" as const, text: label, size: "sm" as const, color: "#64748B", flex: 2 },
+      { type: "text" as const, text: String(value), size: "sm" as const, color: "#0F172A", weight: "bold" as const, align: "end" as const, flex: 3, wrap: true },
+    ],
+  }) : null;
+  const rows = [
+    row("ผู้จอง", `${studentName}${nickname ? ` (${nickname})` : ""}`),
+    row("รหัสนักเรียน", studentId),
+    row("ชั้น/สาขา", [program, department].filter(Boolean).join(" · ")),
+    row("ห้อง", roomName),
+    row("วันที่", dateText),
+    row("เวลา", `${startTime.slice(0, 5)}-${endTime.slice(0, 5)}`),
+    row("จำนวน", attendees ? `${attendees} คน` : null),
+    row("เบอร์", phone),
+    row("Booking", bookingId),
+  ].filter(Boolean) as object[];
+
+  return {
+    type: "bubble",
+    size: "giga",
+    header: buildLineFlexHeader({
+      title: "ASIA-BOT Booking",
+      subtitle: "คำขอจองห้องจากนักเรียน",
+      backgroundColor: cfg.header,
+      photoUrl: studentPhotoUrl,
+    }),
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "md",
+      contents: [
+        { type: "text", text: `คำขอจองห้อง ${roomName}`, weight: "bold", size: "xl", color: cfg.badge, wrap: true },
+        { type: "separator", margin: "sm" },
+        { type: "box", layout: "vertical", spacing: "sm", contents: rows },
+        {
+          type: "box",
+          layout: "vertical",
+          backgroundColor: "#F8FAFC",
+          cornerRadius: "12px",
+          paddingAll: "12px",
+          contents: [{ type: "text", text: purpose, size: "sm", color: "#475569", wrap: true }],
+        },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      contents: [{
+        type: "button",
+        style: "primary",
+        color: cfg.badge,
+        action: { type: "uri", label: "เปิดรายการจอง", uri: `${siteUrl}/admin?tab=bookings` },
+      }],
+    },
+  };
+}
+
+// ─── Student Data Change Flex Message builder ────────────────────────────────
+
+export function buildStudentDataChangeFlexMessage(params: {
+  studentId: string;
+  studentName: string;
+  studentPhotoUrl?: string | null;
+  nickname?: string | null;
+  program?: string | null;
+  department?: string | null;
+  changes: { label: string; oldValue?: string | null; newValue: string }[];
+}) {
+  const { studentId, studentName, studentPhotoUrl, nickname, program, department, changes } = params;
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-lb.vercel.app";
+  const changeRows = changes.slice(0, 6).map((change) => ({
+    type: "box" as const,
+    layout: "vertical" as const,
+    spacing: "xs" as const,
+    contents: [
+      { type: "text" as const, text: change.label, size: "xs" as const, color: "#64748B", weight: "bold" as const },
+      {
+        type: "text" as const,
+        text: `${change.oldValue || "-"} → ${change.newValue}`,
+        size: "sm" as const,
+        color: "#0F172A",
+        wrap: true,
+      },
+    ],
+  }));
+
+  const infoRow = (label: string, value?: string | null) => value ? ({
+    type: "box" as const,
+    layout: "horizontal" as const,
+    contents: [
+      { type: "text" as const, text: label, size: "sm" as const, color: "#64748B", flex: 2 },
+      { type: "text" as const, text: value, size: "sm" as const, color: "#0F172A", weight: "bold" as const, align: "end" as const, flex: 3, wrap: true },
+    ],
+  }) : null;
+  const infoRows = [
+    infoRow("นักเรียน", `${studentName}${nickname ? ` (${nickname})` : ""}`),
+    infoRow("รหัส", studentId),
+    infoRow("ชั้น/สาขา", [program, department].filter(Boolean).join(" · ")),
+  ].filter(Boolean) as object[];
+
+  return {
+    type: "bubble",
+    size: "giga",
+    header: buildLineFlexHeader({
+      title: "ASIA-BOT Data Request",
+      subtitle: "คำขอแก้ไขข้อมูลนักเรียน",
+      backgroundColor: "#6366F1",
+      photoUrl: studentPhotoUrl,
+    }),
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "md",
+      contents: [
+        { type: "text", text: "รอแอดมินตรวจสอบ", weight: "bold", size: "xl", color: "#2563EB" },
+        { type: "box", layout: "vertical", spacing: "sm", contents: infoRows },
+        { type: "separator", margin: "sm" },
+        {
+          type: "box",
+          layout: "vertical",
+          backgroundColor: "#F8FAFC",
+          cornerRadius: "12px",
+          paddingAll: "12px",
+          spacing: "md",
+          contents: [
+            { type: "text" as const, text: "รายการที่ขอแก้ไข", size: "sm" as const, weight: "bold" as const, color: "#0F172A" },
+            ...changeRows,
+            ...(changes.length > 6 ? [{ type: "text" as const, text: `และอีก ${changes.length - 6} รายการ`, size: "xs" as const, color: "#64748B" }] : []),
+          ],
+        },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      contents: [{
+        type: "button",
+        style: "primary",
+        color: "#2563EB",
+        action: { type: "uri", label: "เปิดคำขอแก้ไขข้อมูล", uri: `${siteUrl}/admin?tab=data_requests` },
+      }],
+    },
+  };
+}
+
 // ─── RFID Attendance Flex Message builder ────────────────────────────────────
 
 export function buildRfidScanFlexMessage(params: {
@@ -451,7 +628,7 @@ export function buildRfidScanFlexMessage(params: {
 }) {
   const { action, studentName, studentId, nickname, program, department, studentPhotoUrl, location, locationLabel, uid, scannedAt, duration } = params;
   const isCheckin = action === "checkin";
-  const headerColor = isCheckin ? "#84D4FA" : "#D1FAE5";
+  const headerColor = "#84D4FA";
   const actionText = `${isCheckin ? "เข้า" : "ออก"}${locationLabel}`;
   const statusColor = isCheckin ? "#22C55E" : "#0EA5E9";
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-lb.vercel.app";
@@ -464,50 +641,25 @@ export function buildRfidScanFlexMessage(params: {
     minute: "2-digit",
   });
 
-  const infoRow = (label: string, value: string) => ({
+  const infoRow = (label: string, value?: string | null) => ({
     type: "box" as const,
     layout: "horizontal" as const,
     contents: [
       { type: "text" as const, text: label, size: "sm" as const, color: "#64748B", flex: 2 },
-      { type: "text" as const, text: value, size: "sm" as const, weight: "bold" as const, color: "#0F172A", align: "end" as const, flex: 3, wrap: true },
+      { type: "text" as const, text: value ?? "-", size: "sm" as const, weight: "bold" as const, color: "#0F172A", align: "end" as const, flex: 3, wrap: true },
     ],
   });
 
   return {
     type: "bubble",
     size: "giga",
-    header: {
-      type: "box",
-      layout: "horizontal",
+    header: buildLineFlexHeader({
+      title: isCheckin ? "ASIA-BOT Check-in" : "ASIA-BOT Check-out",
+      subtitle: "สแกนบัตรสำเร็จ",
       backgroundColor: headerColor,
-      paddingAll: "20px",
-      alignItems: "center",
-      contents: [
-        {
-          type: "box" as const,
-          layout: "vertical" as const,
-          flex: 1,
-          contents: [
-            { type: "text" as const, text: isCheckin ? "ASIA-BOT Check-in" : "ASIA-BOT Check-out", weight: "bold" as const, size: "lg" as const, color: "#000000" },
-            { type: "text" as const, text: "สแกนบัตรสำเร็จ", size: "sm" as const, color: "#1E293B", margin: "sm" as const },
-          ],
-        },
-        ...(studentPhotoUrl ? [{
-          type: "box" as const,
-          layout: "vertical" as const,
-          width: "56px",
-          height: "56px",
-          cornerRadius: "8px",
-          contents: [{
-            type: "image" as const,
-            url: studentPhotoUrl,
-            size: "full" as const,
-            aspectRatio: "1:1" as const,
-            aspectMode: "cover" as const,
-          }],
-        }] : []),
-      ],
-    },
+      photoUrl: studentPhotoUrl,
+      subtitleColor: "#1E293B",
+    }),
     body: {
       type: "box",
       layout: "vertical",

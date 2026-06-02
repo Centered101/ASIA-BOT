@@ -25,11 +25,11 @@ export default function Header({ subtitle = "Overview" }: { subtitle?: string })
   const curr = pathname.replace(/\/$/, "");
   const isActive = (l: QuickLink) => !!l.path && curr === l.path.replace(/\/$/, "");
 
-  const all = QUICK_LINKS.filter(l => l.path || l.url);
+  const all = QUICK_LINKS.filter(l => (l.path || l.url) && l.path !== "/");
 
   // Desktop: non-current page links grouped by role
   const visible = all.filter(l => !isActive(l));
-  const mainLinks = visible.filter(l => !l.role && !l.external).slice(0, 4);
+  const mainLinks = visible.filter(l => !l.role && !l.external).slice(0, 3);
   const ctaStudent = visible.find(l => l.role === "student");
   const ctaShop    = visible.find(l => l.role === "shop");
   const moreLinks  = visible.filter(l => !mainLinks.includes(l) && l !== ctaStudent && l !== ctaShop);
@@ -38,7 +38,7 @@ export default function Header({ subtitle = "Overview" }: { subtitle?: string })
     <>
       <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200/60 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="h-16 flex items-center gap-3">
+          <div className="h-16 flex items-center gap-3 min-w-0">
 
             {/* ── Logo ── */}
             <Link href="/" className="flex items-center gap-2.5 flex-shrink-0 group">
@@ -54,11 +54,11 @@ export default function Header({ subtitle = "Overview" }: { subtitle?: string })
             </Link>
 
             {/* ── Desktop nav ── */}
-            <nav className="hidden lg:flex items-center gap-0.5 flex-1 ml-1">
+            <nav className="hidden lg:flex items-center gap-0.5 flex-1 min-w-0 ml-1">
               {mainLinks.map(link => (
                 <Link key={link.name} href={link.url ?? (link.path ?? "#")}
                   target={link.external ? "_blank" : undefined}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition-all">
+                  className="flex items-center gap-1.5 px-2.5 xl:px-3 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition-all whitespace-nowrap">
                   {link.icon && <i className={`${link.icon} text-xs`} style={{ color: link.color ?? "#94A3B8" }} />}
                   <span>{link.name}</span>
                 </Link>
@@ -100,6 +100,13 @@ export default function Header({ subtitle = "Overview" }: { subtitle?: string })
             <div className="hidden lg:flex items-center gap-2 flex-shrink-0">
               {session ? (
                 <>
+                  {ctaShop && (
+                    <Link href={ctaShop.path ?? "#"}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-bold border-2 border-pink-200 text-pink-500 hover:bg-pink-50 transition-all whitespace-nowrap">
+                      {ctaShop.icon && <i className={`${ctaShop.icon} text-xs`} />}
+                      <span>สหกรณ์</span>
+                    </Link>
+                  )}
                   <Link href="/student"
                     className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-[rgba(132,212,250,0.45)] bg-[rgba(132,212,250,0.12)] hover:bg-[rgba(132,212,250,0.2)] transition">
                     <StudentAvatar src={session.photo_url} name={`${session.first_name} ${session.last_name}`} size={24} />
@@ -108,26 +115,26 @@ export default function Header({ subtitle = "Overview" }: { subtitle?: string })
                     </span>
                   </Link>
                   <button onClick={handleLogout}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-red-50 hover:text-red-500 border border-slate-200 hover:border-red-200 transition">
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-red-50 hover:text-red-500 border border-slate-200 hover:border-red-200 transition whitespace-nowrap">
                     <i className="fa-solid fa-arrow-right-from-bracket text-xs" />
-                    ออกจากระบบ
+                    <span className="hidden xl:inline">ออกจากระบบ</span>
                   </button>
                 </>
               ) : (
                 <>
                   {ctaShop && (
                     <Link href={ctaShop.path ?? "#"}
-                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-bold border-2 border-pink-200 text-pink-500 hover:bg-pink-50 transition-all">
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold border-2 border-pink-200 text-pink-500 hover:bg-pink-50 transition-all whitespace-nowrap">
                       {ctaShop.icon && <i className={`${ctaShop.icon} text-xs`} />}
-                      <span>{ctaShop.name}</span>
+                      <span>สหกรณ์</span>
                     </Link>
                   )}
                   {ctaStudent && (
                     <Link href={ctaStudent.path ?? "#"}
-                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white transition-all hover:brightness-110 shadow-md shadow-sky-200"
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-bold text-white transition-all hover:brightness-110 shadow-md shadow-sky-200 whitespace-nowrap"
                       style={{ background: "linear-gradient(135deg,var(--primary-color),var(--primary-dark))" }}>
                       {ctaStudent.icon && <i className={`${ctaStudent.icon} text-xs`} />}
-                      <span>{ctaStudent.name}</span>
+                      <span>เข้าสู่ระบบ</span>
                     </Link>
                   )}
                 </>

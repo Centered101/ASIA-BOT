@@ -141,7 +141,7 @@ export default function HomePage() {
                 {[
                   { href: "/class-track-room",      icon: "fa-chalkboard-user", color: "var(--primary-dark)", label: "Class Track Room", desc: "สถานะห้องเรียนแบบเรียลไทม์" },
                   { href: "/student-entry-scanner", icon: "fa-qrcode",          color: "#059669",              label: "Entry Scanner",    desc: "บันทึกการเข้า-ออกนักเรียน" },
-                  { href: "/roomly",                icon: "fa-calendar-check",  color: "#F59E0B",              label: "จองห้องประชุม",     desc: "ระบบจองห้องออนไลน์" },
+                  { href: "/class-track-room?view=booking", icon: "fa-calendar-check",  color: "#F59E0B",              label: "จองห้องประชุม",     desc: "ระบบจองห้องออนไลน์" },
                   { href: "/feedback",              icon: "fa-comment-dots",    color: "#14B8A6",              label: "ความคิดเห็น",        desc: "ส่งข้อเสนอแนะและรายงาน" },
                 ].map(f => (
                   <Link key={f.href} href={f.href}

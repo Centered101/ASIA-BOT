@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { checkAdminAuth } from "@/lib/admin-auth";
+import { checkAdminAuth, hasAdminRole } from "@/lib/admin-auth";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -17,7 +17,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!await checkAdminAuth(req)) return NextResponse.json({ status: "error" }, { status: 401 });
+  const session = await checkAdminAuth(req);
+  if (!session) return NextResponse.json({ status: "error" }, { status: 401 });
+  if (!hasAdminRole(session, ["superadmin", "admin"])) return NextResponse.json({ status: "error", message: "forbidden" }, { status: 403 });
   const { name, program, grade, section, department, color } = await req.json();
   if (!name?.trim()) return NextResponse.json({ status: "error", message: "กรุณากรอกชื่อกลุ่มเรียน" }, { status: 400 });
   const { data, error } = await supabase.from("class_groups")

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
-import { checkAdminAuth } from "@/lib/admin-auth";
+import { checkAdminAuth, hasAdminRole } from "@/lib/admin-auth";
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,7 +18,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!await checkAdminAuth(req)) return NextResponse.json({ status: "error" }, { status: 401 });
+  const session = await checkAdminAuth(req);
+  if (!session) return NextResponse.json({ status: "error" }, { status: 401 });
+  if (!hasAdminRole(session, ["superadmin", "admin"])) return NextResponse.json({ status: "error", message: "forbidden" }, { status: 403 });
   const { name, slug, project_date, poster_url, demo_url, primary_color, bg_image_url, bg_size, bg_color, bg_overlay, bg_repeat, logo_url, mascot_url, mascot_msg_welcome, mascot_msg_thanks, custom_fields, storage_folder } = await req.json();
   if (!name?.trim() || !slug?.trim() || !project_date)
     return NextResponse.json({ status: "error", message: "กรุณากรอก ชื่อ, slug และ วันที่" }, { status: 400 });

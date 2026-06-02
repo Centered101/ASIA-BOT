@@ -10,7 +10,8 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const next = searchParams.get("next") || "/student";
+  const rawNext = searchParams.get("next") || "/student";
+  const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/student";
 
   const [studentId, setStudentId] = useState("");
   const [phone, setPhone] = useState("");

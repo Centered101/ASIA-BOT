@@ -645,7 +645,10 @@ export default function ProjectFormClient({ params }: { params: Promise<{ slug: 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
-  useEffect(() => { setSession(getStudentSession()); }, []);
+  useEffect(() => {
+    const s = getStudentSession();
+    setSession(s);
+  }, []);
 
 
   // Welcome bubble — play set 1 on load; MascotBubble will auto-sequence to set 2 after 5s
@@ -1136,6 +1139,26 @@ export default function ProjectFormClient({ params }: { params: Promise<{ slug: 
                     />
                     <div className="text-right text-xs mt-1.5" style={{ color: C.muted }}>{form.name.length}/60</div>
                   </div>
+
+                  {!session && (
+                    <div className="rounded-2xl p-3 flex flex-col sm:flex-row sm:items-center gap-3"
+                      style={{ background: accent + "0f", border: `1px solid ${accent}30` }}>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-bold" style={{ color: C.text }}>
+                          มีบัญชีนักเรียนอยู่แล้ว?
+                        </div>
+                        <div className="text-[11px] mt-0.5" style={{ color: C.sub }}>
+                          เข้าสู่ระบบเพื่อกรอกชื่อและสถานะจากข้อมูลนักเรียนอัตโนมัติ
+                        </div>
+                      </div>
+                      <button type="button" onClick={() => router.push(`/login?next=${encodeURIComponent(`/project/${slug}`)}`)}
+                        className="px-3 py-2 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-1.5"
+                        style={{ background: accent }}>
+                        <i className="fa-solid fa-right-to-bracket" />
+                        Login แล้วกลับมา
+                      </button>
+                    </div>
+                  )}
 
                   <button type="button" onClick={() => validateSection1() && setSection(2)} suppressHydrationWarning
                     className="w-full py-3.5 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.98] shadow-md"

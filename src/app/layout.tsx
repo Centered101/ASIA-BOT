@@ -3,20 +3,41 @@ import "./globals.css";
 import AOSProvider from "@/components/AOSProvider";
 import { Toaster } from "sonner";
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-lb.vercel.app";
+const metaImage = "/hero.png";
+
 export const viewport: Viewport = {
   themeColor: "#84D4FA",
 };
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: { default: "ASIA-BOT", template: "%s | ASIA-BOT" },
   description: "แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร — ติดตามห้องเรียน, สแกนบัตร, จองห้อง, สหกรณ์",
   keywords: ["ASIA-BOT", "asialb", "abac", "Student Entry Scanner", "Class Track Room", "Centered101"],
   authors: [{ name: "Centered101" }],
+  alternates: {
+    canonical: siteUrl,
+  },
   openGraph: {
     type: "website",
-    url: "https://asia-lb.web.app",
+    url: siteUrl,
     title: "ASIA-BOT",
-    description: "แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร",
+    description: "แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร — ติดตามห้องเรียน, สแกนบัตร, จองห้อง, สหกรณ์",
+    images: [
+      {
+        url: metaImage,
+        width: 1200,
+        height: 630,
+        alt: "ASIA-BOT",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "ASIA-BOT",
+    description: "แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร — ติดตามห้องเรียน, สแกนบัตร, จองห้อง, สหกรณ์",
+    images: [metaImage],
   },
 };
 

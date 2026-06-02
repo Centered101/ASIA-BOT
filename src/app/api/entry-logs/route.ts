@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
@@ -7,11 +7,16 @@ const supabase = createClient<Database>(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const { searchParams } = new URL(req.url);
+    const date = searchParams.get("date");
+
     const { data, error } = await supabase
       .from("entry_logs")
-      .select("*, students(first_name, last_name, program, department)")
+      .select("*, students(first_name, last_name, nickname, program, department, photo_url)")
+      .gte("scanned_at", date ? `${date}T00:00:00` : "1970-01-01T00:00:00")
+      .lte("scanned_at", date ? `${date}T23:59:59` : "2999-12-31T23:59:59")
       .order("scanned_at", { ascending: false })
       .limit(500);
 

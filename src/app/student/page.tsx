@@ -220,7 +220,7 @@ export default function StudentPage() {
       const raw = localStorage.getItem(SESSION_KEY);
       const time = localStorage.getItem(SESSION_TIME_KEY);
       if (!raw || !time || Date.now() - new Date(time).getTime() > SESSION_TTL) {
-        router.replace("/login");
+        router.replace("/login?next=/student");
         return;
       }
       const cached = JSON.parse(raw);
@@ -238,7 +238,7 @@ export default function StudentPage() {
         })
         .catch(() => {});
     } catch {
-      router.replace("/login");
+      router.replace("/login?next=/student");
     }
   }, [router]);
 
@@ -708,7 +708,7 @@ export default function StudentPage() {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {([
               { icon: "fa-solid fa-folder-open",     color: "#6366F1", bg: "#EEF2FF", path: "/projects",               title: "ประเมินโปรเจค",  desc: "ผลงานนักเรียน"          },
-              { icon: "fa-solid fa-calendar-check",  color: "#F59E0B", bg: "#FFFBEB", path: "/roomly",                  title: "จองห้อง",        desc: "ห้องประชุม/ห้องเรียน"  },
+              { icon: "fa-solid fa-calendar-check",  color: "#F59E0B", bg: "#FFFBEB", path: "/class-track-room?view=booking", title: "จองห้อง",        desc: "ห้องประชุม/ห้องเรียน"  },
               { icon: "fa-solid fa-qrcode",          color: "#059669", bg: "#ECFDF5", path: "/student-entry-scanner",   title: "สแกนเข้า/ออก",  desc: "ตรวจสอบการเข้าเรียน"  },
               { icon: "fa-solid fa-store",           color: "#EC4899", bg: "#FDF2F8", path: "/shop",                    title: "สหกรณ์",         desc: "ซื้อสินค้าในโรงเรียน" },
               { icon: "fa-solid fa-chalkboard-user", color: "#7C3AED", bg: "#F5F3FF", path: "/class-track-room",        title: "Class Track",    desc: "ติดตามห้องเรียน"       },

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
 import type { Database } from "@/types/database";
-import { sendLineMessage, sendLineFlexMessage, buildOrderFlexMessage } from "@/lib/line";
+import { sendLineFlexMessage, buildOrderFlexMessage } from "@/lib/line";
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -116,9 +116,20 @@ export async function GET(
       .select("order_id");
     if (cancelUpdated?.length) {
       const reason = stripeStatus === "requires_payment_method" ? "QR หมดเวลา" : "ยกเลิก/ชำระไม่สำเร็จ";
-      await sendLineMessage(
+      await sendLineFlexMessage(
         process.env.LINE_GROUP_ADMIN ?? "",
-        `❌ ออเดอร์ถูกยกเลิก #${orderId.slice(-8).toUpperCase()}\nนักเรียน: ${order.student_name}\nยอด: ฿${Number(order.total).toFixed(2)}\nสาเหตุ: ${reason}`
+        `❌ ออเดอร์ถูกยกเลิก #${orderId.slice(-8).toUpperCase()} — ${order.student_name}`,
+        buildOrderFlexMessage({
+          orderId,
+          studentName: `${order.student_name} (${reason})`,
+          studentId: order.student_id,
+          items: [],
+          total: Number(order.total),
+          deliveryMode: order.delivery_mode ?? "pickup",
+          deliveryLoc: order.delivery_loc,
+          deliverySlot: order.delivery_slot,
+          status: "cancelled",
+        })
       );
     }
     return NextResponse.json({ status: "success", payment_status: "cancelled", order_id: orderId });

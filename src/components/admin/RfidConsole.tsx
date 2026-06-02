@@ -151,7 +151,7 @@ export default function RfidConsole() {
               หน้านี้อยู่ใน Admin เท่านั้น ใช้ทดสอบการสแกน UID, location, OLED preview และเสียงตอบกลับของ ESP32
             </p>
           </div>
-          <div className="flex min-w-[260px] items-center gap-4 rounded-2xl p-4" style={{ background: "#0c0c0c", border: "1px solid #252525" }}>
+          <div className="flex w-full items-center gap-4 rounded-2xl p-4 sm:w-auto sm:min-w-[260px]" style={{ background: "#0c0c0c", border: "1px solid #252525" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/admin/rfid.ico" alt="" className="h-12 w-12 rounded-xl bg-white p-2 object-contain" />
             <div>
@@ -185,7 +185,7 @@ export default function RfidConsole() {
               onFocus={e => { e.currentTarget.style.borderColor = "#ff7070"; }}
               onBlur={e => { e.currentTarget.style.borderColor = "#3e3e3e"; }} />
 
-            <div className="mt-4 grid grid-cols-3 gap-2">
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2">
               {(Object.entries(LOCATIONS) as [Location, typeof LOCATIONS[Location]][]).map(([key, cfg]) => (
                 <button key={key} onClick={() => setLocation(key)}
                   className="flex h-20 flex-col items-center justify-center gap-2 rounded-xl border text-xs font-bold transition"
@@ -279,19 +279,19 @@ export default function RfidConsole() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[720px] text-sm">
                   <thead className="text-xs text-[#9e9e9e]" style={{ background: "#111111" }}>
                     <tr>
-                      <th className="px-4 py-2 text-left font-bold">นักเรียน</th>
-                      <th className="px-4 py-2 text-left font-bold">เช็กอิน</th>
-                      <th className="px-4 py-2 text-left font-bold">เช็กเอาท์</th>
-                      <th className="px-4 py-2 text-left font-bold">เวลา</th>
+                      <th className="px-4 py-2 text-left font-bold whitespace-nowrap">นักเรียน</th>
+                      <th className="px-4 py-2 text-left font-bold whitespace-nowrap">เช็กอิน</th>
+                      <th className="px-4 py-2 text-left font-bold whitespace-nowrap">เช็กเอาท์</th>
+                      <th className="px-4 py-2 text-left font-bold whitespace-nowrap">เวลา</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#2a2a2a]">
                     {logs.slice(0, 12).map(row => (
                       <tr key={row.id} className="hover:bg-[#232323]">
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 whitespace-nowrap w-[300px]">
                           <div className="flex items-center gap-3">
                             <StudentAvatar
                               src={row.students?.photo_url}
@@ -306,9 +306,9 @@ export default function RfidConsole() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-xs font-bold text-[#3fb950]">{formatTime(row.checkin_time)}</td>
-                        <td className="px-4 py-3 text-xs font-bold text-[#f85149]">{row.checkout_time ? formatTime(row.checkout_time) : "ยังอยู่"}</td>
-                        <td className="px-4 py-3 text-xs text-[#9e9e9e]">{row.duration ?? "-"}</td>
+                        <td className="px-4 py-3 text-xs font-bold text-[#3fb950] whitespace-nowrap">{formatTime(row.checkin_time)}</td>
+                        <td className="px-4 py-3 text-xs font-bold text-[#f85149] whitespace-nowrap">{row.checkout_time ? formatTime(row.checkout_time) : "ยังอยู่"}</td>
+                        <td className="px-4 py-3 text-xs text-[#9e9e9e] whitespace-nowrap">{row.duration ?? "-"}</td>
                       </tr>
                     ))}
                   </tbody>

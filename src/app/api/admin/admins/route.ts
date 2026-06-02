@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
   if (me.role !== "superadmin")
     return NextResponse.json({ status: "error", message: "ต้องเป็น Superadmin เท่านั้น" }, { status: 403 });
 
-  const { username, password, role, first_name, last_name, nickname, email, phone, entry_year, department, linked_student_id } = await req.json();
+  const { username, password, role, first_name, last_name, nickname, email, phone, entry_year, department, linked_student_id, avatar } = await req.json();
 
   if (!username?.trim() || !password)
     return NextResponse.json({ status: "error", message: "กรุณากรอก username และรหัสผ่าน" }, { status: 400 });
@@ -69,6 +69,7 @@ export async function POST(req: NextRequest) {
     phone: phone?.trim() || null,
     entry_year: entry_year?.trim() || null,
     department: department?.trim() || null,
+    avatar: avatar?.trim() || null,
     linked_student_id: linked_student_id?.trim() || null,
   });
 

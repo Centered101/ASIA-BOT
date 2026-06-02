@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
-import { checkAdminAuth } from "@/lib/admin-auth";
+import { checkAdminAuth, hasAdminRole } from "@/lib/admin-auth";
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -16,7 +16,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!await checkAdminAuth(req)) return NextResponse.json({ status: "error" }, { status: 401 });
+  const session = await checkAdminAuth(req);
+  if (!session) return NextResponse.json({ status: "error" }, { status: 401 });
+  if (!hasAdminRole(session, ["superadmin", "admin"])) return NextResponse.json({ status: "error", message: "forbidden" }, { status: 403 });
   const body = await req.json() as { name: string; description?: string; capacity?: number; location?: string; image_url?: string; amenities?: string[] };
   if (!body.name?.trim()) return NextResponse.json({ status: "error", message: "กรุณาระบุชื่อห้อง" }, { status: 400 });
   const { data, error } = await supabase.from("rooms").insert({

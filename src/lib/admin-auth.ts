@@ -12,7 +12,12 @@ export type AdminSession = {
   role: "superadmin" | "admin" | "staff";
   first_name: string | null;
   last_name: string | null;
+  avatar: string | null;
 };
+
+export function hasAdminRole(session: AdminSession, roles: AdminSession["role"][]) {
+  return roles.includes(session.role);
+}
 
 export async function checkAdminAuth(req: Request): Promise<AdminSession | null> {
   const adminId = req.headers.get("x-admin-id");
@@ -21,17 +26,17 @@ export async function checkAdminAuth(req: Request): Promise<AdminSession | null>
   // Env var fallback: admin_id token IS the ADMIN_PASSWORD
   const envPassword = process.env.ADMIN_PASSWORD;
   if (envPassword && adminId === envPassword) {
-    return { id: "env", admin_id: "env", role: "superadmin", first_name: "Admin", last_name: null };
+    return { id: "env", admin_id: "env", role: "superadmin", first_name: "Admin", last_name: null, avatar: null };
   }
 
   // DB lookup
   const { data } = await supabase
     .from("admins")
-    .select("id, admin_id, role, first_name, last_name, admin_status")
+    .select("id, admin_id, role, first_name, last_name, avatar, admin_status")
     .eq("admin_id", adminId)
     .eq("admin_status", "active")
     .single();
 
   if (!data) return null;
-  return { id: data.id, admin_id: data.admin_id, role: data.role, first_name: data.first_name, last_name: data.last_name };
+  return { id: data.id, admin_id: data.admin_id, role: data.role, first_name: data.first_name, last_name: data.last_name, avatar: data.avatar };
 }

@@ -743,7 +743,7 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
         {/* Page content */}
         <main className="flex-1 overflow-auto" style={{ background: "#0c0c0c" }}>
           <div className="p-3 sm:p-4 lg:p-6 min-w-0">
-            {activeTab === "dashboard"       && <DashboardTab   adminId={admin.admin_id} stats={stats} />}
+            {activeTab === "dashboard"       && <DashboardTab   adminId={admin.admin_id} stats={stats} onOpenTab={setActiveTab} />}
             {activeTab === "students"        && <StudentsTab    adminId={admin.admin_id} refreshKey={studentsRefreshKey} role={admin.role} />}
             {activeTab === "data_requests"   && <AllRequestsTab adminId={admin.admin_id} />}
             {activeTab === "entrylogs"       && <EntryLogsTab   adminId={admin.admin_id} />}
@@ -1065,7 +1065,7 @@ function StudentInfoTrigger({
 
 // ─── Dashboard Tab ─────────────────────────────────────────────────────────────
 
-function DashboardTab({ adminId, stats }: { adminId: string; stats: Stats | null }) {
+function DashboardTab({ adminId, stats, onOpenTab }: { adminId: string; stats: Stats | null; onOpenTab: (tab: string) => void }) {
   const [logs, setLogs] = useState<EntryLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
   const [search, setSearch] = useState("");
@@ -1441,11 +1441,11 @@ function DashboardTab({ adminId, stats }: { adminId: string; stats: Stats | null
       {/* Bottom cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[
-          { label: "เช็คซื่อ โรงเรียน",    sub: "อยู่โรงเรียน", icon: "fa-school",    color: "#ff7070" },
-          { label: "เช็คซื่อ ห้องสมุด",     sub: "อยู่ในห้อง",   icon: "fa-book-open", color: "#9e9e9e" },
-          { label: "เช็คซื่อ ห้องประชุม",   sub: "อยู่ในห้อง",   icon: "fa-door-open", color: "#9e9e9e" },
+          { label: "เช็กชื่อโรงเรียน", tab: "checkin_school", icon: "fa-school", color: "#ff7070" },
+          { label: "เช็กชื่อห้องสมุด", tab: "checkin_library", icon: "fa-book-open", color: "#ff7070" },
+          { label: "เช็กชื่อห้องประชุม", tab: "checkin_meeting", icon: "fa-door-open", color: "#ff7070" },
         ].map((c) => (
-          <div key={c.label} className="rounded-xl p-4 flex items-center justify-between cursor-pointer transition-all"
+          <button key={c.label} type="button" onClick={() => onOpenTab(c.tab)} className="rounded-xl p-4 flex items-center justify-between cursor-pointer transition-all text-left"
             style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}
             onMouseEnter={(e) => (e.currentTarget.style.borderColor = c.color + "50")}
             onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#3e3e3e")}>
@@ -1455,11 +1455,11 @@ function DashboardTab({ adminId, stats }: { adminId: string; stats: Stats | null
               </div>
               <div>
                 <div className="text-sm font-bold text-white">{c.label}</div>
-                <div className="text-xs" style={{ color: "#9e9e9e" }}>{c.sub}: <span style={{ color: "#636363" }}>—</span></div>
+                <div className="text-xs" style={{ color: "#9e9e9e" }}>ดูรายการเข้า-ออกแบบรายวัน</div>
               </div>
             </div>
             <i className="fa-solid fa-chevron-right text-xs" style={{ color: "#636363" }} />
-          </div>
+          </button>
         ))}
       </div>
     </div>
@@ -2395,7 +2395,12 @@ type ChangeRequest = {
   status: "pending" | "approved" | "rejected";
   admin_note: string | null; reviewed_by: string | null;
   created_at: string; updated_at: string;
-  students?: { first_name: string; last_name: string; nickname: string | null; program: string; department: string | null; photo_url?: string | null; student_phone?: string; entry_year?: string; nickname_val?: string } | null;
+  students?: {
+    student_id?: string; first_name: string; last_name: string; nickname: string | null;
+    program: string; department: string | null; photo_url?: string | null;
+    student_phone?: string; entry_year?: string; uid?: string | null;
+    card_status?: string | null; line_user_id?: string | null;
+  } | null;
   _current?: Record<string, string>;
 };
 
@@ -2403,7 +2408,9 @@ type UnifiedRequest = {
   _id: string; _kind: "name" | "data"; _status: "pending" | "approved" | "rejected";
   _student_id: string; _student_name: string; _created_at: string;
   _admin_note: string | null; _student_photo_url?: string | null; _student_meta?: string;
-  _rows: Array<{ label: string; old: string; new_val: string }>;
+  _rows: Array<{ field: string; label: string; old: string; new_val: string }>;
+  _changes: Record<string, string>;
+  _current: Record<string, string>;
   _raw_id: string;
 };
 
@@ -2411,7 +2418,13 @@ const CHANGE_FIELD_LABELS: Record<string, string> = {
   first_name: "ชื่อ", last_name: "นามสกุล", nickname: "ชื่อเล่น",
   program: "ระดับ", student_id: "รหัสนักเรียน",
   student_phone: "เบอร์โทร", entry_year: "ปีที่เข้า", department: "สาขาวิชา",
+  uid: "UID บัตร", card_status: "สถานะบัตร", photo_url: "รูปนักเรียน", line_user_id: "LINE User ID",
 };
+
+const REQUEST_EDITABLE_FIELDS = [
+  "student_id", "first_name", "last_name", "nickname", "program", "entry_year",
+  "department", "student_phone", "uid", "card_status", "photo_url", "line_user_id",
+];
 
 const REQ_STATUS_LABEL: Record<string, string> = { pending: "รอดำเนินการ", approved: "อนุมัติแล้ว", rejected: "ปฏิเสธแล้ว" };
 const REQ_STATUS_STYLE: Record<string, { bg: string; text: string }> = {
@@ -2427,13 +2440,18 @@ function AllRequestsTab({ adminId, kind = "all" }: { adminId: string; kind?: "al
   const [updating, setUpdating] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [editedChanges, setEditedChanges] = useState<Record<string, Record<string, string>>>({});
 
   const fetch_ = useCallback(async () => {
     setLoading(true);
     const qs = "status=all";
     const [r1, r2] = await Promise.all([
-      adminFetch(`/api/admin/change-requests?${qs}`, adminId).then(r => r.json()),
-      adminFetch(`/api/admin/name-change-requests?${qs}`, adminId).then(r => r.json()),
+      kind !== "name"
+        ? adminFetch(`/api/admin/change-requests?${qs}`, adminId).then(r => r.json())
+        : Promise.resolve({ data: [] }),
+      kind !== "data"
+        ? adminFetch(`/api/admin/name-change-requests?${qs}`, adminId).then(r => r.json())
+        : Promise.resolve({ data: [] }),
     ]);
 
     const unified: UnifiedRequest[] = [];
@@ -2441,31 +2459,48 @@ function AllRequestsTab({ adminId, kind = "all" }: { adminId: string; kind?: "al
     for (const cr of (r1.data ?? []) as ChangeRequest[]) {
       const stu = cr.students;
       const stuName = stu ? `${stu.first_name} ${stu.last_name}${stu.nickname ? ` (${stu.nickname})` : ""}` : cr.student_id;
+      const current = Object.fromEntries(REQUEST_EDITABLE_FIELDS.map(field => [
+        field,
+        String(stu ? ((stu as Record<string, string | null | undefined>)[field] ?? "") : ""),
+      ]));
       const rows = Object.entries(cr.requested_changes ?? {}).map(([field, newVal]) => {
         const oldVal = stu ? ((stu as Record<string, string | null>)[field] ?? "—") : "—";
-        return { label: CHANGE_FIELD_LABELS[field] ?? field, old: String(oldVal ?? "—"), new_val: String(newVal) };
+        return { field, label: CHANGE_FIELD_LABELS[field] ?? field, old: String(oldVal ?? "—"), new_val: String(newVal) };
       });
       const meta = stu ? [stu.program, stu.department].filter(Boolean).join(" · ") : "";
       unified.push({ _id: `data-${cr.id}`, _kind: "data", _status: cr.status, _student_id: cr.student_id,
         _student_name: stuName, _created_at: cr.created_at, _admin_note: cr.admin_note,
         _student_photo_url: stu?.photo_url ?? null, _student_meta: meta,
-        _rows: rows, _raw_id: cr.id });
+        _rows: rows, _changes: Object.fromEntries(Object.entries(cr.requested_changes ?? {}).map(([k, v]) => [k, String(v)])), _current: current, _raw_id: cr.id });
     }
 
     for (const nr of (r2.data ?? []) as NameChangeRequest[]) {
       const stu = nr.students;
       const stuName = stu ? `${stu.first_name} ${stu.last_name}${stu.nickname ? ` (${stu.nickname})` : ""}` : nr.student_id;
       const meta = stu ? [stu.program, stu.department].filter(Boolean).join(" · ") : "";
+      const current = Object.fromEntries(REQUEST_EDITABLE_FIELDS.map(field => [
+        field,
+        String(stu ? ((stu as Record<string, string | null | undefined>)[field] ?? "") : ""),
+      ]));
+      current.first_name = nr.old_first_name ?? current.first_name;
+      current.last_name = nr.old_last_name ?? current.last_name;
       unified.push({ _id: `name-${nr.id}`, _kind: "name", _status: nr.status, _student_id: nr.student_id,
         _student_name: stuName, _created_at: nr.created_at, _admin_note: nr.admin_note,
         _student_photo_url: stu?.photo_url ?? null, _student_meta: meta,
-        _rows: [{ label: "ชื่อ-นามสกุล", old: `${nr.old_first_name} ${nr.old_last_name}`, new_val: `${nr.new_first_name} ${nr.new_last_name}` },
-                ...(nr.reason ? [{ label: "เหตุผล", old: "—", new_val: nr.reason }] : [])],
-        _raw_id: nr.id });
+        _rows: [{ field: "first_name", label: "ชื่อ", old: nr.old_first_name, new_val: nr.new_first_name },
+                { field: "last_name", label: "นามสกุล", old: nr.old_last_name, new_val: nr.new_last_name },
+                ...(nr.reason ? [{ field: "reason", label: "เหตุผล", old: "—", new_val: nr.reason }] : [])],
+        _changes: { first_name: nr.new_first_name, last_name: nr.new_last_name },
+        _current: current, _raw_id: nr.id });
     }
 
     unified.sort((a, b) => new Date(b._created_at).getTime() - new Date(a._created_at).getTime());
     setItems(kind === "all" ? unified : unified.filter(u => u._kind === kind));
+    setEditedChanges(prev => {
+      const next = { ...prev };
+      for (const item of unified) if (!next[item._id]) next[item._id] = item._changes;
+      return next;
+    });
     setLoading(false);
   }, [adminId, kind]);
 
@@ -2481,7 +2516,8 @@ function AllRequestsTab({ adminId, kind = "all" }: { adminId: string; kind?: "al
     const endpoint = item._kind === "name"
       ? `/api/admin/name-change-requests/${item._raw_id}`
       : `/api/admin/change-requests/${item._raw_id}`;
-    const res = await adminFetch(endpoint, adminId, { method: "PATCH", body: JSON.stringify({ status, admin_note: note ?? null }) });
+    const changes = item._status === "pending" ? editedChanges[item._id] ?? item._changes : item._changes;
+    const res = await adminFetch(endpoint, adminId, { method: "PATCH", body: JSON.stringify({ status, admin_note: note ?? null, changes }) });
     const j = await res.json();
     setUpdating(null);
     if (j.status !== "success") toast.error(j.message ?? "เกิดข้อผิดพลาด");
@@ -2517,6 +2553,39 @@ function AllRequestsTab({ adminId, kind = "all" }: { adminId: string; kind?: "al
       ? { bg: "rgba(255,112,112,0.14)", text: ADMIN_PRIMARY }
       : { bg: "rgba(255,112,112,0.10)", text: "#ff9a9a" };
     const accent = item._status === "pending" ? "#e3b341" : item._status === "approved" ? "#3fb950" : "#ff7070";
+    const currentChanges = editedChanges[item._id] ?? item._changes;
+    const originalFields = new Set(item._rows.map(row => row.field));
+    const editableFields = Object.keys(currentChanges).filter(field => field !== "reason" && REQUEST_EDITABLE_FIELDS.includes(field));
+    const availableExtraFields = item._kind === "data"
+      ? REQUEST_EDITABLE_FIELDS.filter(field => !editableFields.includes(field))
+      : [];
+    const [fieldToAdd, setFieldToAdd] = useState(availableExtraFields[0] ?? "");
+    const setFieldValue = (field: string, value: string) => {
+      setEditedChanges(prev => ({
+        ...prev,
+        [item._id]: { ...(prev[item._id] ?? item._changes), [field]: value },
+      }));
+    };
+    const addExtraField = () => {
+      if (!fieldToAdd) return;
+      setEditedChanges(prev => ({
+        ...prev,
+        [item._id]: {
+          ...(prev[item._id] ?? item._changes),
+          [fieldToAdd]: item._current[fieldToAdd] ?? "",
+        },
+      }));
+      const nextField = availableExtraFields.find(field => field !== fieldToAdd) ?? "";
+      setFieldToAdd(nextField);
+    };
+    const removeExtraField = (field: string) => {
+      if (originalFields.has(field)) return;
+      setEditedChanges(prev => {
+        const next = { ...(prev[item._id] ?? item._changes) };
+        delete next[field];
+        return { ...prev, [item._id]: next };
+      });
+    };
 
     return (
       <div className={`relative overflow-hidden rounded-2xl ${compact ? "p-3" : "p-4"}`} style={{ background: "linear-gradient(180deg,#1c1c1c,#141414)", border: `1px solid ${item._status === "pending" ? "rgba(227,179,65,.42)" : "#3e3e3e"}` }}>
@@ -2565,6 +2634,61 @@ function AllRequestsTab({ adminId, kind = "all" }: { adminId: string; kind?: "al
             <div className="px-3 py-1.5 text-[10px]" style={{ color: "#636363" }}>+ อีก {item._rows.length - 2} รายการ</div>
           )}
         </div>
+
+        {item._status === "pending" && !compact && (
+          <div className="rounded-xl p-3 mb-3" style={{ background: "#101010", border: "1px solid #2a2a2a" }}>
+            <div className="text-[11px] font-bold mb-2" style={{ color: ADMIN_PRIMARY }}>
+              <i className="fa-solid fa-pen-to-square mr-1.5" />แก้ค่าที่จะอนุมัติ
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {editableFields.map(field => {
+                const row = item._rows.find(r => r.field === field);
+                const label = CHANGE_FIELD_LABELS[field] ?? field;
+                const oldValue = row?.old ?? item._current[field] ?? "—";
+                return (
+                  <label key={field} className="block">
+                    <span className="flex items-center justify-between gap-2 text-[10px] font-semibold mb-1" style={{ color: "#636363" }}>
+                      <span>{label} <span className="font-normal">เดิม: {oldValue || "—"}</span></span>
+                      {!originalFields.has(field) && (
+                        <button type="button" onClick={() => removeExtraField(field)} className="hover:text-white" style={{ color: "#777" }}>
+                          <i className="fa-solid fa-xmark" />
+                        </button>
+                      )}
+                    </span>
+                    <input
+                      value={currentChanges[field] ?? ""}
+                      onChange={e => setFieldValue(field, e.target.value)}
+                      className="w-full rounded-lg px-3 py-2 text-xs text-white outline-none"
+                      style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }}
+                    />
+                  </label>
+                );
+              })}
+            </div>
+            {item._kind === "data" && availableExtraFields.length > 0 && (
+              <div className="flex flex-col sm:flex-row gap-2 mt-3">
+                <select
+                  value={fieldToAdd}
+                  onChange={e => setFieldToAdd(e.target.value)}
+                  className="flex-1 rounded-lg px-3 py-2 text-xs text-white outline-none"
+                  style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }}
+                >
+                  {availableExtraFields.map(field => (
+                    <option key={field} value={field}>{CHANGE_FIELD_LABELS[field] ?? field}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={addExtraField}
+                  className="px-3 py-2 rounded-lg text-xs font-bold transition-transform active:scale-95"
+                  style={{ background: `${ADMIN_PRIMARY}18`, color: ADMIN_PRIMARY, border: `1px solid ${ADMIN_PRIMARY}55` }}
+                >
+                  <i className="fa-solid fa-plus mr-1.5" />เพิ่มฟิลด์แก้ไข
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="flex items-center justify-between gap-2">
           <span className="text-[10px]" style={{ color: "#636363" }}>{formatDateTime(item._created_at)}</span>
@@ -2839,7 +2963,15 @@ function StudentsTab({ adminId, refreshKey, role }: { adminId: string; refreshKe
             {viewMode === "list" && (
               <div className="rounded-2xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[960px] text-xs">
+                  <table className="w-full text-xs" style={{ minWidth: 1180, tableLayout: "fixed" }}>
+                    <colgroup>
+                      <col style={{ width: 340 }} />
+                      <col style={{ width: 110 }} />
+                      <col style={{ width: 280 }} />
+                      <col style={{ width: 130 }} />
+                      <col style={{ width: 140 }} />
+                      <col style={{ width: 190 }} />
+                    </colgroup>
                     <thead>
                       <tr style={{ borderBottom: "1px solid #3e3e3e" }}>
                         {["นักเรียน","รหัส","ประเภท/สาขา","บัตร","เพิ่มเมื่อ",""].map(h => (
@@ -2853,22 +2985,22 @@ function StudentsTab({ adminId, refreshKey, role }: { adminId: string; refreshKe
                         const isAdmin = adminStudentIds.has(s.student_id);
                         return (
                           <tr key={s.id} style={{ borderBottom: "1px solid #2a2a2a" }}>
-                            <td className="px-3 py-2 w-[300px]">
+                            <td className="px-3 py-2">
                               <StudentInfoTrigger adminId={adminId} studentId={s.student_id} fallbackName={`${s.first_name} ${s.last_name}`} fallbackPhotoUrl={s.photo_url}
-                                className="flex items-center gap-2">
+                                className="flex items-center gap-2 min-w-0">
                                 <Avatar name={`${s.first_name} ${s.last_name}`} url={s.photo_url} size={28} rounded="lg" />
-                                <div>
-                                  <div className="font-semibold text-white whitespace-nowrap">{s.first_name} {s.last_name} {s.nickname ? `(${s.nickname})` : ""}</div>
+                                <div className="min-w-0">
+                                  <div className="font-semibold text-white whitespace-nowrap truncate">{s.first_name} {s.last_name} {s.nickname ? `(${s.nickname})` : ""}</div>
                                   {isAdmin && <span className="text-[9px] px-1 py-0.5 rounded font-bold" style={{ background: "rgba(255,112,112,0.15)", color: "#ff7070" }}>Admin</span>}
                                 </div>
                               </StudentInfoTrigger>
                             </td>
                             <td className="px-3 py-2 text-[#9e9e9e] whitespace-nowrap font-mono">{s.student_id}</td>
-                            <td className="px-3 py-2 text-[#9e9e9e] whitespace-nowrap">{s.program}{s.department ? ` · ${s.department}` : ""}</td>
+                            <td className="px-3 py-2 text-[#9e9e9e] whitespace-nowrap truncate">{s.program}{s.department ? ` · ${s.department}` : ""}</td>
                             <td className="px-3 py-2 whitespace-nowrap"><span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: cs.bg, color: cs.text }}>{CARD_STATUS[s.card_status]}</span></td>
                             <td className="px-3 py-2 text-[#636363] whitespace-nowrap">{formatDate(s.created_at)}</td>
-                            <td className="px-3 py-2">
-                              <div className="flex gap-1">
+                            <td className="px-3 py-2 whitespace-nowrap">
+                              <div className="flex gap-1 justify-end">
                                 {s.card_status !== "active"   && <DarkAction onClick={() => updateCard(s.id, "active")}   loading={updating === s.id} color="green" icon="fa-check"                label="" small />}
                                 {s.card_status !== "inactive" && <DarkAction onClick={() => updateCard(s.id, "inactive")} loading={updating === s.id} color="gray"  icon="fa-ban"                  label="" small />}
                                 {s.card_status !== "lost"     && <DarkAction onClick={() => updateCard(s.id, "lost")}     loading={updating === s.id} color="red"   icon="fa-triangle-exclamation" label="" small />}

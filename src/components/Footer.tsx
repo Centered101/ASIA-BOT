@@ -15,7 +15,7 @@ export default function Footer() {
               <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg"
                 style={{ background: "linear-gradient(135deg,var(--primary-color),var(--primary-dark))" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img className="w-7" src="/favicon.ico" alt="logo" />
+                <img className="w-7" src="/favicon.png" alt="logo" />
               </div>
               <div>
                 <div className="font-bold text-base">{SITE_NAME}</div>

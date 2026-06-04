@@ -45,7 +45,7 @@ export default function Header({ subtitle = "Overview" }: { subtitle?: string })
               <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shadow-md group-hover:shadow-sky-200 transition-shadow"
                 style={{ background: "linear-gradient(135deg,var(--primary-color),var(--primary-dark))" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img className="w-6 sm:w-7" src="/favicon.ico" alt="logo" />
+                <img className="w-6 sm:w-7" src="/favicon.png" alt="logo" />
               </div>
               <div>
                 <div className="font-bold text-sm sm:text-base leading-tight text-slate-800">{SITE_NAME}</div>
@@ -153,7 +153,7 @@ export default function Header({ subtitle = "Overview" }: { subtitle?: string })
       </header>
 
       {/* ── Mobile bottom-sheet menu ── */}
-      <div className={`lg:hidden fixed inset-0 z-40 transition-all duration-300 ${menuOpen ? "pointer-events-auto" : "pointer-events-none"}`}>
+      <div className={`lg:hidden fixed inset-0 z-[1100] transition-all duration-300 ${menuOpen ? "pointer-events-auto" : "pointer-events-none"}`}>
         {/* Backdrop */}
         <div className={`absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-300 ${menuOpen ? "opacity-100" : "opacity-0"}`}
           onClick={() => setMenuOpen(false)} />
@@ -187,7 +187,7 @@ export default function Header({ subtitle = "Overview" }: { subtitle?: string })
           )}
 
           {/* Link grid */}
-          <div className="overflow-y-auto flex-1 px-4 py-3 pb-6">
+          <div className="overflow-y-auto flex-1 px-4 py-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
             <div className="grid grid-cols-2 gap-2">
               {all.map(link => {
                 const href = link.url ?? (link.path ?? "#");

@@ -34,6 +34,10 @@ type LogEntry = {
   total: number;
   student: string;
   studentId: string;
+  nickname?: string;
+  program?: string;
+  entryYear?: number | string;
+  department?: string;
 };
 type PendingOrder = {
   orderId: string;
@@ -103,14 +107,6 @@ function rRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h
   ctx.lineTo(x + r, y + h); ctx.arcTo(x, y + h, x, y + h - r, r);
   ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r); ctx.closePath();
 }
-
-// ── Pay-status config ──────────────────────────────────────────────────
-const PAY_STATUS_CFG: Record<PayStatus, { icon: string; color: string; bg: string; text: string }> = {
-  loading:  { icon: "fa-circle-notch fa-spin", color: "text-slate-400",  bg: "#F8FAFC", text: "กำลังสร้างออเดอร์..." },
-  waiting:  { icon: "fa-circle-notch fa-spin", color: "text-green-500",  bg: "#F0FDF4", text: "กำลังรอการชำระเงิน — สแกน QR แล้วโอน" },
-  checking: { icon: "fa-magnifying-glass",     color: "text-sky-500",    bg: "#EFF6FF", text: "ตรวจสอบการโอน..." },
-  expired:  { icon: "fa-clock",                color: "text-red-500",    bg: "#FEF2F2", text: "หมดเวลาชำระเงิน — ออเดอร์ถูกยกเลิก" },
-};
 
 // ══════════════════════════════════════════════════════════════════════
 export default function ShopPage() {
@@ -204,8 +200,18 @@ export default function ShopPage() {
   const fetchOrders = useCallback(async () => {
     if (!student) return;
     try {
-      const r = await fetch(`/api/shop/orders?student_id=${encodeURIComponent(student.student_id)}`).then(res => res.json()) as { status: string; data?: LogEntry[] };
-      if (r.status === "success" && Array.isArray(r.data)) setLogs(r.data);
+      const res = await fetch(`/api/shop/orders?student_id=${encodeURIComponent(student.student_id)}`);
+      if (!res.ok) return;
+      const r = await res.json() as { status: string; data?: LogEntry[] };
+      if (r.status === "success" && Array.isArray(r.data)) {
+        setLogs(r.data.map(log => log.studentId === student.student_id ? {
+          ...log,
+          nickname: student.nickname,
+          program: student.program,
+          entryYear: student.entry_year,
+          department: student.department,
+        } : log));
+      }
     } catch { /**/ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [student]);
@@ -346,7 +352,9 @@ export default function ShopPage() {
     pollRef.current = setInterval(async () => {
       if (++tries > max || Date.now() > expireRef.current) { stopPolling(); return; }
       try {
-        const r = await fetch(`/api/shop/orders/${orderId}/check`).then(res => res.json()) as { status: string; payment_status?: string };
+        const res = await fetch(`/api/shop/orders/${orderId}/check`);
+        if (!res.ok) return;
+        const r = await res.json() as { status: string; payment_status?: string };
         if (r.status !== "success") return;
         if (r.payment_status === "paid")       onPaymentPaid(orderId);
         else if (r.payment_status === "cancelled" || r.payment_status === "failed")
@@ -407,7 +415,7 @@ export default function ShopPage() {
     setPayOpen(true);
 
     try {
-      const r = await fetch("/api/shop/orders", {
+      const res = await fetch("/api/shop/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -418,7 +426,8 @@ export default function ShopPage() {
           delivery_loc: deliveryLoc,
           delivery_slot: deliverySlot,
         }),
-      }).then(res => res.json()) as { status: string; message?: string; order_id?: string; qr_url?: string; total?: number };
+      });
+      const r = await res.json().catch(() => ({ status: "error", message: "เซิร์ฟเวอร์ตอบกลับไม่ถูกต้อง" })) as { status: string; message?: string; order_id?: string; qr_url?: string; total?: number };
       if (r.status !== "success") {
         toast.error(r.message || "เกิดข้อผิดพลาด");
         setPayOpen(false); return;
@@ -431,6 +440,10 @@ export default function ShopPage() {
         orderId, ts: new Date().toISOString(), status: "pending",
         items, total: confirmedTotal, student: `${student.first_name} ${student.last_name}`,
         studentId: student.student_id,
+        nickname: student.nickname,
+        program: student.program,
+        entryYear: student.entry_year,
+        department: student.department,
       };
       setLogs(prev => [newLog, ...prev].slice(0, 50));
       const expireAt = Date.now() + PAY_LIMIT;
@@ -453,29 +466,39 @@ export default function ShopPage() {
     if (!canvas) return;
     const ctx = canvas.getContext("2d")!;
     if (!ctx) return;
-    const W = 380, H = Math.max(520, 320 + order.items.length * 24);
+    const studentProgram = order.program ?? student?.program ?? "";
+    const studentEntryYear = order.entryYear ?? student?.entry_year ?? "";
+    const studentDepartment = order.department ?? student?.department ?? "";
+    const studentNickname = order.nickname ?? student?.nickname ?? "";
+    const studentLevel = studentProgram ? calcGrade(studentProgram, studentEntryYear) : "";
+    const studentDisplayName = studentNickname ? `${order.student} (${studentNickname})` : order.student;
+    const subtotal = order.items.reduce((s, i) => s + i.price * i.qty, 0);
+    const stripeFee = Math.ceil(subtotal * STRIPE_FEE_RATE * 100) / 100;
+    const systemFee = Math.ceil(subtotal * SYSTEM_FEE_RATE * 100) / 100;
+    const W = 420;
+    const itemH = 24;
+    const studentRows = 2 + (studentLevel ? 1 : 0) + (studentDepartment ? 1 : 0);
+    const H = Math.max(720, 470 + studentRows * 18 + order.items.length * itemH);
     canvas.width = W; canvas.height = H;
     ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
-    const g = ctx.createLinearGradient(0, 0, W, 110);
+    const g = ctx.createLinearGradient(0, 0, W, 120);
     g.addColorStop(0, "#0EA5E9"); g.addColorStop(1, "#84D4FA");
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, 110);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, 120);
     ctx.fillStyle = "rgba(255,255,255,.12)";
     ctx.beginPath(); ctx.arc(W + 30, -30, 140, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(-10, 120, 80, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#fff"; ctx.textAlign = "center";
+
+    ctx.fillStyle = "#fff"; ctx.textAlign = "left";
     ctx.font = "bold 18px 'Kanit','Bai Jamjuree',sans-serif";
-    ctx.fillText("ใบเสร็จรับเงิน", W / 2, 38);
+    ctx.fillText("ใบเสร็จชำระเงิน", 82, 42);
     ctx.font = "12px 'Kanit','Bai Jamjuree',sans-serif";
     ctx.fillStyle = "rgba(255,255,255,.85)";
-    ctx.fillText("สหกรณ์โรงเรียน ASIA-BOT", W / 2, 58);
-    ctx.fillStyle = "rgba(255,255,255,.22)"; rRect(ctx, W / 2 - 40, 68, 80, 26, 13); ctx.fill();
-    ctx.fillStyle = "#fff"; ctx.font = "bold 10px 'Kanit',sans-serif";
-    ctx.fillText("✅ ชำระแล้ว", W / 2, 85);
-    ctx.fillStyle = "#F8FAFC"; ctx.fillRect(0, 110, W, H - 110);
+    ctx.fillText("สหกรณ์โรงเรียน ASIA-BOT", 82, 64);
+    ctx.fillStyle = "#F8FAFC"; ctx.fillRect(0, 120, W, H - 120);
     const ts = new Date(order.ts || Date.now());
     const dStr = ts.toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" });
     const tStr = ts.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
-    let y = 134;
+    let y = 150;
     function infoRow(label: string, val: string) {
       ctx.fillStyle = "#94A3B8"; ctx.textAlign = "left"; ctx.font = "11px 'Kanit',sans-serif";
       ctx.fillText(label, 24, y);
@@ -484,33 +507,61 @@ export default function ShopPage() {
     }
     infoRow("เลขที่ออเดอร์", order.orderId);
     infoRow("วันที่", dStr); infoRow("เวลา", tStr);
-    ctx.fillStyle = "#E2E8F0"; ctx.fillRect(24, y, W - 48, 1); y += 12;
-    infoRow("นักเรียน", order.student); infoRow("รหัสนักเรียน", order.studentId);
-    ctx.fillStyle = "#E2E8F0"; ctx.fillRect(24, y, W - 48, 1); y += 10;
+    ctx.fillStyle = "#E2E8F0"; ctx.fillRect(24, y, W - 48, 1); y += 16;
+    ctx.fillStyle = "#94A3B8"; ctx.textAlign = "left"; ctx.font = "11px 'Kanit',sans-serif";
+    ctx.fillText("นักเรียน", 24, y);
+    ctx.fillStyle = "#0EA5E9"; ctx.textAlign = "right"; ctx.font = "bold 12px 'Kanit',sans-serif";
+    ctx.fillText(studentDisplayName, W - 24, y); y += 18;
+    infoRow("รหัสนักเรียน", order.studentId);
+    if (studentLevel) infoRow("ระดับ", studentLevel);
+    if (studentDepartment) infoRow("สาขา/แผนก", studentDepartment);
+    ctx.fillStyle = "#E2E8F0"; ctx.fillRect(24, y, W - 48, 1); y += 14;
     ctx.fillStyle = "#64748B"; ctx.textAlign = "left"; ctx.font = "bold 11px 'Kanit',sans-serif";
     ctx.fillText("รายการสินค้า", 24, y); ctx.textAlign = "right"; ctx.fillText("ราคา", W - 24, y); y += 16;
     order.items.forEach(item => {
       ctx.fillStyle = "#1E293B"; ctx.textAlign = "left"; ctx.font = "12px 'Kanit',sans-serif";
-      ctx.fillText(`${item.name} × ${item.qty}`, 30, y);
+      const name = `${item.name} × ${item.qty}`;
+      ctx.fillText(name.length > 34 ? `${name.slice(0, 34)}...` : name, 30, y);
       ctx.fillStyle = "#0EA5E9"; ctx.textAlign = "right"; ctx.font = "bold 12px 'Kanit',sans-serif";
-      ctx.fillText(fmt(item.price * item.qty), W - 24, y); y += 22;
+      ctx.fillText(fmt(item.price * item.qty), W - 24, y); y += itemH;
     });
-    y += 4;
-    ctx.fillStyle = "#EFF6FF"; rRect(ctx, 24, y, W - 48, 42, 12); ctx.fill();
+    y += 8;
+    ctx.fillStyle = "#94A3B8"; ctx.textAlign = "left"; ctx.font = "11px 'Kanit',sans-serif";
+    ctx.fillText("ยอดสินค้า", 30, y);
+    ctx.fillStyle = "#1E293B"; ctx.textAlign = "right"; ctx.font = "bold 11px 'Kanit',sans-serif";
+    ctx.fillText(fmt(subtotal), W - 24, y); y += 18;
+    ctx.fillStyle = "#94A3B8"; ctx.textAlign = "left"; ctx.font = "11px 'Kanit',sans-serif";
+    ctx.fillText("ค่าธรรมเนียม Stripe (2%)", 30, y);
+    ctx.fillStyle = "#1E293B"; ctx.textAlign = "right"; ctx.font = "bold 11px 'Kanit',sans-serif";
+    ctx.fillText(fmt(stripeFee), W - 24, y); y += 18;
+    ctx.fillStyle = "#94A3B8"; ctx.textAlign = "left"; ctx.font = "11px 'Kanit',sans-serif";
+    ctx.fillText("ค่าดำเนินการระบบ (1%)", 30, y);
+    ctx.fillStyle = "#1E293B"; ctx.textAlign = "right"; ctx.font = "bold 11px 'Kanit',sans-serif";
+    ctx.fillText(fmt(systemFee), W - 24, y); y += 12;
+
+    ctx.fillStyle = "#EFF6FF"; rRect(ctx, 24, y, W - 48, 50, 14); ctx.fill();
     ctx.fillStyle = "#64748B"; ctx.textAlign = "left"; ctx.font = "13px 'Kanit',sans-serif";
-    ctx.fillText("ยอดรวมทั้งหมด", 34, y + 26);
+    ctx.fillText("ยอดรวมทั้งหมด", 34, y + 31);
     ctx.fillStyle = "#0EA5E9"; ctx.textAlign = "right"; ctx.font = "bold 18px 'Kanit',sans-serif";
-    ctx.fillText(fmt(order.total), W - 34, y + 26); y += 54;
-    infoRow("วิธีชำระ", "PromptPay"); infoRow("Order ID", order.orderId);
+    ctx.fillText(fmt(order.total), W - 34, y + 31); y += 68;
+    infoRow("วิธีชำระ", "PromptPay");
     ctx.fillStyle = "#E2E8F0"; ctx.fillRect(24, H - 52, W - 48, 1);
     ctx.fillStyle = "#CBD5E1"; ctx.textAlign = "center"; ctx.font = "10px 'Kanit',sans-serif";
     ctx.fillText("ขอบคุณที่ใช้บริการสหกรณ์โรงเรียน ASIA-BOT", W / 2, H - 34);
     ctx.fillText("เก็บใบเสร็จนี้เป็นหลักฐานการชำระเงิน", W / 2, H - 18);
+
+    const logo = new Image();
+    logo.onload = () => {
+      ctx.save();
+      ctx.drawImage(logo, 24, 28, 42, 42);
+      ctx.restore();
+    };
+    logo.src = "/favicon.png";
   }
   function downloadSlip() {
     if (!slipRef.current || !lastOrder) return;
     const a = document.createElement("a");
-    a.download = `receipt-${lastOrder.orderId}.png`;
+    a.download = `ใบเสร็จ-ASIA-BOT-${lastOrder.orderId}.png`;
     a.href = slipRef.current.toDataURL("image/png"); a.click();
     toast.success("ดาวน์โหลดสลิปแล้ว");
   }
@@ -541,7 +592,7 @@ export default function ShopPage() {
 
       <Header subtitle="สหกรณ์โรงเรียน" />
 
-      <main className="max-w-6xl mx-auto px-3 sm:px-6 py-6 relative z-10" style={{ paddingBottom: cartCount > 0 ? "6.5rem" : "2.5rem" }}>
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 py-6 relative z-10" style={{ paddingBottom: cartCount > 0 ? "6.5rem" : "2.5rem" }}>
 
         {/* ── Search bar ── */}
         <div data-aos="fade-down" className="flex items-center gap-2 mb-5">
@@ -588,7 +639,7 @@ export default function ShopPage() {
 
         <div className="flex flex-col lg:flex-row gap-6">
           {/* ── LEFT sidebar ── */}
-          <div className="w-full lg:w-72 flex-shrink-0 space-y-4">
+          <div className="w-full lg:w-80 flex-shrink-0 space-y-4">
             {/* Profile card */}
             <div data-aos="fade-right" data-aos-delay="200"
               className={`rounded-2xl p-4 text-white relative overflow-hidden ${student.program === "ปวส" ? "bg-gradient-to-br from-red-500 to-red-400" : "bg-gradient-to-br from-sky-500 to-sky-400"}`}
@@ -733,7 +784,7 @@ export default function ShopPage() {
                   className={`w-8 h-8 rounded-xl border flex items-center justify-center text-xs transition
                     ${viewMode === "grid" ? "text-white shadow border-transparent" : "bg-white border-slate-200 text-slate-400 hover:border-sky-200"}`}
                   style={viewMode === "grid" ? { background: "var(--primary-color)" } : undefined}>
-                  <i className="fa-solid fa-grid-2" />
+                  <i className="fa-solid fa-grip" />
                 </button>
                 <button onClick={() => setViewMode("table")}
                   className={`w-8 h-8 rounded-xl border flex items-center justify-center text-xs transition
@@ -808,10 +859,10 @@ export default function ShopPage() {
                         <div key={p.id}
                           data-aos="fade-up" data-aos-delay={`${Math.min(i * 40, 200)}`}
                           className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
-                          <div className="relative h-64 flex items-center justify-center bg-gradient-to-br from-sky-50 to-slate-50">
+                          <div className="relative aspect-square w-full flex items-center justify-center bg-gradient-to-br from-sky-50 to-slate-50">
                             {isImg ? (
                               <>
-                                <img src={p.images} alt={p.name} className="w-full h-full object-cover aspect-video" loading="lazy"
+                                <img src={p.images} alt={p.name} className="w-full h-full aspect-square object-cover" loading="lazy"
                                   onError={e => { e.currentTarget.style.display = "none"; const fb = e.currentTarget.nextElementSibling as HTMLElement; if (fb) fb.style.display = "flex"; }} />
                                 <span className="text-5xl absolute inset-0 items-center justify-center" style={{ display: "none" }}>{p.emoji}</span>
                               </>
@@ -898,11 +949,86 @@ export default function ShopPage() {
                   </div>
                 </div>
               ) : (
-              <div className="overflow-x-auto rounded-2xl border border-slate-100 shadow-sm bg-white">
-                <table className="w-full text-sm border-collapse">
+              <>
+              <div className="sm:hidden space-y-2">
+                {filtered.map(p => {
+                  const qty = cart[p.id] || 0;
+                  const out = p.stock <= 0;
+                  const low = !out && p.stock <= 10;
+                  const isImg = p.images?.startsWith("http");
+                  return (
+                    <div key={p.id} className={`rounded-2xl border border-slate-100 bg-white p-3 shadow-sm ${out ? "opacity-60" : ""}`}>
+                      <div className="flex gap-3">
+                        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-sky-50 to-slate-50 flex items-center justify-center overflow-hidden flex-shrink-0">
+                          {isImg ? (
+                            <>
+                              <img src={p.images} alt={p.name} className="w-full h-full aspect-square object-cover" loading="lazy"
+                                onError={e => { e.currentTarget.style.display = "none"; const fb = e.currentTarget.nextElementSibling as HTMLElement; if (fb) fb.style.display = "inline"; }} />
+                              <span className="text-2xl" style={{ display: "none" }}>{p.emoji}</span>
+                            </>
+                          ) : <span className="text-2xl">{p.emoji}</span>}
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="font-bold text-slate-800 text-sm leading-snug line-clamp-2">{p.name}</div>
+                              {p.tag && <div className="text-[9px] font-bold text-sky-500 uppercase mt-0.5">{p.tag}</div>}
+                            </div>
+                            <div className="text-base font-extrabold whitespace-nowrap" style={{ color: "var(--primary-dark)" }}>{fmt(p.price)}</div>
+                          </div>
+
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className="inline-flex items-center gap-1 bg-sky-50 text-sky-500 rounded-full px-2 py-0.5 text-[10px] font-bold max-w-[140px] truncate">
+                              <i className={`${CAT_ICONS[p.cat] || "fa-solid fa-tag"} text-[9px]`} /> {p.cat}
+                            </span>
+                            {out
+                              ? <span className="text-[10px] font-bold text-red-400">หมดแล้ว</span>
+                              : <span className={`text-[10px] font-bold ${low ? "text-amber-500" : "text-slate-500"}`}>เหลือ {p.stock} {p.unit || ""}</span>}
+                          </div>
+
+                          <div className="flex items-center justify-between mt-3">
+                            <span className="text-[10px] text-slate-400">{p.unit || "สินค้า"}</span>
+                            {out
+                              ? <span className="text-xs text-red-300">—</span>
+                              : qty === 0
+                                ? <button onClick={() => addToCart(p.id)}
+                                    className="h-9 px-3 rounded-xl text-white text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-transform"
+                                    style={{ background: "linear-gradient(135deg,var(--primary-color),var(--primary-dark))" }}>
+                                    <i className="fa-solid fa-plus" /> เพิ่ม
+                                  </button>
+                                : <div className="flex items-center gap-1">
+                                    <button onClick={() => changeQty(p.id, -1)}
+                                      className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-500 active:scale-95 transition">
+                                      <i className="fa-solid fa-minus text-[9px]" />
+                                    </button>
+                                    <span className="text-sm font-bold text-slate-700 w-6 text-center tabular-nums">{qty}</span>
+                                    <button onClick={() => changeQty(p.id, 1)}
+                                      className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-500 active:scale-95 transition">
+                                      <i className="fa-solid fa-plus text-[9px]" />
+                                    </button>
+                                  </div>}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="hidden sm:block overflow-x-auto rounded-2xl border border-slate-100 shadow-sm bg-white">
+                <table className="w-full min-w-[820px] text-sm border-collapse table-fixed">
+                  <colgroup>
+                    <col className="w-20" />
+                    <col />
+                    <col className="w-48" />
+                    <col className="w-28" />
+                    <col className="w-32" />
+                    <col className="w-32" />
+                  </colgroup>
                   <thead>
                     <tr style={{ background: "linear-gradient(135deg,var(--primary-color),var(--primary-dark))" }}>
-                      <th className="w-12 p-3 rounded-tl-2xl" />
+                      <th className="p-3 rounded-tl-2xl" />
                       <th className="p-3 text-left text-[11px] font-bold text-white">ชื่อสินค้า</th>
                       <th className="p-3 text-left text-[11px] font-bold text-white">หมวดหมู่</th>
                       <th className="p-3 text-left text-[11px] font-bold text-white">ราคา</th>
@@ -917,32 +1043,32 @@ export default function ShopPage() {
                       const low = !out && p.stock <= 10;
                       const isImg = p.images?.startsWith("http");
                       return (
-                        <tr key={p.id} className={`border-b border-slate-50 hover:bg-sky-50/50 transition ${out ? "opacity-50" : ""}`}>
-                          <td className="p-3">
+                        <tr key={p.id} className={`h-[76px] border-b border-slate-50 hover:bg-sky-50/50 transition ${out ? "opacity-50" : ""}`}>
+                          <td className="p-3 align-middle">
                             {isImg ? (
                               <>
-                                <img src={p.images} alt={p.name} className="w-9 h-9 rounded-xl object-cover" loading="lazy"
+                                <img src={p.images} alt={p.name} className="w-14 h-14 aspect-square rounded-xl object-cover" loading="lazy"
                                   onError={e => { e.currentTarget.style.display = "none"; const fb = e.currentTarget.nextElementSibling as HTMLElement; if (fb) fb.style.display = "inline"; }} />
-                                <span className="text-2xl" style={{ display: "none" }}>{p.emoji}</span>
+                                <span className="text-3xl" style={{ display: "none" }}>{p.emoji}</span>
                               </>
-                            ) : <span className="text-2xl">{p.emoji}</span>}
+                            ) : <div className="w-14 h-14 aspect-square rounded-xl bg-sky-50 flex items-center justify-center text-2xl">{p.emoji}</div>}
                           </td>
-                          <td className="p-3">
-                            <div className="font-bold text-slate-800">{p.name}</div>
+                          <td className="p-3 align-middle">
+                            <div className="font-bold text-slate-800 leading-snug line-clamp-2">{p.name}</div>
                             {p.tag && <span className="text-[9px] font-bold text-sky-500 uppercase">{p.tag}</span>}
                           </td>
-                          <td className="p-3">
-                            <span className="inline-flex items-center gap-1 bg-sky-50 text-sky-500 rounded-full px-2 py-0.5 text-[10px] font-bold">
+                          <td className="p-3 align-middle">
+                            <span className="inline-flex max-w-full items-center gap-1 bg-sky-50 text-sky-500 rounded-full px-2 py-0.5 text-[10px] font-bold">
                               <i className={`${CAT_ICONS[p.cat] || "fa-solid fa-tag"} text-[9px]`} /> {p.cat}
                             </span>
                           </td>
-                          <td className="p-3 font-bold" style={{ color: "var(--primary-dark)" }}>{fmt(p.price)}</td>
-                          <td className="p-3">
+                          <td className="p-3 align-middle font-bold whitespace-nowrap" style={{ color: "var(--primary-dark)" }}>{fmt(p.price)}</td>
+                          <td className="p-3 align-middle">
                             {out
                               ? <span className="text-xs font-bold text-red-400">หมดแล้ว</span>
                               : <span className={`text-xs font-bold ${low ? "text-amber-500" : "text-slate-600"}`}>{p.stock} {p.unit || ""}</span>}
                           </td>
-                          <td className="p-3">
+                          <td className="p-3 align-middle">
                             {out
                               ? <span className="text-xs text-red-300">—</span>
                               : qty === 0
@@ -969,6 +1095,7 @@ export default function ShopPage() {
                   </tbody>
                 </table>
               </div>
+              </>
               )
             )}
           </div>
@@ -1029,7 +1156,7 @@ export default function ShopPage() {
                     <div key={id} className="flex items-center gap-3 py-3 border-b border-slate-50 last:border-0">
                       {isImg ? (
                         <>
-                          <img src={p.images} alt={p.name} className="w-10 h-10 rounded-xl object-cover flex-shrink-0"
+                          <img src={p.images} alt={p.name} className="w-10 h-10 aspect-square rounded-xl object-cover flex-shrink-0"
                             onError={e => { e.currentTarget.style.display = "none"; const fb = e.currentTarget.nextElementSibling as HTMLElement; if (fb) fb.style.display = "inline"; }} />
                           <span className="text-2xl flex-shrink-0" style={{ display: "none" }}>{p.emoji}</span>
                         </>
@@ -1179,106 +1306,130 @@ export default function ShopPage() {
       </div>
 
       {/* ════ MODAL: PAYMENT ════ */}
-      <div className={`fixed inset-0 z-[1000] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 transition-all duration-300 ${payOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+      <div className={`fixed inset-0 z-[1000] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4 transition-all duration-300 ${payOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
         onClick={e => { if (e.target === e.currentTarget && payStatus === "expired") setPayOpen(false); }}>
-        <div className={`bg-white rounded-2xl w-full max-w-sm p-5 transition-all duration-300 ${payOpen ? "scale-100" : "scale-90"}`}>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-sky-50 flex items-center justify-center text-sky-500 flex-shrink-0">
+        <div className={`bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md max-h-[92dvh] flex flex-col overflow-hidden shadow-2xl transition-all duration-300 ${payOpen ? "translate-y-0 sm:scale-100" : "translate-y-full sm:translate-y-0 sm:scale-90"}`}>
+          <div className="sm:hidden w-10 h-1 bg-slate-200 rounded-full mx-auto mt-3 flex-shrink-0" />
+
+          <div className="px-5 pt-4 pb-3 border-b border-slate-100 flex-shrink-0">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-11 h-11 rounded-2xl bg-sky-50 flex items-center justify-center text-sky-500 flex-shrink-0">
                 <i className="fa-solid fa-qrcode text-sm" />
               </div>
-              <div>
-                <div className="font-bold text-slate-800 text-sm">ชำระเงิน PromptPay</div>
-                <div className="text-[10px] text-slate-400">สแกน QR — ยืนยันอัตโนมัติ</div>
-                <div className="text-[10px] font-bold" style={{ color: "var(--primary-dark)" }}>{payDeliveryTag}</div>
+                <div className="min-w-0">
+                  <div className="font-extrabold text-slate-800 text-base leading-tight">ชำระเงิน PromptPay</div>
+                  <div className="text-[11px] text-slate-400">สแกน QR แล้วระบบจะยืนยันอัตโนมัติ</div>
+                  <div className="text-[11px] font-bold truncate mt-0.5" style={{ color: "var(--primary-dark)" }}>{payDeliveryTag}</div>
+                </div>
+              </div>
+              <div className={`rounded-2xl px-3 py-2 min-w-20 text-center flex-shrink-0 ${timerUrgent ? "animate-pulse" : ""}`}
+                style={{ background: timerUrgent ? "linear-gradient(135deg,#EF4444,#F87171)" : "linear-gradient(135deg,var(--primary-dark),#0284C7)" }}>
+                <div className="text-white font-extrabold text-base leading-tight">{fmtTimer(timerMs)}</div>
+                <div className="text-white/75 text-[9px] font-bold">หมดเวลา</div>
               </div>
             </div>
-            <div className={`rounded-xl px-3 py-1.5 min-w-16 text-center ${timerUrgent ? "animate-pulse" : ""}`}
-              style={{ background: "linear-gradient(135deg,var(--primary-dark),#0284C7)" }}>
-              <div className="text-white font-bold text-sm">{fmtTimer(timerMs)}</div>
-              <div className="text-white/70 text-[9px]">หมดเวลา</div>
+            <div className="h-1.5 bg-sky-100 rounded-full mt-3 overflow-hidden">
+              <div className="h-full rounded-full transition-all duration-500"
+                style={{
+                  width: `${Math.max(0, (timerMs / PAY_LIMIT) * 100)}%`,
+                  background: timerUrgent ? "linear-gradient(90deg,#EF4444,#F87171)" : "linear-gradient(90deg,var(--primary-color),var(--primary-dark))"
+                }} />
             </div>
           </div>
-          <div className="h-1 bg-sky-100 rounded-full mb-4 overflow-hidden">
-            <div className="h-full rounded-full transition-all duration-500"
-              style={{
-                width: `${Math.max(0, (timerMs / PAY_LIMIT) * 100)}%`,
-                background: timerUrgent ? "linear-gradient(90deg,#EF4444,#F87171)" : "linear-gradient(90deg,var(--primary-color),var(--primary-dark))"
-              }} />
-          </div>
-          <div className="text-center mb-3">
-            {!qrUrl
-              ? <div className="w-44 h-44 mx-auto rounded-2xl bg-slate-100 flex items-center justify-center">
-                  <i className="fa-solid fa-spinner fa-spin text-3xl text-slate-300" />
-                </div>
-              : <div className="inline-block rounded-2xl p-3 bg-white border-4 border-sky-50"
-                  style={{ boxShadow: "0 8px 28px rgba(14,165,233,.15)" }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={qrUrl} alt="QR Code" className="w-44 h-44 rounded-xl object-contain" />
-                </div>
-            }
-            <div className="text-xs text-slate-400 mt-2">สหกรณ์โรงเรียน ASIA-BOT</div>
-          </div>
-          <div className="bg-sky-50 rounded-2xl p-3 mb-3 space-y-1">
-            {(() => {
-              const sub = payItems.reduce((s, i) => s + i.price * i.qty, 0);
-              const sf  = Math.ceil(sub * STRIPE_FEE_RATE * 100) / 100;
-              const syf = Math.ceil(sub * SYSTEM_FEE_RATE * 100) / 100;
-              return <>
-                <div className="flex justify-between text-xs text-slate-500">
-                  <span>ยอดสินค้า</span><span>{fmt(sub)}</span>
-                </div>
-                <div className="flex justify-between text-xs text-slate-400">
-                  <span>ค่าธรรมเนียม Stripe (2%)</span><span>{fmt(sf)}</span>
-                </div>
-                <div className="flex justify-between text-xs text-slate-400">
-                  <span>ค่าดำเนินการ (1%)</span><span>{fmt(syf)}</span>
-                </div>
-                <div className="border-t border-sky-200 pt-1 flex items-center justify-between">
-                  <div className="text-sm text-slate-600 font-medium">ยอดที่ต้องชำระ</div>
-                  <div className="text-xl font-extrabold" style={{ color: "var(--primary-dark)" }}>{fmt(payAmount)}</div>
-                </div>
-              </>;
-            })()}
-          </div>
-          <div className="bg-slate-50 rounded-2xl p-3 mb-3 max-h-20 overflow-y-auto space-y-1">
-            {payItems.map((item, i) => (
-              <div key={i} className="flex justify-between text-xs text-slate-500">
-                <span>{item.name} × {item.qty}</span>
-                <span className="font-bold text-slate-700">{fmt(item.price * item.qty)}</span>
+
+          <div className="overflow-y-auto px-5 py-4 space-y-4">
+            <div className="text-center">
+              {!qrUrl
+                ? <div className="w-56 h-56 mx-auto rounded-3xl bg-slate-100 flex items-center justify-center">
+                    <i className="fa-solid fa-spinner fa-spin text-3xl text-slate-300" />
+                  </div>
+                : <div className="relative inline-block rounded-3xl p-0.5 bg-white border border-sky-100"
+                    style={{ boxShadow: "0 18px 45px rgba(14,165,233,.16)" }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={qrUrl} alt="QR Code" className="w-56 h-56 aspect-square rounded-3xl object-contain" />
+                    <div className="absolute left-1/2 top-1/2 w-11 h-11 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src="/favicon.png" alt="ASIA-BOT" className="w-full h-full object-contain" />
+                    </div>
+                  </div>
+              }
+              <div className="text-xs font-bold text-slate-400 mt-3">สหกรณ์โรงเรียน ASIA-BOT</div>
+            </div>
+
+            <div className="rounded-3xl p-4" style={{ background: "linear-gradient(180deg,#EAF7FF,#F8FCFF)" }}>
+              {(() => {
+                const sub = payItems.reduce((s, i) => s + i.price * i.qty, 0);
+                const sf  = Math.ceil(sub * STRIPE_FEE_RATE * 100) / 100;
+                const syf = Math.ceil(sub * SYSTEM_FEE_RATE * 100) / 100;
+                return <>
+                  <div className="flex justify-between text-xs text-slate-500">
+                    <span>ยอดสินค้า</span><span className="font-bold text-slate-700">{fmt(sub)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-slate-400 mt-1">
+                    <span>ค่าธรรมเนียม Stripe (2%)</span><span>{fmt(sf)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-slate-400 mt-1">
+                    <span>ค่าดำเนินการ (1%)</span><span>{fmt(syf)}</span>
+                  </div>
+                  <div className="border-t border-sky-200/80 mt-3 pt-3 flex items-end justify-between">
+                    <div>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wide">Total</div>
+                      <div className="text-sm text-slate-600 font-bold">ยอดที่ต้องชำระ</div>
+                    </div>
+                    <div className="text-2xl font-extrabold leading-none" style={{ color: "var(--primary-dark)" }}>{fmt(payAmount)}</div>
+                  </div>
+                </>;
+              })()}
+            </div>
+
+            <div className="bg-slate-50 rounded-3xl p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs font-bold text-slate-500">รายการสินค้า</div>
+                <div className="text-[10px] text-slate-400">{payItems.length} รายการ</div>
               </div>
-            ))}
+              <div className="max-h-28 overflow-y-auto space-y-2 pr-1">
+                {payItems.map((item, i) => (
+                  <div key={i} className="flex items-start justify-between gap-3 text-xs">
+                    <div className="min-w-0">
+                      <div className="font-bold text-slate-700 line-clamp-1">{item.name}</div>
+                      <div className="text-[10px] text-slate-400">จำนวน {item.qty} {item.unit || ""}</div>
+                    </div>
+                    <span className="font-extrabold text-slate-700 whitespace-nowrap">{fmt(item.price * item.qty)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-2 rounded-xl px-3 py-2 mb-3" style={{ background: PAY_STATUS_CFG[payStatus].bg }}>
-            <i className={`fa-solid ${PAY_STATUS_CFG[payStatus].icon} ${PAY_STATUS_CFG[payStatus].color} text-xs`} />
-            <span className={`text-xs font-medium ${PAY_STATUS_CFG[payStatus].color}`}>{PAY_STATUS_CFG[payStatus].text}</span>
+
+          <div className="px-5 py-4 border-t border-slate-100 bg-white flex-shrink-0">
+            <button onClick={() => {
+              const po = pendingOrder || (() => { try { return JSON.parse(localStorage.getItem(LS_PENDING) || "null"); } catch { return null; } })();
+              if (!po) { setPayOpen(false); return; }
+              if (!confirm("ยืนยันยกเลิกออเดอร์? สต็อกจะถูกคืน")) return;
+              stopPolling(); stopCountdown();
+              fetch(`/api/shop/orders/${po.orderId}/cancel`, { method: "POST" }).catch(() => {});
+              onPaymentCancelled(po.orderId);
+              setPayOpen(false);
+            }} className="w-full py-3 rounded-2xl border border-slate-200 text-slate-500 text-sm font-bold hover:bg-slate-50 active:scale-[.99] transition">
+              <i className="fa-solid fa-xmark text-xs" /> ยกเลิกออเดอร์
+            </button>
           </div>
-          <button onClick={() => {
-            const po = pendingOrder || (() => { try { return JSON.parse(localStorage.getItem(LS_PENDING) || "null"); } catch { return null; } })();
-            if (!po) { setPayOpen(false); return; }
-            if (!confirm("ยืนยันยกเลิกออเดอร์? สต็อกจะถูกคืน")) return;
-            stopPolling(); stopCountdown();
-            fetch(`/api/shop/orders/${po.orderId}/cancel`, { method: "POST" }).catch(() => {});
-            onPaymentCancelled(po.orderId);
-            setPayOpen(false);
-          }} className="w-full py-2.5 rounded-xl border border-slate-200 text-slate-500 text-sm font-medium hover:bg-slate-50 transition">
-            <i className="fa-solid fa-xmark text-xs" /> ยกเลิกออเดอร์
-          </button>
-          <div className="text-center text-[10px] text-slate-400 mt-2">ระบบตรวจสอบอัตโนมัติทุก 3 วินาที</div>
         </div>
       </div>
 
       {/* ════ MODAL: SLIP ════ */}
-      <div className={`fixed inset-0 z-[1000] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 transition-all duration-300 ${slipOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+      <div className={`fixed inset-0 z-[1000] bg-black/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 transition-all duration-300 ${slipOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
         onClick={e => { if (e.target === e.currentTarget) setSlipOpen(false); }}>
-        <div className={`bg-white rounded-2xl w-full max-w-md p-6 transition-all duration-300 ${slipOpen ? "scale-100" : "scale-90"}`}>
-          <div className="flex items-center justify-between mb-4">
+        <div className={`bg-white rounded-3xl w-full max-w-md max-h-[92dvh] p-5 sm:p-6 flex flex-col transition-all duration-300 ${slipOpen ? "scale-100" : "scale-90"}`}>
+          <div className="flex items-center justify-between mb-4 flex-shrink-0">
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-green-50 flex items-center justify-center text-green-500 flex-shrink-0">
-                <i className="fa-solid fa-receipt text-sm" />
+              <div className="w-11 h-11 rounded-2xl bg-green-50 flex items-center justify-center flex-shrink-0 p-1.5">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/favicon.png" alt="ASIA-BOT" className="w-full h-full object-contain" />
               </div>
               <div>
-                <div className="font-bold text-slate-800">ใบเสร็จรับเงิน</div>
+                <div className="font-bold text-slate-800">ใบเสร็จชำระเงิน</div>
                 <div className="text-xs text-slate-400">สหกรณ์โรงเรียน ASIA-BOT</div>
               </div>
             </div>
@@ -1286,8 +1437,10 @@ export default function ShopPage() {
               <i className="fa-solid fa-xmark" />
             </button>
           </div>
-          <canvas ref={slipRef} className="rounded-2xl block mx-auto" />
-          <div className="grid grid-cols-2 gap-2 mt-4">
+          <div className="overflow-auto rounded-2xl bg-slate-100 p-2 flex-1 min-h-0">
+            <canvas ref={slipRef} className="rounded-2xl block mx-auto w-full h-auto max-w-[420px]" />
+          </div>
+          <div className="grid grid-cols-2 gap-2 mt-4 flex-shrink-0">
             <button onClick={downloadSlip} className="btn-primary flex items-center justify-center gap-1.5 text-sm py-2.5">
               <i className="fa-solid fa-download" /> ดาวน์โหลดสลิป
             </button>
@@ -1316,7 +1469,7 @@ export default function ShopPage() {
               <i className="fa-solid fa-xmark" />
             </button>
           </div>
-          <div className="overflow-y-auto flex-1 px-5 py-4 space-y-2 pb-8">
+          <div className="overflow-y-auto flex-1 px-4 sm:px-5 py-4 space-y-3 pb-8">
             {logs.length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-5xl mb-3">📋</div>
@@ -1329,33 +1482,64 @@ export default function ShopPage() {
               const badgeCls = l.status === "paid" ? "bg-green-50 text-green-600"
                 : l.status === "cancelled" || l.status === "failed" || l.status === "expired" ? "bg-red-50 text-red-500"
                 : "bg-amber-50 text-amber-600";
-              const badgeTxt = l.status === "paid" ? "✅ ชำระแล้ว"
-                : l.status === "cancelled" ? "❌ ยกเลิก"
-                : l.status === "failed" ? "❌ ล้มเหลว"
-                : l.status === "expired" ? "⏰ หมดเวลา"
-                : "⏳ รอชำระ";
+              const badgeIcon = l.status === "paid" ? "fa-check"
+                : l.status === "cancelled" || l.status === "failed" ? "fa-xmark"
+                : l.status === "expired" ? "fa-clock"
+                : "fa-hourglass-half";
+              const badgeTxt = l.status === "paid" ? "ชำระแล้ว"
+                : l.status === "cancelled" ? "ยกเลิก"
+                : l.status === "failed" ? "ล้มเหลว"
+                : l.status === "expired" ? "หมดเวลา"
+                : "รอชำระ";
               const borderCls = l.status === "paid" ? "border-l-4 border-l-green-400"
                 : l.status === "pending" || l.status === "expired" ? "border-l-4 border-l-amber-400"
                 : "border-l-4 border-l-red-400";
+              const itemText = l.items.map(i => `${i.name} x${i.qty}`).join(", ");
+              const itemPreview = itemText.length > 92 ? `${itemText.slice(0, 92)}...` : itemText;
               return (
-                <div key={idx} className={`bg-slate-50 rounded-2xl p-3 ${borderCls}`}>
-                  <div className="flex items-start justify-between gap-2 mb-1">
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-bold text-slate-700">{l.orderId}</span>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeCls}`}>{badgeTxt}</span>
+                <div key={idx} className={`bg-white rounded-3xl p-3.5 shadow-sm border border-slate-100 ${borderCls}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-sm font-extrabold text-slate-800 truncate">{l.orderId}</span>
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full flex-shrink-0 ${badgeCls}`}>
+                          <i className={`fa-solid ${badgeIcon} text-[9px]`} /> {badgeTxt}
+                        </span>
                       </div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">{dStr} {tStr} · {l.student}</div>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+                        <span className="inline-flex items-center gap-1 text-slate-400">
+                          <i className="fa-regular fa-clock text-[10px]" /> {dStr} · {tStr}
+                        </span>
+                      </div>
                     </div>
-                    <div className="text-sm font-bold flex-shrink-0" style={{ color: "var(--primary-dark)" }}>{fmt(l.total)}</div>
+                    <div className="text-base font-extrabold flex-shrink-0 leading-none" style={{ color: "var(--primary-dark)" }}>{fmt(l.total)}</div>
                   </div>
-                  <div className="text-[10px] text-slate-400 truncate">{l.items.map(i => `${i.name}×${i.qty}`).join(", ")}</div>
-                  {l.status === "paid" && (
-                    <button onClick={() => { setLastOrder(l); generateSlip(l); setLogsOpen(false); setSlipOpen(true); }}
-                      className="mt-1.5 text-[10px] text-sky-500 font-medium flex items-center gap-1 hover:text-sky-700 transition">
-                      <i className="fa-solid fa-receipt" /> ดูสลิป
-                    </button>
-                  )}
+
+                  <div className="mt-3 rounded-2xl bg-slate-50 px-3 py-2">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Items</span>
+                      <span className="text-[10px] font-bold text-slate-400">{l.items.reduce((s, i) => s + i.qty, 0)} ชิ้น</span>
+                    </div>
+                    <div className="text-[11px] leading-relaxed text-slate-500">{itemPreview || "ไม่มีรายการสินค้า"}</div>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <div className="text-[10px] text-slate-400">
+                      {l.studentId && <span>รหัส {l.studentId}</span>}
+                    </div>
+                    {l.status === "paid" && (
+                      <button onClick={() => { setLastOrder(l); generateSlip(l); setLogsOpen(false); setSlipOpen(true); }}
+                        className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-bold text-white shadow-sm active:scale-95 transition"
+                        style={{ background: "linear-gradient(135deg,var(--primary-color),var(--primary-dark))" }}>
+                        <i className="fa-solid fa-receipt" /> ดูสลิป
+                      </button>
+                    )}
+                    {l.status === "pending" && (
+                      <span className="inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-[11px] font-bold bg-amber-50 text-amber-600">
+                        <i className="fa-solid fa-circle-notch fa-spin text-[10px]" /> รอชำระเงิน
+                      </span>
+                    )}
+                  </div>
                 </div>
               );
             })}

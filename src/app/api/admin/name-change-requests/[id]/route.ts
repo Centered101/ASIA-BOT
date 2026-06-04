@@ -20,10 +20,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (body.status === "approved") {
     const { data: ncr } = await supabase.from("name_change_requests").select("*").eq("id", id).single();
     if (ncr) {
-      await supabase.from("students").update({
-        first_name: ncr.new_first_name,
-        last_name: ncr.new_last_name,
+      const changes = body.changes && typeof body.changes === "object" ? body.changes : {};
+      const { error: updateStudentError } = await supabase.from("students").update({
+        first_name: changes.first_name ?? ncr.new_first_name,
+        last_name: changes.last_name ?? ncr.new_last_name,
       }).eq("student_id", ncr.student_id);
+      if (updateStudentError) {
+        return NextResponse.json({ status: "error", message: updateStudentError.message }, { status: 500 });
+      }
     }
   }
 

@@ -462,7 +462,9 @@ export default function StudentPage() {
                   <div className="absolute -top-[30%] -right-[10%] w-[55%] h-[120%] rounded-full bg-white/10 pointer-events-none" />
                   <div className="absolute -bottom-[55%] -left-[8%] w-[50%] h-[100%] rounded-full bg-white/[0.06] pointer-events-none" />
 
-                  <div className="absolute inset-0 flex flex-col justify-between p-[4%]">
+                  <div
+                    className="absolute inset-0 flex flex-col justify-between"
+                    style={{ padding: "4%", paddingBottom: "clamp(26px,6.4vw,36px)" }}>
                     {/* Top: brand + logo */}
                     <div className="flex items-start justify-between">
                       <div>
@@ -476,7 +478,7 @@ export default function StudentPage() {
                       <div className="rounded-lg flex items-center justify-center bg-white/20 border border-white/35 flex-shrink-0"
                         style={{ width: "clamp(22px,6vw,34px)", height: "clamp(22px,6vw,34px)" }}>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src="/favicon.ico" className="w-3/4 h-3/4 object-contain" alt="logo" />
+                        <img src="/favicon.png" className="w-3/4 h-3/4 object-contain" alt="logo" />
                       </div>
                     </div>
 
@@ -521,20 +523,20 @@ export default function StudentPage() {
                     </div>
 
                     {/* Bottom: grade/dept/status + QR */}
-                    <div className="flex items-end justify-between">
-                      <div>
+                    <div className="flex items-end justify-between gap-2 min-h-0">
+                      <div className="min-w-0 pr-2" style={{ maxWidth: "calc(100% - clamp(54px,14vw,74px))" }}>
                         <div className="inline-flex items-center gap-1 px-[5px] py-[2px] rounded-full text-white font-semibold"
                           style={{ fontSize: "clamp(6px,1.6vw,8px)", background: "rgba(255,255,255,0.22)", border: "1px solid rgba(255,255,255,0.4)" }}>
                           <i className="fa-solid fa-graduation-cap" style={{ fontSize: "0.7em" }} />
                           {grade}
                         </div>
-                        <div className="text-white/70 mt-0.5" style={{ fontSize: "clamp(5px,1.5vw,8px)" }}>
+                        <div className="text-white/70 mt-0.5 truncate" style={{ fontSize: "clamp(5px,1.5vw,8px)" }}>
                           {student.department ?? "ไม่ระบุสาขา"}
                         </div>
                         <div className="flex items-center gap-1 mt-0.5">
                           <div className={`rounded-full flex-shrink-0 ${isGraduated ? "bg-amber-400" : isPending ? "bg-slate-400" : "bg-green-400"}`}
                             style={{ width: "clamp(4px,1.2vw,6px)", height: "clamp(4px,1.2vw,6px)" }} />
-                          <span className="text-white/75" style={{ fontSize: "clamp(5px,1.4vw,7px)" }}>
+                          <span className="text-white/75 truncate" style={{ fontSize: "clamp(5px,1.4vw,7px)" }}>
                             {isGraduated ? "จบการศึกษา" : isPending ? "รอเข้าเรียน" : "กำลังศึกษา"}
                           </span>
                         </div>
@@ -545,12 +547,12 @@ export default function StudentPage() {
                         <div className="relative bg-white rounded shadow-lg"
                           style={{ padding: "clamp(2px,0.6vw,4px)" }}>
                           {qrUrl
-                            ? <img src={qrUrl} alt="QR" style={{ display: "block", width: "clamp(42px,12vw,62px)", height: "clamp(42px,12vw,62px)" }} />
-                            : <div style={{ width: "clamp(42px,12vw,62px)", height: "clamp(42px,12vw,62px)" }} />
+                            ? <img src={qrUrl} alt="QR" style={{ display: "block", width: "clamp(40px,11vw,56px)", height: "clamp(40px,11vw,56px)" }} />
+                            : <div style={{ width: "clamp(40px,11vw,56px)", height: "clamp(40px,11vw,56px)" }} />
                           }
                           {/* favicon logo centered on QR */}
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src="/favicon.ico" alt="logo"
+                          <img src="/favicon.png" alt="logo"
                             className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-sm shadow"
                             style={{ width: "clamp(10px,3vw,16px)", height: "clamp(10px,3vw,16px)" }} />
                         </div>
@@ -563,7 +565,7 @@ export default function StudentPage() {
 
                   {/* Magnetic strip */}
                   <div className="absolute bottom-0 left-0 right-0 bg-black/25 flex items-center px-[4%]"
-                    style={{ height: "clamp(14px,4vw,22px)", fontFamily: "monospace", fontSize: "clamp(5px,1.2vw,7px)", letterSpacing: 1, color: "rgba(255,255,255,0.6)" }}>
+                    style={{ height: "clamp(16px,4.3vw,24px)", fontFamily: "monospace", fontSize: "clamp(5px,1.2vw,7px)", letterSpacing: 1, color: "rgba(255,255,255,0.6)" }}>
                     {student.uid ?? student.student_id}
                   </div>
                 </div>

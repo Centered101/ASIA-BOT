@@ -12,6 +12,7 @@
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.49.0",
     "@types/bcryptjs": "^2.4.6",
+    "@vercel/analytics": "^2.0.1",
     "aos": "^2.3.4",
     "bcryptjs": "^3.0.3",
     "chart.js": "^4.4.9",

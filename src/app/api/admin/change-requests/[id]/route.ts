@@ -22,15 +22,68 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: cr } = await (supabase.from("change_requests") as any).select("*").eq("id", id).single();
     if (cr?.requested_changes && typeof cr.requested_changes === "object") {
-      const allowed_fields = ["nickname", "student_phone", "entry_year", "department"];
+      const allowed_fields = ["student_id", "student_phone", "first_name", "last_name", "nickname", "program", "entry_year", "department", "uid", "card_status", "photo_url", "line_user_id"];
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const patch: Record<string, any> = {};
+      const requestedChanges = body.changes && typeof body.changes === "object" ? body.changes : cr.requested_changes;
       for (const k of allowed_fields) {
-        if (k in cr.requested_changes) patch[k] = cr.requested_changes[k];
+        if (k in requestedChanges) patch[k] = requestedChanges[k];
       }
       if (Object.keys(patch).length > 0) {
+        const { data: currentStudent, error: currentStudentError } = await supabase
+          .from("students")
+          .select("id, student_id, uid")
+          .eq("student_id", cr.student_id)
+          .maybeSingle();
+
+        if (currentStudentError) {
+          return NextResponse.json({ status: "error", message: currentStudentError.message }, { status: 500 });
+        }
+        if (!currentStudent) {
+          return NextResponse.json({ status: "error", message: "ไม่พบนักเรียนของคำขอนี้" }, { status: 404 });
+        }
+
+        if (typeof patch.student_id === "string") patch.student_id = patch.student_id.trim();
+        if (typeof patch.uid === "string") patch.uid = patch.uid.trim() || null;
+
+        if (patch.student_id && patch.student_id !== currentStudent.student_id) {
+          const { data: duplicatedStudent } = await supabase
+            .from("students")
+            .select("id")
+            .eq("student_id", patch.student_id)
+            .neq("id", currentStudent.id)
+            .maybeSingle();
+          if (duplicatedStudent) {
+            return NextResponse.json({
+              status: "error",
+              message: `รหัสนักเรียน ${patch.student_id} มีอยู่ในระบบแล้ว กรุณาใช้รหัสอื่น`,
+            }, { status: 409 });
+          }
+        }
+
+        if (patch.uid && patch.uid !== currentStudent.uid) {
+          const { data: duplicatedUid } = await supabase
+            .from("students")
+            .select("id")
+            .eq("uid", patch.uid)
+            .neq("id", currentStudent.id)
+            .maybeSingle();
+          if (duplicatedUid) {
+            return NextResponse.json({
+              status: "error",
+              message: `UID ${patch.uid} ถูกผูกกับนักเรียนคนอื่นแล้ว`,
+            }, { status: 409 });
+          }
+        }
+
         patch.updated_at = new Date().toISOString();
-        await supabase.from("students").update(patch).eq("student_id", cr.student_id);
+        const { error: updateStudentError } = await supabase.from("students").update(patch).eq("id", currentStudent.id);
+        if (updateStudentError) {
+          const message = updateStudentError.code === "23505"
+            ? "ข้อมูลซ้ำกับนักเรียนคนอื่น กรุณาตรวจสอบรหัสนักเรียนหรือ UID"
+            : updateStudentError.message;
+          return NextResponse.json({ status: "error", message }, { status: 500 });
+        }
       }
     }
   }

@@ -164,7 +164,7 @@ function FeedbackContent() {
     <>
       <div className="bg-blob" style={{ width: 520, height: 520, background: "var(--primary-color)", top: -120, right: -170 }} />
       <div className="bg-blob" style={{ width: 420, height: 420, background: "#FF7070", bottom: -110, left: -130 }} />
-      <Header subtitle="Feedback" />
+      <Header subtitle="ความคิดเห็นและแจ้งปัญหา" />
 
       <main className="min-h-screen max-w-6xl mx-auto px-3 sm:px-6 pt-8 pb-16 relative z-10">
 
@@ -244,7 +244,7 @@ function FeedbackContent() {
                   onClick={() => { if (session) setIdentityMode("identified"); else window.location.href = "/login?next=/feedback%23comment"; }}
                   className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all ${identityMode === "identified" ? "bg-sky-500 text-white shadow" : "text-slate-500 hover:text-sky-500"} ${!session ? "opacity-50" : ""}`}>
                   <i className="fa-solid fa-id-card" /> ระบุตัวตน
-                  {!session && <span className="text-[10px] opacity-70">(ต้อง login)</span>}
+                  {!session && <span className="text-[10px] opacity-70">(ต้องเข้าสู่ระบบ)</span>}
                 </button>
               </div>
 
@@ -296,7 +296,7 @@ function FeedbackContent() {
                         <div className="field-wrap">
                           <i className="fa-solid fa-at field-icon" />
                           <input value={contact} onChange={e => setContact(e.target.value)}
-                            className="form-input text-xs sm:text-sm" placeholder="Line / โทร" maxLength={60} />
+                            className="form-input text-xs sm:text-sm" placeholder="ไลน์ / เบอร์โทร" maxLength={60} />
                         </div>
                       </div>
                       <div className="field-wrap">
@@ -409,7 +409,7 @@ function FeedbackContent() {
               ) : (
                 <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">เข้าสู่ระบบ</h3>
-                  <p className="text-xs text-slate-500 mb-3">Login เพื่อส่งความคิดเห็นแบบระบุตัวตน ให้ทีมงานติดต่อกลับได้</p>
+                  <p className="text-xs text-slate-500 mb-3">เข้าสู่ระบบเพื่อส่งความคิดเห็นแบบระบุตัวตน ให้ทีมงานติดต่อกลับได้</p>
                   <a href="/login?next=/feedback%23comment" className="btn-primary text-xs w-full flex items-center justify-center gap-1.5 py-2">
                     <i className="fa-solid fa-right-to-bracket" /> เข้าสู่ระบบ
                   </a>

@@ -13,15 +13,15 @@ export type QuickLink = {
 };
 
 export const QUICK_LINKS: QuickLink[] = [
-  { name: "Overview",                  path: "/",                    icon: "fa-solid fa-house",            desc: "หน้าแรก",             color: "#0EA5E9" },
+  { name: "หน้าแรก",                    path: "/",                    icon: "fa-solid fa-house",            desc: "ภาพรวมระบบ",          color: "#0EA5E9" },
   { name: "โปรเจคนักเรียน",           path: "/projects",            icon: "fa-solid fa-folder-open",      desc: "ผลงานนักเรียน",       color: "#6366F1" },
-  { name: "Class Track Room",          path: "/class-track-room",    icon: "fa-solid fa-chalkboard-user",  desc: "ติดตามห้องเรียน",     color: "#7C3AED" },
-  { name: "Student Entry Scanner",     path: "/student-entry-scanner", icon: "fa-solid fa-qrcode",         desc: "สแกนเข้าโรงเรียน",   color: "#059669" },
+  { name: "สถานะห้องเรียน",           path: "/class-track-room",    icon: "fa-solid fa-chalkboard-user",  desc: "ดูห้องว่างและจองห้อง", color: "#7C3AED" },
+  { name: "เช็กชื่อเข้าออก",           path: "/student-entry-scanner", icon: "fa-solid fa-qrcode",         desc: "ตรวจสอบเวลาเข้าเรียน", color: "#059669" },
   { name: "สหกรณ์โรงเรียน",          path: "/shop",    role: "shop", icon: "fa-solid fa-store",           desc: "ซื้อสินค้าสหกรณ์",   color: "#EC4899" },
   { name: "เข้าสู่ระบบนักเรียน",    path: "/student", role: "student", icon: "fa-solid fa-id-card",      desc: "บัตรนักเรียนดิจิทัล", color: "#0EA5E9" },
   { name: "ลงทะเบียนบัตรนักเรียน", path: "/register",               icon: "fa-solid fa-user-plus",       desc: "สมัครบัตรใหม่",      color: "#6366F1" },
   { name: "แสดงความคิดเห็น",         path: "/feedback",              icon: "fa-solid fa-comment-dots",    desc: "ข้อเสนอแนะ",          color: "#14B8A6" },
-  { name: "Admin Dashboard",           path: "/admin",   role: "admin", icon: "fa-solid fa-gauge",         desc: "จัดการระบบ",          color: "#64748B" },
+  { name: "หลังบ้านผู้ดูแล",          path: "/admin",   role: "admin", icon: "fa-solid fa-gauge",         desc: "จัดการระบบ",          color: "#64748B" },
 ];
 
 export type CustomField =
@@ -30,7 +30,7 @@ export type CustomField =
   | { key: string; label: string; required?: boolean; type: "radio";  options: string[] }
   | { key: string; label: string; required?: boolean; type: "text";   placeholder?: string; maxLength?: number };
 
-export const TEAM_GITHUB = ["Centered101", "Centered101-dev"];
+export const TEAM_GITHUB = ["Centered101", "Centered101-dev", "Centered102-dev"];
 
 export const SESSION_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
 export const SESSION_KEY = "asia_lb_session";

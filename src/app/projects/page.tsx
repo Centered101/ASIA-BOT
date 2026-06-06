@@ -136,7 +136,7 @@ function FeaturedCard({ project }: { project: Project }) {
             src={project.poster_url}
             alt={project.name}
             onError={() => setImgErr(true)}
-            className="w-full h-auto block transition-transform duration-700 group-hover:scale-105"
+            className="w-full h-auto block transition-transform duration-700 group-hover:scale-95"
           />
         ) : (
           <div className="w-full"
@@ -218,12 +218,14 @@ function FeaturedCard({ project }: { project: Project }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function ProjectsPage() {
+  const [mounted, setMounted] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [yearFilter, setYearFilter] = useState<number | "all">("all");
   const [search, setSearch] = useState("");
 
   useEffect(() => {
+    setMounted(true);
     fetch("/api/projects")
       .then(r => r.json())
       .then(j => { if (j.status === "success") setProjects(j.data); })
@@ -275,32 +277,43 @@ export default function ProjectsPage() {
 
         {/* ── Filter bar ── */}
         <div data-aos="fade-up" className="flex flex-wrap items-center gap-2 mb-8">
-          <div className="relative flex-1 min-w-[160px] max-w-xs">
-            <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400" />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="ค้นหาโปรเจค..."
-              className="w-full pl-8 pr-3 py-2 rounded-xl text-sm focus:outline-none transition-all bg-white border border-slate-200"
-              onFocus={e => (e.currentTarget.style.borderColor = "var(--primary-color)")}
-              onBlur={e => (e.currentTarget.style.borderColor = "#e2e8f0")}
-            />
-          </div>
+          {mounted ? (
+            <>
+              <div className="relative flex-1 min-w-[160px] max-w-xs">
+                <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400" />
+                <input
+                  suppressHydrationWarning
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="ค้นหาโปรเจค..."
+                  className="w-full pl-8 pr-3 py-2 rounded-xl text-sm focus:outline-none transition-all bg-white border border-slate-200"
+                  onFocus={e => (e.currentTarget.style.borderColor = "var(--primary-color)")}
+                  onBlur={e => (e.currentTarget.style.borderColor = "#e2e8f0")}
+                />
+              </div>
 
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {(["all", ...years] as (number | "all")[]).map(y => {
-              const active = yearFilter === y;
-              return (
-                <button key={y} onClick={() => setYearFilter(y)}
-                  className="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all"
-                  style={active
-                    ? { background: "var(--primary-color)", color: "#fff", boxShadow: "0 2px 8px var(--primary-color)44" }
-                    : { background: "#f1f5f9", color: "#64748b" }}>
-                  {y === "all" ? "ทั้งหมด" : `ปี ${y}`}
-                </button>
-              );
-            })}
-          </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {(["all", ...years] as (number | "all")[]).map(y => {
+                  const active = yearFilter === y;
+                  return (
+                    <button key={y} onClick={() => setYearFilter(y)}
+                      suppressHydrationWarning
+                      className="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all"
+                      style={active
+                        ? { background: "var(--primary-color)", color: "#fff", boxShadow: "0 2px 8px var(--primary-color)44" }
+                        : { background: "#f1f5f9", color: "#64748b" }}>
+                      {y === "all" ? "ทั้งหมด" : `ปี ${y}`}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex-1 min-w-[160px] max-w-xs h-[38px] rounded-xl bg-white border border-slate-200" />
+              <div className="h-[32px] w-32 rounded-xl bg-slate-100" />
+            </>
+          )}
 
           {!loading && (
             <span className="ml-auto text-xs font-semibold text-slate-400">

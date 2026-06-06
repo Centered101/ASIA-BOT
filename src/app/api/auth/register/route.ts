@@ -17,7 +17,10 @@ function generateCardCode(): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { student_id, student_phone, first_name, last_name, nickname, program, entry_year, department } = body;
+    const {
+      student_id, student_phone, first_name, last_name, nickname, program, entry_year, department,
+      google_email, google_id, google_name, google_avatar_url,
+    } = body;
 
     if (!student_id || !student_phone || !first_name || !last_name || !program || !entry_year || !department) {
       return NextResponse.json({ status: "error", message: "กรุณากรอกข้อมูลให้ครบ" }, { status: 400 });
@@ -37,7 +40,7 @@ export async function POST(req: NextRequest) {
       uid = `${sid}-${generateCardCode()}`;
     }
 
-    const { error } = await supabase.from("students").insert({
+    const basePayload = {
       student_id: student_id.trim(),
       student_phone: student_phone.trim(),
       first_name: first_name.trim(),
@@ -48,7 +51,26 @@ export async function POST(req: NextRequest) {
       department: department.trim(),
       card_status: "inactive",
       uid,
-    });
+    };
+
+    const googlePayload = google_email ? {
+      google_email: String(google_email).trim().toLowerCase(),
+      google_id: google_id ? String(google_id).trim() : null,
+      google_name: google_name ? String(google_name).trim() : null,
+      google_avatar_url: google_avatar_url ? String(google_avatar_url).trim() : null,
+      photo_url: google_avatar_url ? String(google_avatar_url).trim() : null,
+    } : {};
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let { error } = await (supabase.from("students") as any).insert({ ...basePayload, ...googlePayload });
+
+    if (error && google_email && (error.code === "42703" || error.code === "PGRST204" || /google_|photo_url/i.test(error.message))) {
+      // Database has not been migrated for Google Auth yet. Register still works,
+      // but Google login will require the migration below to find this student later.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const retry = await (supabase.from("students") as any).insert(basePayload);
+      error = retry.error;
+    }
 
     if (error) return NextResponse.json({ status: "error", message: error.message }, { status: 500 });
 

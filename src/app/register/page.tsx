@@ -1,10 +1,13 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useRef, useEffect, Suspense } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 import { toast } from "sonner";
 import { DEPARTMENTS, SESSION_KEY, SESSION_TIME_KEY } from "@/lib/config";
+import { getGoogleSupabase } from "@/lib/supabase-google";
 
 type FormData = {
   student_id: string;
@@ -49,18 +52,28 @@ function checkThaiName(val: string, label: string): string | null {
 }
 
 const CROP_SIZE   = 280;
-const STEP_ICONS  = ["fa-user", "fa-graduation-cap", "fa-camera", "fa-check"];
-const STEP_LABELS = ["ข้อมูล", "การศึกษา", "รูปภาพ", "ยืนยัน"];
+const STEP_ICONS  = ["fa-link", "fa-user", "fa-graduation-cap", "fa-camera", "fa-check"];
+const STEP_LABELS = ["เริ่มต้น", "ข้อมูล", "การศึกษา", "รูปภาพ", "ยืนยัน"];
 
 type ErrMap = Partial<Record<keyof FormData, boolean>>;
 
-export default function RegisterPage() {
+function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next");
+  const googleEmail = searchParams.get("google_email")?.trim().toLowerCase() ?? "";
+  const googleId = searchParams.get("google_id")?.trim() ?? "";
+  const googleName = searchParams.get("google_name")?.trim() ?? "";
+  const googleAvatar = searchParams.get("google_avatar")?.trim() ?? "";
+  const needsGoogleSetup = searchParams.get("needs_google_setup") === "1";
 
   const [step,      setStep]      = useState(1);
   const [goingBack, setGoingBack] = useState(false);
   const [zoomOut,   setZoomOut]   = useState(false);
   const [loading,   setLoading]   = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [googleAvatarFailed, setGoogleAvatarFailed] = useState(false);
   const [errs,      setErrs]      = useState<ErrMap>({});
 
   const [photoFile,    setPhotoFile]    = useState<File | null>(null);
@@ -95,12 +108,53 @@ export default function RegisterPage() {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (!googleAvatar || photoPreview) return;
+    setPhotoPreview(googleAvatar);
+  }, [googleAvatar, photoPreview]);
+
+  function handleGoogleAvatarError() {
+    setGoogleAvatarFailed(true);
+    if (photoPreview === googleAvatar) setPhotoPreview("");
+  }
+
   function set(field: keyof FormData, val: string) {
     setForm(f => ({ ...f, [field]: val }));
     if (errs[field]) setErrs(e => ({ ...e, [field]: false }));
   }
   function err(field: keyof FormData) { setErrs(e => ({ ...e, [field]: true })); }
   function gotoStep(n: number, back = false) { setGoingBack(back); setStep(n); }
+
+  function continueFromStart() {
+    if (!acceptedTerms) {
+      toast.error("กรุณายอมรับนโยบายความเป็นส่วนตัวและเงื่อนไขการใช้งานก่อนสมัคร");
+      return;
+    }
+    gotoStep(2);
+  }
+
+  async function startGoogleRegister() {
+    setGoogleLoading(true);
+    try {
+      const supabase = getGoogleSupabase();
+      const target = next && next.startsWith("/") && !next.startsWith("//") ? next : "/student";
+      const redirectTo = `${window.location.origin}/auth/google/callback?next=${encodeURIComponent(target)}`;
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo,
+          queryParams: { access_type: "offline", prompt: "select_account" },
+        },
+      });
+      if (error) {
+        toast.error(error.message);
+        setGoogleLoading(false);
+      }
+    } catch {
+      toast.error("ไม่สามารถเริ่มเชื่อมบัญชี Google ได้");
+      setGoogleLoading(false);
+    }
+  }
 
   function validateStep1() {
     const idErr = checkStudentId(form.student_id.trim());
@@ -137,12 +191,19 @@ export default function RegisterPage() {
   }
 
   async function handleSubmit() {
+    if (loading) return;
     setLoading(true);
-    toast.loading("กำลังส่งข้อมูล กรุณารอสักครู่...");
+    const toastId = toast.loading("กำลังส่งข้อมูล กรุณารอสักครู่...");
     try {
       const res  = await fetch("/api/auth/register", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          google_email: googleEmail || undefined,
+          google_id: googleId || undefined,
+          google_name: googleName || undefined,
+          google_avatar_url: googleAvatar || undefined,
+        }),
       });
       const data = await res.json();
       if (data.status === "success") {
@@ -160,23 +221,27 @@ export default function RegisterPage() {
           localStorage.setItem(SESSION_KEY, JSON.stringify(student));
           localStorage.setItem(SESSION_TIME_KEY, new Date().toISOString());
         } catch { /**/ }
-        toast.success("ลงทะเบียนสำเร็จ! 🎉");
+        toast.success("ลงทะเบียนสำเร็จ!", { id: toastId });
         doFinish();
       } else if (data.status === "duplicate") {
-        toast.error("รหัส " + form.student_id + " มีในระบบแล้ว");
-        gotoStep(1, true);
+        toast.error("รหัส " + form.student_id + " มีในระบบแล้ว", { id: toastId });
+        gotoStep(2, true);
         setErrs(e => ({ ...e, student_id: true }));
       } else {
-        toast.error(data.message || "เกิดข้อผิดพลาด กรุณาลองอีกครั้ง");
+        toast.error(data.message || "เกิดข้อผิดพลาด กรุณาลองอีกครั้ง", { id: toastId });
       }
     } catch {
-      toast.error("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
+      toast.error("ไม่สามารถเชื่อมต่อระบบได้", { id: toastId });
     } finally {
       setLoading(false);
     }
   }
 
-  function doFinish() { setZoomOut(true); setTimeout(() => router.push("/student"), 500); }
+  function doFinish() {
+    const target = next && next.startsWith("/") && !next.startsWith("//") ? next : "/student";
+    setZoomOut(true);
+    setTimeout(() => router.push(target), 500);
+  }
 
   // ── Crop helpers ──
   function pickPhoto(file: File) {
@@ -253,7 +318,7 @@ export default function RegisterPage() {
 
   function resetForm() {
     setForm({ student_id: "", student_phone: "", first_name: "", last_name: "", nickname: "", program: "", entry_year: "", department: "" });
-    setErrs({}); setStep(1); setPhotoFile(null); setPhotoPreview(""); setDeptQuery("");
+    setErrs({}); setStep(1); setAcceptedTerms(false); setPhotoFile(null); setPhotoPreview(""); setDeptQuery("");
   }
 
   const filteredDepts = DEPARTMENTS.map(cat => ({
@@ -293,9 +358,9 @@ export default function RegisterPage() {
       <div className="bg-blob" style={{ width: 420, height: 420, background: "var(--primary-dark)", bottom: -110, left: -130 }} />
       <Header subtitle="ลงทะเบียนบัตรนักเรียน" />
 
-      <main className="min-h-[calc(100vh-64px)] flex items-start sm:items-center justify-center p-2 sm:p-4 py-6">
-        <div data-aos="zoom-in-up"
-          className={`w-full max-w-lg relative bg-[color:var(--white-smoker)] border rounded-2xl shadow p-4 sm:p-6 md:p-8 z-10 transition-all duration-500 origin-center ${zoomOut ? "scale-0 opacity-0" : "scale-100 opacity-100"}`}>
+      <main className="min-h-[calc(100vh-64px)] flex items-center justify-center px-3 sm:px-4 py-6">
+        <div data-aos="zoom-in-up" suppressHydrationWarning
+          className={`w-full max-w-lg relative bg-[color:var(--white-smoker)] border rounded-2xl shadow p-4 sm:p-6 md:p-8 z-10 transition-all duration-500 origin-center overflow-visible ${zoomOut ? "scale-0 opacity-0" : "scale-100 opacity-100"}`}>
 
           {/* Header */}
           <div className="text-center mb-8">
@@ -304,17 +369,26 @@ export default function RegisterPage() {
               <i className="fa-solid fa-id-card text-white text-2xl" />
             </div>
             <h1 className="text-xl sm:text-2xl font-bold text-slate-800 mb-1">ลงทะเบียนบัตรนักเรียน</h1>
-            <p className="text-xs sm:text-sm text-slate-500">กรอกข้อมูลให้ครบถ้วนเพื่อสมัครบัตรเรียน</p>
+            <p className="text-xs sm:text-sm text-slate-500">
+              {googleEmail ? "กรอกข้อมูลนักเรียนเพื่อผูกกับบัญชี Google นี้" : "กรอกข้อมูลให้ครบถ้วนเพื่อสมัครบัตรเรียน"}
+            </p>
           </div>
+
+          {needsGoogleSetup && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5 mb-5 text-xs text-amber-700">
+              <i className="fa-solid fa-triangle-exclamation mr-1.5 text-amber-500" />
+              ระบบรับข้อมูลจาก Google แล้ว แต่ผู้ดูแลต้องเปิดใช้งานการเชื่อมบัญชี Google ก่อน จึงจะเข้าสู่ระบบด้วย Google ได้ในครั้งถัดไป
+            </div>
+          )}
 
           {/* ── Step Bar ── */}
           <div className="relative flex items-start justify-between mb-8 px-1">
-            <div className="absolute left-[calc(12.5%+20px)] right-[calc(12.5%+20px)] top-5 -translate-y-1/2 h-0.5">
+            <div className="absolute left-[calc(10%+20px)] right-[calc(10%+20px)] top-5 -translate-y-1/2 h-0.5">
               <div className="absolute inset-0 bg-slate-200 rounded-full" />
               <div className="absolute left-0 top-0 h-full bg-sky-400 rounded-full transition-all duration-500 ease-out"
-                style={{ width: step === 1 ? "0%" : step === 2 ? "33.33%" : step === 3 ? "66.66%" : "100%" }} />
+                style={{ width: `${((step - 1) / (STEP_LABELS.length - 1)) * 100}%` }} />
             </div>
-            {[1, 2, 3, 4].map((s, i) => {
+            {[1, 2, 3, 4, 5].map((s, i) => {
               const done   = step > s;
               const active = step === s;
               return (
@@ -338,10 +412,101 @@ export default function RegisterPage() {
           {step === 1 && (
             <div className={`form-section active${goingBack ? " go-back" : ""}`}>
               <div className="flex items-center gap-3 mb-5">
+                <div className="section-icon"><i className="fa-solid fa-link" /></div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold text-slate-700">เริ่มสมัครบัตรนักเรียน</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">ขั้นตอนที่ 1 จาก 5</p>
+                </div>
+              </div>
+
+              <div className="space-y-3 mb-5">
+                {googleEmail ? (
+                  <div className="rounded-2xl border border-green-100 bg-green-50 px-3 py-3">
+                    <div className="flex items-center gap-3">
+                      {googleAvatar && !googleAvatarFailed ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={googleAvatar}
+                          alt="รูปจาก Google"
+                          referrerPolicy="no-referrer"
+                          onError={handleGoogleAvatarError}
+                          className="w-11 h-11 rounded-xl object-cover flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-11 h-11 rounded-xl bg-white flex items-center justify-center flex-shrink-0">
+                          <i className="fa-brands fa-google text-[#4285F4]" />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="text-sm font-bold text-slate-700">เชื่อม Google แล้ว</div>
+                        <div className="text-xs text-green-600 truncate">{googleEmail}</div>
+                      </div>
+                      <i className="fa-solid fa-circle-check text-green-500 ml-auto" />
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={startGoogleRegister}
+                      disabled={googleLoading}
+                      className="w-full rounded-2xl border border-sky-100 bg-sky-50 px-3 py-3 text-sm font-bold text-slate-700 hover:bg-sky-100 transition disabled:opacity-60 flex items-center justify-center gap-2"
+                    >
+                      {googleLoading
+                        ? <><span className="spinner w-4 h-4 border-2 border-sky-400 border-t-transparent" /> กำลังเชื่อม Google...</>
+                        : <><i className="fa-brands fa-google text-[#4285F4]" /> เชื่อม Google ก่อนสมัคร</>}
+                    </button>
+                    <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center flex-shrink-0">
+                          <i className="fa-solid fa-forward text-slate-400 text-sm" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-bold text-slate-700">ข้ามการเชื่อม Google ได้</div>
+                          <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">
+                            สมัครด้วยรหัสนักเรียนก่อน แล้วค่อยเชื่อม Google ภายหลังที่หน้าบัตรนักเรียน
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={acceptedTerms}
+                    onChange={e => setAcceptedTerms(e.target.checked)}
+                    className="size-5 rounded border-slate-300 text-sky-500 focus:ring-sky-300"
+                  />
+                  <span className="text-xs text-slate-500 leading-relaxed">
+                    ฉันอ่านและยอมรับ{" "}
+                    <Link href="/privacy-policy" target="_blank" className="font-bold text-sky-500 hover:text-sky-600">
+                      นโยบายความเป็นส่วนตัว
+                    </Link>{" "}
+                    และ{" "}
+                    <Link href="/terms-of-service" target="_blank" className="font-bold text-sky-500 hover:text-sky-600">
+                      เงื่อนไขการใช้งาน
+                    </Link>
+                  </span>
+                </label>
+              </div>
+
+              <button onClick={continueFromStart}
+                className="btn-primary w-full flex items-center justify-center gap-2 text-sm sm:text-base overflow-hidden">
+                <span>{googleEmail ? "ถัดไป" : "ข้ามก่อน / ถัดไป"}</span><i className="fas fa-arrow-right" />
+              </button>
+            </div>
+          )}
+
+          {/* ── STEP 2 ── */}
+          {step === 2 && (
+            <div className={`form-section active${goingBack ? " go-back" : ""}`}>
+              <div className="flex items-center gap-3 mb-5">
                 <div className="section-icon"><i className="fa-solid fa-user" /></div>
                 <div>
                   <h3 className="text-sm sm:text-base font-bold text-slate-700">ข้อมูลส่วนตัว</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">ขั้นตอนที่ 1 จาก 2</p>
+                  <p className="text-xs text-slate-400 mt-0.5">ขั้นตอนที่ 2 จาก 5</p>
                 </div>
               </div>
               <div className="space-y-3">
@@ -376,21 +541,27 @@ export default function RegisterPage() {
                     className={inputCls("nickname")} placeholder="ชื่อเล่น (ไม่บังคับ)" maxLength={15} />
                 </div>
               </div>
-              <button onClick={() => validateStep1() && gotoStep(2)}
-                className="btn-primary w-full flex items-center justify-center gap-2 text-sm sm:text-base mt-6 overflow-hidden">
-                <span>ถัดไป</span><i className="fas fa-arrow-right" />
-              </button>
+              <div className="flex gap-3 mt-6">
+                <button onClick={() => gotoStep(1, true)}
+                  className="btn-secondary w-3/5 flex items-center justify-center gap-1 text-sm overflow-hidden">
+                  <i className="fas fa-arrow-left" /><span>ย้อนกลับ</span>
+                </button>
+                <button onClick={() => validateStep1() && gotoStep(3)}
+                  className="btn-primary w-full flex items-center justify-center gap-2 text-sm sm:text-base overflow-hidden">
+                  <span>ถัดไป</span><i className="fas fa-arrow-right" />
+                </button>
+              </div>
             </div>
           )}
 
-          {/* ── STEP 2 ── */}
-          {step === 2 && (
+          {/* ── STEP 3 ── */}
+          {step === 3 && (
             <div className={`form-section active${goingBack ? " go-back" : ""}`}>
               <div className="flex items-center gap-3 mb-5">
                 <div className="section-icon"><i className="fa-solid fa-graduation-cap" /></div>
                 <div>
                   <h3 className="text-sm sm:text-base font-bold text-slate-700">ข้อมูลการศึกษา</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">ขั้นตอนที่ 2 จาก 2</p>
+                  <p className="text-xs text-slate-400 mt-0.5">ขั้นตอนที่ 3 จาก 5</p>
                 </div>
               </div>
               <div className="space-y-3">
@@ -446,11 +617,11 @@ export default function RegisterPage() {
                 </div>
               </div>
               <div className="flex gap-3 mt-6">
-                <button onClick={() => gotoStep(1, true)}
+                <button onClick={() => gotoStep(2, true)}
                   className="btn-secondary w-3/5 flex items-center justify-center gap-1 text-sm overflow-hidden">
                   <i className="fas fa-arrow-left" /><span>ย้อนกลับ</span>
                 </button>
-                <button onClick={() => validateStep2() && gotoStep(3)}
+                <button onClick={() => validateStep2() && gotoStep(4)}
                   className="btn-primary w-full flex items-center justify-center gap-1 text-sm overflow-hidden">
                   <span>ถัดไป</span><i className="fa-solid fa-arrow-right" />
                 </button>
@@ -458,8 +629,8 @@ export default function RegisterPage() {
             </div>
           )}
 
-          {/* ── STEP 3: Upload Photo ── */}
-          {step === 3 && (
+          {/* ── STEP 4: Upload Photo ── */}
+          {step === 4 && (
             <div className={`form-section active${goingBack ? " go-back" : ""}`}>
               <div className="flex items-center gap-3 mb-5">
                 <div className="section-icon"><i className="fa-solid fa-camera" /></div>
@@ -481,7 +652,15 @@ export default function RegisterPage() {
                 {photoPreview ? (
                   <>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={photoPreview} alt="preview" className="w-full h-full object-cover absolute inset-0" />
+                    <img
+                      src={photoPreview}
+                      alt="preview"
+                      referrerPolicy="no-referrer"
+                      onError={() => {
+                        if (photoPreview === googleAvatar) handleGoogleAvatarError();
+                      }}
+                      className="w-full h-full object-cover absolute inset-0"
+                    />
                     <div className="absolute inset-0 bg-black/30 flex flex-col items-center justify-center gap-2">
                       <div className="w-10 h-10 rounded-full bg-white/20 border-2 border-white flex items-center justify-center">
                         <i className="fa-solid fa-pen text-white text-sm" />
@@ -505,12 +684,12 @@ export default function RegisterPage() {
                 onChange={e => { const f = e.target.files?.[0]; if (f) pickPhoto(f); e.target.value = ""; }} />
 
               <div className="flex gap-3 mt-2">
-                <button onClick={() => gotoStep(2, true)}
-                  className="btn-secondary w-2/5 flex items-center justify-center gap-1 text-sm overflow-hidden">
+                <button onClick={() => gotoStep(3, true)}
+                  className="btn-secondary flex-1 min-w-0 flex items-center justify-center gap-1.5 text-sm whitespace-nowrap overflow-hidden">
                   <i className="fas fa-arrow-left" /><span>ย้อนกลับ</span>
                 </button>
-                <button onClick={() => gotoStep(4)}
-                  className="btn-primary w-full flex items-center justify-center gap-1 text-sm overflow-hidden">
+                <button onClick={() => gotoStep(5)}
+                  className="btn-primary flex-[1.4] min-w-0 flex items-center justify-center gap-1.5 text-sm whitespace-nowrap overflow-hidden">
                   <span>{photoFile ? "ถัดไป" : "ข้ามก่อน"}</span>
                   <i className="fa-solid fa-arrow-right" />
                 </button>
@@ -518,8 +697,8 @@ export default function RegisterPage() {
             </div>
           )}
 
-          {/* ── STEP 4: Confirm ── */}
-          {step === 4 && (
+          {/* ── STEP 5: Confirm ── */}
+          {step === 5 && (
             <div className={`form-section active${goingBack ? " go-back" : ""}`}>
               <div className="flex items-center gap-3 mb-5">
                 <div className="section-icon" style={{ color: "#22C55E", background: "#F0FDF4" }}>
@@ -534,12 +713,20 @@ export default function RegisterPage() {
               {photoPreview && (
                 <div className="flex items-center gap-3 bg-sky-50 border border-sky-100 rounded-xl px-3 py-2 mb-3">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={photoPreview} alt="photo" className="w-10 h-10 rounded-xl object-cover flex-shrink-0 border border-sky-200" />
+                  <img
+                    src={photoPreview}
+                    alt="photo"
+                    referrerPolicy="no-referrer"
+                    onError={() => {
+                      if (photoPreview === googleAvatar) handleGoogleAvatarError();
+                    }}
+                    className="w-10 h-10 rounded-xl object-cover flex-shrink-0 border border-sky-200"
+                  />
                   <div className="min-w-0">
                     <div className="text-xs font-semibold text-sky-700">รูปโปรไฟล์</div>
-                    <div className="text-[10px] text-sky-400 truncate">{photoFile?.name}</div>
+                  <div className="text-[10px] text-sky-400 truncate">{photoFile?.name}</div>
                   </div>
-                  <button onClick={() => gotoStep(3, true)} className="ml-auto text-[10px] text-sky-500 hover:text-sky-700 font-semibold px-2 py-1 rounded-lg hover:bg-sky-100 transition">
+                  <button onClick={() => gotoStep(4, true)} className="ml-auto text-[10px] text-sky-500 hover:text-sky-700 font-semibold px-2 py-1 rounded-lg hover:bg-sky-100 transition">
                     เปลี่ยน
                   </button>
                 </div>
@@ -559,7 +746,7 @@ export default function RegisterPage() {
                 ))}
               </div>
               <div className="flex gap-3">
-                <button onClick={() => gotoStep(3, true)}
+                <button onClick={() => gotoStep(4, true)}
                   className="btn-secondary w-3/5 flex items-center justify-center gap-1 text-sm overflow-hidden">
                   <i className="fa-solid fa-pen" /><span>แก้ไข</span>
                 </button>
@@ -575,10 +762,11 @@ export default function RegisterPage() {
 
         </div>
       </main>
+      <Footer />
 
       {/* ── Crop Modal ── */}
       {cropOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[95dvh] overflow-y-auto p-5 flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <div>
@@ -646,5 +834,13 @@ export default function RegisterPage() {
         </div>
       )}
     </>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense>
+      <RegisterForm />
+    </Suspense>
   );
 }

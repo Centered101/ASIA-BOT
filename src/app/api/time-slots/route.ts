@@ -7,6 +7,15 @@ const supabase = createClient<Database>(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+const DEFAULT_TIME_SLOTS = [
+  { id: 1, label: "08:15 - 09:15", start_time: "08:15:00", end_time: "09:15:00" },
+  { id: 2, label: "09:15 - 10:15", start_time: "09:15:00", end_time: "10:15:00" },
+  { id: 3, label: "10:15 - 11:15", start_time: "10:15:00", end_time: "11:15:00" },
+  { id: 4, label: "11:15 - 12:15", start_time: "11:15:00", end_time: "12:15:00" },
+  { id: 5, label: "13:15 - 14:15", start_time: "13:15:00", end_time: "14:15:00" },
+  { id: 6, label: "14:15 - 15:15", start_time: "14:15:00", end_time: "15:15:00" },
+];
+
 export async function GET() {
   try {
     const { data, error } = await supabase
@@ -14,9 +23,13 @@ export async function GET() {
       .select("id, label, start_time, end_time")
       .order("id");
 
-    if (error) return NextResponse.json({ status: "error", message: error.message }, { status: 500 });
-    return NextResponse.json({ status: "success", data });
-  } catch {
-    return NextResponse.json({ status: "error", message: "เกิดข้อผิดพลาด" }, { status: 500 });
+    if (error) {
+      console.error("[api/time-slots] failed:", error.message);
+      return NextResponse.json({ status: "success", data: DEFAULT_TIME_SLOTS });
+    }
+    return NextResponse.json({ status: "success", data: data?.length ? data : DEFAULT_TIME_SLOTS });
+  } catch (error) {
+    console.error("[api/time-slots] failed:", error);
+    return NextResponse.json({ status: "success", data: DEFAULT_TIME_SLOTS });
   }
 }

@@ -3,8 +3,10 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 import { toast } from "sonner";
 import { SESSION_KEY, SESSION_TIME_KEY, SESSION_TTL } from "@/lib/config";
+import { getGoogleSupabase } from "@/lib/supabase-google";
 
 function LoginForm() {
   const router = useRouter();
@@ -17,6 +19,7 @@ function LoginForm() {
   const [phone, setPhone] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [idErr, setIdErr] = useState(false);
   const [passErr, setPassErr] = useState(false);
 
@@ -59,6 +62,28 @@ function LoginForm() {
     }
   }
 
+  async function handleGoogleLogin() {
+    setGoogleLoading(true);
+    try {
+      const supabase = getGoogleSupabase();
+      const redirectTo = `${window.location.origin}/auth/google/callback?next=${encodeURIComponent(next)}`;
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo,
+          queryParams: { access_type: "offline", prompt: "select_account" },
+        },
+      });
+      if (error) {
+        toast.error(error.message);
+        setGoogleLoading(false);
+      }
+    } catch {
+      toast.error("ไม่สามารถเริ่มเข้าสู่ระบบด้วย Google ได้");
+      setGoogleLoading(false);
+    }
+  }
+
   return (
     <>
       <div className="bg-blob" style={{ width: 520, height: 520, background: "var(--primary-color)", top: -120, right: -170 }} />
@@ -82,6 +107,27 @@ function LoginForm() {
             </div>
             <h1 className="text-2xl font-bold text-slate-800 mb-1">เข้าสู่ระบบ</h1>
             <p className="text-sm text-slate-400">ใช้รหัสนักเรียนและเบอร์โทรของคุณ</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-5">
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2.5">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                <i className="fa-solid fa-id-card text-sky-400" />
+                บัญชีนักเรียนเดิม
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                เข้าด้วยรหัสนักเรียนและเบอร์โทร
+              </p>
+            </div>
+            <div className="rounded-2xl border border-sky-100 bg-sky-50 px-3 py-2.5">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                <i className="fa-brands fa-google text-[#4285F4]" />
+                บัญชี Google
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                ถ้ายังไม่ผูก ระบบจะพาไปสมัคร/เชื่อมบัญชี
+              </p>
+            </div>
           </div>
 
           <div className="space-y-4 mb-6">
@@ -123,14 +169,32 @@ function LoginForm() {
               : <><i className="fa-solid fa-right-to-bracket text-sm" /> เข้าสู่ระบบ</>}
           </button>
 
+          <div className="flex items-center gap-3 mb-4">
+            <div className="h-px bg-slate-200 flex-1" />
+            <span className="text-[11px] font-semibold text-slate-400">หรือ</span>
+            <div className="h-px bg-slate-200 flex-1" />
+          </div>
+
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            disabled={googleLoading || loading}
+            className="w-full mb-4 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm hover:border-sky-200 hover:bg-sky-50 transition disabled:opacity-60 flex items-center justify-center gap-2"
+          >
+            {googleLoading
+              ? <><span className="spinner w-4 h-4 border-2 border-sky-400 border-t-transparent" /> กำลังเชื่อม Google...</>
+              : <><i className="fa-brands fa-google text-[#4285F4]" /> เข้าสู่ระบบด้วย Google</>}
+          </button>
+
           <p className="text-center text-xs text-slate-400">
             ยังไม่มีบัญชี?{" "}
-            <a href="/register" className="font-semibold text-sky-500 hover:text-sky-600 transition-colors">
+            <a href={`/register?next=${encodeURIComponent(next)}`} className="font-semibold text-sky-500 hover:text-sky-600 transition-colors">
               ลงทะเบียนที่นี่
             </a>
           </p>
         </div>
       </main>
+      <Footer />
     </>
   );
 }

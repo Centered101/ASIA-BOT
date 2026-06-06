@@ -234,7 +234,7 @@ export default function ShopPage() {
       } else {
         setLoadErr(r.message || "ไม่พบสินค้า");
       }
-    } catch { setLoadErr("ไม่สามารถเชื่อมต่อ API ได้"); }
+    } catch { setLoadErr("ไม่สามารถเชื่อมต่อระบบได้"); }
     setLoading(false);
   }, []);
 

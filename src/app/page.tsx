@@ -44,7 +44,7 @@ export default function HomePage() {
       <div className="bg-blob" style={{ width: 520, height: 520, background: "var(--primary-color)", top: -120, right: -170 }} />
       <div className="bg-blob" style={{ width: 420, height: 420, background: "#FF7070",              bottom: -110, left: -130 }} />
 
-      <Header subtitle="Overview" />
+      <Header subtitle="หน้าแรก" />
 
       <main className="min-h-screen max-w-6xl mx-auto px-3 sm:px-6 pt-10 pb-16 overflow-x-hidden relative z-10">
 
@@ -59,7 +59,7 @@ export default function HomePage() {
                 </span>
                 <div>
                   <div className="text-base font-extrabold text-slate-900">ภาพรวมระบบ</div>
-                  <p className="mt-0.5 text-xs text-slate-500">ข้อมูลล่าสุดจาก ASIA-BOT Dashboard</p>
+                  <p className="mt-0.5 text-xs text-slate-500">ข้อมูลล่าสุดจากระบบ ASIA-BOT</p>
                 </div>
               </div>
             </div>
@@ -139,8 +139,8 @@ export default function HomePage() {
               {/* Feature cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {[
-                  { href: "/class-track-room",      icon: "fa-chalkboard-user", color: "var(--primary-dark)", label: "Class Track Room", desc: "สถานะห้องเรียนแบบเรียลไทม์" },
-                  { href: "/student-entry-scanner", icon: "fa-qrcode",          color: "#059669",              label: "Entry Scanner",    desc: "บันทึกการเข้า-ออกนักเรียน" },
+                  { href: "/class-track-room",      icon: "fa-chalkboard-user", color: "var(--primary-dark)", label: "สถานะห้องเรียน", desc: "ดูห้องว่างและจองห้อง" },
+                  { href: "/student-entry-scanner", icon: "fa-qrcode",          color: "#059669",              label: "เช็กชื่อเข้าออก",    desc: "บันทึกเวลาเข้า-ออกนักเรียน" },
                   { href: "/class-track-room?view=booking", icon: "fa-calendar-check",  color: "#F59E0B",              label: "จองห้องประชุม",     desc: "ระบบจองห้องออนไลน์" },
                   { href: "/feedback",              icon: "fa-comment-dots",    color: "#14B8A6",              label: "ความคิดเห็น",        desc: "ส่งข้อเสนอแนะและรายงาน" },
                 ].map(f => (
@@ -182,17 +182,13 @@ export default function HomePage() {
               <h2 className="text-2xl sm:text-3xl font-extrabold leading-tight mb-4">เกี่ยวกับ ASIA-BOT</h2>
               <p className="text-sm sm:text-base text-slate-600 leading-relaxed mb-3">
                 <span className="font-semibold text-slate-800">ASIA-BOT</span> คือแพลตฟอร์มจัดการระบบนักเรียนครบวงจร
-                พัฒนาด้วย <span className="font-semibold">Next.js</span>,{" "}
-                <span className="font-semibold">Tailwind CSS</span>,{" "}
-                <span className="font-semibold">TypeScript</span> และ{" "}
-                <span className="font-semibold">Supabase</span>
+                ช่วยรวมงานสำคัญของนักเรียนและบุคลากรไว้ในที่เดียว ใช้งานง่ายจากมือถือและคอมพิวเตอร์
               </p>
               <p className="text-sm text-slate-600 leading-relaxed mb-3">
-                ข้อมูลทั้งหมดเชื่อมต่อกับ <span className="font-semibold">Supabase (PostgreSQL)</span>{" "}
-                รองรับการอัปเดตแบบเรียลไทม์ผ่าน Dashboard
+                ข้อมูลทั้งหมดเชื่อมต่อกับฐานข้อมูลกลาง และอัปเดตสถานะให้เห็นใกล้เคียงเวลาจริง
               </p>
               <div className="flex flex-wrap gap-2 mt-4">
-                {["Next.js 15", "TypeScript", "Tailwind CSS", "Supabase", "PostgreSQL"].map(t => (
+                {["บัตรนักเรียน", "เช็กชื่อ", "จองห้อง", "สหกรณ์", "ความคิดเห็น"].map(t => (
                   <span key={t} className="text-xs font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-600">{t}</span>
                 ))}
               </div>

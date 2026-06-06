@@ -77,13 +77,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="apple-touch-icon" href="/favicon.png" />
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
       </head>
-      <body>
+      <body suppressHydrationWarning>
         <AOSProvider>
           {children}
         </AOSProvider>
         <Toaster
-          position="bottom-right"
-          swipeDirections={["right", "bottom"]}
+          position="top-right"
+          swipeDirections={["top", "left", "right"]}
           toastOptions={toasterOptions}
           icons={toasterIcons}
         />

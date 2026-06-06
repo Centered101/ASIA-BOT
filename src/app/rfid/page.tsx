@@ -14,7 +14,7 @@ export default function RfidRedirectPage() {
     <main className="min-h-screen flex items-center justify-center bg-[#0c0c0c] text-white">
       <div className="text-center">
         <span className="spinner mb-4 inline-block h-10 w-10 border-4" />
-        <p className="text-sm text-[#9e9e9e]">กำลังไปยังหน้า RFID Controller สำหรับผู้ดูแล...</p>
+        <p className="text-sm text-[#9e9e9e]">กำลังไปยังหน้าควบคุมเครื่องอ่านบัตรสำหรับผู้ดูแล...</p>
       </div>
     </main>
   );

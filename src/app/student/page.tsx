@@ -10,8 +10,15 @@ import { toast } from "sonner";
 import { SESSION_KEY, SESSION_TIME_KEY, SESSION_TTL, DEPARTMENTS } from "@/lib/config";
 import type { Database } from "@/types/database";
 import QRCode from "qrcode";
+import { getGoogleSupabase } from "@/lib/supabase-google";
 
-type Student = Database["public"]["Tables"]["students"]["Row"] & { photo_url?: string | null };
+type Student = Database["public"]["Tables"]["students"]["Row"] & {
+  photo_url?: string | null;
+  google_email?: string | null;
+  google_id?: string | null;
+  google_name?: string | null;
+  google_avatar_url?: string | null;
+};
 
 const CROP_SIZE = 280;
 
@@ -38,6 +45,7 @@ export default function StudentPage() {
   const [requesting, setRequesting] = useState(false);
   const [adminRole, setAdminRole] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [googleLinking, setGoogleLinking] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [sessionCountdown, setSessionCountdown] = useState("");
 
@@ -216,11 +224,50 @@ export default function StudentPage() {
   const [reqDept, setReqDept] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function restoreGoogleSession() {
+      try {
+        const supabase = getGoogleSupabase();
+        const [{ data: userRes }, { data: sessionRes }] = await Promise.all([
+          supabase.auth.getUser(),
+          supabase.auth.getSession(),
+        ]);
+        const user = userRes.user ?? sessionRes.session?.user ?? null;
+        if (!user?.email) return false;
+
+        const profile = {
+          email: user.email,
+          google_id: user.id,
+          name: String(user.user_metadata?.full_name ?? user.user_metadata?.name ?? ""),
+          avatar_url: String(user.user_metadata?.avatar_url ?? user.user_metadata?.picture ?? ""),
+        };
+        const res = await fetch("/api/auth/google", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(profile),
+        });
+        const json = await res.json();
+        if (json.status !== "success" || !json.data || cancelled) return false;
+
+        const now = new Date().toISOString();
+        localStorage.setItem(SESSION_KEY, JSON.stringify(json.data));
+        localStorage.setItem(SESSION_TIME_KEY, now);
+        setStudent(json.data);
+        setLoginTime(now);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
     try {
       const raw = localStorage.getItem(SESSION_KEY);
       const time = localStorage.getItem(SESSION_TIME_KEY);
       if (!raw || !time || Date.now() - new Date(time).getTime() > SESSION_TTL) {
-        router.replace("/login?next=/student");
+        void restoreGoogleSession().then(ok => {
+          if (!ok && !cancelled) router.replace("/login?next=/student");
+        });
         return;
       }
       const cached = JSON.parse(raw);
@@ -238,8 +285,12 @@ export default function StudentPage() {
         })
         .catch(() => {});
     } catch {
-      router.replace("/login?next=/student");
+      void restoreGoogleSession().then(ok => {
+        if (!ok && !cancelled) router.replace("/login?next=/student");
+      });
     }
+
+    return () => { cancelled = true; };
   }, [router]);
 
   useEffect(() => {
@@ -265,6 +316,33 @@ export default function StudentPage() {
     localStorage.removeItem(SESSION_KEY);
     localStorage.removeItem(SESSION_TIME_KEY);
     router.replace("/login");
+  }
+
+  async function connectGoogle() {
+    if (!student) return;
+    setGoogleLinking(true);
+    try {
+      const supabase = getGoogleSupabase();
+      const params = new URLSearchParams({
+        next: "/student",
+        link_student_id: student.student_id,
+      });
+      const redirectTo = `${window.location.origin}/auth/google/callback?${params.toString()}`;
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo,
+          queryParams: { access_type: "offline", prompt: "select_account" },
+        },
+      });
+      if (error) {
+        toast.error(error.message);
+        setGoogleLinking(false);
+      }
+    } catch {
+      toast.error("ไม่สามารถเริ่มเชื่อม Google ได้");
+      setGoogleLinking(false);
+    }
   }
 
   function openEdit() {
@@ -357,7 +435,7 @@ export default function StudentPage() {
       });
       const data = await res.json();
       if (data.status === "success") {
-        toast.success("ส่งคำขอแล้ว Admin จะตรวจสอบในเร็วๆ นี้");
+        toast.success("ส่งคำขอแล้ว ผู้ดูแลจะตรวจสอบในเร็วๆ นี้");
         setModalEdit(false);
       } else {
         toast.error(data.message || "เกิดข้อผิดพลาด");
@@ -378,13 +456,14 @@ export default function StudentPage() {
   const isPending   = grade.includes("รอเข้าเรียน");
   const cropScale = imgNat.w ? Math.max(CROP_SIZE / imgNat.w, CROP_SIZE / imgNat.h) * cropZoom : 1;
 
-  const ADMIN_ROLE_LABEL: Record<string, string> = { superadmin: "Super Admin", admin: "Admin", staff: "Staff" };
+  const ADMIN_ROLE_LABEL: Record<string, string> = { superadmin: "ผู้ดูแลสูงสุด", admin: "ผู้ดูแลระบบ", staff: "เจ้าหน้าที่" };
   const ADMIN_ROLE_COLOR: Record<string, { bg: string; text: string; border: string }> = {
     superadmin: { bg: "rgba(248,81,73,0.22)", text: "#ff9a96", border: "rgba(248,81,73,0.45)" },
     admin:      { bg: "rgba(56,139,253,0.22)", text: "#88b8ff", border: "rgba(56,139,253,0.45)" },
     staff:      { bg: "rgba(255,255,255,0.15)", text: "rgba(255,255,255,0.8)", border: "rgba(255,255,255,0.3)" },
   };
   const adminRoleStyle = adminRole ? (ADMIN_ROLE_COLOR[adminRole] ?? ADMIN_ROLE_COLOR.staff) : null;
+  const isGoogleLinked = Boolean(student.google_email || student.google_id);
   const loginHHMM = loginTime
     ? `${new Date(loginTime).getHours().toString().padStart(2, "0")}:${new Date(loginTime).getMinutes().toString().padStart(2, "0")}`
     : "";
@@ -678,14 +757,43 @@ export default function StudentPage() {
                 { icon: "fa-building-columns", label: "สาขาวิชา",  val: student.department ?? "—",                   cls: "" },
                 { icon: "fa-phone",          label: "เบอร์โทร",     val: student.student_phone ?? "—",               cls: "" },
                 { icon: "fa-id-card",        label: "สถานะบัตร",   val: student.card_status === "active" ? "ใช้งานได้" : "รอเปิดใช้", cls: "" },
-                ...(adminRole ? [{ icon: "fa-shield-halved", label: "ตำแหน่ง Admin", val: `${ADMIN_ROLE_LABEL[adminRole] ?? adminRole}`, cls: adminRole === "superadmin" ? "text-red-500" : adminRole === "admin" ? "text-blue-500" : "text-slate-500" }] : []),
+                { icon: "fa-brands fa-google", label: "บัญชี Google", val: isGoogleLinked ? (student.google_email ?? "เชื่อมต่อแล้ว") : "ยังไม่เชื่อมต่อ", cls: isGoogleLinked ? "text-sky-500" : "text-slate-400" },
+                ...(adminRole ? [{ icon: "fa-shield-halved", label: "สิทธิ์ผู้ดูแล", val: `${ADMIN_ROLE_LABEL[adminRole] ?? adminRole}`, cls: adminRole === "superadmin" ? "text-red-500" : adminRole === "admin" ? "text-blue-500" : "text-slate-500" }] : []),
               ].map((row) => (
                 <div key={row.label} className="flex items-center gap-2.5 py-2.5 border-b border-slate-100 last:border-0">
-                  <i className={`fa-solid ${row.icon} text-slate-300 text-xs w-4 text-center flex-shrink-0`} />
+                  <i className={`${row.icon.startsWith("fa-brands") ? row.icon : `fa-solid ${row.icon}`} text-slate-300 text-xs w-4 text-center flex-shrink-0`} />
                   <span className="text-xs text-slate-400 font-medium min-w-[100px]">{row.label}</span>
                   <span className={`text-sm font-semibold flex-1 ${row.cls || "text-slate-800"}`}>{String(row.val)}</span>
                 </div>
               ))}
+            </div>
+
+            <div className={`rounded-2xl border px-3.5 py-3 mb-4 flex items-start gap-3 ${isGoogleLinked ? "bg-sky-50 border-sky-100" : "bg-slate-50 border-slate-200"}`}>
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${isGoogleLinked ? "bg-white text-[#4285F4]" : "bg-white text-slate-300"}`}>
+                <i className="fa-brands fa-google" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-bold text-slate-700">
+                  {isGoogleLinked ? "บัญชีนี้ผูก Google แล้ว" : "ยังไม่ได้ผูก Google"}
+                </div>
+                <div className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                  {isGoogleLinked
+                    ? "ครั้งต่อไปสามารถกดเข้าสู่ระบบด้วย Google ได้ทันที"
+                    : "กดเชื่อม Google แล้วระบบจะผูกบัญชีนี้กับรหัสนักเรียนของคุณ"}
+                </div>
+                {!isGoogleLinked && (
+                  <button
+                    type="button"
+                    onClick={connectGoogle}
+                    disabled={googleLinking}
+                    className="mt-2 inline-flex items-center gap-2 rounded-xl bg-white border border-sky-100 px-3 py-2 text-[11px] font-bold text-sky-600 shadow-sm hover:bg-sky-50 disabled:opacity-60 transition"
+                  >
+                    {googleLinking
+                      ? <><span className="spinner w-3.5 h-3.5 border-2 border-sky-400 border-t-transparent inline-block" /> กำลังเชื่อม...</>
+                      : <><i className="fa-brands fa-google text-[#4285F4]" /> เชื่อม Google</>}
+                  </button>
+                )}
+              </div>
             </div>
 
             <button onClick={openEdit}
@@ -702,7 +810,7 @@ export default function StudentPage() {
           </div>
         </div>
 
-        {/* ── Nav cards: หน้าที่ต้องการ Login ── */}
+        {/* ── Student services ── */}
         <div className="mt-10">
           <p data-aos="fade-up" className="text-xs font-bold tracking-widest text-slate-500 uppercase flex items-center gap-1.5 mb-4">
             <i className="fa-solid fa-compass text-primary-dark" /> บริการสำหรับนักเรียน
@@ -747,7 +855,7 @@ export default function StudentPage() {
             </div>
             <div>
               <div className="font-semibold text-[15px] text-slate-800">แก้ไขข้อมูล</div>
-              <div className="text-[11px] text-slate-400 mt-px">บางข้อมูลต้องรับการอนุมัติจาก Admin</div>
+              <div className="text-[11px] text-slate-400 mt-px">บางข้อมูลต้องรับการอนุมัติจากผู้ดูแล</div>
             </div>
             <button onClick={() => setModalEdit(false)} className="ml-auto text-slate-400 text-lg px-1">
               <i className="fa-solid fa-xmark" />
@@ -820,7 +928,7 @@ export default function StudentPage() {
             <div className="border-t border-slate-100 pt-4">
               <div className="flex items-center gap-2 mb-3">
                 <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
-                  <i className="fa-solid fa-shield-halved text-[8px]" /> ต้องอนุมัติโดย Admin
+                  <i className="fa-solid fa-shield-halved text-[8px]" /> ต้องอนุมัติโดยผู้ดูแล
                 </span>
                 <span className="text-[10px] text-slate-400">เลขบัตร · ชื่อ · ระดับ · ปี · สาขา</span>
               </div>
@@ -885,7 +993,7 @@ export default function StudentPage() {
 
               <p className="flex items-start gap-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5 mt-3">
                 <i className="fa-solid fa-circle-info mt-0.5 flex-shrink-0" />
-                การเปลี่ยนแปลงจะมีผลหลังจาก Admin ตรวจสอบและอนุมัติแล้วเท่านั้น
+                การเปลี่ยนแปลงจะมีผลหลังจากผู้ดูแลตรวจสอบและอนุมัติแล้วเท่านั้น
               </p>
 
               <button onClick={sendChangeRequest} disabled={requesting}

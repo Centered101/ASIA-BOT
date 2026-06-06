@@ -127,6 +127,17 @@ a, button, label, .cursor-pointer, [class^="btn-"] { cursor: url(https://sweezy-
 
 .slide-up { animation: slideUp 0.7s ease; }
 @keyframes slideUp { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@media (max-width: 640px) {
+  [data-sonner-toast] {
+    width: calc(100vw - 32px) !important;
+    max-width: 360px;
+  }
+
+  .slide-up {
+    animation: toastTopIn 0.45s ease;
+  }
+}
+@keyframes toastTopIn { from { transform: translateY(-18px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 .fade-in { animation: fadeIn 0.7s ease; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 

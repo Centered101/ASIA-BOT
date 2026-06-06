@@ -380,7 +380,7 @@ function ClassTrackRoomPageContent() {
 
   return (
     <>
-      <Header subtitle="Class Track Room" />
+      <Header subtitle="สถานะห้องเรียน" />
       <main className="min-h-screen bg-slate-50/70">
         <section className="bg-white border-b border-slate-100 overflow-hidden">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
@@ -389,7 +389,7 @@ function ClassTrackRoomPageContent() {
                 <div className="inline-flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full mb-4"
                   style={{ background: "color-mix(in srgb, var(--primary-color) 12%, white)", color: "var(--primary-dark)" }}>
                   <i className="fa-solid fa-door-open" />
-                  Class Track Room
+                  สถานะห้องเรียน
                 </div>
                 <h1 className="text-3xl sm:text-4xl font-black leading-tight">
                   <span className="text-green-500">Class</span>{" "}
@@ -600,7 +600,7 @@ function ClassTrackRoomPageContent() {
                       <div className="flex items-center justify-between gap-3 mb-3">
                         <div>
                           <div className="text-sm font-bold text-slate-800">
-                            <i className="fa-solid fa-user-check mr-1.5 text-sky-400" />ผู้จองจากบัญชีที่ Login
+                            <i className="fa-solid fa-user-check mr-1.5 text-sky-400" />ผู้จองจากบัญชีที่เข้าสู่ระบบ
                           </div>
                           <div className="text-xs text-slate-400 mt-0.5">ชื่อผู้จองหลักถูกล็อกจากบัญชีของคุณ</div>
                         </div>

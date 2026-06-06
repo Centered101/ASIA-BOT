@@ -83,7 +83,20 @@ export default function Footer() {
 
         {/* ── Bottom bar ── */}
         <div className="border-t border-slate-800 mt-10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span className="text-xs text-slate-500">© 2024–2026 {SITE_NAME} — สงวนลิขสิทธิ์ทุกประการ</span>
+          <div className="flex items-center gap-3 text-xs text-slate-600">
+            <Link href="/privacy-policy"
+              className="hover:text-slate-400 transition">
+              นโยบายความเป็นส่วนตัว
+            </Link>
+            <span className="w-1 h-1 rounded-full bg-slate-700" />
+            <Link href="/terms-of-service"
+              className="hover:text-slate-400 transition">
+              เงื่อนไขการใช้งาน
+            </Link>
+          </div>
+        </div>
+        <div className="border-t border-slate-800 mt-6 pt-6 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <span className="text-xs text-slate-500">Centered101 © 2024–2026 {SITE_NAME} — สงวนลิขสิทธิ์ทุกประการ</span>
           <div className="flex items-center gap-3 text-xs text-slate-600">
             <Link href="https://Centered101.com" target="_blank" rel="noopener noreferrer"
               className="hover:text-slate-400 transition flex items-center gap-1">

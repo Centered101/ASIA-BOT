@@ -7,7 +7,7 @@ import { QUICK_LINKS, SITE_NAME, type QuickLink } from "@/lib/config";
 import { getStudentSession, clearStudentSession, type StudentSession } from "@/lib/session";
 import StudentAvatar from "@/components/StudentAvatar";
 
-export default function Header({ subtitle = "Overview" }: { subtitle?: string }) {
+export default function Header({ subtitle = "หน้าแรก" }: { subtitle?: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -33,6 +33,12 @@ export default function Header({ subtitle = "Overview" }: { subtitle?: string })
   const ctaStudent = visible.find(l => l.role === "student");
   const ctaShop    = visible.find(l => l.role === "shop");
   const moreLinks  = visible.filter(l => !mainLinks.includes(l) && l !== ctaStudent && l !== ctaShop);
+  const displayLink = (link: QuickLink) => {
+    if (link.role === "student" && session) {
+      return { ...link, name: "บัตรประจำตัวนักเรียน", desc: "บัตรนักเรียนดิจิทัล" };
+    }
+    return link;
+  };
 
   return (
     <>
@@ -190,6 +196,7 @@ export default function Header({ subtitle = "Overview" }: { subtitle?: string })
           <div className="overflow-y-auto flex-1 px-4 py-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
             <div className="grid grid-cols-2 gap-2">
               {all.map(link => {
+                const display = displayLink(link);
                 const href = link.url ?? (link.path ?? "#");
                 const active = isActive(link);
                 const isStudentCta = link.role === "student";
@@ -212,11 +219,11 @@ export default function Header({ subtitle = "Overview" }: { subtitle?: string })
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className={`text-xs font-bold leading-tight ${isStudentCta ? "text-white" : active ? "text-sky-600" : "text-slate-700"}`}>
-                        {link.name}
+                        {display.name}
                       </div>
-                      {link.desc && (
+                      {display.desc && (
                         <div className={`text-[10px] mt-0.5 leading-tight ${isStudentCta ? "text-white/70" : "text-slate-400"}`}>
-                          {link.desc}
+                          {display.desc}
                         </div>
                       )}
                     </div>

@@ -116,7 +116,7 @@ export default function StudentEntryScannerPage() {
   if (authed === null) {
     return (
       <>
-        <Header subtitle="Student Entry Scanner" />
+        <Header subtitle="เช็กชื่อเข้าออก" />
         <main className="min-h-screen flex items-center justify-center">
           <span className="spinner w-10 h-10 border-4" />
         </main>
@@ -130,7 +130,7 @@ export default function StudentEntryScannerPage() {
       <>
         <div className="bg-blob" style={{ width: 500, height: 500, background: "var(--primary-color)", top: -120, right: -170 }} />
         <div className="bg-blob" style={{ width: 400, height: 400, background: "#FF7070", bottom: -100, left: -130 }} />
-        <Header subtitle="Student Entry Scanner" />
+        <Header subtitle="เช็กชื่อเข้าออก" />
         <main className="min-h-screen max-w-6xl mx-auto px-4 py-20 flex flex-col items-center justify-center text-center relative z-10">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/status_room/mascot-blues.svg" alt="mascot" className="w-32 h-32 mb-6 drop-shadow-lg" />
@@ -173,7 +173,7 @@ export default function StudentEntryScannerPage() {
     <>
       <div className="bg-blob" style={{ width: 500, height: 500, background: "var(--primary-color)", top: -120, right: -170 }} />
       <div className="bg-blob" style={{ width: 400, height: 400, background: "#FF7070", bottom: -100, left: -130 }} />
-      <Header subtitle="Student Entry Scanner" />
+      <Header subtitle="เช็กชื่อเข้าออก" />
 
       <main className="min-h-screen max-w-6xl mx-auto px-3 sm:px-6 pt-8 pb-16 relative z-10">
 
@@ -182,7 +182,7 @@ export default function StudentEntryScannerPage() {
           <div className="flex-1">
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-800 leading-tight flex items-center gap-2">
               <i className="fa-solid fa-qrcode text-[var(--primary-dark)] text-xl" />
-              Student Entry Scanner
+              เช็กชื่อเข้าออก
             </h1>
             <p className="text-sm text-slate-500 mt-1">ระบบแสดงผลการเข้าออกนักเรียนแบบเรียลไทม์</p>
             {student && (
@@ -195,26 +195,30 @@ export default function StudentEntryScannerPage() {
               </div>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button onClick={() => setDate(shiftDate(date, -1))}
-              className="flex items-center gap-1.5 text-xs text-slate-600 bg-white border border-slate-200 px-3 py-1.5 rounded-xl hover:border-[var(--primary-color)] hover:text-[var(--primary-dark)] transition">
-              <i className="fa-solid fa-chevron-left text-[10px]" /> วันก่อนหน้า
+              className="flex items-center gap-1.5 text-xs text-slate-600 bg-white border border-slate-200 px-2.5 sm:px-3 py-1.5 rounded-xl hover:border-[var(--primary-color)] hover:text-[var(--primary-dark)] transition">
+              <i className="fa-solid fa-chevron-left text-[10px]" />
+              <span className="sm:hidden">ก่อนหน้า</span>
+              <span className="hidden sm:inline">วันก่อนหน้า</span>
             </button>
             <button onClick={() => setDate(today)}
               disabled={isToday}
-              className="flex items-center gap-1.5 text-xs bg-white border px-3 py-1.5 rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-1.5 text-xs bg-white border px-2.5 sm:px-3 py-1.5 rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ borderColor: isToday ? "rgba(132,212,250,0.6)" : "#E2E8F0", color: isToday ? "var(--primary-dark)" : "#475569", background: isToday ? "rgba(132,212,250,0.12)" : "#fff" }}>
               <i className="fa-solid fa-calendar-day text-[10px]" /> วันนี้
             </button>
             <input type="date" value={date} onChange={e => setDate(e.target.value)} max={todayISO()}
-              className="text-sm border border-slate-200 rounded-xl px-3 py-1.5 bg-white outline-none focus:border-[var(--primary-color)] transition font-[inherit]" />
+              className="min-w-0 flex-1 sm:flex-none text-sm border border-slate-200 rounded-xl px-2.5 sm:px-3 py-1.5 bg-white outline-none focus:border-[var(--primary-color)] transition font-[inherit]" />
             <button onClick={() => setDate(shiftDate(date, 1))}
               disabled={isToday}
-              className="flex items-center gap-1.5 text-xs text-slate-600 bg-white border border-slate-200 px-3 py-1.5 rounded-xl hover:border-[var(--primary-color)] hover:text-[var(--primary-dark)] transition disabled:opacity-50 disabled:cursor-not-allowed">
-              วันถัดไป <i className="fa-solid fa-chevron-right text-[10px]" />
+              className="flex items-center gap-1.5 text-xs text-slate-600 bg-white border border-slate-200 px-2.5 sm:px-3 py-1.5 rounded-xl hover:border-[var(--primary-color)] hover:text-[var(--primary-dark)] transition disabled:opacity-50 disabled:cursor-not-allowed">
+              <span className="sm:hidden">ถัดไป</span>
+              <span className="hidden sm:inline">วันถัดไป</span>
+              <i className="fa-solid fa-chevron-right text-[10px]" />
             </button>
             <button onClick={fetchData}
-              className="flex items-center gap-1.5 text-xs text-[var(--primary-dark)] bg-white border border-[rgba(132,212,250,0.45)] px-3 py-1.5 rounded-xl hover:bg-[rgba(132,212,250,0.12)] transition">
+              className="flex items-center gap-1.5 text-xs text-[var(--primary-dark)] bg-white border border-[rgba(132,212,250,0.45)] px-2.5 sm:px-3 py-1.5 rounded-xl hover:bg-[rgba(132,212,250,0.12)] transition">
               <i className={`fa-solid fa-arrows-rotate${loading ? " fa-spin" : ""}`} />
             </button>
           </div>
@@ -240,23 +244,23 @@ export default function StudentEntryScannerPage() {
         </div>
 
         {/* ── Overview ── */}
-        <div data-aos="fade-up" className="mb-6 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
-          <div className="relative px-4 py-4 sm:px-5">
+        <div data-aos="fade-up" className="mb-4 sm:mb-6 overflow-hidden rounded-2xl sm:rounded-[1.75rem] border border-slate-200 bg-white shadow-[0_12px_34px_rgba(15,23,42,0.05)] sm:shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
+          <div className="relative px-3 py-3 sm:px-5 sm:py-4">
             <div className="absolute inset-x-0 top-0 h-1 bg-[var(--primary-color)]" />
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
-                <span className="grid h-11 w-11 place-items-center rounded-2xl border border-[var(--primary-color)] bg-white text-[var(--primary-dark)] shadow-[0_8px_24px_rgba(132,212,250,0.22)]">
-                  <i className="fa-solid fa-chart-simple" />
+            <div className="flex flex-col gap-2.5 sm:gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2.5 sm:gap-3">
+                <span className="grid h-9 w-9 sm:h-11 sm:w-11 place-items-center rounded-xl sm:rounded-2xl border border-[var(--primary-color)] bg-white text-[var(--primary-dark)] shadow-[0_6px_18px_rgba(132,212,250,0.18)] sm:shadow-[0_8px_24px_rgba(132,212,250,0.22)]">
+                  <i className="fa-solid fa-chart-simple text-sm sm:text-base" />
                 </span>
                 <div>
-                  <div className="text-base font-extrabold text-slate-900">ภาพรวมการเข้าออก</div>
-                  <p className="mt-0.5 text-xs text-slate-500">
+                  <div className="text-sm sm:text-base font-extrabold text-slate-900">ภาพรวมการเข้าออก</div>
+                  <p className="mt-0.5 text-[10px] sm:text-xs text-slate-500">
                     {cfg.label} · {new Date(date).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })}
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 shadow-sm">
-                <span className="h-2.5 w-2.5 rounded-full bg-[var(--primary-color)] shadow-[0_0_0_4px_rgba(132,212,250,0.2)]" />
+              <div className="flex items-center gap-1.5 sm:gap-2 rounded-xl sm:rounded-2xl border border-slate-200 bg-white px-2.5 py-1.5 sm:px-3 sm:py-2 text-[10px] sm:text-xs text-slate-600 shadow-sm">
+                <span className="h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-full bg-[var(--primary-color)] shadow-[0_0_0_4px_rgba(132,212,250,0.2)]" />
                 สถานะของฉัน
                 <b className="text-slate-900">{myLatest ? (myLatest.checkout_time ? "ออกแล้ว" : "กำลังอยู่") : "ยังไม่มีรายการ"}</b>
               </div>
@@ -269,15 +273,15 @@ export default function StudentEntryScannerPage() {
               { label: "กำลังอยู่", value: openCount, icon: "fa-person-walking-arrow-right", color: "#16A34A" },
               { label: "ออกแล้ว", value: checkedOutCount, icon: "fa-door-open", color: "#F97316" },
             ].map((item) => (
-              <div key={item.label} className="group relative border-b border-r border-slate-100 p-4 transition-colors hover:bg-slate-50/70 last:border-r-0 sm:border-b-0">
-                <div className="absolute left-0 top-4 h-8 w-1 rounded-r-full bg-[var(--primary-color)] opacity-0 transition-opacity group-hover:opacity-100" />
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <div className="text-xs font-bold text-slate-500">{item.label}</div>
-                  <span className="grid h-8 w-8 place-items-center rounded-xl border border-slate-100 bg-white shadow-sm">
-                    <i className={`fa-solid ${item.icon}`} style={{ color: item.color }} />
+              <div key={item.label} className="group relative border-b border-r border-slate-100 p-2.5 sm:p-4 transition-colors hover:bg-slate-50/70 last:border-r-0 sm:border-b-0">
+                <div className="absolute left-0 top-3 sm:top-4 h-7 sm:h-8 w-1 rounded-r-full bg-[var(--primary-color)] opacity-0 transition-opacity group-hover:opacity-100" />
+                <div className="mb-1.5 sm:mb-3 flex items-center justify-between gap-1.5 sm:gap-2">
+                  <div className="text-[10px] sm:text-xs font-bold text-slate-500 leading-tight">{item.label}</div>
+                  <span className="grid h-7 w-7 sm:h-8 sm:w-8 place-items-center rounded-lg sm:rounded-xl border border-slate-100 bg-white shadow-sm">
+                    <i className={`fa-solid ${item.icon} text-xs sm:text-sm`} style={{ color: item.color }} />
                   </span>
                 </div>
-                <div className="text-3xl font-extrabold tracking-tight text-slate-900">{item.value}</div>
+                <div className="text-xl sm:text-3xl font-extrabold tracking-tight text-slate-900">{item.value}</div>
               </div>
             ))}
           </div>
@@ -325,16 +329,16 @@ export default function StudentEntryScannerPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[860px] text-sm">
                 <thead>
                   <tr className="text-left text-xs text-slate-500 border-b border-slate-50">
-                    <th className="px-4 py-2.5 font-bold">#</th>
-                    <th className="px-4 py-2.5 font-bold">นักเรียน</th>
-                    <th className="px-4 py-2.5 font-bold">รหัสนักเรียน</th>
-                    <th className="px-4 py-2.5 font-bold hidden sm:table-cell">สาขา</th>
-                    <th className="px-4 py-2.5 font-bold">เช็กอิน</th>
-                    <th className="px-4 py-2.5 font-bold">เช็กเอาท์</th>
-                    <th className="px-4 py-2.5 font-bold hidden sm:table-cell">เวลา</th>
+                    <th className="px-4 py-2.5 font-bold w-12">#</th>
+                    <th className="px-4 py-2.5 font-bold min-w-[250px]">นักเรียน</th>
+                    <th className="px-4 py-2.5 font-bold w-32">รหัสนักเรียน</th>
+                    <th className="px-4 py-2.5 font-bold min-w-[180px]">สาขา</th>
+                    <th className="px-4 py-2.5 font-bold w-28">เช็กอิน</th>
+                    <th className="px-4 py-2.5 font-bold w-28">เช็กเอาท์</th>
+                    <th className="px-4 py-2.5 font-bold w-36">เวลา</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -353,11 +357,11 @@ export default function StudentEntryScannerPage() {
                             name={row.students ? `${row.students.first_name} ${row.students.last_name}` : row.student_id}
                             size={36}
                           />
-                          <div className="flex items-center gap-2 font-bold text-slate-800 leading-tight text-xs">
+                          <div className="flex min-w-0 items-center gap-2 whitespace-nowrap font-bold text-slate-800 leading-tight text-xs">
                           {isMe && (
                             <span className="rounded-full bg-[var(--primary-color)] px-2 py-0.5 text-[10px] font-extrabold text-slate-900">ฉัน</span>
                           )}
-                          <span>
+                          <span className="whitespace-nowrap">
                           {row.students ? `${row.students.first_name} ${row.students.last_name}` : "—"}
                           {row.students?.nickname ? ` (${row.students.nickname})` : ""}
                           </span>
@@ -365,8 +369,8 @@ export default function StudentEntryScannerPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3 font-mono text-xs text-slate-600">{row.student_id}</td>
-                      <td className="px-4 py-3 hidden sm:table-cell">
-                        <span className="text-[10px] text-slate-500">
+                      <td className="px-4 py-3">
+                        <span className="whitespace-nowrap text-[10px] text-slate-500">
                           {row.students?.program ?? ""} {row.students?.department ?? ""}
                         </span>
                       </td>
@@ -384,7 +388,7 @@ export default function StudentEntryScannerPage() {
                           <span className="text-[10px] text-slate-400">ยังอยู่</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 hidden sm:table-cell text-xs text-slate-500">
+                      <td className="px-4 py-3 whitespace-nowrap text-xs font-bold text-slate-500">
                         {durationLabel(row.duration)}
                       </td>
                     </tr>

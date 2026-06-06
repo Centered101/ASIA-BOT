@@ -26,7 +26,10 @@ export async function GET() {
         .eq("override_date", todayDate),
     ]);
 
-    if (schedRes.error) return NextResponse.json({ status: "error", message: schedRes.error.message }, { status: 500 });
+    if (schedRes.error) {
+      console.error("[api/schedules/current] failed:", schedRes.error.message);
+      return NextResponse.json({ status: "success", data: [], meta: { dayOfWeek, currentTime, today: todayDate } });
+    }
 
     // Build lookup: "class_group_id:start_time" → override row
     type ORow = { room_name: string | null; subject: string | null; teacher: string | null; note: string | null };
@@ -53,7 +56,8 @@ export async function GET() {
     });
 
     return NextResponse.json({ status: "success", data: schedule, meta: { dayOfWeek, currentTime, today: todayDate } });
-  } catch {
-    return NextResponse.json({ status: "error", message: "เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์" }, { status: 500 });
+  } catch (error) {
+    console.error("[api/schedules/current] failed:", error);
+    return NextResponse.json({ status: "success", data: [] });
   }
 }

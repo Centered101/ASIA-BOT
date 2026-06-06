@@ -13,9 +13,13 @@ export async function GET() {
       .from("rooms")
       .select("*");
 
-    if (error) return NextResponse.json({ status: "error", message: error.message }, { status: 500 });
+    if (error) {
+      console.error("[api/rooms] failed:", error.message);
+      return NextResponse.json({ status: "success", data: [] });
+    }
     return NextResponse.json({ status: "success", data });
-  } catch {
-    return NextResponse.json({ status: "error", message: "เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์" }, { status: 500 });
+  } catch (error) {
+    console.error("[api/rooms] failed:", error);
+    return NextResponse.json({ status: "success", data: [] });
   }
 }

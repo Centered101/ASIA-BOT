@@ -211,7 +211,7 @@ function ViewToggle({ mode, onChange }: { mode: ViewMode; onChange: (m: ViewMode
 
 const BOOKING_STATUS: Record<string, string> = { pending: "รอดำเนินการ", approved: "อนุมัติ", rejected: "ปฏิเสธ", cancelled: "ยกเลิก" };
 const FEEDBACK_STATUS: Record<string, string> = { pending: "รอดำเนินการ", in_progress: "กำลังดำเนินการ", resolved: "แก้ไขแล้ว", rejected: "ปฏิเสธ" };
-const ROLE_DESC: Record<string, string> = { superadmin: "ครูชั้นสูง / Dev", admin: "ครู", staff: "อวท. / ประธาน / สมาชิก" };
+const ROLE_DESC: Record<string, string> = { superadmin: "ผู้ดูแลสูงสุด", admin: "ผู้ดูแลระบบ", staff: "เจ้าหน้าที่" };
 const CARD_STATUS: Record<string, string> = { active: "บัตรใช้งานได้", inactive: "บัตรไม่ได้ใช้งาน", lost: "บัตรหาย" };
 
 // ─── Navigation Config ────────────────────────────────────────────────────────
@@ -223,7 +223,7 @@ type NavSection = { title: string | null; items: NavItem[] };
 const NAV_SECTIONS: NavSection[] = [
   {
     title: "ภาพรวม",
-    items: [{ id: "dashboard", label: "Dashboard", icon: "fa-gauge-high" }],
+    items: [{ id: "dashboard", label: "ภาพรวมระบบ", icon: "fa-gauge-high" }],
   },
   {
     title: "นักเรียน",
@@ -239,7 +239,7 @@ const NAV_SECTIONS: NavSection[] = [
       { id: "checkin_school",  label: "เช็กชื่อ โรงเรียน",   icon: "fa-school" },
       { id: "checkin_library", label: "เช็กชื่อ ห้องสมุด",    icon: "fa-book-open" },
       { id: "checkin_meeting", label: "เช็กชื่อ ห้องประชุม",  icon: "fa-door-open" },
-      { id: "rfid",            label: "RFID Controller",      icon: "fa-microchip", badge: "rfidIssues" },
+      { id: "rfid",            label: "เครื่องอ่านบัตร",      icon: "fa-microchip", badge: "rfidIssues" },
     ],
   },
   {
@@ -253,7 +253,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: "สหกรณ์ โรงเรียน",
     items: [
       { id: "products",   label: "สินค้า",  icon: "fa-box", badge: "lowStockProducts" },
-      { id: "shoporders", label: "ออเดอร์", icon: "fa-receipt", badge: "orderUpdates" },
+      { id: "shoporders", label: "คำสั่งซื้อ", icon: "fa-receipt", badge: "orderUpdates" },
     ],
   },
   {
@@ -282,8 +282,14 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: "ระบบ",
     items: [
-      { id: "feedbacks", label: "Feedback", icon: "fa-comment-dots", badge: "feedbackPending" },
-      { id: "admins",    label: "Admin",    icon: "fa-user-shield" },
+      { id: "feedbacks", label: "ความคิดเห็น", icon: "fa-comment-dots", badge: "feedbackPending" },
+      { id: "line_broadcast", label: "ส่งข่าวสาร", icon: "fa-bullhorn" },
+    ],
+  },
+  {
+    title: "ระบบ",
+    items: [
+      { id: "admins",    label: "ผู้ดูแลระบบ", icon: "fa-user-shield" },
       { id: "settings",  label: "ตั้งค่า",  icon: "fa-gear" },
     ],
   },
@@ -311,6 +317,7 @@ const TAB_ACCESS: Record<string, AdminRole[]> = {
   teachers: ["superadmin", "admin"],
   feedbacks: ["superadmin", "admin", "staff"],
   admins: ["superadmin", "admin", "staff"],
+  line_broadcast: ["superadmin", "admin", "staff"],
   settings: ["superadmin", "admin", "staff"],
 };
 
@@ -422,18 +429,18 @@ function AdminLogin({ onLogin }: { onLogin: (a: AdminUser) => void }) {
 
       {/* ADMIN watermark */}
       <div className="absolute bottom-8 right-8 text-[120px] font-black select-none pointer-events-none"
-        style={{ color: "rgba(255,112,112,0.05)", letterSpacing: "-0.05em" }}>ADMIN</div>
+        style={{ color: "rgba(255,112,112,0.05)", letterSpacing: "-0.05em" }}>ดูแล</div>
 
       <div className="relative z-10 w-full max-w-sm px-4">
         {/* Logo */}
         <div className="text-center mb-8">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/admin/favicon.ico" alt="ASIA-BOT" className="w-16 h-16 mx-auto mb-4 rounded-2xl object-contain" />
-          <h1 className="text-2xl font-black text-white">ผู้ดูแระบบ</h1>
-          <p className="text-[#9e9e9e] text-sm mt-1">ASIA-BOT Admin Portal · เข้าถึงเฉพาะผู้มีสิทธิ์เท่านั้น</p>
+          <h1 className="text-2xl font-black text-white">ผู้ดูแลระบบ</h1>
+          <p className="text-[#9e9e9e] text-sm mt-1">พื้นที่สำหรับผู้ดูแล ASIA-BOT · เข้าถึงเฉพาะผู้มีสิทธิ์เท่านั้น</p>
           <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full text-xs font-semibold"
             style={{ background: "rgba(255,112,112,0.15)", color: "#ff7070", border: "1px solid rgba(255,112,112,0.3)" }}>
-            <i className="fa-solid fa-lock text-[10px]" /> Secure Area · กิจกรรมทั้งหมดถูกบันทึก
+            <i className="fa-solid fa-lock text-[10px]" /> พื้นที่ปลอดภัย · กิจกรรมทั้งหมดถูกบันทึก
           </div>
         </div>
 
@@ -452,11 +459,11 @@ function AdminLogin({ onLogin }: { onLogin: (a: AdminUser) => void }) {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-[#ededed] mb-1.5">
-                <i className="fa-solid fa-user text-red-400 mr-1.5" />Username
+                <i className="fa-solid fa-user text-red-400 mr-1.5" />ชื่อผู้ใช้
               </label>
               <div className="relative">
                 <i className="fa-solid fa-at absolute left-3 top-1/2 -translate-y-1/2 text-[#9e9e9e] text-sm" />
-                <input type="text" required autoFocus placeholder="กรอก username ผู้ดูแล"
+                <input type="text" required autoFocus placeholder="กรอกชื่อผู้ใช้ผู้ดูแล"
                   value={username} onChange={(e) => setUsername(e.target.value)}
                   suppressHydrationWarning
                   className="w-full pl-9 pr-4 py-3 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none transition-colors"
@@ -468,11 +475,11 @@ function AdminLogin({ onLogin }: { onLogin: (a: AdminUser) => void }) {
 
             <div>
               <label className="block text-xs font-semibold text-[#ededed] mb-1.5">
-                <i className="fa-solid fa-key text-red-400 mr-1.5" />Password
+                <i className="fa-solid fa-key text-red-400 mr-1.5" />รหัสผ่าน
               </label>
               <div className="relative">
                 <i className="fa-solid fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-[#9e9e9e] text-sm" />
-                <input type={showPw ? "text" : "password"} required placeholder="กรอก password"
+                <input type={showPw ? "text" : "password"} required placeholder="กรอกรหัสผ่าน"
                   value={password} onChange={(e) => setPassword(e.target.value)}
                   suppressHydrationWarning
                   className="w-full pl-9 pr-10 py-3 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none transition-colors"
@@ -515,7 +522,7 @@ function AdminLogin({ onLogin }: { onLogin: (a: AdminUser) => void }) {
 
 // ─── Admin Shell ──────────────────────────────────────────────────────────────
 
-const VALID_TABS = new Set(["dashboard","students","data_requests","entrylogs","checkin_school","checkin_library","checkin_meeting","rfid","bookings","rooms","products","shoporders","projects","evaluations","class_groups","class_schedule","class_schedule_weekly","class_schedule_override","teachers","feedbacks","admins","settings"]);
+const VALID_TABS = new Set(["dashboard","students","data_requests","entrylogs","checkin_school","checkin_library","checkin_meeting","rfid","bookings","rooms","products","shoporders","projects","evaluations","class_groups","class_schedule","class_schedule_weekly","class_schedule_override","teachers","feedbacks","admins","line_broadcast","settings"]);
 
 function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onLogout: () => void; onAvatarChange: (url: string | null) => void }) {
   const router = useRouter();
@@ -554,7 +561,7 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
   }, [activeTab, requestedTab, router]);
 
   const displayName = admin.nickname ?? admin.first_name ?? admin.username;
-  const roleLabel = admin.role === "superadmin" ? "Super Administrator" : admin.role === "admin" ? "Administrator" : "Staff";
+  const roleLabel = admin.role === "superadmin" ? "ผู้ดูแลสูงสุด" : admin.role === "admin" ? "ผู้ดูแลระบบ" : "เจ้าหน้าที่";
 
   async function refreshStats() {
     if (refreshingStats) return;
@@ -574,7 +581,7 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
     for (const sec of navSections)
       for (const item of sec.items)
         if (item.id === activeTab) return item.label;
-    return "Dashboard";
+    return "ภาพรวมระบบ";
   }
 
   return (
@@ -596,7 +603,7 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
           <img src="/admin/favicon.ico" alt="logo" className="w-6 h-6 rounded-md object-contain flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="text-[13px] font-semibold text-white truncate leading-tight">ASIA-BOT</div>
-            <div className="text-[10px] truncate leading-tight" style={{ color: "#636363" }}>Admin Panel</div>
+            <div className="text-[10px] truncate leading-tight" style={{ color: "#636363" }}>แผงควบคุมผู้ดูแล</div>
           </div>
           <div className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0" style={{ color: "#636363" }}>
             <i className="fa-solid fa-chevron-up-down text-[9px]" />
@@ -698,7 +705,7 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
             </button>
             <a href="/" className="hidden sm:inline" style={{ color: "#555" }}>ASIA-BOT</a>
             <i className="fa-solid fa-chevron-right text-[9px] hidden sm:inline" style={{ color: "#333" }} />
-            <a href="/admin" className="hidden sm:inline" style={{ color: "#555" }}>Admin</a>
+            <a href="/admin" className="hidden sm:inline" style={{ color: "#555" }}>ผู้ดูแล</a>
             <i className="fa-solid fa-chevron-right text-[9px] hidden sm:inline" style={{ color: "#333" }} />
             <span className="truncate font-semibold" style={{ color: "#ededed" }}>{getPageTitle()}</span>
           </div>
@@ -768,6 +775,7 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
             )}
             {activeTab === "teachers"        && <TeachersTab    adminId={admin.admin_id} />}
             {activeTab === "admins"          && <AdminsTab      adminId={admin.admin_id} role={admin.role} onAvatarChange={onAvatarChange} />}
+            {activeTab === "line_broadcast"  && <LineBroadcastTab adminId={admin.admin_id} />}
             {activeTab === "settings"        && <SettingsTab    adminId={admin.admin_id} adminName={[admin.first_name, admin.last_name].filter(Boolean).join(" ") || admin.admin_id} adminRole={admin.role} adminAvatar={admin.avatar} stats={stats} />}
           </div>
         </main>
@@ -817,7 +825,7 @@ function SidebarUser({ admin, onLogout, onAvatarChange }: {
   const [timeLeft, setTimeLeft] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const displayName = admin.nickname ?? admin.first_name ?? admin.username;
-  const roleLabel = admin.role === "superadmin" ? "Super Administrator" : admin.role === "admin" ? "Administrator" : "Staff";
+  const roleLabel = admin.role === "superadmin" ? "ผู้ดูแลสูงสุด" : admin.role === "admin" ? "ผู้ดูแลระบบ" : "เจ้าหน้าที่";
 
   useEffect(() => {
     const raw = sessionStorage.getItem(STORAGE_TIME_KEY);
@@ -1039,7 +1047,7 @@ function StudentInfoTrigger({
                   ["ปีที่เข้า", student?.entry_year ?? "—", "fa-calendar"],
                   ["เบอร์โทร", student?.student_phone ?? "—", "fa-phone"],
                   ["สถานะบัตร", student ? CARD_STATUS[student.card_status] : "—", "fa-id-card"],
-                  ["UID บัตร", student?.uid ?? "—", "fa-fingerprint"],
+                  ["รหัสบัตร", student?.uid ?? "—", "fa-fingerprint"],
                   ["อัปเดตล่าสุด", student?.updated_at ? formatDateTime(student.updated_at) : "—", "fa-clock-rotate-left"],
                 ].map(([label, value, icon]) => (
                   <div key={label} className="rounded-xl p-3" style={{ background: "#111111", border: "1px solid #2a2a2a" }}>
@@ -1106,10 +1114,10 @@ function DashboardTab({ adminId, stats, onOpenTab }: { adminId: string; stats: S
     { label: "นักเรียนทั้งหมด",    val: stats?.students,                                       icon: "fa-users",               color: "#ff7070" },
     { label: "อยู่ในโรงเรียน",     val: inSchool,                                              icon: "fa-right-to-bracket",    color: "#9e9e9e" },
     { label: "ออกแล้ว",             val: outSchool,                                             icon: "fa-right-from-bracket",  color: "#9e9e9e" },
-    { label: "บัตร Active",         val: stats ? (stats.students - stats.inactiveCards - stats.lostCards) : null, icon: "fa-id-card", color: "#ff7070" },
+    { label: "บัตรใช้งานได้",         val: stats ? (stats.students - stats.inactiveCards - stats.lostCards) : null, icon: "fa-id-card", color: "#ff7070" },
     { label: "บัตรสูญหาย",         val: stats?.lostCards,                                      icon: "fa-id-card-clip",        color: "#ff7070" },
-    { label: "ออเดอร์ชำระ",        val: stats?.paidOrders,                                     icon: "fa-cart-shopping",       color: "#9e9e9e" },
-    { label: "Feedback รอดำเนินการ", val: stats?.feedbackPending,                              icon: "fa-comment-dots",        color: "#9e9e9e" },
+    { label: "คำสั่งซื้อที่ชำระแล้ว",        val: stats?.paidOrders,                                     icon: "fa-cart-shopping",       color: "#9e9e9e" },
+    { label: "ความคิดเห็นรอดำเนินการ", val: stats?.feedbackPending,                              icon: "fa-comment-dots",        color: "#9e9e9e" },
     { label: "ห้องประชุม (รอ)",     val: stats?.pendingBookings,                               icon: "fa-calendar-check",      color: "#9e9e9e" },
   ];
 
@@ -1141,7 +1149,7 @@ function DashboardTab({ adminId, stats, onOpenTab }: { adminId: string; stats: S
   useChart(systemChartRef, () => ({
     type: "bar",
     data: {
-      labels: ["นักเรียน", "เข้าออกวันที่เลือก", "จองห้อง", "ออเดอร์", "Feedback"],
+      labels: ["นักเรียน", "เข้าออกวันที่เลือก", "จองห้อง", "คำสั่งซื้อ", "ความคิดเห็น"],
       datasets: [{
         label: "จำนวน",
         data: [
@@ -1191,7 +1199,7 @@ function DashboardTab({ adminId, stats, onOpenTab }: { adminId: string; stats: S
   useChart(cardsChartRef, () => ({
     type: "doughnut",
     data: {
-      labels: ["Active", "Inactive", "Lost"],
+      labels: ["ใช้งานได้", "ยังไม่เปิดใช้", "บัตรหาย"],
       datasets: [{
         data: [activeCards, inactiveCards, lostCards],
         backgroundColor: ["#ff7070", "#636363", "#2a2a2a"],
@@ -2048,7 +2056,7 @@ function FeedbackCard({ f, adminId, onUpdated }: { f: Feedback; adminId: string;
 
   async function deleteFeedback() {
     const label = f.name || f.category || f.id.slice(0, 8);
-    if (!confirm(`ลบ Feedback "${label}" ถาวร?`)) return;
+    if (!confirm(`ลบความคิดเห็น "${label}" ถาวร?`)) return;
 
     setDeleting(true);
     try {
@@ -2061,13 +2069,13 @@ function FeedbackCard({ f, adminId, onUpdated }: { f: Feedback; adminId: string;
           })()
         : { status: res.ok ? "success" : "error" };
       if (json.status !== "success") {
-        toast.error(json.message ?? "ลบ Feedback ไม่สำเร็จ");
+        toast.error(json.message ?? "ลบความคิดเห็นไม่สำเร็จ");
         return;
       }
-      toast.success("ลบ Feedback แล้ว");
+      toast.success("ลบความคิดเห็นแล้ว");
       onUpdated();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "ลบ Feedback ไม่สำเร็จ");
+      toast.error(error instanceof Error ? error.message : "ลบความคิดเห็นไม่สำเร็จ");
     } finally {
       setDeleting(false);
     }
@@ -2138,7 +2146,7 @@ function FeedbackCard({ f, adminId, onUpdated }: { f: Feedback; adminId: string;
               {Object.entries(FB_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
             <button onClick={deleteFeedback} disabled={updating || deleting}
-              title="ลบ Feedback"
+              title="ลบความคิดเห็น"
               className="w-8 h-8 rounded-lg flex items-center justify-center transition-all disabled:opacity-50"
               style={{ background: "rgba(255,112,112,0.08)", color: "#ff7070", border: "1px solid rgba(255,112,112,0.2)" }}>
               <i className={`fa-solid ${deleting ? "fa-spinner fa-spin" : "fa-trash"} text-[11px]`} />
@@ -2291,7 +2299,7 @@ function FeedbacksTab({ adminId }: { adminId: string }) {
 
   return (
     <div>
-      <DarkSectionHeader title="Feedback & รายงาน" icon="fa-comment-dots" count={filtered.length} />
+      <DarkSectionHeader title="ความคิดเห็นและรายงานปัญหา" icon="fa-comment-dots" count={filtered.length} />
 
       {/* ── Overview ── */}
       {!loading && total > 0 && (
@@ -2317,14 +2325,14 @@ function FeedbacksTab({ adminId }: { adminId: string }) {
           <div className="rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
             <div className="flex items-center gap-2 mb-3">
               <i className="fa-solid fa-chart-pie text-xs" style={{ color: "#ff7070" }} />
-              <span className="text-xs font-bold text-white">สถานะ Feedback</span>
+              <span className="text-xs font-bold text-white">สถานะความคิดเห็น</span>
             </div>
             <div className="relative h-[220px]"><canvas ref={fbStatusChartRef} /></div>
           </div>
           <div className="rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
             <div className="flex items-center gap-2 mb-3">
               <i className="fa-solid fa-chart-column text-xs" style={{ color: "#ff7070" }} />
-              <span className="text-xs font-bold text-white">ประเภท Feedback</span>
+              <span className="text-xs font-bold text-white">ประเภทความคิดเห็น</span>
             </div>
             <div className="relative h-[220px]"><canvas ref={fbTypeChartRef} /></div>
           </div>
@@ -2378,7 +2386,7 @@ function FeedbacksTab({ adminId }: { adminId: string }) {
         </div>
       </div>
 
-      {loading ? <DarkSpinner /> : filtered.length === 0 ? <DarkEmpty text={search ? "ไม่พบผลการค้นหา" : "ไม่มี Feedback"} /> : (
+      {loading ? <DarkSpinner /> : filtered.length === 0 ? <DarkEmpty text={search ? "ไม่พบผลการค้นหา" : "ยังไม่มีความคิดเห็น"} /> : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
           {filtered.map(f => <FeedbackCard key={f.id} f={f} adminId={adminId} onUpdated={fetch_} />)}
         </div>
@@ -2418,7 +2426,7 @@ const CHANGE_FIELD_LABELS: Record<string, string> = {
   first_name: "ชื่อ", last_name: "นามสกุล", nickname: "ชื่อเล่น",
   program: "ระดับ", student_id: "รหัสนักเรียน",
   student_phone: "เบอร์โทร", entry_year: "ปีที่เข้า", department: "สาขาวิชา",
-  uid: "UID บัตร", card_status: "สถานะบัตร", photo_url: "รูปนักเรียน", line_user_id: "LINE User ID",
+  uid: "รหัสบัตร", card_status: "สถานะบัตร", photo_url: "รูปนักเรียน", line_user_id: "รหัส LINE",
 };
 
 const REQUEST_EDITABLE_FIELDS = [
@@ -2933,7 +2941,7 @@ function StudentsTab({ adminId, refreshKey, role }: { adminId: string; refreshKe
                           <div className="font-bold text-white text-sm leading-tight flex items-center gap-1.5 flex-wrap">
                             {s.first_name} {s.last_name}
                             {s.nickname && <span className="text-[#9e9e9e] font-normal text-xs">({s.nickname})</span>}
-                            {isAdmin && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ background: "rgba(255,112,112,0.15)", color: "#ff7070" }}><i className="fa-solid fa-shield-halved mr-0.5" />Admin</span>}
+                            {isAdmin && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ background: "rgba(255,112,112,0.15)", color: "#ff7070" }}><i className="fa-solid fa-shield-halved mr-0.5" />ผู้ดูแล</span>}
                           </div>
                           <div className="flex flex-wrap gap-1 mt-1">
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: cs.bg, color: cs.text }}>{CARD_STATUS[s.card_status]}</span>
@@ -2991,7 +2999,7 @@ function StudentsTab({ adminId, refreshKey, role }: { adminId: string; refreshKe
                                 <Avatar name={`${s.first_name} ${s.last_name}`} url={s.photo_url} size={28} rounded="lg" />
                                 <div className="min-w-0">
                                   <div className="font-semibold text-white whitespace-nowrap truncate">{s.first_name} {s.last_name} {s.nickname ? `(${s.nickname})` : ""}</div>
-                                  {isAdmin && <span className="text-[9px] px-1 py-0.5 rounded font-bold" style={{ background: "rgba(255,112,112,0.15)", color: "#ff7070" }}>Admin</span>}
+                                  {isAdmin && <span className="text-[9px] px-1 py-0.5 rounded font-bold" style={{ background: "rgba(255,112,112,0.15)", color: "#ff7070" }}>ผู้ดูแล</span>}
                                 </div>
                               </StudentInfoTrigger>
                             </td>
@@ -3034,7 +3042,7 @@ function StudentsTab({ adminId, refreshKey, role }: { adminId: string; refreshKe
                           className="flex items-center gap-2 flex-wrap mb-1">
                           <span className="font-bold text-white">{s.first_name} {s.last_name}</span>
                           {s.nickname && <span className="text-xs text-[#9e9e9e]">({s.nickname})</span>}
-                          {isAdmin && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ background: "rgba(255,112,112,0.15)", color: "#ff7070" }}><i className="fa-solid fa-shield-halved mr-0.5" />Admin</span>}
+                          {isAdmin && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ background: "rgba(255,112,112,0.15)", color: "#ff7070" }}><i className="fa-solid fa-shield-halved mr-0.5" />ผู้ดูแล</span>}
                           <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: cs.bg, color: cs.text }}>{CARD_STATUS[s.card_status]}</span>
                         </StudentInfoTrigger>
                         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-4 gap-y-1 text-[11px] mb-3" style={{ color: "#9e9e9e" }}>
@@ -3854,7 +3862,7 @@ function ProductForm({ product, adminId, onClose, onSaved }: { product: Product 
         setError(json.message ?? "บันทึกไม่สำเร็จ");
       }
     } catch {
-      setError("เชื่อมต่อ API ไม่ได้");
+      setError("เชื่อมต่อระบบไม่ได้");
     } finally {
       setSaving(false);
     }
@@ -4499,7 +4507,7 @@ type AdminRecord = {
   username_changed_at: string | null; linked_student_id: string | null;
 };
 
-const ROLE_LABELS: Record<string, string> = { superadmin: "Super Admin", admin: "Admin", staff: "Staff" };
+const ROLE_LABELS: Record<string, string> = { superadmin: "ผู้ดูแลสูงสุด", admin: "ผู้ดูแลระบบ", staff: "เจ้าหน้าที่" };
 const ROLE_STYLE: Record<string, { bg: string; text: string }> = {
   superadmin: { bg: "rgba(255,112,112,0.15)", text: "#ff7070" },
   admin:      { bg: "rgba(56,139,253,0.15)", text: "#ff7070" },
@@ -4712,16 +4720,16 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
               value={a.role}
               onChange={async (e) => {
                 const newRole = e.target.value;
-                const pw = prompt(`ยืนยันรหัสผ่านของคุณเพื่อเปลี่ยน Role ของ @${a.username} เป็น "${ROLE_LABELS[newRole]}"`);
+                const pw = prompt(`ยืนยันรหัสผ่านของคุณเพื่อเปลี่ยนสิทธิ์ของ @${a.username} เป็น "${ROLE_LABELS[newRole]}"`);
                 if (!pw) return;
                 await onCycleRole({ ...a, _newRole: newRole, _confirmPassword: pw } as AdminRecord & { _newRole: string; _confirmPassword: string });
               }}
               disabled={updating === a.admin_id}
               className="text-[11px] px-2 py-1.5 rounded-lg font-semibold disabled:opacity-50 cursor-pointer"
               style={{ background: "rgba(255,255,255,0.05)", color: "#9e9e9e", border: "1px solid #3e3e3e" }}>
-              <option value="staff">Staff</option>
-              <option value="admin">Admin</option>
-              <option value="superadmin">Super Admin</option>
+              <option value="staff">เจ้าหน้าที่</option>
+              <option value="admin">ผู้ดูแลระบบ</option>
+              <option value="superadmin">ผู้ดูแลสูงสุด</option>
             </select>
             <button onClick={() => onToggleStatus(a)} disabled={updating === a.admin_id}
               className="text-[11px] px-2.5 py-1.5 rounded-lg font-semibold disabled:opacity-50"
@@ -4795,7 +4803,7 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             <div className="col-span-2 sm:col-span-3">
               <label className="block text-[10px] text-[#9e9e9e] mb-1">
-                <i className="fa-solid fa-link mr-1" />Avatar URL
+                <i className="fa-solid fa-link mr-1" />ลิงก์รูปโปรไฟล์
               </label>
               <input
                 value={studentAvatarUrl ?? ""}
@@ -4804,7 +4812,7 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
                 {...inp}
               />
               <p className="text-[10px] mt-1" style={{ color: "#636363" }}>
-                ใส่ URL แล้วกดบันทึกเพื่อเปลี่ยน avatar หรือใช้ปุ่มจากนักเรียนเพื่อดึงรูปอัตโนมัติ
+                ใส่ลิงก์รูปแล้วกดบันทึกเพื่อเปลี่ยนรูป หรือใช้ปุ่มจากนักเรียนเพื่อดึงรูปอัตโนมัติ
               </p>
             </div>
             <div><label className="block text-[10px] text-[#9e9e9e] mb-1">ชื่อ</label>
@@ -4813,7 +4821,7 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
               <input value={pf.last_name} onChange={e => setPf(p => ({ ...p, last_name: e.target.value }))} placeholder="นามสกุล" {...inp} /></div>
             <div><label className="block text-[10px] text-[#9e9e9e] mb-1">ชื่อเล่น</label>
               <input value={pf.nickname} onChange={e => setPf(p => ({ ...p, nickname: e.target.value }))} placeholder="ชื่อเล่น" {...inp} /></div>
-            <div><label className="block text-[10px] text-[#9e9e9e] mb-1"><i className="fa-solid fa-envelope mr-1" />Email</label>
+            <div><label className="block text-[10px] text-[#9e9e9e] mb-1"><i className="fa-solid fa-envelope mr-1" />อีเมล</label>
               <input type="email" value={pf.email} onChange={e => setPf(p => ({ ...p, email: e.target.value }))} placeholder="email@example.com" {...inp} /></div>
             <div><label className="block text-[10px] text-[#9e9e9e] mb-1"><i className="fa-solid fa-phone mr-1" />เบอร์โทร</label>
               <input value={pf.phone} onChange={e => setPf(p => ({ ...p, phone: e.target.value }))} placeholder="08x-xxx-xxxx" {...inp} /></div>
@@ -4827,7 +4835,7 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div>
                 <label className="block text-[10px] text-[#9e9e9e] mb-1">
-                  <i className="fa-solid fa-at mr-1" />Username ใหม่ {a.username_changed_at && <span style={{ color: "#636363" }}>(เปลี่ยนล่าสุด {new Date(a.username_changed_at).toLocaleDateString("th-TH")})</span>}
+                  <i className="fa-solid fa-at mr-1" />ชื่อผู้ใช้ใหม่ {a.username_changed_at && <span style={{ color: "#636363" }}>(เปลี่ยนล่าสุด {new Date(a.username_changed_at).toLocaleDateString("th-TH")})</span>}
                 </label>
                 <input value={newUsername} onChange={e => setNewUsername(e.target.value)} placeholder={`@${a.username}`} {...inp} />
               </div>
@@ -4973,7 +4981,7 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
   }
 
   async function deleteAdmin(a: AdminRecord) {
-    if (!confirm(`ลบ Admin "@${a.username}" ออกจากระบบถาวร?`)) return;
+    if (!confirm(`ลบผู้ดูแล "@${a.username}" ออกจากระบบถาวร?`)) return;
     await adminFetch(`/api/admin/admins/${a.admin_id}`, adminId, { method: "DELETE" });
     load();
   }
@@ -4986,14 +4994,14 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
         <div className="mt-4 mb-4">
           <DarkAction onClick={() => { setShowForm(!showForm); setMsg(""); if (showForm) { setAvatarFile(null); setAvatarPreview(null); setAvatarSourceUrl(null); setForm(BLANK_ADMIN_FORM); } }} loading={false}
             color={showForm ? "gray" : "green"} icon={showForm ? "fa-xmark" : "fa-plus"}
-            label={showForm ? "ยกเลิก" : "เพิ่ม Admin"} />
+            label={showForm ? "ยกเลิก" : "เพิ่มผู้ดูแล"} />
         </div>
       )}
 
       {showForm && (
         <div className="mb-5 rounded-xl p-4 space-y-3" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="text-xs font-bold text-white">เพิ่ม Admin ใหม่ <span className="font-normal text-[#636363]">(เฉพาะ Superadmin เท่านั้น)</span></div>
+            <div className="text-xs font-bold text-white">เพิ่มผู้ดูแลใหม่ <span className="font-normal text-[#636363]">(เฉพาะผู้ดูแลสูงสุดเท่านั้น)</span></div>
             <div className="flex gap-1.5 flex-wrap">
               <button type="button" onClick={() => { setPickerType("student"); setPickerSearch(""); setPickerResults([]); }}
                 className="text-[11px] px-2.5 py-1.5 rounded-lg font-semibold"
@@ -5063,7 +5071,7 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
                 e.target.value = "";
               }} />
             <div>
-              <p className="text-xs font-semibold text-[#ededed]">Avatar <span className="font-normal text-[#636363]">(ไม่บังคับ)</span></p>
+              <p className="text-xs font-semibold text-[#ededed]">รูปโปรไฟล์ <span className="font-normal text-[#636363]">(ไม่บังคับ)</span></p>
               {avatarPreview
                 ? <button type="button" onClick={() => { setAvatarFile(null); setAvatarPreview(null); setAvatarSourceUrl(null); }}
                     className="text-[11px] mt-0.5" style={{ color: "#ff7070" }}>
@@ -5075,7 +5083,7 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
 
           <div>
             <label className="block text-[11px] text-[#9e9e9e] mb-1">
-              <i className="fa-solid fa-link mr-1" />Avatar URL
+              <i className="fa-solid fa-link mr-1" />ลิงก์รูปโปรไฟล์
             </label>
             <input
               value={avatarSourceUrl ?? ""}
@@ -5089,25 +5097,25 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
               placeholder="https://... หรือเลือกจากนักเรียน"
             />
             <p className="text-[10px] mt-1" style={{ color: "#636363" }}>
-              ใช้ได้ทั้ง URL รูปจากนักเรียน, Supabase Storage หรือรูปภายนอกที่ LINE/Browser เปิดได้
+              ใช้ได้ทั้งลิงก์รูปจากนักเรียน รูปในระบบ หรือรูปภายนอกที่เปิดดูได้
             </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-[11px] text-[#9e9e9e] mb-1">Username * <span className="text-[#636363]">(a-z 0-9 _)</span></label>
+              <label className="block text-[11px] text-[#9e9e9e] mb-1">ชื่อผู้ใช้ * <span className="text-[#636363]">(อังกฤษ/ตัวเลข/ขีดล่าง)</span></label>
               <input value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} {...inp} placeholder="เช่น admin01" />
             </div>
             <div>
-              <label className="block text-[11px] text-[#9e9e9e] mb-1">Password * <span className="text-[#636363]">(min 6 ตัว)</span></label>
+              <label className="block text-[11px] text-[#9e9e9e] mb-1">รหัสผ่าน * <span className="text-[#636363]">(อย่างน้อย 6 ตัว)</span></label>
               <input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} {...inp} placeholder="••••••" />
             </div>
             <div>
-              <label className="block text-[11px] text-[#9e9e9e] mb-1">Role</label>
+              <label className="block text-[11px] text-[#9e9e9e] mb-1">สิทธิ์การใช้งาน</label>
               <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))} {...inp}>
-                <option value="staff">Staff — {ROLE_DESC.staff}</option>
-                <option value="admin">Admin — {ROLE_DESC.admin}</option>
-                <option value="superadmin">Super Admin — {ROLE_DESC.superadmin}</option>
+                <option value="staff">เจ้าหน้าที่ — {ROLE_DESC.staff}</option>
+                <option value="admin">ผู้ดูแลระบบ — {ROLE_DESC.admin}</option>
+                <option value="superadmin">ผู้ดูแลสูงสุด — {ROLE_DESC.superadmin}</option>
               </select>
             </div>
             <div>
@@ -5123,7 +5131,7 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
               <input value={form.nickname} onChange={e => setForm(f => ({ ...f, nickname: e.target.value }))} {...inp} placeholder="ชื่อเล่น" />
             </div>
             <div>
-              <label className="block text-[11px] text-[#9e9e9e] mb-1"><i className="fa-solid fa-envelope mr-1" />Email</label>
+              <label className="block text-[11px] text-[#9e9e9e] mb-1"><i className="fa-solid fa-envelope mr-1" />อีเมล</label>
               <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} {...inp} placeholder="email@example.com" />
             </div>
             <div>
@@ -5144,7 +5152,7 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
             <button onClick={addAdmin} disabled={saving}
               className="px-4 py-2 rounded-lg text-xs font-bold text-white hover:opacity-80 disabled:opacity-50"
               style={{ background: "#ff7070" }}>
-              {saving ? "กำลังบันทึก..." : "+ เพิ่ม Admin"}
+              {saving ? "กำลังบันทึก..." : "+ เพิ่มผู้ดูแล"}
             </button>
           </div>
         </div>
@@ -5174,7 +5182,7 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
 
       {!isSuperAdmin && (
         <div className="mt-4 p-4 rounded-xl text-xs" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e", color: "#636363" }}>
-          <i className="fa-solid fa-lock mr-2" />การจัดการ Admin ต้องใช้สิทธิ์ Superadmin เท่านั้น
+          <i className="fa-solid fa-lock mr-2" />การจัดการผู้ดูแลต้องใช้สิทธิ์ผู้ดูแลสูงสุดเท่านั้น
         </div>
       )}
     </div>
@@ -5182,6 +5190,179 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
 }
 
 // ─── Settings Tab ─────────────────────────────────────────────────────────────
+
+function LineBroadcastTab({ adminId }: { adminId: string }) {
+  const [state, setState] = useState<{ state: "idle" | "sending" | "ok" | "error"; message: string; detail?: string }>({ state: "idle", message: "" });
+  const [cooldown, setCooldown] = useState(0);
+  const [targetId, setTargetId] = useState("");
+  const [mode, setMode] = useState<"news_flex" | "urgent_flex" | "event_flex" | "notice_flex" | "text" | "image" | "custom_json">("news_flex");
+  const [title, setTitle] = useState("ข่าวสารจาก ASIA-BOT");
+  const [subtitle, setSubtitle] = useState("แจ้งข่าวสารถึงนักเรียนและผู้เกี่ยวข้อง");
+  const [text, setText] = useState("กรุณาติดตามข่าวสารและประกาศจากระบบ ASIA-BOT");
+  const [imageUrl, setImageUrl] = useState("https://dummyimage.com/1000x450/84d4fa/0f172a.png&text=ASIA-BOT+News");
+  const [buttonLabel, setButtonLabel] = useState("เปิดเว็บไซต์");
+  const [buttonUrl, setButtonUrl] = useState("/");
+  const [json, setJson] = useState(`{
+  "type": "text",
+  "text": "ข่าวสารจาก ASIA-BOT"
+}`);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = window.setTimeout(() => setCooldown(v => Math.max(0, v - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [cooldown]);
+
+  const style = {
+    idle: { color: "#636363", bg: "#2a2a2a", icon: "fa-bullhorn" },
+    sending: { color: "#e3b341", bg: "rgba(227,179,65,0.1)", icon: "fa-spinner fa-spin" },
+    ok: { color: "#3fb950", bg: "rgba(63,185,80,0.1)", icon: "fa-circle-check" },
+    error: { color: "#ff7070", bg: "rgba(255,112,112,0.1)", icon: "fa-triangle-exclamation" },
+  }[state.state];
+
+  async function sendLineNews() {
+    if (cooldown > 0) return;
+    let payload: unknown = undefined;
+    if (mode === "custom_json") {
+      try { payload = JSON.parse(json); }
+      catch { setState({ state: "error", message: "รูปแบบข้อความไม่ถูกต้อง", detail: "ตรวจสอบ JSON ก่อนส่ง" }); return; }
+    }
+    if (mode === "image" && !imageUrl.trim()) { setState({ state: "error", message: "กรุณาใส่ URL รูปภาพ" }); return; }
+    if (mode !== "image" && mode !== "custom_json" && !title.trim() && !text.trim()) {
+      setState({ state: "error", message: "กรุณากรอกหัวข้อหรือข้อความข่าวสาร" });
+      return;
+    }
+
+    setState({ state: "sending", message: `กำลังส่งข่าวสารไปยัง ${targetId.trim() || "กลุ่มผู้ดูแล"}...` });
+    try {
+      const res = await adminFetch("/api/line/broadcast", adminId, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: targetId.trim() || undefined,
+          mode,
+          title,
+          subtitle,
+          text,
+          imageUrl,
+          buttonLabel,
+          buttonUrl,
+          payload,
+          altText: title || "ข่าวสารจาก ASIA-BOT",
+        }),
+      });
+      const j = await res.json();
+      if (res.ok && j.status === "success") {
+        setCooldown(Number(j.cooldown_seconds ?? 20));
+        setState({ state: "ok", message: "ส่งข่าวสาร LINE สำเร็จ", detail: `${j.sent_count ?? 1} ข้อความ${j.admin ? ` · ส่งโดย ${j.admin}` : ""}` });
+      } else {
+        if (j.cooldown_seconds) setCooldown(Number(j.cooldown_seconds));
+        setState({ state: "error", message: j.message || "ส่งข่าวสาร LINE ไม่สำเร็จ", detail: [j.http_status ? `HTTP ${j.http_status}` : "", j.body].filter(Boolean).join(" · ") });
+      }
+    } catch (err) {
+      setState({ state: "error", message: "เชื่อมต่อระบบส่งข้อความไม่ได้", detail: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  return (
+    <div className="max-w-4xl space-y-5">
+      <DarkSectionHeader title="ส่งข่าวสาร LINE" icon="fa-bullhorn" />
+      <div className="rounded-xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+        <div className="px-4 py-3 flex items-center justify-between gap-2" style={{ borderBottom: "1px solid #3e3e3e" }}>
+          <div className="flex items-center gap-2">
+            <i className="fa-brands fa-line text-sm" style={{ color: "#3fb950" }} />
+            <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "#9e9e9e" }}>ส่งข่าวสาร</span>
+          </div>
+          <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: "rgba(255,112,112,0.12)", color: "#ff7070", border: "1px solid rgba(255,112,112,0.3)" }}>ส่งจริง</span>
+        </div>
+        <div className="p-4 space-y-4">
+          <div>
+            <div className="text-sm font-bold text-white">ส่งข่าวสารถึง LINE</div>
+            <div className="text-xs mt-1 leading-relaxed" style={{ color: "#636363" }}>
+              ส่งข้อความ รูปภาพ หรือ Flex ข่าวสารไปยังกลุ่มหรือผู้ใช้ LINE
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#9e9e9e" }}>รูปแบบข่าวสาร</label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+              {[
+                ["news_flex", "ข่าวสาร"],
+                ["urgent_flex", "ด่วน"],
+                ["event_flex", "กิจกรรม"],
+                ["notice_flex", "แจ้งเตือน"],
+                ["text", "ข้อความ"],
+                ["image", "รูปภาพ"],
+                ["custom_json", "กำหนดเอง"],
+              ].map(([value, label]) => (
+                <button key={value} type="button" onClick={() => setMode(value as typeof mode)}
+                  className="px-2.5 py-2 rounded-lg text-[11px] font-bold"
+                  style={mode === value ? { background: "rgba(255,112,112,0.18)", color: "#ff7070", border: "1px solid rgba(255,112,112,0.45)" } : { background: "#0c0c0c", color: "#9e9e9e", border: "1px solid #3e3e3e" }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <DarkField label="ผู้รับ LINE" value={targetId} onChange={setTargetId} placeholder="เว้นว่าง = กลุ่มผู้ดูแล" mono />
+            <DarkField label="หัวข้อ" value={title} onChange={setTitle} placeholder="หัวข้อข่าวสาร" />
+          </div>
+
+          {mode !== "image" && mode !== "custom_json" && (
+            <>
+              <DarkField label="คำอธิบายสั้น" value={subtitle} onChange={setSubtitle} placeholder="คำอธิบายใต้หัวข้อ" />
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#9e9e9e" }}>ข้อความ</label>
+                <textarea value={text} onChange={e => setText(e.target.value)} className="w-full min-h-[110px] px-3 py-2 rounded-lg text-xs outline-none resize-y" style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }} />
+              </div>
+            </>
+          )}
+
+          {(mode === "image" || mode.endsWith("_flex")) && (
+            <DarkField label="URL รูปภาพ" value={imageUrl} onChange={setImageUrl} placeholder="https://example.com/image.jpg" mono help="รูปสำหรับ Flex แนะนำ 1000x450 px หรืออัตราส่วน 20:9" />
+          )}
+
+          {mode.endsWith("_flex") && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <DarkField label="ชื่อปุ่ม" value={buttonLabel} onChange={setButtonLabel} placeholder="เปิดดูเพิ่มเติม" />
+              <DarkField label="ลิงก์ปุ่ม" value={buttonUrl} onChange={setButtonUrl} placeholder="/ หรือ https://..." mono />
+            </div>
+          )}
+
+          {mode === "custom_json" && (
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#9e9e9e" }}>ข้อความกำหนดเอง</label>
+              <textarea value={json} onChange={e => setJson(e.target.value)} spellCheck={false} className="w-full min-h-[170px] px-3 py-2 rounded-lg text-[11px] font-mono outline-none resize-y" style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }} />
+            </div>
+          )}
+
+          {state.state !== "idle" && (
+            <div className="rounded-lg px-3 py-2 text-xs" style={{ background: style.bg, color: style.color, border: `1px solid ${style.color}33` }}>
+              <div className="font-bold flex items-center gap-2"><i className={`fa-solid ${style.icon}`} />{state.message}</div>
+              {state.detail && <div className="mt-1 break-words opacity-80">{state.detail}</div>}
+            </div>
+          )}
+
+          <button onClick={sendLineNews} disabled={state.state === "sending" || cooldown > 0} className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold text-white disabled:opacity-50" style={{ background: "#ff7070" }}>
+            <i className={`fa-solid ${state.state === "sending" ? "fa-spinner fa-spin" : "fa-bullhorn"}`} />
+            {cooldown > 0 ? `รอ ${cooldown} วินาที` : "ส่งข่าวสาร LINE"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DarkField({ label, value, onChange, placeholder, mono, help }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; mono?: boolean; help?: string }) {
+  return (
+    <div>
+      <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#9e9e9e" }}>{label}</label>
+      <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} className={`w-full px-3 py-2 rounded-lg text-xs outline-none ${mono ? "font-mono" : ""}`} style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }} />
+      {help && <p className="text-[10px] mt-1" style={{ color: "#636363" }}>{help}</p>}
+    </div>
+  );
+}
 
 function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { adminId: string; adminName: string; adminRole: string; adminAvatar: string | null; stats: Stats | null }) {
   const [ping, setPing] = useState<"idle" | "checking" | "ok" | "error">("idle");
@@ -5196,8 +5377,27 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
   const [lineStudentId, setLineStudentId] = useState("");
   const [lineJson, setLineJson] = useState(`{
   "type": "text",
-  "text": "ทดสอบส่งจาก JSON ของ ASIA-BOT"
+  "text": "ทดสอบส่งข้อความจาก ASIA-BOT"
 }`);
+  const [newsState, setNewsState] = useState<{
+    state: "idle" | "sending" | "ok" | "error";
+    message: string;
+    detail?: string;
+  }>({ state: "idle", message: "" });
+  const [newsCooldown, setNewsCooldown] = useState(0);
+  const [newsTargetId, setNewsTargetId] = useState("");
+  const [newsMode, setNewsMode] = useState<"news_flex" | "urgent_flex" | "event_flex" | "notice_flex" | "text" | "image" | "custom_json">("news_flex");
+  const [newsTitle, setNewsTitle] = useState("ข่าวสารจาก ASIA-BOT");
+  const [newsSubtitle, setNewsSubtitle] = useState("แจ้งข่าวสารถึงนักเรียนและผู้เกี่ยวข้อง");
+  const [newsText, setNewsText] = useState("กรุณาติดตามข่าวสารและประกาศจากระบบ ASIA-BOT");
+  const [newsImageUrl, setNewsImageUrl] = useState("https://dummyimage.com/1000x450/84d4fa/0f172a.png&text=ASIA-BOT+News");
+  const [newsButtonLabel, setNewsButtonLabel] = useState("เปิดเว็บไซต์");
+  const [newsButtonUrl, setNewsButtonUrl] = useState("/");
+  const [newsJson, setNewsJson] = useState(`{
+  "type": "text",
+  "text": "ข่าวสารจาก ASIA-BOT"
+}`);
+  const [lineToolTab] = useState<"news" | "test">("test");
 
   async function testApi() {
     setPing("checking");
@@ -5216,12 +5416,12 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
       try {
         payload = JSON.parse(lineJson);
       } catch {
-        setLineTest({ state: "error", message: "JSON ไม่ถูกต้อง", detail: "ตรวจสอบวงเล็บ, comma, และเครื่องหมายคำพูดก่อนส่ง" });
+        setLineTest({ state: "error", message: "รูปแบบข้อความไม่ถูกต้อง", detail: "ตรวจสอบวงเล็บ เครื่องหมายคั่น และเครื่องหมายคำพูดก่อนส่ง" });
         return;
       }
     }
 
-    setLineTest({ state: "sending", message: `กำลังส่ง LINE test ไปยัง ${target || "LINE_GROUP_ADMIN"}...` });
+    setLineTest({ state: "sending", message: `กำลังส่งข้อความทดสอบไปยัง ${target || "กลุ่มผู้ดูแล"}...` });
     try {
       const res = await adminFetch("/api/line/test", adminId, {
         method: "POST",
@@ -5231,7 +5431,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
           mode: lineMode,
           student_id: lineStudentId.trim() || undefined,
           payload,
-          altText: "ASIA-BOT custom LINE test",
+          altText: "ข้อความทดสอบจาก ASIA-BOT",
         }),
       });
       const j = await res.json();
@@ -5239,19 +5439,79 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
         setLineCooldown(Number(j.cooldown_seconds ?? 15));
         setLineTest({
           state: "ok",
-          message: "ส่ง LINE test สำเร็จ",
-          detail: `${j.sent_count ?? 1} message · ${j.mode ?? lineMode}${j.admin ? ` · ส่งโดย ${j.admin}` : ""}${j.student ? ` · นักเรียน ${j.student}` : ""}`,
+          message: "ส่งข้อความทดสอบสำเร็จ",
+          detail: `${j.sent_count ?? 1} ข้อความ · ${j.mode ?? lineMode}${j.admin ? ` · ส่งโดย ${j.admin}` : ""}${j.student ? ` · นักเรียน ${j.student}` : ""}`,
         });
       } else {
         if (j.cooldown_seconds) setLineCooldown(Number(j.cooldown_seconds));
         setLineTest({
           state: "error",
-          message: j.message || j.error || "ส่ง LINE test ไม่สำเร็จ",
+          message: j.message || j.error || "ส่งข้อความทดสอบไม่สำเร็จ",
           detail: [j.step, j.http_status ? `HTTP ${j.http_status}` : "", j.body].filter(Boolean).join(" · "),
         });
       }
     } catch (err) {
-      setLineTest({ state: "error", message: "เชื่อมต่อ API LINE test ไม่ได้", detail: err instanceof Error ? err.message : String(err) });
+      setLineTest({ state: "error", message: "เชื่อมต่อระบบส่งข้อความไม่ได้", detail: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  async function sendLineNews() {
+    if (newsCooldown > 0) return;
+    let payload: unknown = undefined;
+    if (newsMode === "custom_json") {
+      try {
+        payload = JSON.parse(newsJson);
+      } catch {
+        setNewsState({ state: "error", message: "รูปแบบข้อความไม่ถูกต้อง", detail: "ตรวจสอบ JSON ก่อนส่ง" });
+        return;
+      }
+    }
+    if (newsMode !== "image" && newsMode !== "custom_json" && !newsTitle.trim() && !newsText.trim()) {
+      setNewsState({ state: "error", message: "กรุณากรอกหัวข้อหรือข้อความข่าวสาร" });
+      return;
+    }
+    if (newsMode === "image" && !newsImageUrl.trim()) {
+      setNewsState({ state: "error", message: "กรุณาใส่ URL รูปภาพ" });
+      return;
+    }
+
+    const target = newsTargetId.trim();
+    setNewsState({ state: "sending", message: `กำลังส่งข่าวสารไปยัง ${target || "กลุ่มผู้ดูแล"}...` });
+    try {
+      const res = await adminFetch("/api/line/broadcast", adminId, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: target || undefined,
+          mode: newsMode,
+          title: newsTitle,
+          subtitle: newsSubtitle,
+          text: newsText,
+          imageUrl: newsImageUrl,
+          buttonLabel: newsButtonLabel,
+          buttonUrl: newsButtonUrl,
+          payload,
+          altText: newsTitle || "ข่าวสารจาก ASIA-BOT",
+        }),
+      });
+      const j = await res.json();
+      if (res.ok && j.status === "success") {
+        setNewsCooldown(Number(j.cooldown_seconds ?? 20));
+        setNewsState({
+          state: "ok",
+          message: "ส่งข่าวสาร LINE สำเร็จ",
+          detail: `${j.sent_count ?? 1} ข้อความ · ${j.mode ?? newsMode}${j.admin ? ` · ส่งโดย ${j.admin}` : ""}`,
+        });
+      } else {
+        if (j.cooldown_seconds) setNewsCooldown(Number(j.cooldown_seconds));
+        setNewsState({
+          state: "error",
+          message: j.message || "ส่งข่าวสาร LINE ไม่สำเร็จ",
+          detail: [j.http_status ? `HTTP ${j.http_status}` : "", j.body].filter(Boolean).join(" · "),
+        });
+      }
+    } catch (err) {
+      setNewsState({ state: "error", message: "เชื่อมต่อระบบส่งข้อความไม่ได้", detail: err instanceof Error ? err.message : String(err) });
     }
   }
 
@@ -5261,12 +5521,18 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
     return () => window.clearTimeout(timer);
   }, [lineCooldown]);
 
+  useEffect(() => {
+    if (newsCooldown <= 0) return;
+    const timer = window.setTimeout(() => setNewsCooldown(v => Math.max(0, v - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [newsCooldown]);
+
   const infoRows = [
-    { label: "ระบบ", val: "ASIA-BOT Admin Panel" },
+    { label: "ระบบ", val: "แผงควบคุมผู้ดูแล ASIA-BOT" },
     { label: "เวอร์ชัน", val: "1.0.0" },
-    { label: "Framework", val: "Next.js (App Router)" },
-    { label: "Database", val: "Supabase (PostgreSQL)" },
-    { label: "Auth", val: "Session-based (bcrypt)" },
+    { label: "เว็บไซต์", val: "พร้อมใช้งาน" },
+    { label: "ฐานข้อมูล", val: "ฐานข้อมูลกลาง" },
+    { label: "การเข้าสู่ระบบ", val: "บัญชีผู้ดูแล" },
     { label: "วันที่ตรวจสอบ", val: new Date().toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" }) },
   ];
 
@@ -5278,6 +5544,12 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
     ok: { color: "#3fb950", bg: "rgba(63,185,80,0.1)", icon: "fa-circle-check" },
     error: { color: "#ff7070", bg: "rgba(255,112,112,0.1)", icon: "fa-triangle-exclamation" },
   }[lineTest.state];
+  const newsStyle = {
+    idle: { color: "#636363", bg: "#2a2a2a", icon: "fa-bullhorn" },
+    sending: { color: "#e3b341", bg: "rgba(227,179,65,0.1)", icon: "fa-spinner fa-spin" },
+    ok: { color: "#3fb950", bg: "rgba(63,185,80,0.1)", icon: "fa-circle-check" },
+    error: { color: "#ff7070", bg: "rgba(255,112,112,0.1)", icon: "fa-triangle-exclamation" },
+  }[newsState.state];
   const linePreview = useMemo(() => {
     const studentImage = adminAvatar || "/admin/favicon.ico";
     const dummyProductImage = "https://dummyimage.com/240x240/eaf7ff/0f172a.png&text=240x240";
@@ -5293,7 +5565,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
     const baseRows = [
       ["นักเรียน", `${adminName} (เทสต์)`],
       ["รหัส", adminId],
-      ["ชั้น/สาขา", `${adminRole} · 555 ASIA-BOT Test`],
+      ["ชั้น/สาขา", `${adminRole} · ข้อมูลทดสอบ ASIA-BOT`],
     ] as [string, string][];
 
     if (lineMode === "feedback_flex") return {
@@ -5311,8 +5583,8 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
         ["หมวดหมู่", "ทดสอบระบบ"],
       ] as [string, string][],
       noteTitle: "ข้อความ",
-      note: `นี่คือ Feedback Flex สำหรับแจ้งเตือนแอดมิน\nส่งทดสอบโดย: ${adminName}`,
-      button: "เปิด Feedback",
+      note: `นี่คือข้อความทดสอบสำหรับแจ้งเตือนผู้ดูแล\nส่งทดสอบโดย: ${adminName}`,
+      button: "เปิดความคิดเห็น",
     };
     if (lineMode === "booking_flex") return {
       header: "จองห้อง ASIA-BOT",
@@ -5324,7 +5596,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
       rows: [
         ["ผู้จอง", `${adminName} (เทสต์)`],
         ["รหัสนักเรียน", adminId],
-        ["ชั้น/สาขา", `${adminRole} · 555 ASIA-BOT Test`],
+        ["ชั้น/สาขา", `${adminRole} · ข้อมูลทดสอบ ASIA-BOT`],
         ["ห้อง", "ห้องประชุม"],
         ["วันที่", new Date().toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", year: "numeric" })],
         ["เวลา", "10:15-12:15"],
@@ -5338,7 +5610,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
       header: "แก้ไขข้อมูล ASIA-BOT",
       subheader: "คำขอแก้ไขข้อมูลนักเรียน",
       color: "#6366F1",
-      title: "รอแอดมินตรวจสอบ",
+      title: "รอผู้ดูแลตรวจสอบ",
       titleColor: "#2563EB",
       avatar: studentImage,
       rows: baseRows,
@@ -5358,23 +5630,23 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
         ["โซน", "school"],
         ["ชื่อเล่น", lineStudentId.trim() ? "ตามข้อมูลนักเรียน" : "ทดสอบ"],
         ["ระดับ", lineStudentId.trim() ? "ตามข้อมูลนักเรียน" : adminRole],
-        ["สาขา", lineStudentId.trim() ? "ตามข้อมูลนักเรียน" : "555 ASIA-BOT Test"],
+        ["สาขา", lineStudentId.trim() ? "ตามข้อมูลนักเรียน" : "ข้อมูลทดสอบ ASIA-BOT"],
         ["เวลา", nowText],
-        ["UID", lineStudentId.trim() ? `${lineStudentId.trim()}-TESTLINE` : `${adminId}-TESTLINE`],
+        ["รหัสบัตร", lineStudentId.trim() ? `${lineStudentId.trim()}-TESTLINE` : `${adminId}-TESTLINE`],
       ] as [string, string][],
       button: "ดูประวัติการสแกน",
     };
     if (lineMode === "custom_json") return {
-      header: "ASIA-BOT JSON",
-      subheader: "ตัวอย่าง payload ที่จะส่ง",
+      header: "ข้อความกำหนดเอง",
+      subheader: "ตัวอย่างข้อความที่จะส่ง",
       color: "#9CA3AF",
-      title: "Custom JSON",
+      title: "ข้อความกำหนดเอง",
       titleColor: "#111827",
       avatar: null as string | null,
-      rows: [["Target", lineTargetId.trim() || "LINE_GROUP_ADMIN"]] as [string, string][],
-      noteTitle: "JSON",
+      rows: [["ผู้รับ", lineTargetId.trim() || "กลุ่มผู้ดูแล"]] as [string, string][],
+      noteTitle: "ข้อความที่กำหนด",
       note: lineJson.trim().slice(0, 240),
-      button: "ส่งตาม JSON",
+      button: "ส่งตามที่กำหนด",
     };
     return {
       header: "สหกรณ์โรงเรียน ASIA-BOT",
@@ -5430,7 +5702,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
             { label: "นักเรียนทั้งหมด", val: stats.students },
             { label: "บันทึกเข้า-ออก (วันนี้)", val: stats.todayEntries },
             { label: "การจองห้องประชุมทั้งหมด", val: stats.totalBookings },
-            { label: "Feedback ทั้งหมด", val: stats.feedbackTotal },
+            { label: "ความคิดเห็นทั้งหมด", val: stats.feedbackTotal },
             { label: "บัตรหาย", val: stats.lostCards },
             { label: "ออเดอร์สหกรณ์ที่ชำระแล้ว", val: stats.paidOrders },
           ].map((r, i) => (
@@ -5446,8 +5718,8 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
       {/* API connectivity test */}
       <div className="rounded-xl p-4 flex items-center justify-between" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
         <div>
-          <div className="text-sm font-bold text-white">ทดสอบการเชื่อมต่อ API</div>
-          <div className="text-xs mt-0.5" style={{ color: "#636363" }}>ตรวจสอบว่า API และฐานข้อมูลทำงานปกติ</div>
+          <div className="text-sm font-bold text-white">ทดสอบการเชื่อมต่อระบบ</div>
+          <div className="text-xs mt-0.5" style={{ color: "#636363" }}>ตรวจสอบว่าเว็บไซต์และฐานข้อมูลทำงานปกติ</div>
         </div>
         <div className="flex items-center gap-3">
           {ping !== "idle" && (
@@ -5463,18 +5735,186 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
         </div>
       </div>
 
+      {/* LINE broadcast */}
+      {lineToolTab === "news" && (
+      <div className="rounded-xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+        <div className="px-4 py-3 flex items-center justify-between gap-2" style={{ borderBottom: "1px solid #3e3e3e" }}>
+          <div className="flex items-center gap-2">
+            <i className="fa-brands fa-line text-sm" style={{ color: "#3fb950" }} />
+            <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "#9e9e9e" }}>ส่งข่าวสาร LINE</span>
+          </div>
+          <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: "rgba(255,112,112,0.12)", color: "#ff7070", border: "1px solid rgba(255,112,112,0.3)" }}>
+            ส่งจริง
+          </span>
+        </div>
+        <div className="p-4 space-y-4">
+          <div>
+            <div className="text-sm font-bold text-white">ส่งข่าวสารถึง LINE</div>
+            <div className="text-xs mt-1 leading-relaxed" style={{ color: "#636363" }}>
+              ส่งประกาศ ข้อความ รูปภาพ หรือข้อความแบบ Flex ไปยังกลุ่มหรือผู้ใช้ LINE ที่กำหนด
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#9e9e9e" }}>
+              รูปแบบข่าวสาร
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+              {[
+                ["news_flex", "ข่าวสาร"],
+                ["urgent_flex", "ด่วน"],
+                ["event_flex", "กิจกรรม"],
+                ["notice_flex", "แจ้งเตือน"],
+                ["text", "ข้อความ"],
+                ["image", "รูปภาพ"],
+                ["custom_json", "กำหนดเอง"],
+              ].map(([value, label]) => (
+                <button key={value} type="button" onClick={() => setNewsMode(value as typeof newsMode)}
+                  className="px-2.5 py-2 rounded-lg text-[11px] font-bold"
+                  style={newsMode === value
+                    ? { background: "rgba(255,112,112,0.18)", color: "#ff7070", border: "1px solid rgba(255,112,112,0.45)" }
+                    : { background: "#0c0c0c", color: "#9e9e9e", border: "1px solid #3e3e3e" }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#9e9e9e" }}>ผู้รับ LINE</label>
+              <input
+                value={newsTargetId}
+                onChange={e => setNewsTargetId(e.target.value)}
+                placeholder="เว้นว่าง = กลุ่มผู้ดูแล"
+                className="w-full px-3 py-2 rounded-lg text-xs font-mono outline-none"
+                style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#9e9e9e" }}>หัวข้อ</label>
+              <input
+                value={newsTitle}
+                onChange={e => setNewsTitle(e.target.value)}
+                placeholder="หัวข้อข่าวสาร"
+                className="w-full px-3 py-2 rounded-lg text-xs outline-none"
+                style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}
+              />
+            </div>
+          </div>
+
+          {newsMode !== "image" && newsMode !== "custom_json" && (
+            <>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#9e9e9e" }}>คำอธิบายสั้น</label>
+                <input
+                  value={newsSubtitle}
+                  onChange={e => setNewsSubtitle(e.target.value)}
+                  placeholder="คำอธิบายใต้หัวข้อ"
+                  className="w-full px-3 py-2 rounded-lg text-xs outline-none"
+                  style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#9e9e9e" }}>ข้อความ</label>
+                <textarea
+                  value={newsText}
+                  onChange={e => setNewsText(e.target.value)}
+                  placeholder="รายละเอียดข่าวสาร"
+                  className="w-full min-h-[110px] px-3 py-2 rounded-lg text-xs outline-none resize-y"
+                  style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}
+                />
+              </div>
+            </>
+          )}
+
+          {(newsMode === "image" || newsMode.endsWith("_flex")) && (
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#9e9e9e" }}>URL รูปภาพ</label>
+              <input
+                value={newsImageUrl}
+                onChange={e => setNewsImageUrl(e.target.value)}
+                placeholder="https://example.com/image.jpg"
+                className="w-full px-3 py-2 rounded-lg text-xs font-mono outline-none"
+                style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}
+              />
+              <p className="text-[10px] mt-1" style={{ color: "#636363" }}>
+                รูปสำหรับ Flex แนะนำ 1000x450 px หรืออัตราส่วน 20:9
+              </p>
+            </div>
+          )}
+
+          {newsMode.endsWith("_flex") && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#9e9e9e" }}>ชื่อปุ่ม</label>
+                <input
+                  value={newsButtonLabel}
+                  onChange={e => setNewsButtonLabel(e.target.value)}
+                  placeholder="เปิดดูเพิ่มเติม"
+                  className="w-full px-3 py-2 rounded-lg text-xs outline-none"
+                  style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#9e9e9e" }}>ลิงก์ปุ่ม</label>
+                <input
+                  value={newsButtonUrl}
+                  onChange={e => setNewsButtonUrl(e.target.value)}
+                  placeholder="/ หรือ https://..."
+                  className="w-full px-3 py-2 rounded-lg text-xs font-mono outline-none"
+                  style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}
+                />
+              </div>
+            </div>
+          )}
+
+          {newsMode === "custom_json" && (
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#9e9e9e" }}>ข้อความกำหนดเอง</label>
+              <textarea
+                value={newsJson}
+                onChange={e => setNewsJson(e.target.value)}
+                spellCheck={false}
+                className="w-full min-h-[170px] px-3 py-2 rounded-lg text-[11px] font-mono outline-none resize-y"
+                style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}
+              />
+            </div>
+          )}
+
+          {newsState.state !== "idle" && (
+            <div className="rounded-lg px-3 py-2 text-xs" style={{ background: newsStyle.bg, color: newsStyle.color, border: `1px solid ${newsStyle.color}33` }}>
+              <div className="font-bold flex items-center gap-2">
+                <i className={`fa-solid ${newsStyle.icon}`} />
+                {newsState.message}
+              </div>
+              {newsState.detail && <div className="mt-1 break-words opacity-80">{newsState.detail}</div>}
+            </div>
+          )}
+
+          <button onClick={sendLineNews} disabled={newsState.state === "sending" || newsCooldown > 0}
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold text-white disabled:opacity-50"
+            style={{ background: "#ff7070" }}>
+            <i className={`fa-solid ${newsState.state === "sending" ? "fa-spinner fa-spin" : "fa-bullhorn"}`} />
+            {newsCooldown > 0 ? `รอ ${newsCooldown} วินาที` : "ส่งข่าวสาร LINE"}
+          </button>
+        </div>
+      </div>
+      )}
+
       {/* Notification tools */}
+      {lineToolTab === "test" && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="rounded-xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
           <div className="px-4 py-3 flex items-center gap-2" style={{ borderBottom: "1px solid #3e3e3e" }}>
             <i className="fa-brands fa-line text-sm" style={{ color: "#3fb950" }} />
-            <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "#9e9e9e" }}>LINE Notify Test</span>
+            <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "#9e9e9e" }}>ทดสอบแจ้งเตือน LINE</span>
           </div>
           <div className="p-4 space-y-4">
             <div>
-              <div className="text-sm font-bold text-white">ทดสอบ LINE Flex Message</div>
+              <div className="text-sm font-bold text-white">ทดสอบข้อความแจ้งเตือน LINE</div>
               <div className="text-xs mt-1 leading-relaxed" style={{ color: "#636363" }}>
-                เลือกทดสอบ Flex ตามประเภทงานจริง หรือวาง JSON ของ LINE แล้วส่งไปยัง UID / Group ID ได้
+                เลือกรูปแบบแจ้งเตือนตามงานจริง หรือวางข้อความแบบกำหนดเองแล้วส่งไปยังผู้ใช้หรือกลุ่ม LINE ได้
               </div>
             </div>
 
@@ -5484,12 +5924,12 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
               </label>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
                 {[
-                  ["order_flex", "Order Flex"],
-                  ["feedback_flex", "Feedback Flex"],
-                  ["attendance_flex", "Student Flex"],
-                  ["booking_flex", "Booking Flex"],
-                  ["data_change_flex", "Data Change"],
-                  ["custom_json", "JSON"],
+                  ["order_flex", "คำสั่งซื้อ"],
+                  ["feedback_flex", "ความคิดเห็น"],
+                  ["attendance_flex", "เช็กชื่อ"],
+                  ["booking_flex", "จองห้อง"],
+                  ["data_change_flex", "แก้ข้อมูล"],
+                  ["custom_json", "กำหนดเอง"],
                 ].map(([value, label]) => (
                   <button key={value} type="button" onClick={() => setLineMode(value as typeof lineMode)}
                     className="px-2.5 py-2 rounded-lg text-[11px] font-bold"
@@ -5504,13 +5944,13 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
 
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#9e9e9e" }}>
-                Target LINE ID
+                ผู้รับข้อความ LINE
               </label>
               <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   value={lineTargetId}
                   onChange={e => setLineTargetId(e.target.value)}
-                  placeholder="เช่น Uxxxxxxxx หรือ Cxxxxxxxx (เว้นว่าง = LINE_GROUP_ADMIN)"
+                  placeholder="เช่น รหัสผู้ใช้หรือรหัสกลุ่ม (เว้นว่าง = กลุ่มผู้ดูแล)"
                   className="flex-1 px-3 py-2 rounded-lg text-xs font-mono outline-none"
                   style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}
                 />
@@ -5518,12 +5958,12 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
                   <button type="button" onClick={() => setLineTargetId("")}
                     className="px-3 py-2 rounded-lg text-xs font-bold"
                     style={{ background: "#2a2a2a", color: "#9e9e9e", border: "1px solid #3e3e3e" }}>
-                    ใช้กลุ่มแอดมิน
+                    ใช้กลุ่มผู้ดูแล
                   </button>
                 )}
               </div>
               <p className="text-[10px] mt-1" style={{ color: "#636363" }}>
-                หมายเหตุ: UID ส่วนตัวต้องเคย add friend/ผูกกับ LINE Bot แล้ว ไม่งั้น LINE จะปฏิเสธการ push message
+                หมายเหตุ: ผู้รับส่วนตัวต้องเคยเพิ่มเพื่อนหรือผูกกับ LINE ของระบบแล้ว ไม่อย่างนั้นจะส่งข้อความไม่ได้
               </p>
             </div>
 
@@ -5540,7 +5980,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
                   style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}
                 />
                 <p className="text-[10px] mt-1" style={{ color: "#636363" }}>
-                  ระบบจะดึงชื่อ, ชื่อเล่น, รูป, แผนก และ UID จากตารางนักเรียนมาสร้าง Flex เช็กชื่อ
+                  ระบบจะดึงชื่อ, ชื่อเล่น, รูป, แผนก และรหัสบัตรจากข้อมูลนักเรียนมาสร้างข้อความเช็กชื่อ
                 </p>
               </div>
             )}
@@ -5548,7 +5988,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
             {lineMode === "custom_json" && (
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#9e9e9e" }}>
-                  LINE JSON Payload
+                  ข้อความ LINE แบบกำหนดเอง
                 </label>
                 <textarea
                   value={lineJson}
@@ -5558,16 +5998,16 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
                   style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}
                 />
                 <p className="text-[10px] mt-1" style={{ color: "#636363" }}>
-                  รองรับ LINE message object, Flex contents หรือ <code className="text-[#9e9e9e]">{"{ messages: [...] }"}</code>
+                  เหมาะสำหรับผู้ดูแลที่ต้องการทดสอบรูปแบบข้อความขั้นสูง
                 </p>
               </div>
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               {[
-                { label: "LINE_TOKEN", ok: "ต้องตั้งค่าใน env" },
-                { label: "Target ID", ok: lineTargetId.trim() ? "กำหนดปลายทางเอง" : "ใช้กลุ่มแอดมิน" },
-                { label: "Test Mode", ok: lineMode === "attendance_flex" ? "ดึงข้อมูลนักเรียน" : lineMode === "custom_json" ? "ส่งตาม JSON" : "ใช้ Flex ตามประเภทงาน" },
+                { label: "ระบบ LINE", ok: "ต้องตั้งค่าไว้ในระบบ" },
+                { label: "ผู้รับ", ok: lineTargetId.trim() ? "กำหนดปลายทางเอง" : "ใช้กลุ่มผู้ดูแล" },
+                { label: "รูปแบบทดสอบ", ok: lineMode === "attendance_flex" ? "ดึงข้อมูลนักเรียน" : lineMode === "custom_json" ? "ส่งตามข้อความที่กำหนด" : "ใช้รูปแบบตามประเภทงาน" },
               ].map(item => (
                 <div key={item.label} className="rounded-lg px-3 py-2" style={{ background: "#0c0c0c", border: "1px solid #2a2a2a" }}>
                   <div className="text-[10px] font-mono" style={{ color: "#9e9e9e" }}>{item.label}</div>
@@ -5590,7 +6030,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold text-white disabled:opacity-50"
               style={{ background: "#ff7070" }}>
               <i className={`fa-solid ${lineTest.state === "sending" ? "fa-spinner fa-spin" : "fa-paper-plane"}`} />
-              {lineCooldown > 0 ? `รอ ${lineCooldown}s` : "ส่ง LINE Test"}
+              {lineCooldown > 0 ? `รอ ${lineCooldown} วินาที` : "ส่งข้อความทดสอบ"}
             </button>
           </div>
         </div>
@@ -5600,7 +6040,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
           <div className="px-4 py-3 flex items-center justify-between gap-2" style={{ borderBottom: "1px solid #3e3e3e" }}>
             <div className="flex items-center gap-2">
               <i className="fa-solid fa-eye text-sm" style={{ color: "#3fb950" }} />
-              <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "#9e9e9e" }}>LINE Flex Preview</span>
+              <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "#9e9e9e" }}>ตัวอย่างข้อความ LINE</span>
             </div>
             <span className="text-[10px] font-mono px-2 py-0.5 rounded-full" style={{ background: "#0c0c0c", color: "#636363", border: "1px solid #2a2a2a" }}>
               {lineMode.replace("_", " ")}
@@ -5723,6 +6163,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
         </div>
         </div>
       </div>
+      )}
     </div>
   );
 }

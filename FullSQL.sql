@@ -17,6 +17,10 @@ CREATE TABLE public.students (
   updated_at timestamp with time zone DEFAULT now(),
   photo_url text,
   line_user_id text,
+  google_email text,
+  google_id text,
+  google_name text,
+  google_avatar_url text,
   CONSTRAINT students_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.admins (

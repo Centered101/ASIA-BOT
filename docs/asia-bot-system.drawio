@@ -1,0 +1,138 @@
+<mxfile host="65bd71144e">
+    <diagram id="asia-bot-architecture" name="สถาปัตยกรรมระบบ">
+        <mxGraphModel dx="1013" dy="749" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="สถาปัตยกรรมระบบ ASIA-BOT" style="text;html=1;strokeColor=none;fillColor=none;fontSize=30;fontStyle=1;fontColor=#0F172A;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="460" y="30" width="680" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="students" value="นักเรียน / ผู้ใช้งาน&#xa;เว็บเบราว์เซอร์ / มือถือ" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EAF7FF;strokeColor=#84D4FA;fontColor=#0F172A;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="150" width="210" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="admins" value="ผู้ดูแลระบบ&#xa;หน้าหลังบ้าน" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFECEC;strokeColor=#FF7070;fontColor=#0F172A;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="285" width="210" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="esp32" value="เครื่องอ่านบัตร ESP32 RFID&#xa;MFRC522 + จอ OLED + เสียงแจ้งเตือน" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#22C55E;fontColor=#0F172A;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="420" width="210" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="next" value="เว็บ ASIA-BOT&#xa;หน้าเว็บ + ระบบรับส่งข้อมูล" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#111827;strokeColor=#374151;fontColor=#FFFFFF;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="500" y="245" width="250" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="auth" value="ระบบเข้าสู่ระบบ&#xa;นักเรียน + ผู้ดูแล + Google" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#CBD5E1;fontColor=#0F172A;" parent="1" vertex="1">
+                    <mxGeometry x="500" y="110" width="250" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="api" value="กลุ่มระบบหลังบ้าน&#xa;/api/admin&#xa;/api/rfid&#xa;/api/line&#xa;/api/shop&#xa;/api/bookings" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#CBD5E1;fontColor=#0F172A;" parent="1" vertex="1">
+                    <mxGeometry x="500" y="410" width="250" height="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="supabase" value="ฐานข้อมูล Supabase PostgreSQL&#xa;students, admins, attendance, bookings, orders, projects..." style="shape=cylinder3d;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#ECFDF5;strokeColor=#3ECF8E;fontColor=#0F172A;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="990" y="145" width="270" height="130" as="geometry"/>
+                </mxCell>
+                <mxCell id="storage" value="พื้นที่เก็บไฟล์ Supabase&#xa;รูปนักเรียน, รูปสินค้า, รูป feedback, รูปผู้ดูแล" style="shape=cylinder3d;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#EFF6FF;strokeColor=#84D4FA;fontColor=#0F172A;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="990" y="330" width="270" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="line" value="LINE Messaging API&#xa;ทดสอบ Flex + ส่งข่าวสาร + แจ้งเตือน" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#06C755;fontColor=#0F172A;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="990" y="510" width="270" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="vercel" value="Vercel Hosting&#xa;เว็บจริง + สถิติการใช้งาน" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#111827;fontColor=#0F172A;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="990" y="690" width="270" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="modules" value="โมดูลหลักของระบบ&#xa;บัตรนักเรียน&#xa;เช็กชื่อเข้าออก&#xa;ติดตามห้องเรียน&#xa;จองห้อง&#xa;สหกรณ์โรงเรียน&#xa;โปรเจกต์ / ผลประเมิน&#xa;ความคิดเห็น / คำขอแก้ไขข้อมูล" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#F59E0B;fontColor=#0F172A;" parent="1" vertex="1">
+                    <mxGeometry x="500" y="650" width="250" height="210" as="geometry"/>
+                </mxCell>
+                <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeColor=#64748B;" parent="1" source="students" target="next" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeColor=#64748B;" parent="1" source="admins" target="next" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeColor=#22C55E;" parent="1" source="esp32" target="api" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeColor=#64748B;" parent="1" source="next" target="auth" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeColor=#64748B;" parent="1" source="next" target="api" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeColor=#3ECF8E;" parent="1" source="api" target="supabase" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeColor=#84D4FA;" parent="1" source="api" target="storage" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeColor=#06C755;" parent="1" source="api" target="line" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeColor=#111827;" parent="1" source="next" target="vercel" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeColor=#F59E0B;" parent="1" source="next" target="modules" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="asia-bot-schema" name="ภาพรวมฐานข้อมูล">
+        <mxGraphModel grid="1" page="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" pageScale="1" pageWidth="1800" pageHeight="1200" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="schema-title" value="ภาพรวมฐานข้อมูล ASIA-BOT" style="text;html=1;strokeColor=none;fillColor=none;fontSize=30;fontStyle=1;fontColor=#0F172A;align=center;" parent="1" vertex="1">
+                    <mxGeometry x="540" y="30" width="720" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="students-table" value="students - ข้อมูลนักเรียน&#xa;────────────&#xa;student_id: รหัสนักเรียน&#xa;first_name / last_name: ชื่อ-นามสกุล&#xa;nickname / program: ชื่อเล่น / ระดับ&#xa;department / entry_year: สาขา / ปีที่เข้า&#xa;uid: รหัสบัตร RFID&#xa;card_status: สถานะบัตร&#xa;photo_url: รูปนักเรียน&#xa;line_user_id: LINE นักเรียน&#xa;google_email / google_id: บัญชี Google" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EAF7FF;strokeColor=#84D4FA;fontColor=#0F172A;fontStyle=1;align=left;spacingLeft=12;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="150" width="260" height="230" as="geometry"/>
+                </mxCell>
+                <mxCell id="admins-table" value="admins - ผู้ดูแลระบบ&#xa;────────────&#xa;admin_id: รหัสผู้ดูแล&#xa;username: ชื่อผู้ใช้&#xa;password_hash: รหัสผ่านที่เข้ารหัส&#xa;role: superadmin / admin / staff&#xa;avatar: รูปผู้ดูแล&#xa;admin_status: สถานะบัญชี&#xa;linked_student_id: ผูกกับนักเรียน" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFECEC;strokeColor=#FF7070;fontColor=#0F172A;fontStyle=1;align=left;spacingLeft=12;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="470" width="260" height="190" as="geometry"/>
+                </mxCell>
+                <mxCell id="attendance-table" value="attendance / attendance_logs&#xa;บันทึกสแกนเข้า-ออก&#xa;────────────&#xa;student_id: รหัสนักเรียน&#xa;uid: รหัสบัตร RFID&#xa;location: จุดเช็กชื่อ&#xa;checkin_time / check_in: เวลาเข้า&#xa;checkout_time / check_out: เวลาออก&#xa;duration / duration_minutes: ระยะเวลา&#xa;date: วันที่" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#22C55E;fontColor=#0F172A;fontStyle=1;align=left;spacingLeft=12;" parent="1" vertex="1">
+                    <mxGeometry x="460" y="120" width="285" height="210" as="geometry"/>
+                </mxCell>
+                <mxCell id="requests-table" value="change_requests / name_change_requests&#xa;คำขอแก้ไขข้อมูลนักเรียน&#xa;────────────&#xa;student_id: รหัสนักเรียน&#xa;requested_changes: รายการที่ขอแก้&#xa;old/new names: ชื่อเดิม / ชื่อใหม่&#xa;status: สถานะคำขอ&#xa;admin_note: หมายเหตุผู้ดูแล&#xa;reviewed_by: ผู้ตรวจสอบ" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EEF2FF;strokeColor=#6366F1;fontColor=#0F172A;fontStyle=1;align=left;spacingLeft=12;" parent="1" vertex="1">
+                    <mxGeometry x="460" y="390" width="285" height="190" as="geometry"/>
+                </mxCell>
+                <mxCell id="bookings-table" value="rooms / bookings / time_slots&#xa;ห้องเรียนและการจองห้อง&#xa;────────────&#xa;rooms.id: รหัสห้อง&#xa;bookings.room_id: ห้องที่จอง&#xa;bookings.student_id: ผู้จอง&#xa;slot_id: ช่วงเวลา&#xa;booking_date: วันที่จอง&#xa;attendees: จำนวนคน&#xa;status / admin_note: สถานะ / หมายเหตุ" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#F59E0B;fontColor=#0F172A;fontStyle=1;align=left;spacingLeft=12;" parent="1" vertex="1">
+                    <mxGeometry x="460" y="650" width="285" height="210" as="geometry"/>
+                </mxCell>
+                <mxCell id="shop-table" value="products / orders&#xa;สหกรณ์โรงเรียน&#xa;────────────&#xa;products.id: รหัสสินค้า&#xa;name / price / stock: ชื่อ / ราคา / คงเหลือ&#xa;images / category: รูป / หมวดหมู่&#xa;orders.order_id: เลขออเดอร์&#xa;orders.student_id: ผู้สั่งซื้อ&#xa;items_json: รายการสินค้า&#xa;total / status: ยอดรวม / สถานะ" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FDF2F8;strokeColor=#EC4899;fontColor=#0F172A;fontStyle=1;align=left;spacingLeft=12;" parent="1" vertex="1">
+                    <mxGeometry x="880" y="120" width="285" height="220" as="geometry"/>
+                </mxCell>
+                <mxCell id="projects-table" value="projects / evaluations&#xa;โปรเจกต์และผลประเมิน&#xa;────────────&#xa;projects.id: รหัสโปรเจกต์&#xa;slug: ลิงก์โปรเจกต์&#xa;project_date: วันที่/ปีโปรเจกต์&#xa;poster / logo / mascot: รูปประกอบ&#xa;custom_fields: คำถามเพิ่มเติม&#xa;evaluations.project_id: โปรเจกต์ที่ประเมิน&#xa;scores + comments: คะแนนและความคิดเห็น" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#64748B;fontColor=#0F172A;fontStyle=1;align=left;spacingLeft=12;" parent="1" vertex="1">
+                    <mxGeometry x="880" y="410" width="285" height="210" as="geometry"/>
+                </mxCell>
+                <mxCell id="school-table" value="class_groups / schedules / overrides / teachers&#xa;ตารางเรียนและครูผู้สอน&#xa;────────────&#xa;class_group_id: กลุ่มเรียน&#xa;room_name: ชื่อห้องเรียน&#xa;teacher: ครูผู้สอน&#xa;day_of_week: วันในสัปดาห์&#xa;start_time / end_time: เวลาเริ่ม / จบ&#xa;override_date: วันพิเศษ&#xa;teachers เป็นข้อมูลครู ไม่ใช่สิทธิ์ผู้ใช้" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F0F9FF;strokeColor=#0EA5E9;fontColor=#0F172A;fontStyle=1;align=left;spacingLeft=12;" parent="1" vertex="1">
+                    <mxGeometry x="880" y="690" width="285" height="230" as="geometry"/>
+                </mxCell>
+                <mxCell id="feedback-table" value="feedback&#xa;ความคิดเห็นและรายงานปัญหา&#xa;────────────&#xa;type: ประเภทเรื่อง&#xa;name: ชื่อผู้ส่ง&#xa;student_id: รหัสนักเรียน&#xa;email / contact: ช่องทางติดต่อ&#xa;category: หมวดหมู่&#xa;message: ข้อความ&#xa;image_urls: รูปแนบ&#xa;status / admin_note: สถานะ / หมายเหตุ" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF2F2;strokeColor=#FF7070;fontColor=#0F172A;fontStyle=1;align=left;spacingLeft=12;" parent="1" vertex="1">
+                    <mxGeometry x="1280" y="250" width="260" height="210" as="geometry"/>
+                </mxCell>
+                <mxCell id="line-note" value="LINE Messaging API&#xa;ระบบแจ้งเตือนและส่งข่าวสาร&#xa;────────────&#xa;Order Flex: ออเดอร์สหกรณ์&#xa;Feedback Flex: ความคิดเห็น/ปัญหา&#xa;RFID Attendance Flex: เช็กชื่อเข้า-ออก&#xa;Booking Flex: จองห้อง&#xa;Student Data Change Flex: ขอแก้ข้อมูล&#xa;ส่งข่าวสาร: ข้อความ / รูปภาพ / ข่าวสาร / ด่วน / กิจกรรม / JSON กำหนดเอง" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#06C755;fontColor=#0F172A;fontStyle=1;align=left;spacingLeft=12;" parent="1" vertex="1">
+                    <mxGeometry x="1280" y="560" width="300" height="250" as="geometry"/>
+                </mxCell>
+                <mxCell id="s-a" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#22C55E;" parent="1" source="students-table" target="attendance-table" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="s-r" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#6366F1;" parent="1" source="students-table" target="requests-table" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="s-b" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#F59E0B;" parent="1" source="students-table" target="bookings-table" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="s-shop" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#EC4899;" parent="1" source="students-table" target="shop-table" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="s-admin" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#FF7070;" parent="1" source="students-table" target="admins-table" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="p-e" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#64748B;" parent="1" source="projects-table" target="students-table" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="f-line" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#06C755;" parent="1" source="feedback-table" target="line-note" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

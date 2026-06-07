@@ -50,12 +50,24 @@ ASIA-BOT คือระบบเว็บแอปสำหรับนัก�
 | Feedback | ความคิดเห็น/รายงานปัญหา พร้อม LINE Flex แจ้งแอดมิน |
 | Data Requests | คำขอแก้ไขข้อมูลนักเรียน รวมคำขอเปลี่ยนชื่อไว้ด้วยกัน |
 | Admin Roles | superadmin, admin, staff พร้อมการจำกัดสิทธิ์แต่ละ tab |
+| LINE Broadcast | ส่งข่าวสาร LINE จริง ทั้งข้อความ รูปภาพ Flex ข่าวสาร ด่วน กิจกรรม และ Custom JSON |
 | LINE Flex Test | ทดสอบ Order, Feedback, RFID, Booking, Student Data Change และ Custom JSON |
 | Analytics | Vercel Analytics ผ่าน `@vercel/analytics/next` |
 
 ---
 
 ## Architecture
+
+เปิดแผนภาพแบบแก้ไขได้ใน Draw.io / diagrams.net:
+
+```txt
+docs/asia-bot-system.drawio
+```
+
+ไฟล์นี้มี 2 หน้า:
+
+- `System Architecture`
+- `Schema Visualizer`
 
 ```mermaid
 graph TB
@@ -151,6 +163,7 @@ FullSQL.sql                         # SQL/schema reference
 | `teachers` | ข้อมูลครูผู้สอนสำหรับตารางเรียน ไม่ใช่ role ผู้ใช้ |
 | `feedbacks` | Feedback |
 | `admins` | จัดการผู้ดูแลระบบ |
+| `line_broadcast` | ส่งข่าวสาร LINE จริง ทั้งข้อความ รูปภาพ Flex และ Custom JSON |
 | `settings` | System checklist และ LINE Flex test |
 
 ---
@@ -214,6 +227,24 @@ Content-Type: application/json
 | RFID Attendance Flex | `#84D4FA` | แจ้งเตือนสแกนเข้า-ออก |
 | Booking Flex | `#F59E0B` | คำขอจองห้อง |
 | Student Data Change Flex | `#6366F1` | คำขอแก้ไขข้อมูลนักเรียน |
+
+ระบบส่งข่าวสารจริงจากผู้ดูแลรองรับ:
+
+| Message | ใช้ทำอะไร |
+|---|---|
+| Text Message | ส่งข้อความทั่วไป |
+| Image Message | ส่งรูปภาพโดยตรง |
+| News Flex | ส่งข่าวสารทั่วไป |
+| Urgent Flex | ส่งประกาศด่วน |
+| Event Flex | ส่งกิจกรรม |
+| Notice Flex | ส่งแจ้งเตือน |
+| Custom JSON | ส่ง payload ที่ผู้ดูแลเขียนเอง |
+
+ส่งข่าวสารจริงได้ที่:
+
+```txt
+/admin?tab=line_broadcast
+```
 
 ทดสอบได้ที่:
 
@@ -653,7 +684,7 @@ Admin Panel แบ่งหมวดหมู่ด้านซ้าย เช�
 | สหกรณ์โรงเรียน | `products`, `shoporders` |
 | โปรเจกต์ | `projects`, `evaluations` |
 | การเรียนการสอน | `class_groups`, `class_schedule_weekly`, `class_schedule_override`, `teachers` |
-| ระบบ | `feedbacks`, `admins`, `settings` |
+| ระบบ | `feedbacks`, `admins`, `line_broadcast`, `settings` |
 
 ข้อมูลที่เป็น list เยอะ ๆ ควรมีรูปแบบเหมือนกัน:
 
@@ -690,6 +721,7 @@ Admin Panel แบ่งหมวดหมู่ด้านซ้าย เช�
 | teachers | ❌ | ✅ | ✅ |
 | feedbacks | ✅ | ✅ | ✅ |
 | admins | ✅ | ✅ | ✅ |
+| line_broadcast | ✅ | ✅ | ✅ |
 | settings | ✅ | ✅ | ✅ |
 
 แนวคิด:
@@ -841,6 +873,12 @@ Admin สามารถดึง avatar จากนักเรียนได
 ## 8. Schema Visualizer
 
 แผนภาพนี้อิงจาก `FullSQL.sql` เป็นหลัก โดยแสดงเฉพาะ table/field/foreign key ที่มีอยู่จริงใน schema ปัจจุบัน ไม่ใส่ role หรือ column ที่ระบบไม่ได้ใช้
+
+มีไฟล์ Draw.io สำหรับเปิดดูและแก้ไขแผนภาพได้โดยตรง:
+
+```txt
+docs/asia-bot-system.drawio
+```
 
 ```mermaid
 erDiagram
@@ -1165,7 +1203,9 @@ src/app/api/
 |---|---|
 | `/api/admin/*` | งานหลังบ้านและ admin panel |
 | `/api/rfid/*` | ESP32 RFID scan / bind / reset |
-| `/api/line/*` | ส่ง LINE Flex และ test |
+| `/api/line/test` | ทดสอบ LINE Flex และ Custom JSON |
+| `/api/line/broadcast` | ส่งข่าวสาร LINE จริง ทั้งข้อความ รูปภาพ และ Flex |
+| `/api/line/webhook` | รับ event จาก LINE สำหรับผูกบัญชี/ตอบกลับ |
 | `/api/shop/*` | สินค้าและ order |
 | `/api/rooms/*` | ห้องและ booking |
 | `/api/student/*` | ข้อมูลนักเรียน |
@@ -1195,6 +1235,7 @@ LINE Flex หลักของระบบมี 5 แบบ:
 ```txt
 src/lib/line.ts
 src/app/api/line/test/route.ts
+src/app/api/line/broadcast/route.ts
 ```
 
 จุดสำคัญ:
@@ -1204,6 +1245,8 @@ src/app/api/line/test/route.ts
 - ข้อมูลทดสอบใช้ admin ที่กำลังกด test
 - ถ้า admin ไม่มีรูป ใช้ fallback favicon/admin icon
 - รองรับ custom JSON สำหรับทดสอบ payload เอง
+- ข่าวสารจริงแยกอยู่ที่ `/admin?tab=line_broadcast` เพื่อไม่ปนกับการทดสอบ
+- การส่งข่าวสารมี cooldown กันกดซ้ำ และแสดงชื่อผู้ดูแลที่ส่งในผลลัพธ์
 
 ---
 
@@ -1400,11 +1443,13 @@ npm run dev
 | `src/app/layout.tsx` | metadata, favicon, Analytics |
 | `src/lib/line.ts` | LINE Flex builders |
 | `src/app/api/line/test/route.ts` | API ทดสอบ LINE Flex |
+| `src/app/api/line/broadcast/route.ts` | API ส่งข่าวสาร LINE จริง |
 | `src/lib/admin-auth.ts` | admin auth/session |
 | `src/lib/session.ts` | student session |
 | `src/lib/amenities.ts` | รายการสิ่งอำนวยความสะดวก |
 | `arduino/RFID_ESP32/RFID_ESP32.ino` | ESP32 firmware |
 | `FullSQL.sql` | schema/reference SQL |
+| `docs/asia-bot-system.drawio` | Draw.io architecture + schema visualizer |
 
 ---
 

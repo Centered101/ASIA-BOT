@@ -126,7 +126,7 @@ export function buildOrderFlexMessage(params: {
     day: "numeric", month: "short", year: "numeric",
     hour: "2-digit", minute: "2-digit",
   });
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-lb.web.app/shop";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-bot.xyz/shop";
 
   return {
     type: "bubble",
@@ -306,7 +306,7 @@ export function buildFeedbackFlexMessage(params: {
   imageUrls?: string[] | null;
 }) {
   const { type, name, studentId, studentPhotoUrl, email, contact, category, reportUrl, message, imageUrls } = params;
-  const siteUrl     = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-lb.web.app";
+  const siteUrl     = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-bot.xyz";
   const typeLabel   = type === "comment" ? "ความคิดเห็น" : "รายงานปัญหา";
   const headerColor = type === "comment" ? "#84D4FA" : "#FF7070";
   const imgs        = (imageUrls ?? []).filter(Boolean);
@@ -449,7 +449,7 @@ export function buildBookingFlexMessage(params: {
   status?: "pending" | "approved" | "rejected" | "cancelled";
 }) {
   const { bookingId, roomName, studentName, studentId, studentPhotoUrl, nickname, program, department, bookingDate, startTime, endTime, attendees, phone, purpose, status = "pending" } = params;
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-lb.vercel.app";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-bot.xyz";
   const cfg = {
     pending: { header: "#F59E0B", badge: "#F59E0B", label: "รออนุมัติ", icon: "📅" },
     approved: { header: "#F59E0B", badge: "#22C55E", label: "อนุมัติแล้ว", icon: "✅" },
@@ -534,7 +534,7 @@ export function buildStudentDataChangeFlexMessage(params: {
   changes: { label: string; oldValue?: string | null; newValue: string }[];
 }) {
   const { studentId, studentName, studentPhotoUrl, nickname, program, department, changes } = params;
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-lb.vercel.app";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-bot.xyz";
   const changeRows = changes.slice(0, 6).map((change) => ({
     type: "box" as const,
     layout: "vertical" as const,
@@ -631,7 +631,7 @@ export function buildRfidScanFlexMessage(params: {
   const headerColor = "#84D4FA";
   const actionText = `${isCheckin ? "เข้า" : "ออก"}${locationLabel}`;
   const statusColor = isCheckin ? "#22C55E" : "#0EA5E9";
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-lb.vercel.app";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-bot.xyz";
   const timeText = new Date(scannedAt).toLocaleString("th-TH", {
     timeZone: "Asia/Bangkok",
     day: "numeric",

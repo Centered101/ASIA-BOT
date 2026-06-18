@@ -4,15 +4,18 @@
 
 # ASIA-BOT
 
-**แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร**
+**แพลตฟอร์มบริหารจัดการโรงเรียนแบบครบวงจร**
 
 [![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=next.js)](https://nextjs.org)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org)
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E?style=for-the-badge&logo=supabase)](https://supabase.com)
 [![Vercel](https://img.shields.io/badge/Vercel-Deploy-black?style=for-the-badge&logo=vercel)](https://vercel.com)
+[![LINE](https://img.shields.io/badge/LINE-Messaging_API-00C300?style=for-the-badge&logo=line)](https://developers.line.biz)
+[![ESP32](https://img.shields.io/badge/ESP32-RFID_Controller-E7352C?style=for-the-badge&logo=espressif)](https://espressif.com)
 
-[![Live](https://img.shields.io/badge/Live-asia--lb.vercel.app-84D4FA?style=for-the-badge)](https://asia-lb.vercel.app)
+[![Live](https://img.shields.io/badge/Live-asia--bot.xyz-84D4FA?style=for-the-badge)](https://asia-bot.xyz)
+[![Report](https://img.shields.io/badge/Report-docs/report.md-6366F1?style=for-the-badge&logo=bookstack)](./docs/report.md)
 
 </div>
 
@@ -20,18 +23,21 @@
 
 ## Overview
 
-ASIA-BOT คือระบบเว็บแอปสำหรับนักเรียนและผู้ดูแลระบบ พัฒนาด้วย **Next.js App Router**, **Supabase PostgreSQL**, **Supabase Storage**, **LINE Messaging API**, และรองรับอุปกรณ์ **ESP32 RFID Controller** สำหรับเช็กชื่อเข้า-ออกแบบใช้งานจริง
+ASIA-BOT คือระบบเว็บแอปสำหรับบริหารจัดการโรงเรียนแบบครบวงจร พัฒนาด้วย **Next.js 15 App Router**, **Supabase PostgreSQL**, **Supabase Storage**, **LINE Messaging API** และรองรับอุปกรณ์ **ESP32 RFID Controller** สำหรับเช็กชื่อเข้า-ออกแบบ Real-time
 
 ระบบรวมงานหลักของโรงเรียนไว้ในที่เดียว:
 
-- บัตรนักเรียนดิจิทัล
-- ระบบ RFID Attendance
-- ติดตามสถานะห้องเรียนและตารางสอน
-- จองห้องและจัดการห้อง
-- สหกรณ์โรงเรียน
-- โปรเจกต์นักเรียนและผลประเมิน
+- บัตรนักเรียนดิจิทัลพร้อม QR Code
+- ระบบ RFID Attendance ด้วย ESP32 + MFRC522 + OLED
+- ติดตามสถานะห้องเรียนและตารางสอนรายสัปดาห์
+- จองห้องและจัดการห้องพร้อม amenities
+- สหกรณ์โรงเรียนพร้อมระบบออเดอร์
+- โปรเจกต์นักเรียนและผลประเมินด้วย Chart.js
 - Feedback และคำขอแก้ไขข้อมูลนักเรียน
-- Admin Panel แบบ responsive
+- Admin Panel แบบ Single-page พร้อม Role-based Access (superadmin / admin / staff)
+- LINE Flex Messages 5 ประเภทและการส่งข่าวสารจริง
+
+> รายงานโครงงานฉบับสมบูรณ์อยู่ที่ [docs/report.md](./docs/report.md)
 
 ---
 
@@ -53,6 +59,24 @@ ASIA-BOT คือระบบเว็บแอปสำหรับนัก�
 | LINE Broadcast | ส่งข่าวสาร LINE จริง ทั้งข้อความ รูปภาพ Flex ข่าวสาร ด่วน กิจกรรม และ Custom JSON |
 | LINE Flex Test | ทดสอบ Order, Feedback, RFID, Booking, Student Data Change และ Custom JSON |
 | Analytics | Vercel Analytics ผ่าน `@vercel/analytics/next` |
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | Next.js 15 App Router + React 19 + TypeScript 5.8 |
+| Styling | Tailwind CSS 3 |
+| Database | Supabase PostgreSQL |
+| Storage | Supabase Storage (student photos, product images, feedback images) |
+| Auth | Custom session (students) + bcryptjs (admins) |
+| Hosting | Vercel (Fluid Compute) + Vercel Analytics |
+| Notifications | LINE Messaging API — Flex Messages + Broadcast |
+| Charts | Chart.js 4 + react-chartjs-2 |
+| Hardware | ESP32 DevKit V1 + MFRC522 RFID + OLED SSD1306 + Buzzer |
+| Payment | Stripe |
+| QR Code | qrcode |
 
 ---
 
@@ -258,7 +282,7 @@ Content-Type: application/json
 
 ```env
 # Site
-NEXT_PUBLIC_SITE_URL=https://asia-lb.vercel.app
+NEXT_PUBLIC_SITE_URL=https://asia-bot.xyz
 
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
@@ -331,10 +355,16 @@ admin avatars
 
 ---
 
-## Development
+## Quick Start
 
 ```bash
+# 1. ติดตั้ง dependencies
 npm install
+
+# 2. สร้างไฟล์ .env.local จาก template ด้านล่าง แล้วใส่ค่าจริง
+cp .env.example .env.local   # หรือสร้างเอง
+
+# 3. รัน dev server
 npm run dev
 ```
 
@@ -348,6 +378,13 @@ Build production:
 
 ```bash
 npm run build
+```
+
+แก้ปัญหา `.next` cache เสีย:
+
+```powershell
+Remove-Item -Recurse -Force .next
+npm run dev
 ```
 
 ---
@@ -1291,7 +1328,7 @@ Portal: 192.168.4.1
 เมื่อ ESP32 ต่อ WiFi สำเร็จ:
 
 ```txt
-ESP32 → https://asia-lb.vercel.app/api/rfid/...
+ESP32 → https://asia-bot.xyz/api/rfid/...
 ```
 
 จึงจะส่งข้อมูลเข้า database ได้
@@ -1469,6 +1506,17 @@ npm run dev
 
 ---
 
+## Documentation
+
+| ไฟล์ | รายละเอียด |
+|---|---|
+| [docs/report.md](./docs/report.md) | รายงานโครงงานฉบับสมบูรณ์ (วิชาการ) |
+| [docs/asia-bot-system.drawio](./docs/asia-bot-system.drawio) | System Architecture + ER Diagram (Draw.io) |
+| [supabase/FullSQL.sql](./supabase/FullSQL.sql) | Database schema reference |
+| [arduino/RFID_ESP32/RFID_ESP32.ino](./arduino/RFID_ESP32/RFID_ESP32.ino) | ESP32 firmware |
+
+---
+
 ## License
 
-© 2024-2026 ASIA-BOT. All rights reserved.
+© 2024–2026 ASIA-BOT. All rights reserved.

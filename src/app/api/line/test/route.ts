@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
   const altText = String(body.altText || "🔔 ASIA-BOT LINE test");
   const messages: LineMessage[] = [];
   let studentLabel = "";
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-lb.vercel.app";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-bot.xyz";
   const testerPhotoUrl = absoluteAssetUrl(admin.avatar, siteUrl) || `${siteUrl.replace(/\/$/, "")}/admin/favicon.ico`;
   const dummyProductImage = "https://dummyimage.com/240x240/eaf7ff/0f172a.png&text=240x240";
   const dummyFeedbackImage = "https://dummyimage.com/1000x450/84d4fa/0f172a.png&text=1000x450+-+20:9";

@@ -127,7 +127,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-lb.vercel.app";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-bot.xyz";
   const targetId = String(body.to || "").trim() || process.env.LINE_GROUP_ADMIN || "";
   if (!targetId) return NextResponse.json({ status: "error", message: "ยังไม่ได้ตั้งค่าผู้รับ LINE" }, { status: 500 });
 

@@ -49,7 +49,7 @@
 #define WIFI_TIMEOUT_MS 30000
   #define AP_SSID "ASIA-BOT-Setup"
   #define AP_PASS ""
-  #define DEFAULT_API_CHECK_URL "https://asia-lb.vercel.app/api/rfid/check"
+  #define DEFAULT_API_CHECK_URL "https://asia-bot.xyz/api/rfid/check"
   #define DEFAULT_DEVICE_ID "esp32-rfid-01"
   #define DEFAULT_DEVICE_KEY ""
   #define CONTROLLER_AUTH_CACHE_MS 300000
@@ -892,8 +892,8 @@ void oledStatus() {
   <!doctype html><html><head><meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>ASIA-BOT RFID Controller</title>
-  <link rel="icon" href="https://asia-lb.vercel.app/admin/rfid.ico" type="image/x-icon">
-  <link rel="shortcut icon" href="https://asia-lb.vercel.app/admin/rfid.ico" type="image/x-icon">
+  <link rel="icon" href="https://asia-bot.xyz/admin/rfid.ico" type="image/x-icon">
+  <link rel="shortcut icon" href="https://asia-bot.xyz/admin/rfid.ico" type="image/x-icon">
   <meta name="theme-color" content="#0b0f0d">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
@@ -911,7 +911,7 @@ void oledStatus() {
   input{background:#0b1110;border:1px solid var(--line);color:#fff;border-radius:7px;padding:10px;font-family:'JetBrains Mono',monospace;outline:none}input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(62,207,142,.12)}
   .row{display:grid;grid-template-columns:1fr auto;gap:8px}.small{font-size:12px;color:var(--muted);margin-top:14px}.hint{font-size:12px;color:#a7b8af;line-height:1.5;margin:8px 0 0}.section-title{font-size:14px;font-weight:900;color:#fff;margin-bottom:8px}.section-title:before{content:"";display:inline-block;width:6px;height:14px;background:var(--green);border-radius:99px;margin-right:8px;vertical-align:-2px}.warn{display:none;border:1px solid #755f21;background:#191405;color:#ffe59b;border-radius:8px;padding:10px;margin:12px 0;font-size:13px;line-height:1.5}.offline .warn{display:block}.offline .needs-net{opacity:.38;pointer-events:none;filter:grayscale(1)}[data-section]{display:none}[data-section].show{display:block}.mode-active{background:var(--green);border-color:var(--green);color:#06110c}details.card summary{cursor:pointer;list-style:none}details.card summary::-webkit-details-marker{display:none}
   </style></head><body><div class="wrap">
-  <div class="top"><div class="brand"><div class="brand-mark"><i class="fa-solid fa-id-card-clip"></i></div><div><h1>ตัวควบคุม RFID ASIA-BOT</h1><div class="subhead">ESP32 Attendance Controller</div></div></div><div class="head-actions"><span class="mono" id="online">...</span><a class="admin-link" href="https://asia-lb.vercel.app/admin" target="_blank"><i class="fa-solid fa-arrow-up-right-from-square"></i>Admin</a></div></div>
+  <div class="top"><div class="brand"><div class="brand-mark"><i class="fa-solid fa-id-card-clip"></i></div><div><h1>ตัวควบคุม RFID ASIA-BOT</h1><div class="subhead">ESP32 Attendance Controller</div></div></div><div class="head-actions"><span class="mono" id="online">...</span><a class="admin-link" href="https://asia-bot.xyz/admin" target="_blank"><i class="fa-solid fa-arrow-up-right-from-square"></i>Admin</a></div></div>
   <div class="warn" id="apWarn">ตอนนี้เครื่องอยู่ใน AP Mode / ออฟไลน์ ใช้สำหรับตั้งค่า WiFi และ API เท่านั้น ยังอัพ UID, รีเซ็ตบัตร, โหลดแคช หรือส่งข้อมูลเข้า database ไม่ได้</div>
   <div class="grid">
   <div class="card"><div class="label"><i class="fa-solid fa-sliders"></i> โหมดปัจจุบัน</div><div class="val" id="mode">-</div></div>
@@ -1020,8 +1020,8 @@ void oledStatus() {
   <!doctype html><html><head><meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>ตั้งค่า ASIA-BOT RFID</title>
-  <link rel="icon" href="https://asia-lb.vercel.app/admin/rfid.ico" type="image/x-icon">
-  <link rel="shortcut icon" href="https://asia-lb.vercel.app/admin/rfid.ico" type="image/x-icon">
+  <link rel="icon" href="https://asia-bot.xyz/admin/rfid.ico" type="image/x-icon">
+  <link rel="shortcut icon" href="https://asia-bot.xyz/admin/rfid.ico" type="image/x-icon">
   <meta name="theme-color" content="#0b0f0d">
   <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Kanit:wght@400;700;900&display=swap');
@@ -1038,7 +1038,7 @@ void oledStatus() {
   <h1>ตั้งค่าเครื่อง RFID</h1>
   <div class="sub">AP Mode ใช้สำหรับตั้งค่า WiFi, API และรหัสอุปกรณ์เท่านั้น</div>
   <div class="warn">ตอนนี้เครื่องยังไม่ได้ต่ออินเทอร์เน็ต จึงยังไม่สามารถอัพ UID, รีเซ็ตบัตร หรือส่งข้อมูลเข้า database ได้</div>
-  <div class="field"><label class="label">API URL</label><input id="api" value="https://asia-lb.vercel.app/api/rfid/check"></div>
+  <div class="field"><label class="label">API URL</label><input id="api" value="https://asia-bot.xyz/api/rfid/check"></div>
   <div class="field"><label class="label">Device ID</label><input id="did" value="esp32-rfid-01"></div>
   <div class="field"><label class="label">Device Key</label><input id="key" placeholder="เช่น asia-rfid-2026-main-gate"></div>
   <button class="btn" onclick="scanWifi()">ค้นหา WiFi ใกล้เคียง</button>

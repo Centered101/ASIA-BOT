@@ -4,7 +4,7 @@ import AOSProvider from "@/components/AOSProvider";
 import { Toaster } from "sonner";
 import { Analytics } from "@vercel/analytics/next";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-lb.vercel.app";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-bot.xyz";
 const metaImage = "/hero.png";
 
 export const viewport: Viewport = {

@@ -108,12 +108,13 @@ export async function POST(req: NextRequest) {
       + Math.ceil(subtotal * SYSTEM_FEE_RATE * 100) / 100;
 
     // ── Fetch student phone ────────────────────────────────────────────
-    const { data: studentPhoneRow } = await supabase
+    const { data: studentRow } = await supabase
       .from("students")
       .select("student_phone")
       .eq("student_id", student_id)
       .maybeSingle();
-    const studentPhone = studentPhoneRow?.student_phone ?? null;
+    const studentPhone = studentRow?.student_phone ?? null;
+    const studentEmail = `${student_id}@asia-lb.ac.th`;
 
     // ── Stripe PromptPay ──────────────────────────────────────────────
     let pi_id = "";
@@ -130,12 +131,12 @@ export async function POST(req: NextRequest) {
       payment_method_data: {
         type: "promptpay",
         billing_details: {
-          email: `${student_id}@asia-lb.ac.th`,
+          email: studentEmail,
           name: student_name,
           ...(studentPhone ? { phone: studentPhone } : {}),
         },
       },
-      return_url: `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-lb.web.app"}/shop/`,
+      return_url: `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-bot.xyz"}/shop/`,
     });
     pi_id = confirmed.id;
     const nextAction = confirmed.next_action as { promptpay_display_qr_code?: { image_url_png?: string } } | null;

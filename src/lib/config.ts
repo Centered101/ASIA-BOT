@@ -1,5 +1,5 @@
 export const SITE_NAME = "ASIA-BOT";
-export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-lb.web.app";
+export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-bot.xyz";
 
 export type QuickLink = {
   name: string;

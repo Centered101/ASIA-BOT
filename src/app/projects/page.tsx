@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 
@@ -35,13 +36,17 @@ function ProjectCard({ project, isLatest }: { project: Project; isLatest: boolea
       {/* ── Poster (click → evaluate) ── */}
       <Link href={`/project/${project.slug}`} className="block relative overflow-hidden">
         {project.poster_url && !imgErr ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={project.poster_url}
-            alt={project.name}
-            onError={() => setImgErr(true)}
-            className="w-full h-auto block transition-transform duration-500 group-hover:scale-105"
-          />
+          <div className="relative w-full" style={{ aspectRatio: "16/9" }}>
+            <Image
+              src={project.poster_url}
+              alt={project.name}
+              fill
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+              className="object-cover transition-transform duration-500 group-hover:scale-105"
+              onError={() => setImgErr(true)}
+              loading="lazy"
+            />
+          </div>
         ) : (
           <div className="w-full flex items-center justify-center"
             style={{ minHeight: 140, background: `linear-gradient(135deg, ${color}22 0%, ${color}10 100%)` }}>
@@ -62,12 +67,12 @@ function ProjectCard({ project, isLatest }: { project: Project; isLatest: boolea
         </span>
 
         <div className="absolute bottom-0 left-0 right-0 flex items-end gap-2.5 px-3 pb-3">
-          <div className="w-8 h-8 rounded-xl flex-shrink-0 overflow-hidden shadow-lg"
+          <div className="relative w-8 h-8 rounded-xl flex-shrink-0 overflow-hidden shadow-lg"
             style={{ background: "rgba(255,255,255,0.18)", backdropFilter: "blur(8px)", border: "1.5px solid rgba(255,255,255,0.35)" }}>
             {!logoErr ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={project.logo_url ?? "/school/school-logo.svg"} alt=""
-                className="w-full h-full object-contain" onError={() => setLogoErr(true)} />
+              <Image src={project.logo_url ?? "/school/school-logo.svg"} alt=""
+                fill sizes="32px" className="object-contain"
+                onError={() => setLogoErr(true)} loading="lazy" />
             ) : (
               <i className="fa-solid fa-graduation-cap text-[10px] text-white m-auto block mt-2" />
             )}
@@ -131,13 +136,17 @@ function FeaturedCard({ project }: { project: Project }) {
       {/* ── Poster ── */}
       <Link href={`/project/${project.slug}`} className="block relative overflow-hidden">
         {project.poster_url && !imgErr ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={project.poster_url}
-            alt={project.name}
-            onError={() => setImgErr(true)}
-            className="w-full h-auto block transition-transform duration-700 group-hover:scale-95"
-          />
+          <div className="relative w-full" style={{ aspectRatio: "16/9" }}>
+            <Image
+              src={project.poster_url}
+              alt={project.name}
+              fill
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 1200px"
+              className="object-cover transition-transform duration-700 group-hover:scale-95"
+              onError={() => setImgErr(true)}
+              priority
+            />
+          </div>
         ) : (
           <div className="w-full"
             style={{ minHeight: 180, background: `linear-gradient(135deg, ${color}30 0%, ${color}10 100%)` }} />
@@ -156,12 +165,12 @@ function FeaturedCard({ project }: { project: Project }) {
         </span>
 
         <div className="absolute bottom-0 left-0 right-0 flex items-end gap-4 px-5 pb-5">
-          <div className="w-14 h-14 rounded-2xl flex-shrink-0 shadow-2xl overflow-hidden"
+          <div className="relative w-14 h-14 rounded-2xl flex-shrink-0 shadow-2xl overflow-hidden"
             style={{ background: "rgba(255,255,255,0.22)", backdropFilter: "blur(12px)", border: "2px solid rgba(255,255,255,0.4)" }}>
             {!logoErr ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={project.logo_url ?? "/school/school-logo.svg"} alt=""
-                className="w-full h-full object-contain" onError={() => setLogoErr(true)} />
+              <Image src={project.logo_url ?? "/school/school-logo.svg"} alt=""
+                fill sizes="56px" className="object-contain"
+                onError={() => setLogoErr(true)} priority />
             ) : (
               <i className="fa-solid fa-graduation-cap text-white text-xl m-auto block mt-3" />
             )}

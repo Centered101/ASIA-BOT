@@ -24,6 +24,14 @@
 html, * { scrollbar-width: none; }
 ::-webkit-scrollbar { display: none; }
 
+/* ── Global protection ───────────────────────────────────── */
+img, svg, video, canvas, a, button {
+  -webkit-user-drag: none;
+  user-drag: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 ::selection { background: #000000b3; color: var(--primary-color); }
 
 body {

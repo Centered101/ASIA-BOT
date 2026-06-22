@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import AOSProvider from "@/components/AOSProvider";
+import NoRightClick from "@/components/NoRightClick";
 import { Toaster } from "sonner";
 import { Analytics } from "@vercel/analytics/next";
 
@@ -9,14 +10,31 @@ const metaImage = "/hero.png";
 
 export const viewport: Viewport = {
   themeColor: "#84D4FA",
+  width: "device-width",
+  initialScale: 1,
 };
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: { default: "ASIA-BOT", template: "%s | ASIA-BOT" },
-  description: "แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร — ติดตามห้องเรียน, สแกนบัตร, จองห้อง, สหกรณ์",
-  keywords: ["ASIA-BOT", "asialb", "abac", "Student Entry Scanner", "Class Track Room", "Centered101"],
-  authors: [{ name: "Centered101" }],
+  applicationName: "ASIA-BOT",
+  title: {
+    default: "ASIA-BOT — แพลตฟอร์มบริหารจัดการระบบนักเรียน",
+    template: "%s | ASIA-BOT",
+  },
+  description:
+    "ASIA-BOT แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร สำหรับ ABAC — สแกนบัตรเข้าห้องเรียน ติดตาม Class Track Room จองห้อง สหกรณ์ออนไลน์ และอีกมากมาย",
+  keywords: [
+    "ASIA-BOT", "asialb", "abac", "Assumption University",
+    "Student Entry Scanner", "สแกนบัตรนักเรียน", "เข้าห้องเรียน",
+    "Class Track Room", "ติดตามห้องเรียน", "จองห้อง",
+    "สหกรณ์", "สหกรณ์ออนไลน์", "RFID", "ระบบนักเรียน",
+    "student management", "Centered101", "asia-bot.xyz",
+  ],
+  authors: [{ name: "Centered101", url: siteUrl }],
+  creator: "Centered101",
+  publisher: "Centered101",
+  category: "Education Technology",
+  alternates: { canonical: siteUrl },
   icons: {
     icon: [
       { url: "/favicon.ico", type: "image/x-icon" },
@@ -25,35 +43,36 @@ export const metadata: Metadata = {
     shortcut: "/favicon.ico",
     apple: "/favicon.png",
   },
-  alternates: {
-    canonical: siteUrl,
-  },
   openGraph: {
     type: "website",
     url: siteUrl,
-    title: "ASIA-BOT",
-    description: "แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร — ติดตามห้องเรียน, สแกนบัตร, จองห้อง, สหกรณ์",
-    images: [
-      {
-        url: metaImage,
-        width: 1200,
-        height: 630,
-        alt: "ASIA-BOT",
-      },
-    ],
+    siteName: "ASIA-BOT",
+    locale: "th_TH",
+    title: "ASIA-BOT — แพลตฟอร์มบริหารจัดการระบบนักเรียน",
+    description:
+      "แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร — สแกนบัตร ติดตามห้องเรียน จองห้อง สหกรณ์",
+    images: [{ url: metaImage, width: 1200, height: 630, alt: "ASIA-BOT Platform" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "ASIA-BOT",
-    description: "แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร — ติดตามห้องเรียน, สแกนบัตร, จองห้อง, สหกรณ์",
+    site: "@centered101",
+    creator: "@centered101",
+    title: "ASIA-BOT — แพลตฟอร์มบริหารจัดการระบบนักเรียน",
+    description:
+      "แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร — สแกนบัตร ติดตามห้องเรียน จองห้อง สหกรณ์",
     images: [metaImage],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, "max-image-preview": "large" },
   },
 };
 
 const toasterOptions = {
   unstyled: true,
   classNames: {
-    toast: "slide-up flex items-center gap-2 bg-[color:var(--white-smoker)] border border-slate-200 rounded-xl shadow-xl px-3 py-2 w-72 cursor-grab active:cursor-grabbing font-['Kanit']",
+    toast: "slide-up flex items-center gap-2 bg-[color:var(--white-smoker)] border border-slate-200 rounded-xl shadow-xl px-3 py-2 w-full cursor-grab active:cursor-grabbing font-['Kanit']",
     content: "flex-1 min-w-0",
     title: "font-['Kanit'] font-medium text-sm text-slate-700 line-clamp-2",
     icon: "flex-shrink-0",
@@ -78,6 +97,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
       </head>
       <body suppressHydrationWarning>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "Organization",
+              name: "ASIA-BOT",
+              url: siteUrl,
+              logo: `${siteUrl}/favicon.png`,
+              description: "แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร สำหรับ ABAC",
+              creator: { "@type": "Person", name: "Centered101" },
+              sameAs: [siteUrl],
+            }),
+          }}
+        />
+        <NoRightClick />
         <AOSProvider>
           {children}
         </AOSProvider>

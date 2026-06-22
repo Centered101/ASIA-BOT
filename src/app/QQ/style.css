@@ -1,0 +1,22 @@
+@import url(/style/index.css);
+
+:root {
+    --primary-color: #1ed760;
+    --secondary-color: #ed2424;
+    --accent-color: #acfda9;
+    --text-color: #28282a;
+    --bg-color: #fff9e1;
+
+    --success-color: #10b981;
+    --danger-color: #ef4444;
+
+    --store-1-color: #f97316;
+    --store-2-color: #3b82f6;
+    --store-3-color: #ef4444;
+    --store-4-color: #eab308;
+}
+
+* {
+    user-select: none;
+    /* font-family: 'Bai Jamjuree' */
+}

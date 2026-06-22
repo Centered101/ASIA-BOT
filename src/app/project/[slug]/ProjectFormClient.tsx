@@ -590,7 +590,7 @@ function MascotBubble({ mascot, msg, accent, onDismiss }: {
       {/* Mascot */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={mascot} alt="" className="h-24 w-auto object-contain flex-shrink-0"
-        style={{ filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.25))" }} />
+        loading="lazy" style={{ filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.25))" }} />
     </div>
   );
 }
@@ -950,7 +950,7 @@ export default function ProjectFormClient({ params }: { params: Promise<{ slug: 
                       <div className="w-9 h-9 rounded-xl flex-shrink-0 overflow-hidden shadow-lg"
                         style={{ background: "rgba(255,255,255,0.2)", backdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,0.3)" }}>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={project.logo ?? "/school/school-logo.svg"} alt="" className="w-full h-full object-cover" />
+                        <img src={project.logo ?? "/school/school-logo.svg"} alt="" className="w-full h-full object-cover" loading="lazy" />
                       </div>
                       <div className="min-w-0">
                         <p className="text-[9px] font-semibold leading-none mb-0.5" style={{ color: "rgba(255,255,255,0.65)" }}>แบบประเมินความพึงพอใจ</p>
@@ -963,7 +963,7 @@ export default function ProjectFormClient({ params }: { params: Promise<{ slug: 
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   {project.mascot && (
                     <img src={project.mascot} alt="" className="absolute right-3 bottom-0 h-28 w-auto object-contain pointer-events-none"
-                      style={{ filter: "drop-shadow(0 4px 16px rgba(0,0,0,0.55))" }} />
+                      loading="lazy" style={{ filter: "drop-shadow(0 4px 16px rgba(0,0,0,0.55))" }} />
                   )}
                 </div>
 
@@ -986,7 +986,7 @@ export default function ProjectFormClient({ params }: { params: Promise<{ slug: 
                   <div className="w-12 h-12 rounded-2xl flex-shrink-0 overflow-hidden shadow-md"
                     style={{ background: accent }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={project.logo ?? "/school/school-logo.svg"} alt="" className="w-full h-full object-cover" />
+                    <img src={project.logo ?? "/school/school-logo.svg"} alt="" className="w-full h-full object-cover" loading="lazy" />
                   </div>
                   {/* Name + year + demo */}
                   <div className="flex-1 min-w-0">
@@ -1011,7 +1011,7 @@ export default function ProjectFormClient({ params }: { params: Promise<{ slug: 
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 {project.mascot && (
                   <img src={project.mascot} alt="" className="absolute right-0 bottom-0 h-24 w-auto object-contain pointer-events-none"
-                    style={{ filter: `drop-shadow(0 2px 10px ${accent}88)` }} />
+                    loading="lazy" style={{ filter: `drop-shadow(0 2px 10px ${accent}88)` }} />
                 )}
               </div>
             )}

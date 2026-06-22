@@ -1,0 +1,20 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "สหกรณ์ออนไลน์ — ASIA-BOT Shop",
+  description:
+    "สหกรณ์ออนไลน์สำหรับนักเรียน ซื้อขายสินค้า อุปกรณ์การเรียน และบริการต่างๆ ภายในมหาวิทยาลัย",
+  keywords: [
+    "สหกรณ์", "สหกรณ์ออนไลน์", "ร้านค้านักเรียน",
+    "ABAC shop", "university store", "ASIA-BOT",
+  ],
+  openGraph: {
+    title: "สหกรณ์ออนไลน์ | ASIA-BOT",
+    description: "ซื้อขายสินค้าและบริการภายในมหาวิทยาลัย",
+    type: "website",
+  },
+};
+
+export default function Layout({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
+}

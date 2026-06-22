@@ -5,7 +5,7 @@ import Footer from "@/components/Footer";
 export default function NotFound() {
   return (
     <>
-      <Header subtitle="404" />
+      <Header subtitle="404 Error" />
       <main className="min-h-[calc(100vh-128px)] flex flex-col items-center justify-center p-4 text-center">
         <div className="relative mb-8">
           <div className="text-[120px] sm:text-[180px] font-black text-slate-100 leading-none select-none">404</div>

@@ -50,3 +50,7 @@ AGENTS.md
 
 # Temp
 .tmp.driveupload/
+.tmp-kidsync/
+
+# Docs (large binaries)
+docs/user-manual.pdf

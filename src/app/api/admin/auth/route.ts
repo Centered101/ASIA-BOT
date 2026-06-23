@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   // ── Try DB admin lookup ──────────────────────────────────────────────────
   const { data: admin, error: dbError } = await supabase
     .from("admins")
-    .select("id, admin_id, username, password_hash, role, first_name, last_name, nickname, email, phone, entry_year, department, avatar, admin_status, created_at")
+    .select("id, admin_id, username, password_hash, role, first_name, last_name, nickname, email, phone, entry_year, department, avatar, admin_status, google_email, created_at")
     .eq("username", username)
     .single();
 
@@ -61,7 +61,8 @@ export async function POST(req: NextRequest) {
         phone: (admin as Record<string, unknown>).phone ?? null,
         entry_year: (admin as Record<string, unknown>).entry_year ?? null,
         department: (admin as Record<string, unknown>).department ?? null,
-        created_at: (admin as Record<string, unknown>).created_at ?? null,
+        created_at:   (admin as Record<string, unknown>).created_at   ?? null,
+        google_email: (admin as Record<string, unknown>).google_email ?? null,
       },
     });
   }

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { verifyLineSignature, replyLineMessage } from "@/lib/line";
+import { handleStudentMessage } from "@/lib/line-commands";
+import { handleAdminGroupMessage } from "@/lib/line-admin-commands";
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -28,7 +30,7 @@ export async function POST(req: NextRequest) {
 type LineEvent = {
   type: string;
   replyToken?: string;
-  source: { userId?: string };
+  source: { userId?: string; groupId?: string; type?: string };
   message?: { type: string; text?: string };
 };
 
@@ -37,16 +39,17 @@ type LineEvent = {
 async function handleEvent(event: LineEvent) {
   const userId = event.source.userId;
   if (!userId) return;
+  if (event.type !== "message" || event.message?.type !== "text") return;
 
-  if (event.type === "message" && event.message?.type === "text") {
-    const text = event.message.text?.trim() ?? "";
-    const replyToken = event.replyToken ?? "";
-    await handleTextMessage(userId, text, replyToken);
-  }
+  const text = event.message.text?.trim() ?? "";
+  const replyToken = event.replyToken ?? "";
+  const groupId = event.source.groupId;
+
+  await handleTextMessage(userId, text, replyToken, groupId);
 }
 
-async function handleTextMessage(userId: string, text: string, replyToken: string) {
-  // ── "รับเรื่อง Feedback #<id>" from admin ────────────────────────
+async function handleTextMessage(userId: string, text: string, replyToken: string, groupId?: string) {
+  // ── "รับเรื่อง Feedback #<id>" — any source ───────────────────────────────
   const fbMatch = text.match(/รับเรื่อง\s+Feedback\s+#([a-zA-Z0-9-]+)/i);
   if (fbMatch) {
     const feedbackId = fbMatch[1];
@@ -71,8 +74,26 @@ async function handleTextMessage(userId: string, text: string, replyToken: strin
     return;
   }
 
-  // ── Student ID linking ───────────────────────────────────────────
-  const studentId = text.trim().toUpperCase();
+  // ── Admin group commands ──────────────────────────────────────────────────
+  if (groupId && groupId === process.env.LINE_GROUP_ADMIN) {
+    await handleAdminGroupMessage(supabase as any, text, replyToken);
+    return;
+  }
+
+  // ── Look up linked student by LINE userId ─────────────────────────────────
+  const { data: linkedStudent } = await (supabase as any)
+    .from("students")
+    .select("student_id, first_name, last_name, nickname, program, department, photo_url")
+    .eq("line_user_id", userId)
+    .maybeSingle();
+
+  if (linkedStudent) {
+    await handleStudentMessage(supabase as any, linkedStudent, text, replyToken);
+    return;
+  }
+
+  // ── Student ID linking (not yet linked) ───────────────────────────────────
+  const studentId = text.toUpperCase();
 
   const { data: student } = await (supabase as any)
     .from("students")
@@ -116,20 +137,20 @@ async function handleTextMessage(userId: string, text: string, replyToken: strin
             },
             {
               type: "text",
-              text: "ตอนนี้คุณจะได้รับการแจ้งเตือนผ่าน LINE นี้ทุกครั้งที่คำสั่งซื้อได้รับการยืนยัน",
+              text: "บัญชี LINE นี้เชื่อมกับรหัสนักเรียนของคุณแล้ว\nพิมพ์ 'ช่วยเหลือ' เพื่อดูสิ่งที่ฉันทำได้ 🤖",
               size: "sm",
               color: "#64748B",
               wrap: true,
             },
           ],
         },
-        styles: { header: { backgroundColor: "#0EA5E9" } },
       },
     }]);
   } else {
+    // Could be a random message to an unlinked user — prompt them
     await replyLineMessage(replyToken, [{
       type: "text",
-      text: "❌ ไม่พบรหัสนักเรียนนี้\nกรุณาส่งรหัสนักเรียนของคุณ (เช่น 6512345)",
+      text: "🔗 กรุณาส่งรหัสนักเรียนของคุณก่อน เพื่อเชื่อมต่อบัญชี LINE กับระบบ\nเช่น: 6512345",
     }]);
   }
 }

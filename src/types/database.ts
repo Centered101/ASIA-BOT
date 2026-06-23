@@ -19,6 +19,7 @@ export type Database = {
           department: string | null;
           avatar: string | null;
           admin_status: "active" | "inactive";
+          google_email: string | null;
           created_at: string;
         };
         Insert: {
@@ -36,6 +37,7 @@ export type Database = {
           department?: string | null;
           avatar?: string | null;
           admin_status?: "active" | "inactive";
+          google_email?: string | null;
           created_at?: string;
         };
         Update: {
@@ -52,6 +54,7 @@ export type Database = {
           department?: string | null;
           avatar?: string | null;
           admin_status?: "active" | "inactive";
+          google_email?: string | null;
         };
         Relationships: [];
       };

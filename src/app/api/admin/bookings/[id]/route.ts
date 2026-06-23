@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { checkAdminAuth } from "@/lib/admin-auth";
+import { sendLineFlexMessage, buildBookingFlexMessage } from "@/lib/line";
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -25,5 +26,52 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { error } = await supabase.from("bookings").update(update).eq("id", id);
   if (error) return NextResponse.json({ status: "error", message: error.message }, { status: 500 });
+
+  // Push LINE notification to student on approve/reject
+  if (update.status === "approved" || update.status === "rejected") {
+    try {
+      const { data: booking } = await (supabase as any)
+        .from("bookings")
+        .select("*, rooms(name), time_slots(start_time, end_time)")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (booking) {
+        const { data: student } = await (supabase as any)
+          .from("students")
+          .select("line_user_id, program, department, nickname, photo_url")
+          .eq("student_id", booking.student_id)
+          .maybeSingle();
+
+        if (student?.line_user_id) {
+          const room = booking.rooms as any;
+          const slot = booking.time_slots as any;
+          const flex = buildBookingFlexMessage({
+            bookingId:      booking.id,
+            roomName:       room?.name ?? "ห้องที่จอง",
+            studentName:    booking.student_name,
+            studentId:      booking.student_id,
+            studentPhotoUrl: student.photo_url ?? null,
+            nickname:       student.nickname ?? null,
+            program:        student.program ?? null,
+            department:     student.department ?? null,
+            bookingDate:    booking.booking_date,
+            startTime:      slot?.start_time ?? "?",
+            endTime:        slot?.end_time   ?? "?",
+            attendees:      booking.attendees,
+            phone:          booking.student_phone ?? null,
+            purpose:        booking.purpose,
+            status:         update.status,
+          });
+          await sendLineFlexMessage(
+            student.line_user_id,
+            update.status === "approved" ? "การจองห้องได้รับอนุมัติแล้ว ✅" : "การจองห้องถูกปฏิเสธ 🚫",
+            flex
+          );
+        }
+      }
+    } catch { /* LINE notification is non-critical */ }
+  }
+
   return NextResponse.json({ status: "success" });
 }

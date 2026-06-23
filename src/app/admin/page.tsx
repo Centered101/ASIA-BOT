@@ -2,6 +2,7 @@
 
 import { memo, useEffect, useState, useCallback, useMemo, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { getGoogleSupabase } from "@/lib/supabase-google";
 import type { CustomField } from "@/lib/config";
 import { AMENITY_OPTIONS, getAmenityInfo } from "@/lib/amenities";
 import RfidConsole from "@/components/admin/RfidConsole";
@@ -19,6 +20,7 @@ type AdminUser = {
   email?: string | null; phone?: string | null;
   entry_year?: string | null; department?: string | null;
   created_at?: string | null;
+  google_email?: string | null;
 };
 
 type Stats = {
@@ -26,7 +28,7 @@ type Stats = {
   feedbackTotal: number; feedbackPending: number; todayEntries: number;
   inactiveCards: number; lostCards: number; paidOrders: number;
   pendingOrders: number; orderUpdates: number; pendingDataRequests: number;
-  rfidIssues: number; lowStockProducts: number;
+  rfidIssues: number; lowStockProducts: number; pendingTeacherApps: number;
 };
 
 type Booking = {
@@ -289,6 +291,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: "ระบบ",
     items: [
+      { id: "teacher_applications", label: "ใบสมัครครู", icon: "fa-chalkboard-user", badge: "pendingTeacherApps" },
       { id: "admins",    label: "ผู้ดูแลระบบ", icon: "fa-user-shield" },
       { id: "settings",  label: "ตั้งค่า",  icon: "fa-gear" },
     ],
@@ -316,6 +319,7 @@ const TAB_ACCESS: Record<string, AdminRole[]> = {
   class_schedule_override: ["superadmin", "admin"],
   teachers: ["superadmin", "admin"],
   feedbacks: ["superadmin", "admin", "staff"],
+  teacher_applications: ["superadmin"],
   admins: ["superadmin", "admin", "staff"],
   line_broadcast: ["superadmin", "admin", "staff"],
   settings: ["superadmin", "admin", "staff"],
@@ -391,7 +395,26 @@ function AdminLogin({ onLogin }: { onLogin: (a: AdminUser) => void }) {
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [attempts, setAttempts] = useState(5);
+
+  async function handleGoogleLogin() {
+    setGoogleLoading(true);
+    try {
+      const supabase = getGoogleSupabase();
+      const { error: oauthErr } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/admin/google/callback`,
+          queryParams: { access_type: "offline", prompt: "select_account" },
+        },
+      });
+      if (oauthErr) { setError(oauthErr.message); setGoogleLoading(false); }
+    } catch {
+      setError("ไม่สามารถเริ่ม Google Login ได้");
+      setGoogleLoading(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -507,6 +530,31 @@ function AdminLogin({ onLogin }: { onLogin: (a: AdminUser) => void }) {
                 : <><i className="fa-solid fa-right-to-bracket" /> เข้าสู่ระบบผู้ดูแล</>}
             </button>
           </form>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 my-4">
+            <div className="flex-1 h-px" style={{ background: "#3e3e3e" }} />
+            <span className="text-xs" style={{ color: "#636363" }}>หรือ</span>
+            <div className="flex-1 h-px" style={{ background: "#3e3e3e" }} />
+          </div>
+
+          {/* Google Login */}
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            disabled={googleLoading}
+            suppressHydrationWarning
+            className="w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+            style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}
+            onMouseEnter={e => (e.currentTarget.style.borderColor = "#ff7070")}
+            onMouseLeave={e => (e.currentTarget.style.borderColor = "#3e3e3e")}>
+            {googleLoading
+              ? <><i className="fa-solid fa-spinner fa-spin text-[#ff7070]" /> กำลังเชื่อม Google...</>
+              : <><i className="fa-brands fa-google" style={{ color: "#ff7070" }} /> เข้าสู่ระบบด้วย Google</>}
+          </button>
+          <p className="text-[10px] text-center mt-2" style={{ color: "#636363" }}>
+            สำหรับครูที่ผูก Google email ไว้กับบัญชี Admin เท่านั้น
+          </p>
         </div>
 
         <div className="flex items-center justify-between mt-4 px-1">
@@ -522,7 +570,7 @@ function AdminLogin({ onLogin }: { onLogin: (a: AdminUser) => void }) {
 
 // ─── Admin Shell ──────────────────────────────────────────────────────────────
 
-const VALID_TABS = new Set(["dashboard","students","data_requests","entrylogs","checkin_school","checkin_library","checkin_meeting","rfid","bookings","rooms","products","shoporders","projects","evaluations","class_groups","class_schedule","class_schedule_weekly","class_schedule_override","teachers","feedbacks","admins","line_broadcast","settings"]);
+const VALID_TABS = new Set(["dashboard","students","data_requests","entrylogs","checkin_school","checkin_library","checkin_meeting","rfid","bookings","rooms","products","shoporders","projects","evaluations","class_groups","class_schedule","class_schedule_weekly","class_schedule_override","teachers","teacher_applications","feedbacks","admins","line_broadcast","settings"]);
 
 function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onLogout: () => void; onAvatarChange: (url: string | null) => void }) {
   const router = useRouter();
@@ -544,6 +592,13 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
   const [studentsRefreshKey, setStudentsRefreshKey] = useState(0);
   const [refreshingStats, setRefreshingStats] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("google_linked") === "1") {
+      toast.success("เชื่อม Google กับบัญชีสำเร็จแล้ว!");
+      router.replace("/admin", { scroll: false });
+    }
+  }, [searchParams, router]);
 
   useEffect(() => {
     adminFetch("/api/admin/stats", admin.admin_id)
@@ -773,8 +828,9 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
                 onViewChange={v => setActiveTab(v === "override" ? "class_schedule_override" : "class_schedule_weekly")}
               />
             )}
-            {activeTab === "teachers"        && <TeachersTab    adminId={admin.admin_id} />}
-            {activeTab === "admins"          && <AdminsTab      adminId={admin.admin_id} role={admin.role} onAvatarChange={onAvatarChange} />}
+            {activeTab === "teachers"             && <TeachersTab           adminId={admin.admin_id} />}
+            {activeTab === "teacher_applications" && <TeacherApplicationsTab adminId={admin.admin_id} onAddTeacher={() => setActiveTab("teachers")} />}
+            {activeTab === "admins"               && <AdminsTab             adminId={admin.admin_id} role={admin.role} onAvatarChange={onAvatarChange} />}
             {activeTab === "line_broadcast"  && <LineBroadcastTab adminId={admin.admin_id} />}
             {activeTab === "settings"        && <SettingsTab    adminId={admin.admin_id} adminName={[admin.first_name, admin.last_name].filter(Boolean).join(" ") || admin.admin_id} adminRole={admin.role} adminAvatar={admin.avatar} stats={stats} />}
           </div>
@@ -823,6 +879,34 @@ function SidebarUser({ admin, onLogout, onAvatarChange }: {
   const [uploadBusy, setUploadBusy] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [timeLeft, setTimeLeft] = useState("");
+  const [googleLinking, setGoogleLinking] = useState(false);
+
+  async function handleLinkGoogle() {
+    setGoogleLinking(true);
+    try {
+      localStorage.setItem("asia_admin_google_link", JSON.stringify({
+        admin_id: admin.admin_id,
+        timestamp: Date.now(),
+      }));
+      const supabase = getGoogleSupabase();
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/admin/google/callback`,
+          queryParams: { access_type: "offline", prompt: "select_account" },
+        },
+      });
+      if (error) {
+        localStorage.removeItem("asia_admin_google_link");
+        toast.error(error.message);
+        setGoogleLinking(false);
+      }
+    } catch {
+      localStorage.removeItem("asia_admin_google_link");
+      toast.error("ไม่สามารถเริ่มเชื่อม Google ได้");
+      setGoogleLinking(false);
+    }
+  }
   const fileRef = useRef<HTMLInputElement>(null);
   const displayName = admin.nickname ?? admin.first_name ?? admin.username;
   const roleLabel = admin.role === "superadmin" ? "ผู้ดูแลสูงสุด" : admin.role === "admin" ? "ผู้ดูแลระบบ" : "เจ้าหน้าที่";
@@ -927,6 +1011,30 @@ function SidebarUser({ admin, onLogout, onAvatarChange }: {
                 สมาชิกตั้งแต่ {new Date(admin.created_at).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })}
               </div>
             )}
+            {/* Link Google */}
+            <div className="pt-2" style={{ borderTop: "1px solid #1e1e1e" }}>
+              {admin.google_email ? (
+                <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px]"
+                  style={{ background: "#0d1f0d", border: "1px solid #1a3a1a", color: "#3fb950" }}>
+                  <i className="fa-brands fa-google text-[10px]" />
+                  <span className="flex-1 truncate">{admin.google_email}</span>
+                  <i className="fa-solid fa-circle-check text-[9px]" />
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleLinkGoogle}
+                  disabled={googleLinking}
+                  className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50"
+                  style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", color: "#9e9e9e" }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = "#ff7070"; e.currentTarget.style.color = "#ff7070"; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#9e9e9e"; }}>
+                  {googleLinking
+                    ? <><i className="fa-solid fa-spinner fa-spin text-[10px]" /> กำลังเชื่อม...</>
+                    : <><i className="fa-brands fa-google text-[10px]" /> เชื่อม Google กับบัญชีนี้</>}
+                </button>
+              )}
+            </div>
             {/* 8H countdown */}
             {timeLeft && (
               <div className="mt-2 pt-2" style={{ borderTop: "1px solid #1e1e1e" }}>
@@ -5189,6 +5297,262 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
   );
 }
 
+// ─── Teacher Applications Tab ─────────────────────────────────────────────────
+
+type TeacherApp = {
+  id: string; full_name: string; email: string | null; phone: string | null;
+  department: string | null; subject: string | null; reason: string;
+  desired_username: string; status: string; admin_note: string | null;
+  reviewed_by: string | null; reviewed_at: string | null; created_at: string;
+};
+
+const TA_STATUS: Record<string, { label: string; color: string; bg: string }> = {
+  pending:   { label: "รอตรวจสอบ",   color: "#60a5fa", bg: "#1e3a5f33" },
+  reviewing: { label: "กำลังตรวจสอบ", color: "#a78bfa", bg: "#3b1f6333" },
+  approved:  { label: "อนุมัติแล้ว",  color: "#34d399", bg: "#064e3b33" },
+  rejected:  { label: "ปฏิเสธ",       color: "#f87171", bg: "#7f1d1d33" },
+};
+
+function TeacherApplicationsTab({ adminId, onAddTeacher }: { adminId: string; onAddTeacher?: () => void }) {
+  const [apps, setApps]             = useState<TeacherApp[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [filter, setFilter]         = useState<"pending" | "approved" | "rejected" | "all">("pending");
+  const [selected, setSelected]     = useState<TeacherApp | null>(null);
+  const [actionLoading, setAL]      = useState(false);
+  const [approvePassword, setAppPw] = useState("");
+  const [rejectNote, setRejectNote] = useState("");
+  const [adminNote, setAdminNote]   = useState("");
+  const [msg, setMsg]               = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const res = await fetch(`/api/admin/teacher-applications?status=${filter}`, {
+      headers: { "x-admin-id": adminId },
+    });
+    const j = await res.json();
+    if (j.status === "success") setApps(j.data ?? []);
+    setLoading(false);
+  }, [adminId, filter]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleAction(action: "approve" | "reject" | "review") {
+    if (!selected) return;
+    if (action === "approve" && approvePassword.length < 6) { setMsg("รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร"); return; }
+    if (action === "reject"  && !rejectNote.trim())          { setMsg("กรุณาระบุเหตุผลที่ปฏิเสธ"); return; }
+    setAL(true); setMsg("");
+    const res = await fetch(`/api/admin/teacher-applications/${selected.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "x-admin-id": adminId },
+      body: JSON.stringify({
+        action,
+        password:   action === "approve" ? approvePassword : undefined,
+        admin_note: action === "approve" ? adminNote : rejectNote,
+      }),
+    });
+    const j = await res.json();
+    setAL(false);
+    if (j.status === "success") {
+      toast.success(action === "approve" ? `อนุมัติแล้ว — สร้างบัญชี Admin: ${j.username}` : action === "reject" ? "ปฏิเสธใบสมัครแล้ว" : "เปลี่ยนสถานะแล้ว");
+      setSelected(null); setAppPw(""); setRejectNote(""); setAdminNote("");
+      load();
+    } else {
+      setMsg(j.message || "เกิดข้อผิดพลาด");
+    }
+  }
+
+  const pending = apps.filter(a => a.status === "pending" || a.status === "reviewing");
+
+  return (
+    <div style={{ color: "#e5e5e5" }}>
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div>
+          <h2 className="text-lg font-bold">ใบสมัครครู</h2>
+          <p className="text-sm" style={{ color: "#888" }}>ผู้ที่ได้รับการอนุมัติจะได้บัญชี Admin ในระบบ</p>
+        </div>
+        <div className="flex gap-2">
+          {onAddTeacher && (
+            <button onClick={onAddTeacher}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white hover:opacity-80 transition-opacity"
+              style={{ background: "#ff7070" }}>
+              <i className="fa-solid fa-plus" /> เพิ่มครู
+            </button>
+          )}
+          {(["pending","approved","rejected","all"] as const).map(f => (
+            <button key={f} onClick={() => setFilter(f)}
+              className="rounded-lg px-3 py-1.5 text-xs font-medium transition-all"
+              style={filter === f ? { background: ADMIN_PRIMARY, color: "#fff" } : { background: "#1e1e1e", color: "#888", border: "1px solid #333" }}>
+              {f === "pending" ? "รอตรวจสอบ" : f === "approved" ? "อนุมัติ" : f === "rejected" ? "ปฏิเสธ" : "ทั้งหมด"}
+              {f === "pending" && pending.length > 0 && (
+                <span className="ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold" style={{ background: "#ff4444", color: "#fff" }}>
+                  {pending.length}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-16"><i className="fa-solid fa-spinner fa-spin text-2xl" style={{ color: ADMIN_PRIMARY }} /></div>
+      ) : apps.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center" style={{ color: "#555" }}>
+          <i className="fa-solid fa-chalkboard-user text-4xl mb-3" />
+          <p className="text-sm">ไม่มีใบสมัครในหมวดนี้</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {apps.map(app => {
+            const st = TA_STATUS[app.status] ?? TA_STATUS.pending;
+            return (
+              <div key={app.id}
+                className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 cursor-pointer transition-all"
+                style={{ background: "#161616", border: "1px solid #2a2a2a" }}
+                onClick={() => { setSelected(app); setMsg(""); setAppPw(""); setRejectNote(""); setAdminNote(""); }}>
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold shrink-0"
+                    style={{ background: "#ff707018", color: ADMIN_PRIMARY }}>
+                    {app.full_name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-sm truncate text-white">{app.full_name}</p>
+                    <p className="text-xs truncate" style={{ color: "#888" }}>
+                      @{app.desired_username}{app.department ? ` · ${app.department}` : ""}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className="text-xs" style={{ color: "#666" }}>
+                    {new Date(app.created_at).toLocaleDateString("th-TH")}
+                  </span>
+                  <span className="rounded-full px-2.5 py-1 text-xs font-medium"
+                    style={{ background: st.bg, color: st.color }}>
+                    {st.label}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Detail Modal */}
+      {selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.8)" }}
+          onClick={e => { if (e.target === e.currentTarget) setSelected(null); }}>
+          <div className="w-full max-w-lg rounded-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto"
+            style={{ background: "#161616", border: "1px solid #2a2a2a" }}>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3 className="text-lg font-bold text-white">{selected.full_name}</h3>
+                <p className="text-sm" style={{ color: "#888" }}>@{selected.desired_username}</p>
+              </div>
+              <button onClick={() => setSelected(null)} className="text-xl" style={{ color: "#666" }}>
+                <i className="fa-solid fa-xmark" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              {[
+                ["อีเมล",      selected.email],
+                ["เบอร์โทร",   selected.phone],
+                ["แผนก",       selected.department],
+                ["วิชาที่สอน", selected.subject],
+              ].map(([k, v]) => v ? (
+                <div key={k} className="rounded-lg p-2.5" style={{ background: "#0c0c0c" }}>
+                  <p className="text-xs mb-0.5" style={{ color: "#666" }}>{k}</p>
+                  <p className="font-medium text-white">{v}</p>
+                </div>
+              ) : null)}
+            </div>
+
+            <div className="rounded-xl p-3" style={{ background: "#0c0c0c", border: "1px solid #1e1e1e" }}>
+              <p className="text-xs mb-1" style={{ color: "#666" }}>เหตุผลที่สมัคร</p>
+              <p className="text-sm text-white whitespace-pre-wrap">{selected.reason}</p>
+            </div>
+
+            {selected.admin_note && (
+              <div className="rounded-xl p-3" style={{ background: "#1a1400", border: "1px solid #3d2e00" }}>
+                <p className="text-xs mb-1" style={{ color: "#a16207" }}>หมายเหตุจาก Admin</p>
+                <p className="text-sm" style={{ color: "#fbbf24" }}>{selected.admin_note}</p>
+              </div>
+            )}
+
+            {msg && <p className="text-sm text-center" style={{ color: "#f87171" }}>{msg}</p>}
+
+            {(selected.status === "pending" || selected.status === "reviewing") && (
+              <div className="space-y-3 border-t pt-4" style={{ borderColor: "#2a2a2a" }}>
+                {/* Approve section */}
+                <div className="rounded-xl p-3 space-y-2" style={{ background: "#0a1f0a", border: "1px solid #14532d33" }}>
+                  <p className="text-xs font-semibold" style={{ color: "#34d399" }}>
+                    <i className="fa-solid fa-circle-check mr-1" /> อนุมัติ — กำหนดรหัสผ่านสำหรับบัญชี Admin
+                  </p>
+                  <input
+                    type="password"
+                    value={approvePassword}
+                    onChange={e => setAppPw(e.target.value)}
+                    placeholder="รหัสผ่าน (อย่างน้อย 6 ตัว)"
+                    className="w-full rounded-lg px-3 py-2 text-sm font-mono"
+                    style={{ background: "#0c0c0c", border: "1px solid #2a2a2a", color: "#fff" }}
+                  />
+                  <input
+                    type="text"
+                    value={adminNote}
+                    onChange={e => setAdminNote(e.target.value)}
+                    placeholder="หมายเหตุถึงครูท่านนี้ (ไม่บังคับ)"
+                    className="w-full rounded-lg px-3 py-2 text-sm"
+                    style={{ background: "#0c0c0c", border: "1px solid #2a2a2a", color: "#fff" }}
+                  />
+                  <button
+                    onClick={() => handleAction("approve")}
+                    disabled={actionLoading}
+                    className="w-full py-2 rounded-lg text-sm font-semibold disabled:opacity-50"
+                    style={{ background: "#16a34a", color: "#fff" }}>
+                    {actionLoading ? <i className="fa-solid fa-spinner fa-spin" /> : "✅ อนุมัติและสร้างบัญชี Admin"}
+                  </button>
+                </div>
+
+                {/* Reject section */}
+                <div className="rounded-xl p-3 space-y-2" style={{ background: "#1a0a0a", border: "1px solid #7f1d1d33" }}>
+                  <p className="text-xs font-semibold" style={{ color: "#f87171" }}>
+                    <i className="fa-solid fa-circle-xmark mr-1" /> ปฏิเสธ
+                  </p>
+                  <input
+                    type="text"
+                    value={rejectNote}
+                    onChange={e => setRejectNote(e.target.value)}
+                    placeholder="เหตุผลที่ปฏิเสธ (บังคับ)"
+                    className="w-full rounded-lg px-3 py-2 text-sm"
+                    style={{ background: "#0c0c0c", border: "1px solid #2a2a2a", color: "#fff" }}
+                  />
+                  <button
+                    onClick={() => handleAction("reject")}
+                    disabled={actionLoading}
+                    className="w-full py-2 rounded-lg text-sm font-semibold disabled:opacity-50"
+                    style={{ background: "#dc2626", color: "#fff" }}>
+                    {actionLoading ? <i className="fa-solid fa-spinner fa-spin" /> : "❌ ปฏิเสธใบสมัคร"}
+                  </button>
+                </div>
+
+                {selected.status === "pending" && (
+                  <button
+                    onClick={() => handleAction("review")}
+                    disabled={actionLoading}
+                    className="w-full py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                    style={{ background: "#1e1e1e", border: "1px solid #333", color: "#a78bfa" }}>
+                    เปลี่ยนสถานะเป็น "กำลังตรวจสอบ"
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Settings Tab ─────────────────────────────────────────────────────────────
 
 function LineBroadcastTab({ adminId }: { adminId: string }) {
@@ -7360,11 +7724,11 @@ function EvaluationsTab({ adminId }: { adminId: string }) {
 
 // ─── TeachersTab ─────────────────────────────────────────────────────────────
 
-type Teacher = { id: string; name: string; nickname: string | null; subject: string | null; phone: string | null; active: boolean; created_at: string; };
+type Teacher = { id: string; full_name: string; nickname: string | null; email: string | null; phone: string | null; department: string | null; subject: string | null; color: string | null; status: string; linked_admin_id: string | null; created_at: string; };
 
-const BLANK_TEACHER = { name: "", nickname: "", subject: "", phone: "" };
+const BLANK_TEACHER = { full_name: "", nickname: "", email: "", phone: "", department: "", subject: "", color: "" };
 
-function TeachersTab({ adminId }: { adminId: string }) {
+function TeachersTab({ adminId, defaultShowForm }: { adminId: string; defaultShowForm?: boolean }) {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
@@ -7373,6 +7737,7 @@ function TeachersTab({ adminId }: { adminId: string }) {
   const [msg, setMsg]           = useState("");
   const [search, setSearch]     = useState("");
   const [view, setView]         = useState<"grid" | "list">("grid");
+  const [showForm, setShowForm] = useState(defaultShowForm ?? false);
 
   const inp = { className: "w-full px-3 py-2 rounded-lg text-sm outline-none", style: { background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" } };
 
@@ -7386,13 +7751,13 @@ function TeachersTab({ adminId }: { adminId: string }) {
 
   function startEdit(t: Teacher) {
     setEditId(t.id);
-    setForm({ name: t.name, nickname: t.nickname ?? "", subject: t.subject ?? "", phone: t.phone ?? "" });
+    setForm({ full_name: t.full_name, nickname: t.nickname ?? "", email: t.email ?? "", phone: t.phone ?? "", department: t.department ?? "", subject: t.subject ?? "", color: t.color ?? "" });
     setMsg("");
   }
-  function reset() { setEditId(null); setForm(BLANK_TEACHER); setMsg(""); }
+  function reset() { setEditId(null); setForm(BLANK_TEACHER); setMsg(""); setShowForm(false); }
 
   async function save() {
-    if (!form.name.trim()) { setMsg("กรุณากรอกชื่อครู"); return; }
+    if (!form.full_name.trim()) { setMsg("กรุณากรอกชื่อครู"); return; }
     setSaving(true); setMsg("");
     const url = editId ? `/api/admin/teachers/${editId}` : "/api/admin/teachers";
     const method = editId ? "PUT" : "POST";
@@ -7403,8 +7768,8 @@ function TeachersTab({ adminId }: { adminId: string }) {
     } finally { setSaving(false); }
   }
 
-  async function del(id: string, name: string) {
-    if (!confirm(`ลบครู "${name}"?`)) return;
+  async function del(id: string, full_name: string) {
+    if (!confirm(`ลบครู "${full_name}"?`)) return;
     await adminFetch(`/api/admin/teachers/${id}`, adminId, { method: "DELETE" });
     load();
   }
@@ -7412,18 +7777,28 @@ function TeachersTab({ adminId }: { adminId: string }) {
   const teacherQuery = search.trim().toLowerCase();
   const filteredTeachers = teacherQuery
     ? teachers.filter(t =>
-        t.name.toLowerCase().includes(teacherQuery) ||
+        t.full_name.toLowerCase().includes(teacherQuery) ||
         t.nickname?.toLowerCase().includes(teacherQuery) ||
+        t.department?.toLowerCase().includes(teacherQuery) ||
         t.subject?.toLowerCase().includes(teacherQuery) ||
         t.phone?.toLowerCase().includes(teacherQuery)
       )
     : teachers;
   const teacherSubjects = [...new Set(teachers.map(t => t.subject).filter(Boolean))].length;
-  const activeTeachers = teachers.filter(t => t.active !== false).length;
+  const activeTeachers = teachers.filter(t => t.status === "active").length;
 
   return (
     <div className="space-y-5">
-      <DarkSectionHeader title="ครูผู้สอน" icon="fa-chalkboard-user" count={teachers.length} />
+      <div className="flex items-center justify-between gap-3">
+        <DarkSectionHeader title="ครูผู้สอน" icon="fa-chalkboard-user" count={teachers.length} />
+        <button
+          onClick={() => { setShowForm(v => !v); if (editId) reset(); }}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white transition-opacity hover:opacity-80"
+          style={{ background: "#ff7070" }}>
+          <i className={`fa-solid ${showForm ? "fa-xmark" : "fa-plus"}`} />
+          {showForm ? "ยกเลิก" : "เพิ่มครู"}
+        </button>
+      </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
@@ -7445,20 +7820,21 @@ function TeachersTab({ adminId }: { adminId: string }) {
       </div>
 
       {/* Form */}
+      {(showForm || editId) && (
       <div className="rounded-xl p-4 space-y-3" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-xs font-bold text-white">{editId ? "แก้ไขครู" : "เพิ่มครูใหม่"}</div>
             <div className="text-[11px] mt-0.5" style={{ color: "#636363" }}>ข้อมูลนี้จะใช้ในตารางเรียนและรายการคาบเรียน</div>
           </div>
-          <div className="w-10 h-10 rounded-lg flex items-center justify-center font-black text-white" style={{ background: ADMIN_PRIMARY }}>
-            {(form.name.trim() || "ค").charAt(0)}
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center font-black text-white" style={{ background: form.color || ADMIN_PRIMARY }}>
+            {(form.full_name.trim() || "ค").charAt(0)}
           </div>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="col-span-2">
             <label className="block text-[11px] text-[#9e9e9e] mb-1">ชื่อ-นามสกุล *</label>
-            <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} {...inp} placeholder="ครูสมใจ ใจดี" />
+            <input value={form.full_name} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))} {...inp} placeholder="ครูสมใจ ใจดี" />
           </div>
           <div>
             <label className="block text-[11px] text-[#9e9e9e] mb-1">ชื่อเล่น</label>
@@ -7469,8 +7845,24 @@ function TeachersTab({ adminId }: { adminId: string }) {
             <input value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} {...inp} placeholder="คณิตศาสตร์" />
           </div>
           <div>
+            <label className="block text-[11px] text-[#9e9e9e] mb-1">แผนก</label>
+            <input value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))} {...inp} placeholder="คอมพิวเตอร์" />
+          </div>
+          <div>
             <label className="block text-[11px] text-[#9e9e9e] mb-1">เบอร์โทร</label>
             <input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} {...inp} placeholder="08x-xxx-xxxx" />
+          </div>
+          <div>
+            <label className="block text-[11px] text-[#9e9e9e] mb-1">อีเมล</label>
+            <input value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} {...inp} placeholder="teacher@school.ac.th" />
+          </div>
+          <div>
+            <label className="block text-[11px] text-[#9e9e9e] mb-1">สี (timetable)</label>
+            <div className="flex gap-2">
+              <input type="color" value={form.color || "#ff7070"} onChange={e => setForm(f => ({ ...f, color: e.target.value }))}
+                className="w-10 h-9 rounded-lg cursor-pointer p-0.5" style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }} />
+              <input value={form.color} onChange={e => setForm(f => ({ ...f, color: e.target.value }))} {...inp} placeholder="#ff7070" className="flex-1 px-3 py-2 rounded-lg text-sm outline-none font-mono" />
+            </div>
           </div>
         </div>
         {msg && <p className="text-xs text-red-400">{msg}</p>}
@@ -7483,6 +7875,7 @@ function TeachersTab({ adminId }: { adminId: string }) {
           {editId && <button onClick={reset} className="px-4 py-2 rounded-lg text-xs font-bold hover:opacity-80" style={{ background: "#2a2a2a", color: "#9e9e9e" }}>ยกเลิก</button>}
         </div>
       </div>
+      )}
 
       <div className="rounded-xl p-3" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
         <div className="flex flex-col md:flex-row gap-3 md:items-center">
@@ -7519,12 +7912,12 @@ function TeachersTab({ adminId }: { adminId: string }) {
           {filteredTeachers.map(t => (
             <div key={t.id} className="rounded-xl p-4" style={{ background: "#1c1c1c", borderWidth: 1, borderStyle: "solid", borderColor: "#3e3e3e" }}>
               <div className="flex items-start gap-3">
-                <div className="w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0 text-base font-black text-white" style={{ background: ADMIN_PRIMARY }}>
-                  {t.name.charAt(0)}
+                <div className="w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0 text-base font-black text-white" style={{ background: t.color || ADMIN_PRIMARY }}>
+                  {t.full_name.charAt(0)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-bold text-white truncate">{t.name}</div>
-                  <div className="text-[11px] mt-0.5" style={{ color: "#9e9e9e" }}>{t.nickname ? `ชื่อเล่น ${t.nickname}` : "ยังไม่มีชื่อเล่น"}</div>
+                  <div className="text-sm font-bold text-white truncate">{t.full_name}</div>
+                  <div className="text-[11px] mt-0.5" style={{ color: "#9e9e9e" }}>{t.nickname ? `ชื่อเล่น ${t.nickname}` : t.department ?? "ยังไม่มีชื่อเล่น"}</div>
                   <div className="flex gap-2 flex-wrap mt-3 text-[11px]" style={{ color: "#636363" }}>
                     {t.subject && <span className="px-2 py-1 rounded-lg" style={{ background: "#0c0c0c", border: "1px solid #2a2a2a" }}><i className="fa-solid fa-book mr-1" />{t.subject}</span>}
                     {t.phone && <span className="px-2 py-1 rounded-lg" style={{ background: "#0c0c0c", border: "1px solid #2a2a2a" }}><i className="fa-solid fa-phone mr-1" />{t.phone}</span>}
@@ -7533,7 +7926,7 @@ function TeachersTab({ adminId }: { adminId: string }) {
               </div>
               <div className="flex gap-2 mt-4">
                 <button onClick={() => startEdit(t)} className="flex-1 text-[11px] px-2 py-1.5 rounded-lg font-bold" style={{ background: `${ADMIN_PRIMARY}18`, color: ADMIN_PRIMARY }}>แก้ไข</button>
-                <button onClick={() => del(t.id, t.name)} className="text-[11px] px-3 py-1.5 rounded-lg font-bold" style={{ background: "#da363322", color: "#ff7070" }}>ลบ</button>
+                <button onClick={() => del(t.id, t.full_name)} className="text-[11px] px-3 py-1.5 rounded-lg font-bold" style={{ background: "#da363322", color: "#ff7070" }}>ลบ</button>
               </div>
             </div>
           ))}
@@ -7549,21 +7942,22 @@ function TeachersTab({ adminId }: { adminId: string }) {
                 borderTopColor: "#2a2a2a",
               }}>
               <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold"
-                style={{ background: ADMIN_PRIMARY, color: "#fff" }}>
-                {t.name.charAt(0)}
+                style={{ background: t.color || ADMIN_PRIMARY, color: "#fff" }}>
+                {t.full_name.charAt(0)}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-bold text-white">
-                  {t.name}
+                  {t.full_name}
                   {t.nickname && <span className="text-xs font-normal ml-2" style={{ color: "#9e9e9e" }}>({t.nickname})</span>}
                 </div>
                 <div className="flex gap-3 text-[11px]" style={{ color: "#636363" }}>
                   {t.subject && <span><i className="fa-solid fa-book mr-1" />{t.subject}</span>}
+                  {t.department && <span><i className="fa-solid fa-building mr-1" />{t.department}</span>}
                   {t.phone && <span><i className="fa-solid fa-phone mr-1" />{t.phone}</span>}
                 </div>
               </div>
               <button onClick={() => startEdit(t)} className="text-[11px] px-2 py-1 rounded flex-shrink-0" style={{ background: `${ADMIN_PRIMARY}18`, color: ADMIN_PRIMARY }}>แก้ไข</button>
-              <button onClick={() => del(t.id, t.name)} className="text-[11px] px-2 py-1 rounded flex-shrink-0" style={{ background: "#da363322", color: "#ff7070" }}>ลบ</button>
+              <button onClick={() => del(t.id, t.full_name)} className="text-[11px] px-2 py-1 rounded flex-shrink-0" style={{ background: "#da363322", color: "#ff7070" }}>ลบ</button>
             </div>
           ))}
         </div>
@@ -8120,14 +8514,20 @@ function ClassScheduleTab({ adminId, activeView, onViewChange }: {
             </div>
             <div>
               <label className="block text-[11px] text-[#9e9e9e] mb-1">ครูผู้สอน</label>
-              <select value={form.teacher} onChange={e => setForm(f => ({ ...f, teacher: e.target.value }))} {...inp}>
-                <option value="">-- ไม่ระบุ --</option>
+              <input
+                list="teacher-datalist"
+                value={form.teacher}
+                onChange={e => setForm(f => ({ ...f, teacher: e.target.value }))}
+                {...inp}
+                placeholder="เลือกหรือพิมพ์ชื่อครู"
+              />
+              <datalist id="teacher-datalist">
                 {teacherList.map(t => (
-                  <option key={t.id} value={t.name}>
-                    {t.name}{t.nickname ? ` (${t.nickname})` : ""}{t.subject ? ` · ${t.subject}` : ""}
+                  <option key={t.id} value={t.full_name}>
+                    {t.nickname ? `(${t.nickname})` : ""}{t.subject ? ` · ${t.subject}` : ""}
                   </option>
                 ))}
-              </select>
+              </datalist>
             </div>
           </div>
           {msg && <p className="text-xs text-red-400">{msg}</p>}

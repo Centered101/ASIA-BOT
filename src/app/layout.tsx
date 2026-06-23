@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import AOSProvider from "@/components/AOSProvider";
 import NoRightClick from "@/components/NoRightClick";
+import ChatBubble from "@/components/ChatBubble";
 import { Toaster } from "sonner";
 import { Analytics } from "@vercel/analytics/next";
 
@@ -116,6 +117,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AOSProvider>
           {children}
         </AOSProvider>
+        <ChatBubble />
         <Toaster
           position="top-right"
           swipeDirections={["top", "left", "right"]}

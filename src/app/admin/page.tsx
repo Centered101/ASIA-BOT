@@ -7791,13 +7791,24 @@ function TeachersTab({ adminId, defaultShowForm }: { adminId: string; defaultSho
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
         <DarkSectionHeader title="ครูผู้สอน" icon="fa-chalkboard-user" count={teachers.length} />
-        <button
-          onClick={() => { setShowForm(v => !v); if (editId) reset(); }}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white transition-opacity hover:opacity-80"
-          style={{ background: "#ff7070" }}>
-          <i className={`fa-solid ${showForm ? "fa-xmark" : "fa-plus"}`} />
-          {showForm ? "ยกเลิก" : "เพิ่มครู"}
-        </button>
+        <div className="flex items-center gap-2">
+          <a
+            href="/become-teacher"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-opacity hover:opacity-80"
+            style={{ background: "#1c1c1c", border: "1px solid #3e3e3e", color: "#9e9e9e" }}>
+            <i className="fa-solid fa-link text-xs" />
+            ลิงก์สมัครครู
+          </a>
+          <button
+            onClick={() => { setShowForm(v => !v); if (editId) reset(); }}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white transition-opacity hover:opacity-80"
+            style={{ background: "#ff7070" }}>
+            <i className={`fa-solid ${showForm ? "fa-xmark" : "fa-plus"}`} />
+            {showForm ? "ยกเลิก" : "เพิ่มครู"}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

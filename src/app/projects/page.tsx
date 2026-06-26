@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { MascotState } from "@/components/Mascot";
 
 type Project = {
   id: string;
@@ -341,10 +342,7 @@ export default function ProjectsPage() {
 
         {/* ── Empty ── */}
         {!loading && filtered.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-24 gap-3 text-slate-400">
-            <i className="fa-solid fa-folder-open text-4xl" />
-            <span className="text-sm font-medium">ไม่พบโปรเจค</span>
-          </div>
+          <MascotState mood="confused" title="ไม่พบโปรเจค" subtitle="ลองเปลี่ยนคำค้นหาหรือหมวดหมู่ดูนะครับ" />
         )}
 
         {/* ── Content ── */}

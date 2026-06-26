@@ -41,6 +41,8 @@ CREATE TABLE public.admins (
   created_at timestamp with time zone DEFAULT now(),
   username_changed_at timestamp with time zone,
   linked_student_id text,
+  google_id text UNIQUE,
+  google_email text UNIQUE,
   CONSTRAINT admins_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.login_logs (
@@ -274,12 +276,23 @@ CREATE TABLE public.class_schedule_overrides (
 );
 CREATE TABLE public.teachers (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
-  name text NOT NULL,
+  full_name text NOT NULL,
   nickname text,
   subject text,
   phone text,
-  active boolean NOT NULL DEFAULT true,
   created_at timestamp with time zone DEFAULT now(),
+  status text NOT NULL DEFAULT 'active'::text CHECK (status = ANY (ARRAY['pending'::text, 'reviewing'::text, 'approved'::text, 'rejected'::text, 'active'::text, 'inactive'::text])),
+  email text,
+  department text,
+  color text,
+  reason text,
+  desired_username text,
+  linked_admin_id text,
+  admin_note text,
+  reviewed_by text,
+  reviewed_at timestamp with time zone,
+  updated_at timestamp with time zone DEFAULT now(),
+  desired_password_hash text,
   CONSTRAINT teachers_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.change_requests (
@@ -363,4 +376,158 @@ CREATE TABLE public.room_bookings (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT room_bookings_pkey PRIMARY KEY (id),
   CONSTRAINT room_bookings_room_id_fkey FOREIGN KEY (room_id) REFERENCES public.rooms(id)
+);
+CREATE TABLE public.qq_stores (
+  id integer NOT NULL,
+  name text NOT NULL,
+  icon text NOT NULL,
+  color text NOT NULL,
+  color1 text NOT NULL,
+  color2 text NOT NULL,
+  CONSTRAINT qq_stores_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.qq_menu_items (
+  id integer NOT NULL DEFAULT nextval('qq_menu_items_id_seq'::regclass),
+  store_id integer,
+  name text NOT NULL,
+  category text DEFAULT 'ทั่วไป'::text,
+  price numeric NOT NULL,
+  image text DEFAULT ''::text,
+  is_available boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT qq_menu_items_pkey PRIMARY KEY (id),
+  CONSTRAINT qq_menu_items_store_id_fkey FOREIGN KEY (store_id) REFERENCES public.qq_stores(id)
+);
+CREATE TABLE public.qq_orders (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  table_num text NOT NULL,
+  customer_name text DEFAULT '-'::text,
+  total numeric NOT NULL,
+  notes text DEFAULT '-'::text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT qq_orders_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.qq_order_items (
+  id integer NOT NULL DEFAULT nextval('qq_order_items_id_seq'::regclass),
+  order_id uuid,
+  store_id integer NOT NULL,
+  item_name text NOT NULL,
+  price numeric NOT NULL,
+  quantity integer NOT NULL,
+  image text DEFAULT ''::text,
+  CONSTRAINT qq_order_items_pkey PRIMARY KEY (id),
+  CONSTRAINT qq_order_items_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.qq_orders(id)
+);
+CREATE TABLE public.qq_store_order_status (
+  id integer NOT NULL DEFAULT nextval('qq_store_order_status_id_seq'::regclass),
+  order_id uuid,
+  store_id integer NOT NULL,
+  status text DEFAULT 'pending'::text,
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT qq_store_order_status_pkey PRIMARY KEY (id),
+  CONSTRAINT qq_store_order_status_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.qq_orders(id)
+);
+CREATE TABLE public.qman_categories (
+  id integer NOT NULL,
+  name text NOT NULL,
+  icon text NOT NULL,
+  color_from text NOT NULL,
+  color_to text NOT NULL,
+  CONSTRAINT qman_categories_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.qman_shops (
+  id integer NOT NULL DEFAULT nextval('qman_shops_id_seq'::regclass),
+  category_id integer,
+  name text NOT NULL,
+  branch text NOT NULL,
+  logo_url text DEFAULT ''::text,
+  map_url text DEFAULT ''::text,
+  price_per_booking numeric DEFAULT 0,
+  badge text DEFAULT ''::text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT qman_shops_pkey PRIMARY KEY (id),
+  CONSTRAINT qman_shops_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.qman_categories(id)
+);
+CREATE TABLE public.qman_users (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  email text NOT NULL UNIQUE,
+  password_hash text NOT NULL,
+  wallet_balance numeric DEFAULT 500,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT qman_users_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.qman_bookings (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  queue_number text NOT NULL,
+  user_id uuid,
+  shop_id integer,
+  shop_name text NOT NULL,
+  shop_branch text NOT NULL,
+  shop_logo text DEFAULT ''::text,
+  shop_map text DEFAULT ''::text,
+  customer_name text NOT NULL,
+  customer_phone text NOT NULL,
+  booking_date date NOT NULL,
+  booking_time time without time zone NOT NULL,
+  notes text DEFAULT ''::text,
+  price numeric NOT NULL,
+  status text DEFAULT 'รอรับบริการ'::text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT qman_bookings_pkey PRIMARY KEY (id),
+  CONSTRAINT qman_bookings_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.qman_users(id),
+  CONSTRAINT qman_bookings_shop_id_fkey FOREIGN KEY (shop_id) REFERENCES public.qman_shops(id)
+);
+CREATE TABLE public.teacher_applications (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  full_name text NOT NULL,
+  email text,
+  phone text,
+  department text,
+  subject text,
+  reason text NOT NULL,
+  desired_username text NOT NULL,
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'reviewing'::text, 'approved'::text, 'rejected'::text])),
+  admin_note text,
+  reviewed_by text,
+  reviewed_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT teacher_applications_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.name_change_requests (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  student_id text NOT NULL,
+  old_first_name text NOT NULL,
+  old_last_name text NOT NULL,
+  new_first_name text NOT NULL,
+  new_last_name text NOT NULL,
+  reason text,
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])),
+  admin_note text,
+  reviewed_by text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT name_change_requests_pkey PRIMARY KEY (id),
+  CONSTRAINT name_change_requests_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(student_id)
+);
+CREATE TABLE public.agent_conversations (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  session_id text NOT NULL UNIQUE,
+  messages jsonb NOT NULL DEFAULT '[]'::jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT agent_conversations_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.agent_logs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  session_id text,
+  channel text NOT NULL,
+  user_id text,
+  user_role text,
+  user_message text NOT NULL,
+  tools_called jsonb DEFAULT '[]'::jsonb,
+  response text,
+  latency_ms integer,
+  error text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT agent_logs_pkey PRIMARY KEY (id)
 );

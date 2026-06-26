@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import StudentAvatar from "@/components/StudentAvatar";
+import { Mascot } from "@/components/Mascot";
 import { toast } from "sonner";
 import { getStudentSession, type StudentSession } from "@/lib/session";
 
@@ -91,10 +92,7 @@ export default function StudentEntryScannerPage() {
     if (!authed) return;
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        date,
-        location: tab,
-      });
+      const params = new URLSearchParams({ date, location: tab });
       const res  = await fetch(`/api/attendance?${params.toString()}`);
       const json = await res.json();
       if (json.status === "success") {
@@ -317,15 +315,14 @@ export default function StudentEntryScannerPage() {
           {loading ? (
             <div className="flex justify-center py-16"><span className="spinner w-10 h-10 border-4" /></div>
           ) : data.length === 0 ? (
-            <div className="text-center py-16">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/mascot/mascot-search.svg" alt="empty" className="w-20 h-20 mx-auto mb-4 opacity-60" />
-              <p className="text-slate-400 text-sm">ไม่มีข้อมูลการเข้า{cfg.label}ในวันที่เลือก</p>
+            <div className="flex flex-col items-center text-center py-16">
+              <Mascot mood="sleeping" size={104} float />
+              <p className="text-slate-400 text-sm mt-3">ยังไม่มีข้อมูลการเข้า{cfg.label}ในวันที่เลือก</p>
             </div>
           ) : filteredData.length === 0 ? (
-            <div className="text-center py-16">
-              <i className="fa-solid fa-magnifying-glass text-3xl text-slate-200 mb-4" />
-              <p className="text-slate-400 text-sm">ไม่พบข้อมูลที่ตรงกับคำค้นหา</p>
+            <div className="flex flex-col items-center text-center py-16">
+              <Mascot mood="confused" size={104} float />
+              <p className="text-slate-400 text-sm mt-3">ไม่พบข้อมูลที่ตรงกับคำค้นหา</p>
             </div>
           ) : (
             <div className="overflow-x-auto">

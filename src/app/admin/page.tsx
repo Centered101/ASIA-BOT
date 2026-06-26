@@ -289,6 +289,12 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    title: "เอกสาร",
+    items: [
+      { id: "documents", label: "เอกสาร PDF", icon: "fa-file-pdf" },
+    ],
+  },
+  {
     title: "ระบบ",
     items: [
       { id: "teacher_applications", label: "ใบสมัครครู", icon: "fa-chalkboard-user", badge: "pendingTeacherApps" },
@@ -322,6 +328,7 @@ const TAB_ACCESS: Record<string, AdminRole[]> = {
   teacher_applications: ["superadmin"],
   admins: ["superadmin", "admin", "staff"],
   line_broadcast: ["superadmin", "admin", "staff"],
+  documents: ["superadmin", "admin", "staff"],
   settings: ["superadmin", "admin", "staff"],
 };
 
@@ -832,6 +839,7 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
             {activeTab === "teacher_applications" && <TeacherApplicationsTab adminId={admin.admin_id} onAddTeacher={() => setActiveTab("teachers")} />}
             {activeTab === "admins"               && <AdminsTab             adminId={admin.admin_id} role={admin.role} onAvatarChange={onAvatarChange} />}
             {activeTab === "line_broadcast"  && <LineBroadcastTab adminId={admin.admin_id} />}
+            {activeTab === "documents"       && <DocumentsTab   adminId={admin.admin_id} role={admin.role} />}
             {activeTab === "settings"        && <SettingsTab    adminId={admin.admin_id} adminName={[admin.first_name, admin.last_name].filter(Boolean).join(" ") || admin.admin_id} adminRole={admin.role} adminAvatar={admin.avatar} stats={stats} />}
           </div>
         </main>
@@ -5302,7 +5310,7 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
 type TeacherApp = {
   id: string; full_name: string; email: string | null; phone: string | null;
   department: string | null; subject: string | null; reason: string;
-  desired_username: string; status: string; admin_note: string | null;
+  desired_username: string; has_desired_password: boolean; status: string; admin_note: string | null;
   reviewed_by: string | null; reviewed_at: string | null; created_at: string;
 };
 
@@ -5318,11 +5326,12 @@ function TeacherApplicationsTab({ adminId, onAddTeacher }: { adminId: string; on
   const [loading, setLoading]       = useState(true);
   const [filter, setFilter]         = useState<"pending" | "approved" | "rejected" | "all">("pending");
   const [selected, setSelected]     = useState<TeacherApp | null>(null);
-  const [actionLoading, setAL]      = useState(false);
-  const [approvePassword, setAppPw] = useState("");
-  const [rejectNote, setRejectNote] = useState("");
-  const [adminNote, setAdminNote]   = useState("");
-  const [msg, setMsg]               = useState("");
+  const [actionLoading, setAL]        = useState(false);
+  const [approvePassword, setAppPw]   = useState("");
+  const [useDesiredPwd, setUseDesired] = useState(false);
+  const [rejectNote, setRejectNote]   = useState("");
+  const [adminNote, setAdminNote]     = useState("");
+  const [msg, setMsg]                 = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -5338,23 +5347,24 @@ function TeacherApplicationsTab({ adminId, onAddTeacher }: { adminId: string; on
 
   async function handleAction(action: "approve" | "reject" | "review") {
     if (!selected) return;
-    if (action === "approve" && approvePassword.length < 6) { setMsg("รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร"); return; }
-    if (action === "reject"  && !rejectNote.trim())          { setMsg("กรุณาระบุเหตุผลที่ปฏิเสธ"); return; }
+    if (action === "approve" && !useDesiredPwd && approvePassword.length < 6) { setMsg("รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร"); return; }
+    if (action === "reject"  && !rejectNote.trim())                            { setMsg("กรุณาระบุเหตุผลที่ปฏิเสธ"); return; }
     setAL(true); setMsg("");
     const res = await fetch(`/api/admin/teacher-applications/${selected.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json", "x-admin-id": adminId },
       body: JSON.stringify({
         action,
-        password:   action === "approve" ? approvePassword : undefined,
-        admin_note: action === "approve" ? adminNote : rejectNote,
+        password:             action === "approve" && !useDesiredPwd ? approvePassword : undefined,
+        use_desired_password: action === "approve" ? useDesiredPwd : undefined,
+        admin_note:           action === "approve" ? adminNote : rejectNote,
       }),
     });
     const j = await res.json();
     setAL(false);
     if (j.status === "success") {
       toast.success(action === "approve" ? `อนุมัติแล้ว — สร้างบัญชี Admin: ${j.username}` : action === "reject" ? "ปฏิเสธใบสมัครแล้ว" : "เปลี่ยนสถานะแล้ว");
-      setSelected(null); setAppPw(""); setRejectNote(""); setAdminNote("");
+      setSelected(null); setAppPw(""); setUseDesired(false); setRejectNote(""); setAdminNote("");
       load();
     } else {
       setMsg(j.message || "เกิดข้อผิดพลาด");
@@ -5408,7 +5418,7 @@ function TeacherApplicationsTab({ adminId, onAddTeacher }: { adminId: string; on
               <div key={app.id}
                 className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 cursor-pointer transition-all"
                 style={{ background: "#161616", border: "1px solid #2a2a2a" }}
-                onClick={() => { setSelected(app); setMsg(""); setAppPw(""); setRejectNote(""); setAdminNote(""); }}>
+                onClick={() => { setSelected(app); setMsg(""); setAppPw(""); setUseDesired(false); setRejectNote(""); setAdminNote(""); }}>
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold shrink-0"
                     style={{ background: "#ff707018", color: ADMIN_PRIMARY }}>
@@ -5488,14 +5498,24 @@ function TeacherApplicationsTab({ adminId, onAddTeacher }: { adminId: string; on
                   <p className="text-xs font-semibold" style={{ color: "#34d399" }}>
                     <i className="fa-solid fa-circle-check mr-1" /> อนุมัติ — กำหนดรหัสผ่านสำหรับบัญชี Admin
                   </p>
-                  <input
-                    type="password"
-                    value={approvePassword}
-                    onChange={e => setAppPw(e.target.value)}
-                    placeholder="รหัสผ่าน (อย่างน้อย 6 ตัว)"
-                    className="w-full rounded-lg px-3 py-2 text-sm font-mono"
-                    style={{ background: "#0c0c0c", border: "1px solid #2a2a2a", color: "#fff" }}
-                  />
+                  {selected.has_desired_password && (
+                    <label className="flex items-center gap-2 cursor-pointer rounded-lg px-3 py-2 text-sm"
+                      style={{ background: "#0c1f0c", border: "1px solid #14532d" }}>
+                      <input type="checkbox" checked={useDesiredPwd} onChange={e => setUseDesired(e.target.checked)}
+                        className="accent-green-500 w-4 h-4" />
+                      <span style={{ color: "#86efac" }}>ใช้รหัสผ่านที่ครูตั้งเองไว้</span>
+                    </label>
+                  )}
+                  {!useDesiredPwd && (
+                    <input
+                      type="password"
+                      value={approvePassword}
+                      onChange={e => setAppPw(e.target.value)}
+                      placeholder="รหัสผ่าน (อย่างน้อย 6 ตัว)"
+                      className="w-full rounded-lg px-3 py-2 text-sm font-mono"
+                      style={{ background: "#0c0c0c", border: "1px solid #2a2a2a", color: "#fff" }}
+                    />
+                  )}
                   <input
                     type="text"
                     value={adminNote}
@@ -5551,6 +5571,147 @@ function TeacherApplicationsTab({ adminId, onAddTeacher }: { adminId: string; on
       )}
     </div>
   );
+}
+
+// ─── Documents Tab ────────────────────────────────────────────────────────────
+
+type PdfDocument = {
+  id: string
+  name: string
+  description: string | null
+  file_url: string
+  file_size: number | null
+  uploaded_by: string
+  upload_source: 'admin' | 'line'
+  is_public: boolean
+  created_at: string
+}
+
+function DocumentsTab({ adminId, role }: { adminId: string; role: string }) {
+  const [docs, setDocs] = useState<PdfDocument[]>([])
+  const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const [form, setForm] = useState({ name: '', description: '', is_public: true })
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const canEdit = role === 'superadmin' || role === 'admin'
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const res = await adminFetch('/api/documents', adminId)
+    const json = await res.json()
+    if (json.status === 'success') setDocs(json.data ?? [])
+    setLoading(false)
+  }, [adminId])
+
+  useEffect(() => { load() }, [load])
+
+  async function handleUpload(e: React.FormEvent) {
+    e.preventDefault()
+    const file = fileRef.current?.files?.[0]
+    if (!file || !form.name.trim()) { toast.error('กรุณาเลือกไฟล์และระบุชื่อเอกสาร'); return }
+
+    setUploading(true)
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('name', form.name.trim())
+    fd.append('description', form.description.trim())
+    fd.append('is_public', String(form.is_public))
+
+    const res = await fetch('/api/documents/upload', {
+      method: 'POST',
+      headers: { 'x-admin-id': adminId },
+      body: fd,
+    })
+    const json = await res.json()
+    setUploading(false)
+
+    if (json.status === 'success') {
+      toast.success(`อัปโหลดสำเร็จ (${json.chunk_count} ส่วน)`)
+      setForm({ name: '', description: '', is_public: true })
+      if (fileRef.current) fileRef.current.value = ''
+      load()
+    } else {
+      toast.error(json.message ?? 'อัปโหลดไม่สำเร็จ')
+    }
+  }
+
+  async function handleDelete(doc: PdfDocument) {
+    if (!confirm(`ลบเอกสาร "${doc.name}" ?`)) return
+    const res = await adminFetch('/api/documents/upload', adminId, {
+      method: 'DELETE',
+      body: JSON.stringify({ id: doc.id }),
+    })
+    const json = await res.json()
+    if (json.status === 'success') { toast.success('ลบแล้ว'); load() }
+    else toast.error(json.message ?? 'ลบไม่สำเร็จ')
+  }
+
+  return (
+    <div style={{ padding: 24, maxWidth: 900 }}>
+      <h2 style={{ color: '#fff', fontWeight: 700, fontSize: 20, marginBottom: 20 }}>
+        <i className="fa-solid fa-file-pdf" style={{ color: '#ff7070', marginRight: 8 }} />
+        เอกสาร PDF
+      </h2>
+
+      {canEdit && (
+        <form onSubmit={handleUpload} style={{ background: '#1a1a1a', borderRadius: 12, padding: 20, marginBottom: 24, border: '1px solid #2a2a2a' }}>
+          <p style={{ color: '#9e9e9e', fontSize: 13, marginBottom: 12 }}>อัปโหลด PDF ใหม่</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <input type="file" accept=".pdf" ref={fileRef} style={{ color: '#ccc', fontSize: 13 }} />
+            <input
+              type="text" placeholder="ชื่อเอกสาร *"
+              value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              style={{ background: '#111', border: '1px solid #333', borderRadius: 8, padding: '8px 12px', color: '#fff', fontSize: 13 }} />
+            <input
+              type="text" placeholder="คำอธิบาย (ไม่บังคับ)"
+              value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+              style={{ background: '#111', border: '1px solid #333', borderRadius: 8, padding: '8px 12px', color: '#fff', fontSize: 13 }} />
+            <label style={{ color: '#9e9e9e', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" checked={form.is_public} onChange={e => setForm(f => ({ ...f, is_public: e.target.checked }))} />
+              เปิดให้นักเรียนค้นหาได้ (สาธารณะ)
+            </label>
+            <button type="submit" disabled={uploading}
+              style={{ background: '#ff7070', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 20px', fontWeight: 600, cursor: uploading ? 'not-allowed' : 'pointer', opacity: uploading ? 0.6 : 1, width: 'fit-content' }}>
+              {uploading ? 'กำลังอัปโหลด…' : 'อัปโหลด PDF'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {loading ? (
+        <p style={{ color: '#9e9e9e' }}>กำลังโหลด…</p>
+      ) : docs.length === 0 ? (
+        <p style={{ color: '#9e9e9e' }}>ยังไม่มีเอกสาร</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {docs.map(doc => (
+            <div key={doc.id} style={{ background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 10, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+              <i className="fa-solid fa-file-pdf" style={{ color: '#ff7070', fontSize: 22, flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ color: '#fff', fontWeight: 600, fontSize: 14, margin: 0 }}>{doc.name}</p>
+                {doc.description && <p style={{ color: '#9e9e9e', fontSize: 12, margin: '2px 0 0' }}>{doc.description}</p>}
+                <p style={{ color: '#636363', fontSize: 11, margin: '4px 0 0' }}>
+                  {doc.upload_source === 'line' ? '📱 LINE' : '🖥 Admin'} ·{' '}
+                  {doc.is_public ? '🌐 สาธารณะ' : '🔒 ส่วนตัว'} ·{' '}
+                  {doc.file_size ? `${(doc.file_size / 1024).toFixed(0)} KB` : ''} ·{' '}
+                  {formatDate(doc.created_at)}
+                </p>
+              </div>
+              <a href={doc.file_url} target="_blank" rel="noopener noreferrer"
+                style={{ color: '#84D4FA', fontSize: 12, textDecoration: 'none', flexShrink: 0 }}>ดูไฟล์</a>
+              {canEdit && (
+                <button onClick={() => handleDelete(doc)}
+                  style={{ background: 'rgba(239,68,68,0.15)', color: '#ff7070', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer', flexShrink: 0 }}>
+                  ลบ
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ─── Settings Tab ─────────────────────────────────────────────────────────────

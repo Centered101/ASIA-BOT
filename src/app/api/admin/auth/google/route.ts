@@ -28,11 +28,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, message: "บัญชีนี้ถูกปิดการใช้งาน" }, { status: 403 });
   }
 
-  // อัปเดต google_id + avatar ถ้ายังไม่มี
+  // อัปเดต google_id เท่านั้น ไม่เอารูปจาก Google มาบันทึก
   const updates: Record<string, unknown> = {};
   if (google_id && !admin.google_id) updates.google_id = google_id;
   if (!admin.google_email)           updates.google_email = email;
-  if (avatar_url && !admin.avatar)   updates.avatar = avatar_url;
   if (Object.keys(updates).length > 0) {
     await (supabase.from("admins") as any).update(updates).eq("id", admin.id);
   }
@@ -55,7 +54,7 @@ export async function POST(req: NextRequest) {
       first_name: admin.first_name,
       last_name:  admin.last_name,
       nickname:   admin.nickname,
-      avatar:     avatar_url ?? admin.avatar ?? null,
+      avatar:     admin.avatar ?? null,
       email:        admin.email ?? email,
       phone:        admin.phone ?? null,
       entry_year:   admin.entry_year ?? null,

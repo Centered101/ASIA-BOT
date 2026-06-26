@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { Mascot, MascotState } from "@/components/Mascot";
 import { getAmenityInfo } from "@/lib/amenities";
 import { getStudentSession, type StudentSession } from "@/lib/session";
 
@@ -169,6 +170,8 @@ function ClassTrackRoomPageContent() {
         setCurrentTime(json.meta?.currentTime?.slice(0, 5) ?? "");
         setLastUpdate(new Date().toLocaleTimeString("th-TH"));
       }
+    } catch {
+      // transient network error — keep existing data, will retry on next interval
     } finally {
       setSchedLoading(false);
     }
@@ -821,20 +824,15 @@ function SectionTitle({ icon, title, count, muted }: { icon: string; title: stri
 
 function LoadingState() {
   return (
-    <div className="flex flex-col items-center justify-center py-24 text-slate-400">
-      <i className="fa-solid fa-spinner fa-spin text-3xl mb-3" />
-      <span>กำลังโหลด...</span>
+    <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+      <Mascot mood="thinking" size={104} float />
+      <span className="mt-3">กำลังโหลด...</span>
     </div>
   );
 }
 
 function EmptyState({ text }: { text: string }) {
-  return (
-    <div className="text-center py-20 text-slate-400">
-      <i className="fa-solid fa-door-closed text-4xl mb-3 block" />
-      <p>{text}</p>
-    </div>
-  );
+  return <MascotState mood="confused" title={text} />;
 }
 
 function RoomStatusCard({ room }: { room: Room }) {

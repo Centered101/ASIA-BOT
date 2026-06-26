@@ -7,6 +7,8 @@ import Footer from "@/components/Footer";
 import { toast } from "sonner";
 import { SESSION_KEY, SESSION_TIME_KEY, SESSION_TTL } from "@/lib/config";
 
+let _welcomeShown = false;
+
 const PAY_LIMIT = 15 * 60 * 1000;
 const LS_PENDING = "coopPendingOrder";
 const STRIPE_FEE_RATE = 0.02;
@@ -163,6 +165,7 @@ export default function ShopPage() {
   const bannerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
   const expireRef   = useRef<number>(0);
   const orderIdRef  = useRef("");
+  const paidRef     = useRef(false);
   const slipRef     = useRef<HTMLCanvasElement>(null);
 
   // ── Init: session guard ───────────────────────────────────────────
@@ -175,7 +178,10 @@ export default function ShopPage() {
       }
       const s: Student = JSON.parse(raw);
       setStudent(s);
-      toast.success(`ยินดีต้อนรับ ${s.nickname || s.first_name} 🛒`);
+      if (!_welcomeShown) {
+        _welcomeShown = true;
+        toast.success(`ยินดีต้อนรับ ${s.nickname || s.first_name} 🛒`);
+      }
     } catch { router.replace("/login?next=/shop"); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -347,6 +353,7 @@ export default function ShopPage() {
   // ── Polling ──────────────────────────────────────────────────────
   function startPolling(orderId: string) {
     stopPolling();
+    paidRef.current = false;
     let tries = 0;
     const max = Math.ceil(PAY_LIMIT / 3000) + 10;
     pollRef.current = setInterval(async () => {
@@ -368,6 +375,8 @@ export default function ShopPage() {
 
   // ── Payment outcomes ─────────────────────────────────────────────
   function onPaymentPaid(orderId: string) {
+    if (paidRef.current) return;
+    paidRef.current = true;
     stopPolling(); stopCountdown(); clearPendingOrder();
     setLogs(prev => {
       const next = prev.map(l => l.orderId === orderId ? { ...l, status: "paid" as const } : l);

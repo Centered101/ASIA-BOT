@@ -15,7 +15,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!hasAdminRole(session, ["superadmin"]))
     return NextResponse.json({ status: "error", message: "เฉพาะ Superadmin เท่านั้น" }, { status: 403 });
 
-  const { action, admin_note, password } = await req.json();
+  const { action, admin_note, password, use_desired_password } = await req.json();
   if (action !== "approve" && action !== "reject" && action !== "review")
     return NextResponse.json({ status: "error", message: "action ไม่ถูกต้อง" }, { status: 400 });
 
@@ -32,7 +32,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   // ── Approve ─────────────────────────────────────────────────────────────────
   if (action === "approve") {
-    if (!password || password.length < 6)
+    const usingDesired = use_desired_password && !!app.desired_password_hash;
+    if (!usingDesired && (!password || password.length < 6))
       return NextResponse.json({ status: "error", message: "กรุณากำหนดรหัสผ่านอย่างน้อย 6 ตัวอักษร" }, { status: 400 });
 
     const { data: existingAdmin } = await (supabase.from("admins") as any)
@@ -42,7 +43,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (existingAdmin)
       return NextResponse.json({ status: "error", message: `username "${app.desired_username}" มีอยู่ในระบบแล้ว` }, { status: 409 });
 
-    const password_hash = await bcrypt.hash(password, 12);
+    const password_hash = usingDesired
+      ? app.desired_password_hash
+      : await bcrypt.hash(password, 12);
     const newAdminId = `ADM-${Date.now()}`;
 
     // ตรวจว่า email นี้มี admin อื่น google_email ซ้ำอยู่ไหม

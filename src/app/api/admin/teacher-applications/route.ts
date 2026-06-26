@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 
   const query = supabase
     .from("teachers")
-    .select("id, full_name, email, phone, department, subject, reason, desired_username, status, admin_note, reviewed_by, reviewed_at, linked_admin_id, created_at")
+    .select("id, full_name, email, phone, department, subject, reason, desired_username, desired_password_hash, status, admin_note, reviewed_by, reviewed_at, linked_admin_id, created_at")
     .order("created_at", { ascending: true });
 
   if (statusParam === "pending") {
@@ -32,5 +32,10 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ status: "error", message: error.message }, { status: 500 });
-  return NextResponse.json({ status: "success", data: data ?? [] });
+  // ไม่ส่ง hash ออกไป — แค่บอกว่าครูตั้งรหัสผ่านไว้ไหม
+  const sanitized = (data ?? []).map(({ desired_password_hash, ...rest }: { desired_password_hash: string | null; [key: string]: unknown }) => ({
+    ...rest,
+    has_desired_password: !!desired_password_hash,
+  }));
+  return NextResponse.json({ status: "success", data: sanitized });
 }

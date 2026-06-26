@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { Mascot } from "@/components/Mascot";
 
 export default function NotFound() {
   return (
@@ -10,9 +11,7 @@ export default function NotFound() {
         <div className="relative mb-8">
           <div className="text-[120px] sm:text-[180px] font-black text-slate-100 leading-none select-none">404</div>
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-center">
-              <i className="fa-solid fa-compass fa-spin text-4xl sm:text-5xl text-sky-400 mb-2" />
-            </div>
+            <Mascot mood="shocked" size={140} float />
           </div>
         </div>
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-3">ไม่พบหน้าที่ต้องการ</h1>

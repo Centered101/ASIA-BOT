@@ -22,10 +22,14 @@ function checkPhone(raw: string): string | null {
   return null;
 }
 
-function checkTeacherName(val: string): string | null {
+function checkName(val: string, label: string): string | null {
   const v = val.trim();
-  if (v.length < 2) return "ชื่อ-นามสกุลต้องมีอย่างน้อย 2 ตัวอักษร";
-  if (/^\W+$/.test(v)) return "กรุณากรอกชื่อ-นามสกุลจริง";
+  if (v.length < 2) return `${label}ต้องมีอย่างน้อย 2 ตัวอักษร`;
+  const hasThai    = /[ก-๙]/.test(v);
+  const hasEnglish = /[a-zA-Z]/.test(v);
+  if (!hasThai && !hasEnglish) return `กรุณากรอก${label}จริง`;
+  if (/[0-9]/.test(v))         return `${label}ไม่ควรมีตัวเลข`;
+  if (hasThai && hasEnglish)   return `${label}กรุณากรอกภาษาเดียวกัน (ไทยหรืออังกฤษ)`;
   return null;
 }
 
@@ -45,15 +49,50 @@ function checkUsername(val: string): string | null {
   return null;
 }
 
+function checkPassword(val: string): string | null {
+  if (val.length < 8)        return "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร";
+  if (!/[a-zA-Z]/.test(val)) return "รหัสผ่านต้องมีตัวอักษรภาษาอังกฤษอย่างน้อย 1 ตัว";
+  if (!/[0-9]/.test(val))    return "รหัสผ่านต้องมีตัวเลขอย่างน้อย 1 ตัว";
+  return null;
+}
+
+function genPassword(): string {
+  const upper  = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower  = "abcdefghjkmnpqrstuvwxyz";
+  const digits = "23456789";
+  const syms   = "!@#$&*";
+  const all    = upper + lower + digits + syms;
+  const chars  = [
+    upper [Math.floor(Math.random() * upper.length)],
+    lower [Math.floor(Math.random() * lower.length)],
+    digits[Math.floor(Math.random() * digits.length)],
+    syms  [Math.floor(Math.random() * syms.length)],
+    ...Array.from({ length: 6 }, () => all[Math.floor(Math.random() * all.length)]),
+  ];
+  return chars.sort(() => Math.random() - 0.5).join("");
+}
+
+function checkReason(val: string): string | null {
+  const v = val.trim();
+  if (v.length < 20) return "กรุณากรอกเหตุผลอย่างน้อย 20 ตัวอักษร";
+  const noSpace     = v.replace(/\s/g, "");
+  const uniqueRatio = new Set(noSpace).size / noSpace.length;
+  const hasThai     = /[ก-๙]/.test(v);
+  if (!hasThai && uniqueRatio < 0.25) return "เหตุผลดูเหมือนการกดแป้นพิมพ์สุ่ม กรุณากรอกเหตุผลจริง";
+  return null;
+}
+
 type FormData = {
-  full_name:        string;
-  nickname:         string;
-  phone:            string;
-  email:            string;
-  department:       string;
-  subject:          string;
-  desired_username: string;
-  reason:           string;
+  first_name:        string;
+  last_name:         string;
+  nickname:          string;
+  phone:             string;
+  email:             string;
+  department:        string;
+  subject:           string;
+  desired_username:  string;
+  desired_password:  string;
+  reason:            string;
 };
 type ErrMap = Partial<Record<keyof FormData, boolean>>;
 
@@ -75,10 +114,11 @@ function BecomeTeacherForm() {
   const [done,          setDone]          = useState(false);
   const [submittedUser, setSubmittedUser] = useState("");
   const [errs,          setErrs]          = useState<ErrMap>({});
+  const [showPwd,       setShowPwd]       = useState(false);
 
   const [form, setForm] = useState<FormData>({
-    full_name: "", nickname: "", phone: "", email: "",
-    department: "", subject: "", desired_username: "", reason: "",
+    first_name: "", last_name: "", nickname: "", phone: "", email: "",
+    department: "", subject: "", desired_username: "", desired_password: "", reason: "",
   });
 
   const [deptQuery, setDeptQuery] = useState("");
@@ -95,10 +135,14 @@ function BecomeTeacherForm() {
 
   useEffect(() => {
     if (googleEmail || googleName) {
+      const parts      = googleName.trim().split(/\s+/);
+      const autoFirst  = parts[0]            ?? "";
+      const autoLast   = parts.slice(1).join(" ") ?? "";
       setForm(f => ({
         ...f,
-        email:     f.email     || googleEmail,
-        full_name: f.full_name || googleName,
+        email:      f.email      || googleEmail,
+        first_name: f.first_name || autoFirst,
+        last_name:  f.last_name  || autoLast,
       }));
     }
   }, [googleEmail, googleName]);
@@ -138,13 +182,18 @@ function BecomeTeacherForm() {
   }
 
   function validateStep2(): boolean {
-    if (!form.full_name.trim()) { errField("full_name"); toast.error("กรุณากรอกชื่อ-นามสกุล"); return false; }
-    const nameErr = checkTeacherName(form.full_name);
-    if (nameErr) { errField("full_name"); toast.error(nameErr); return false; }
+    if (!form.first_name.trim()) { errField("first_name"); toast.error("กรุณากรอกชื่อ"); return false; }
+    const firstErr = checkName(form.first_name, "ชื่อ");
+    if (firstErr) { errField("first_name"); toast.error(firstErr); return false; }
 
-    if (!form.phone.trim()) { errField("phone"); toast.error("กรุณากรอกเบอร์โทร"); return false; }
-    const phoneErr = checkPhone(form.phone);
-    if (phoneErr) { errField("phone"); toast.error(phoneErr); return false; }
+    if (!form.last_name.trim()) { errField("last_name"); toast.error("กรุณากรอกนามสกุล"); return false; }
+    const lastErr = checkName(form.last_name, "นามสกุล");
+    if (lastErr) { errField("last_name"); toast.error(lastErr); return false; }
+
+    if (form.phone.trim()) {
+      const phoneErr = checkPhone(form.phone);
+      if (phoneErr) { errField("phone"); toast.error(phoneErr); return false; }
+    }
 
     if (form.email.trim()) {
       const emailErr = checkEmail(form.email);
@@ -158,9 +207,11 @@ function BecomeTeacherForm() {
     if (!form.desired_username.trim()) { errField("desired_username"); toast.error("กรุณากรอก Username ที่ต้องการ"); return false; }
     const usernameErr = checkUsername(form.desired_username);
     if (usernameErr) { errField("desired_username"); toast.error(usernameErr); return false; }
-    if (!form.reason.trim() || form.reason.trim().length < 20) {
-      errField("reason"); toast.error("กรุณากรอกเหตุผลอย่างน้อย 20 ตัวอักษร"); return false;
-    }
+    if (!form.desired_password.trim()) { errField("desired_password"); toast.error("กรุณากรอกรหัสผ่าน"); return false; }
+    const pwdErr = checkPassword(form.desired_password);
+    if (pwdErr) { errField("desired_password"); toast.error(pwdErr); return false; }
+    const reasonErr = checkReason(form.reason);
+    if (reasonErr) { errField("reason"); toast.error(reasonErr); return false; }
     return true;
   }
 
@@ -173,7 +224,7 @@ function BecomeTeacherForm() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          full_name:        form.full_name.trim(),
+          full_name:        [form.first_name, form.last_name].map(s => s.trim()).filter(Boolean).join(" "),
           nickname:         form.nickname.trim() || null,
           phone:            form.phone.trim() || null,
           email:            form.email.trim() || googleEmail || null,
@@ -181,6 +232,7 @@ function BecomeTeacherForm() {
           subject:          form.subject.trim() || null,
           reason:           form.reason.trim(),
           desired_username: form.desired_username.trim().toLowerCase(),
+          desired_password: form.desired_password,
         }),
       });
       const data = await res.json();
@@ -219,14 +271,16 @@ function BecomeTeacherForm() {
   const inputCls = (field: keyof FormData) => `form-input text-xs sm:text-sm${errs[field] ? " error" : ""}`;
   const wrapCls  = (field: keyof FormData) => `field-wrap${errs[field] ? " has-error" : ""}`;
 
+  const fullNamePreview = [form.first_name, form.last_name].map(s => s.trim()).filter(Boolean).join(" ");
   const previewRows = [
-    { icon: "fa-user",             label: "ชื่อ-นามสกุล",       val: form.full_name },
+    { icon: "fa-user",             label: "ชื่อ-นามสกุล",       val: fullNamePreview },
     { icon: "fa-face-smile",       label: "ชื่อเล่น",            val: form.nickname },
     { icon: "fa-phone",            label: "เบอร์โทร",            val: form.phone },
     { icon: "fa-envelope",         label: "Email",               val: form.email || googleEmail },
     { icon: "fa-building-columns", label: "สาขาวิชา",            val: form.department },
     { icon: "fa-book",             label: "วิชาที่สอน",          val: form.subject },
     { icon: "fa-at",               label: "Username ที่ต้องการ", val: form.desired_username },
+    { icon: "fa-lock",             label: "รหัสผ่าน",            val: form.desired_password ? "•".repeat(form.desired_password.length) : "" },
   ];
 
   // ── Scoped CSS override ────────────────────────────────────────────────────
@@ -436,11 +490,19 @@ function BecomeTeacherForm() {
                   </div>
                 </div>
                 <div className="space-y-3">
-                  <div className={wrapCls("full_name")}>
-                    <i className="fa-solid fa-user-tie field-icon" />
-                    <input suppressHydrationWarning value={form.full_name}
-                      onChange={e => set("full_name", e.target.value)}
-                      className={inputCls("full_name")} placeholder="ชื่อ-นามสกุล *" maxLength={60} />
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className={wrapCls("first_name")}>
+                      <i className="fa-solid fa-user-tie field-icon" />
+                      <input suppressHydrationWarning value={form.first_name}
+                        onChange={e => set("first_name", e.target.value)}
+                        className={inputCls("first_name")} placeholder="ชื่อ *" maxLength={30} />
+                    </div>
+                    <div className={wrapCls("last_name")}>
+                      <i className="fa-solid fa-user-tie field-icon" />
+                      <input suppressHydrationWarning value={form.last_name}
+                        onChange={e => set("last_name", e.target.value)}
+                        className={inputCls("last_name")} placeholder="นามสกุล *" maxLength={30} />
+                    </div>
                   </div>
                   <div className={wrapCls("nickname")}>
                     <i className="fa-solid fa-face-smile field-icon" />
@@ -452,7 +514,7 @@ function BecomeTeacherForm() {
                     <i className="fa-solid fa-phone field-icon" />
                     <input suppressHydrationWarning value={form.phone}
                       onChange={e => set("phone", e.target.value.replace(/\D/g, ""))}
-                      className={inputCls("phone")} placeholder="เบอร์โทร *" maxLength={10} inputMode="numeric" />
+                      className={inputCls("phone")} placeholder="เบอร์โทร (ไม่บังคับ)" maxLength={10} inputMode="numeric" />
                   </div>
                   <div className={wrapCls("email")} style={{ position: "relative" }}>
                     <i className="fa-solid fa-envelope field-icon" />
@@ -543,6 +605,30 @@ function BecomeTeacherForm() {
                     <input suppressHydrationWarning value={form.desired_username}
                       onChange={e => set("desired_username", e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
                       className={inputCls("desired_username")} placeholder="Username ที่ต้องการ * (a-z, 0-9, _)" maxLength={20} />
+                  </div>
+
+                  <div className={wrapCls("desired_password")} style={{ position: "relative" }}>
+                    <i className="fa-solid fa-lock field-icon" />
+                    <input suppressHydrationWarning value={form.desired_password}
+                      onChange={e => set("desired_password", e.target.value)}
+                      type={showPwd ? "text" : "password"}
+                      className={`${inputCls("desired_password")} pr-20`}
+                      placeholder="รหัสผ่าน * (ตัวอักษร + ตัวเลข อย่างน้อย 8 ตัว)" maxLength={32} />
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                      <button type="button" tabIndex={-1}
+                        onClick={() => setShowPwd(v => !v)}
+                        className="text-slate-400 hover:text-slate-600 transition px-1 py-0.5 text-xs"
+                        title={showPwd ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}>
+                        <i className={`fa-solid ${showPwd ? "fa-eye-slash" : "fa-eye"}`} />
+                      </button>
+                      <button type="button" tabIndex={-1}
+                        onClick={() => { const p = genPassword(); set("desired_password", p); setShowPwd(true); }}
+                        className="text-[10px] font-bold px-1.5 py-0.5 rounded-md transition"
+                        style={{ background: "#fff0f0", color: P }}
+                        title="สุ่มรหัสผ่าน">
+                        <i className="fa-solid fa-dice mr-1" />สุ่ม
+                      </button>
+                    </div>
                   </div>
 
                   <div className={`field-wrap${errs.reason ? " has-error" : ""}`} style={{ position: "relative" }}>

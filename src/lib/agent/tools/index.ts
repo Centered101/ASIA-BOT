@@ -1,0 +1,179 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { UserContext, UserRole } from '../types'
+
+import { attendanceTools, executeAttendanceTool } from './attendance'
+import { studentTools, executeStudentTool } from './students'
+import { bookingTools, executeBookingTool } from './booking'
+import { shopTools, executeShopTool } from './shop'
+import { scheduleTools, executeScheduleTool } from './schedule'
+import { feedbackTools, executeFeedbackTool } from './feedback'
+import { dashboardTools, executeDashboardTool } from './dashboard'
+import { documentTools, executeDocumentTool } from './documents'
+
+// Full tool registry — every tool the agent can call
+export const ALL_TOOLS = [
+  ...attendanceTools,
+  ...studentTools,
+  ...bookingTools,
+  ...shopTools,
+  ...scheduleTools,
+  ...feedbackTools,
+  ...dashboardTools,
+  ...documentTools,
+]
+
+const DOC_TOOLS = ['list_documents', 'search_documents']
+
+// Tools available for each role (least-privilege)
+const TOOL_ALLOW: Record<UserRole, string[]> = {
+  guest: ['get_school_info'],
+  student: [
+    'get_attendance_status',
+    'get_attendance_summary',
+    'get_attendance_by_date_range',
+    'get_student_profile',
+    'get_my_bookings',
+    'get_available_rooms',
+    'get_time_slots',
+    'create_booking',
+    'cancel_booking',
+    'get_my_orders',
+    'get_products',
+    'place_order',
+    'cancel_order',
+    'get_schedule_today',
+    'get_schedule_week',
+    'submit_feedback',
+    'get_school_info',
+    ...DOC_TOOLS,
+  ],
+  parent: [
+    'get_attendance_status',
+    'get_student_profile',
+    'get_schedule_today',
+    'get_school_info',
+    ...DOC_TOOLS,
+  ],
+  teacher: [
+    'get_attendance_status',
+    'get_attendance_summary',
+    'get_attendance_by_date_range',
+    'get_student_profile',
+    'search_students',
+    'get_my_bookings',
+    'get_available_rooms',
+    'get_time_slots',
+    'create_booking',
+    'cancel_booking',
+    'get_all_bookings',
+    'get_schedule_today',
+    'get_schedule_week',
+    'get_school_info',
+    'submit_feedback',
+    ...DOC_TOOLS,
+  ],
+  librarian: [
+    'get_student_profile',
+    'search_students',
+    'get_school_info',
+    ...DOC_TOOLS,
+  ],
+  cooperative_staff: [
+    'get_products',
+    'get_all_orders',
+    'get_school_info',
+    ...DOC_TOOLS,
+  ],
+  school_admin: [
+    'get_attendance_status',
+    'get_attendance_summary',
+    'get_attendance_by_date_range',
+    'get_student_profile',
+    'search_students',
+    'get_my_bookings',
+    'get_available_rooms',
+    'get_time_slots',
+    'create_booking',
+    'cancel_booking',
+    'get_all_bookings',
+    'get_all_orders',
+    'get_products',
+    'cancel_order',
+    'get_schedule_today',
+    'get_schedule_week',
+    'submit_feedback',
+    'get_pending_feedback',
+    'get_school_stats',
+    'get_school_info',
+    ...DOC_TOOLS,
+  ],
+  executive: [
+    'get_school_stats',
+    'get_attendance_summary',
+    'get_schedule_today',
+    'get_school_info',
+    'get_pending_feedback',
+    ...DOC_TOOLS,
+  ],
+  it_admin: [
+    'get_school_stats',
+    'get_student_profile',
+    'search_students',
+    'get_school_info',
+    ...DOC_TOOLS,
+  ],
+  superadmin: ALL_TOOLS.map(t => t.name),
+}
+
+export function getToolsForRole(role: UserRole) {
+  const allowed = new Set(TOOL_ALLOW[role] ?? TOOL_ALLOW.guest)
+  return ALL_TOOLS.filter(t => allowed.has(t.name))
+}
+
+const TOOL_MODULES: Record<string, string> = {
+  get_attendance_status: 'attendance',
+  get_attendance_summary: 'attendance',
+  get_attendance_by_date_range: 'attendance',
+  get_student_profile: 'students',
+  search_students: 'students',
+  get_time_slots: 'booking',
+  create_booking: 'booking',
+  cancel_booking: 'booking',
+  get_my_bookings: 'booking',
+  get_available_rooms: 'booking',
+  get_all_bookings: 'booking',
+  place_order: 'shop',
+  cancel_order: 'shop',
+  get_my_orders: 'shop',
+  get_products: 'shop',
+  get_all_orders: 'shop',
+  get_schedule_today: 'schedule',
+  get_schedule_week: 'schedule',
+  submit_feedback: 'feedback',
+  get_pending_feedback: 'feedback',
+  get_school_stats: 'dashboard',
+  get_school_info: 'dashboard',
+  list_documents: 'documents',
+  search_documents: 'documents',
+}
+
+export async function executeToolCall(
+  toolName: string,
+  input: Record<string, unknown>,
+  ctx: UserContext,
+  supabase: SupabaseClient
+): Promise<unknown> {
+  const module = TOOL_MODULES[toolName]
+
+  switch (module) {
+    case 'attendance': return executeAttendanceTool(toolName, input, ctx, supabase)
+    case 'students':   return executeStudentTool(toolName, input, ctx, supabase)
+    case 'booking':    return executeBookingTool(toolName, input, ctx, supabase)
+    case 'shop':       return executeShopTool(toolName, input, ctx, supabase)
+    case 'schedule':   return executeScheduleTool(toolName, input, ctx, supabase)
+    case 'feedback':   return executeFeedbackTool(toolName, input, ctx, supabase)
+    case 'dashboard':  return executeDashboardTool(toolName, input, ctx, supabase)
+    case 'documents':  return executeDocumentTool(toolName, input, ctx, supabase)
+    default:           return { error: `Unknown tool: ${toolName}` }
+  }
+}

@@ -90,6 +90,33 @@ function absoluteAssetUrl(url: string | null | undefined, siteUrl: string) {
   return `${siteUrl.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
 }
 
+export async function GET() {
+  const token = process.env.LINE_TOKEN
+  const groupAdmin = process.env.LINE_GROUP_ADMIN
+
+  if (!token) return NextResponse.json({ error: 'LINE_TOKEN not set' }, { status: 500 })
+
+  const [botRes, groupRes] = await Promise.all([
+    fetch('https://api.line.me/v2/bot/info', {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    groupAdmin
+      ? fetch(`https://api.line.me/v2/bot/group/${groupAdmin}/summary`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+      : Promise.resolve(null),
+  ])
+
+  const botBody  = await botRes.text()
+  const groupBody = groupRes ? await groupRes.text() : null
+
+  return NextResponse.json({
+    token_prefix:    token.slice(0, 20) + '...',
+    bot_info:        { status: botRes.status,           ok: botRes.ok,           body: JSON.parse(botBody) },
+    group_admin:     { id: groupAdmin ?? '(not set)',   status: groupRes?.status ?? null, ok: groupRes?.ok ?? null, body: groupBody ? JSON.parse(groupBody) : null },
+  })
+}
+
 export async function POST(req: NextRequest) {
   const admin = await checkAdminAuth(req);
   if (!admin) return NextResponse.json({ status: "error", message: "unauthorized" }, { status: 401 });

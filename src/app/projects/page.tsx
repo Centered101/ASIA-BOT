@@ -37,17 +37,17 @@ function ProjectCard({ project, isLatest }: { project: Project; isLatest: boolea
       {/* ── Poster (click → evaluate) ── */}
       <Link href={`/project/${project.slug}`} className="block relative overflow-hidden">
         {project.poster_url && !imgErr ? (
-          <div className="relative w-full" style={{ aspectRatio: "16/9" }}>
-            <Image
-              src={project.poster_url}
-              alt={project.name}
-              fill
-              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-              className="object-cover transition-transform duration-500 group-hover:scale-105"
-              onError={() => setImgErr(true)}
-              loading="lazy"
-            />
-          </div>
+          <Image
+            src={project.poster_url}
+            alt={project.name}
+            width={0}
+            height={0}
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            className="w-full h-auto object-contain transition-transform duration-500 group-hover:scale-[1.02]"
+            style={{ background: `linear-gradient(135deg, ${color}18 0%, ${color}08 100%)` }}
+            onError={() => setImgErr(true)}
+            loading="lazy"
+          />
         ) : (
           <div className="w-full flex items-center justify-center"
             style={{ minHeight: 140, background: `linear-gradient(135deg, ${color}22 0%, ${color}10 100%)` }}>
@@ -55,8 +55,8 @@ function ProjectCard({ project, isLatest }: { project: Project; isLatest: boolea
           </div>
         )}
 
-        <div className="absolute inset-0 pointer-events-none"
-          style={{ background: "linear-gradient(to top, rgba(0,0,0,0.62) 0%, transparent 55%)" }} />
+        <div className="absolute inset-x-0 bottom-0 h-1/3 pointer-events-none"
+          style={{ background: "linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 100%)" }} />
 
         {isLatest && (
           <span className="absolute top-2.5 left-2.5 text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-full"
@@ -137,24 +137,24 @@ function FeaturedCard({ project }: { project: Project }) {
       {/* ── Poster ── */}
       <Link href={`/project/${project.slug}`} className="block relative overflow-hidden">
         {project.poster_url && !imgErr ? (
-          <div className="relative w-full" style={{ aspectRatio: "16/9" }}>
-            <Image
-              src={project.poster_url}
-              alt={project.name}
-              fill
-              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 1200px"
-              className="object-cover transition-transform duration-700 group-hover:scale-95"
-              onError={() => setImgErr(true)}
-              priority
-            />
-          </div>
+          <Image
+            src={project.poster_url}
+            alt={project.name}
+            width={0}
+            height={0}
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 1200px"
+            className="w-full h-auto object-contain"
+            style={{ background: `linear-gradient(135deg, ${color}22 0%, ${color}0c 100%)` }}
+            onError={() => setImgErr(true)}
+            priority
+          />
         ) : (
           <div className="w-full"
             style={{ minHeight: 180, background: `linear-gradient(135deg, ${color}30 0%, ${color}10 100%)` }} />
         )}
 
-        <div className="absolute inset-0 pointer-events-none"
-          style={{ background: "linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.1) 60%, transparent 100%)" }} />
+        <div className="absolute inset-x-0 bottom-0 h-2/5 pointer-events-none"
+          style={{ background: "linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.15) 55%, transparent 100%)" }} />
 
         <span className="absolute top-4 left-4 text-[10px] font-extrabold uppercase tracking-widest px-3 py-1 rounded-full flex items-center gap-1.5"
           style={{ background: color, color: "#fff", boxShadow: `0 4px 12px ${color}55` }}>
@@ -258,8 +258,17 @@ export default function ProjectsPage() {
     return list;
   }, [projects, yearFilter, search]);
 
-  const featured = filtered[0] ?? null;
-  const rest = filtered.slice(1);
+  // Group projects into per-year sections (newest year first, undated last)
+  const sections = useMemo(() => {
+    const map = new Map<number | "none", Project[]>();
+    for (const p of filtered) {
+      const key = pYear(p) ?? "none";
+      (map.get(key) ?? map.set(key, []).get(key)!).push(p);
+    }
+    return [...map.keys()]
+      .sort((a, b) => (a === "none" ? 1 : b === "none" ? -1 : (b as number) - (a as number)))
+      .map(year => ({ year, items: map.get(year)! }));
+  }, [filtered]);
 
   return (
     <>
@@ -345,22 +354,46 @@ export default function ProjectsPage() {
           <MascotState mood="confused" title="ไม่พบโปรเจค" subtitle="ลองเปลี่ยนคำค้นหาหรือหมวดหมู่ดูนะครับ" />
         )}
 
-        {/* ── Content ── */}
+        {/* ── Content (grouped by year) ── */}
         {!loading && filtered.length > 0 && (
-          <div className="space-y-6">
-            <div data-aos="fade-up">
-              <FeaturedCard project={featured!} />
-            </div>
-
-            {rest.length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {rest.map((p, i) => (
-                  <div key={p.id} data-aos="zoom-in-up" data-aos-delay={String((i % 6) * 60)}>
-                    <ProjectCard project={p} isLatest={false} />
+          <div className="space-y-12">
+            {sections.map(({ year, items }, si) => {
+              const isNewest = si === 0 && year !== "none";
+              const featured = isNewest ? items[0] : null;
+              const gridItems = isNewest ? items.slice(1) : items;
+              return (
+                <section key={String(year)} data-aos="fade-up">
+                  {/* Year header */}
+                  <div className="flex items-center gap-3 mb-5">
+                    <span className="inline-flex items-center gap-2 text-base sm:text-lg font-extrabold text-slate-800">
+                      <i className="fa-solid fa-calendar-day text-sm" style={{ color: "var(--primary-color)" }} />
+                      {year === "none" ? "ไม่ระบุปี" : `ปี ${year}`}
+                    </span>
+                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full"
+                      style={{ background: "var(--primary-color)15", color: "var(--primary-dark)" }}>
+                      {items.length} โปรเจค
+                    </span>
+                    <div className="flex-1 h-px bg-slate-200" />
                   </div>
-                ))}
-              </div>
-            )}
+
+                  {featured && (
+                    <div data-aos="fade-up" className="mb-5 sm:w-1/2">
+                      <FeaturedCard project={featured} />
+                    </div>
+                  )}
+
+                  {gridItems.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
+                      {gridItems.map((p, i) => (
+                        <div key={p.id} data-aos="zoom-in-up" data-aos-delay={String((i % 6) * 60)}>
+                          <ProjectCard project={p} isLatest={false} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              );
+            })}
           </div>
         )}
       </main>

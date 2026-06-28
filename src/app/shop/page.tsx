@@ -814,7 +814,7 @@ export default function ShopPage() {
             {!loading && loadErr && (
               <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/mascot/mascot-produk_out.svg" alt="error" className="w-28 h-28 mb-5 drop-shadow-lg" />
+                <img src="/mascot/mascot-produk_out.webp" alt="error" className="w-28 h-28 mb-5 drop-shadow-lg" />
                 <h3 className="font-bold text-slate-700 text-base mb-1">โหลดสินค้าไม่สำเร็จ</h3>
                 <p className="text-xs text-slate-400 mb-5 max-w-[200px]">{loadErr}</p>
                 <button onClick={fetchProducts}
@@ -830,7 +830,7 @@ export default function ShopPage() {
                 ? (
                   <div className="flex flex-col items-center justify-center py-14 px-4 text-center">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src="/mascot/mascot-search.svg" alt="empty" className="w-28 h-28 mb-4 drop-shadow-md" />
+                    <img src="/mascot/mascot-search.webp" alt="empty" className="w-28 h-28 mb-4 drop-shadow-md" />
                     <h3 className="font-bold text-slate-700 text-base mb-1">ไม่พบสินค้าที่ตรงกัน</h3>
                     {searchQ && (
                       <p className="text-xs text-slate-400 mb-0.5">
@@ -930,7 +930,7 @@ export default function ShopPage() {
               filtered.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-14 px-4 text-center">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/mascot/mascot-search.svg" alt="empty" className="w-28 h-28 mb-4 drop-shadow-md" />
+                  <img src="/mascot/mascot-search.webp" alt="empty" className="w-28 h-28 mb-4 drop-shadow-md" />
                   <h3 className="font-bold text-slate-700 text-base mb-1">ไม่พบสินค้าที่ตรงกัน</h3>
                   {searchQ && (
                     <p className="text-xs text-slate-400 mb-0.5">

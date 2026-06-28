@@ -131,7 +131,7 @@ export default function StudentEntryScannerPage() {
         <Header subtitle="เช็กชื่อเข้าออก" />
         <main className="min-h-screen max-w-6xl mx-auto px-4 py-20 flex flex-col items-center justify-center text-center relative z-10">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/status_room/mascot-blues.svg" alt="mascot" className="w-32 h-32 mb-6 drop-shadow-lg" />
+          <img src="/status_room/mascot-blues.webp" alt="mascot" className="w-32 h-32 mb-6 drop-shadow-lg" />
           <h2 className="text-2xl font-extrabold text-slate-800 mb-2">ต้องเข้าสู่ระบบก่อน</h2>
           <p className="text-slate-500 text-sm mb-8 max-w-xs">ข้อมูลการสแกนบัตรนักเรียนสามารถดูได้เฉพาะเมื่อเข้าสู่ระบบเท่านั้น</p>
           <div className="flex gap-3">

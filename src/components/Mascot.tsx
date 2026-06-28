@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Image from "next/image";
 
 /** Semantic moods → ASIA-BOT mascot artwork in /public/bot. */
 export type MascotMood =
@@ -44,8 +45,7 @@ export function Mascot({
 }) {
   return (
     <>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+      <Image
         src={MASCOT_SRC[mood]}
         alt="ASIA-BOT"
         width={size}

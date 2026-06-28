@@ -71,9 +71,9 @@ type BookingParticipant = Pick<StudentSession, "student_id" | "first_name" | "la
 const DAYS = ["", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์", "อาทิตย์"];
 
 const STATUS_CFG: Record<RoomStatus, { label: string; color: string; bg: string; border: string; icon: string; mascot: string }> = {
-available: { label: "ห้องว่าง", color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0", icon: "fa-circle-check", mascot: "/status_room/mascot-greens.svg" },
-occupied: { label: "ห้องไม่ว่าง", color: "#dc2626", bg: "#fef2f2", border: "#fecaca", icon: "fa-clock", mascot: "/status_room/mascot-reds.svg" },
-maintenance: { label: "ปิดให้บริการ", color: "#2563eb", bg: "#eff6ff", border: "#bfdbfe", icon: "fa-lock", mascot: "/status_room/mascot-blues.svg" },
+available: { label: "ห้องว่าง", color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0", icon: "fa-circle-check", mascot: "/status_room/mascot-greens.webp" },
+occupied: { label: "ห้องไม่ว่าง", color: "#dc2626", bg: "#fef2f2", border: "#fecaca", icon: "fa-clock", mascot: "/status_room/mascot-reds.webp" },
+maintenance: { label: "ปิดให้บริการ", color: "#2563eb", bg: "#eff6ff", border: "#bfdbfe", icon: "fa-lock", mascot: "/status_room/mascot-blues.webp" },
 };
 
 function todayStr() {
@@ -435,9 +435,9 @@ function ClassTrackRoomPageContent() {
                   <div className="absolute inset-x-0 top-6 h-px bg-amber-300/70" />
                   <div className="absolute inset-x-0 top-14 h-px bg-amber-300/70" />
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/status_room/mascot-greens.svg" alt="ห้องว่าง" className="absolute left-5 bottom-2 h-28 object-contain drop-shadow-md" />
+                  <img src="/status_room/mascot-greens.webp" alt="ห้องว่าง" className="absolute left-5 bottom-2 h-28 object-contain drop-shadow-md" />
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/status_room/mascot-reds.svg" alt="ห้องไม่ว่าง" className="absolute right-5 bottom-2 h-28 object-contain drop-shadow-md" />
+                  <img src="/status_room/mascot-reds.webp" alt="ห้องไม่ว่าง" className="absolute right-5 bottom-2 h-28 object-contain drop-shadow-md" />
                 </div>
               </div>
             </div>
@@ -977,7 +977,7 @@ function ClassroomCard({ entry }: { entry: ScheduleEntry }) {
           <div className="text-sm font-black text-white truncate">{entry.room_name}</div>
         </div>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/status_room/mascot-reds.svg" alt="ห้องไม่ว่าง" className="absolute right-4 bottom-0 h-28 object-contain drop-shadow-md" />
+        <img src="/status_room/mascot-reds.webp" alt="ห้องไม่ว่าง" className="absolute right-4 bottom-0 h-28 object-contain drop-shadow-md" />
       </div>
       <div className="p-4">
         <div className="flex items-center justify-between gap-3 mb-2">

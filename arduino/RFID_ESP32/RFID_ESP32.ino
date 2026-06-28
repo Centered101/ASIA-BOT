@@ -142,6 +142,7 @@ struct ScanEvent {
   bool oledReady = false;
   bool resetConfirmed = false;
   bool apMode = false;
+  volatile bool testAllRunning = false;
   unsigned long lastCardMs = 0;
   String webLogs[WEB_LOG_SIZE];
   uint8_t webLogPos = 0;
@@ -687,6 +688,10 @@ void oledStatus() {
 
   void rfidTask(void *param) {
     while (true) {
+      if (testAllRunning) {
+        vTaskDelay(pdMS_TO_TICKS(150));
+        continue;
+      }
       if (currentMode == MODE_IDLE) {
         vTaskDelay(pdMS_TO_TICKS(120));
         continue;
@@ -751,17 +756,20 @@ void oledStatus() {
         oledError("Reset Mode", "Press confirm", uid);
           beepFail();
         } else {
+          resetConfirmed = false;
           bool erased = writeCardBlock("");
           if (erased) {
+            // Writable card: block erased -> deactivate DB by the UID on the card
             enqueueEvent(makeEvent(EVENT_RESET, uid, location));
-            resetConfirmed = false;
+            setStateResult(uid, "reset_queued");
             oledShow("Reset Queued", uid, "Card block erased");
             beepClick();
           } else {
-            resetConfirmed = false;
-            setStateResult(uid, "erase_failed");
-            oledError("Erase Failed", uid, "Try again");
-            beepFail();
+            // Non-writable card: cannot erase block -> deactivate DB by hardware UID
+            enqueueEvent(makeEvent(EVENT_RESET, hwUid, location));
+            setStateResult(hwUid, "reset_hw_queued");
+            oledShow("Reset (HW UID)", hwUid, "Set inactive in DB");
+            beepClick();
           }
         }
       } else if (currentMode == MODE_UPLOAD_HW_UID) {
@@ -784,6 +792,62 @@ void oledStatus() {
       stopCardCrypto();
       vTaskDelay(pdMS_TO_TICKS(100));
     }
+  }
+
+  // Combined hardware self-test with a 30s "time-bomb" countdown.
+  // Runs as its own task so the web server stays responsive. While it runs,
+  // loop()/rfidTask leave the OLED/LED alone (testAllRunning guard).
+  void testAllTask(void *param) {
+    testAllRunning = true;
+    digitalWrite(LED_PIN, LOW);
+    for (int s = 30; s >= 1; s--) {
+      if (oledReady) {
+        oled.invertDisplay(false);
+        oled.clearDisplay();
+        oled.setTextColor(SSD1306_WHITE);
+        oled.setTextSize(1);
+        oled.setCursor(0, 0);
+        oled.println("== TEST ALL ==");
+        const char *sub = (s % 3 == 0) ? "OLED check" : (s % 3 == 1) ? "LED check" : "Speaker check";
+        oled.setCursor(0, 12);
+        oled.println(sub);
+        oled.setTextSize(2);
+        char buf[8];
+        snprintf(buf, sizeof(buf), "%2ds", s);
+        oled.setCursor(84, 14);
+        oled.print(buf);
+        oled.display();
+      }
+      uint8_t blinks = s <= 5 ? 6 : s <= 10 ? 3 : 1;
+      uint16_t gap = s <= 5 ? 40 : s <= 10 ? 80 : 150;
+      for (uint8_t i = 0; i < blinks; i++) {
+        digitalWrite(LED_PIN, HIGH); delay(gap);
+        digitalWrite(LED_PIN, LOW);  delay(gap);
+      }
+      beepCountdown(s);
+      delay(s <= 5 ? 320 : s <= 10 ? 440 : 630);
+    }
+    // EXPLOSION: strobe LED + invert OLED + rising/booming tones
+    for (int i = 0; i < 8; i++) {
+      if (oledReady) oled.invertDisplay(i % 2 == 0);
+      digitalWrite(LED_PIN, i % 2 == 0 ? HIGH : LOW);
+      toneOnce(140 + i * 30, 55);
+      delay(35);
+    }
+    digitalWrite(LED_PIN, LOW);
+    if (oledReady) {
+      oled.invertDisplay(false);
+      oled.clearDisplay();
+      oled.setTextSize(2);
+      oled.setCursor(18, 8);
+      oled.print("BOOM!");
+      oled.display();
+    }
+    toneOnce(180, 350);
+    delay(800);
+    oledStatus();
+    testAllRunning = false;
+    vTaskDelete(NULL);
   }
 
   // ---------------------------------------------------------------------------
@@ -894,24 +958,28 @@ void oledStatus() {
   <title>ASIA-BOT RFID Controller</title>
   <link rel="icon" href="https://asia-bot.xyz/admin/rfid.ico" type="image/x-icon">
   <link rel="shortcut icon" href="https://asia-bot.xyz/admin/rfid.ico" type="image/x-icon">
-  <meta name="theme-color" content="#0b0f0d">
+  <meta name="theme-color" content="#0c0c0c">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Sarabun:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600;1,700&display=swap');
   @import url('https://fonts.googleapis.com/css2?family=Kanit:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Source+Code+Pro:ital,wght@0,200..900;1,200..900&display=swap');
-  :root{--bg:#0b0f0d;--panel:#111815;--panel2:#0f1512;--line:#26332d;--text:#e5e7eb;--muted:#8b949e;--green:#3ecf8e;--green2:#2aa876;--red:#f87171;--amber:#fbbf24}
-  *{box-sizing:border-box}body{margin:0;min-height:100vh;background:linear-gradient(180deg,#0b0f0d,#090c0b);color:var(--text);font-family:Kanit,Sarabun,Arial,sans-serif}
-  .wrap{max-width:1040px;margin:auto;padding:18px}.top{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:12px;border:1px solid var(--line);background:rgba(17,24,21,.88);box-shadow:0 14px 40px rgba(0,0,0,.24);border-radius:8px;position:sticky;top:10px;z-index:5;backdrop-filter:blur(12px)}
-  .brand{display:flex;align-items:center;gap:10px;min-width:0}.brand-mark{width:34px;height:34px;border:1px solid #2f5f49;border-radius:8px;background:#0d1411;display:flex;align-items:center;justify-content:center;color:var(--green);box-shadow:0 0 22px rgba(62,207,142,.18)}h1{font-size:17px;margin:0;color:#fff;font-weight:900;line-height:1.1}.subhead{font-size:11px;color:var(--muted);margin-top:2px}.head-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.mono{font-family:'JetBrains Mono','Source Code Pro',monospace}
-  #online{border:1px solid var(--line);background:#0d1411;color:var(--green);border-radius:999px;padding:7px 10px;font-size:12px}.admin-link{border:1px solid #2f5f49;background:#102019;color:var(--green);border-radius:7px;padding:8px 10px;font-size:12px;text-decoration:none;font-weight:800;display:inline-flex;gap:7px;align-items:center}.admin-link:hover{background:var(--green);color:#06110c}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:16px 0}
-  .card{border:1px solid var(--line);background:linear-gradient(180deg,var(--panel),var(--panel2));border-radius:8px;padding:14px;box-shadow:0 10px 30px rgba(0,0,0,.18)}.label{font-size:11px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.04em}.val{font-size:18px;font-weight:900;word-break:break-word;color:#fff}
-  .bar{display:flex;gap:8px;flex-wrap:wrap}.btn{border:1px solid #2f5f49;background:#102019;color:var(--green);border-radius:7px;padding:10px 12px;font-weight:800;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:7px}
-  .btn:hover{background:var(--green);border-color:var(--green);color:#06110c}.danger{border-color:#6b3030;color:var(--red);background:#221313}.danger:hover{background:var(--red);border-color:var(--red);color:#180707}.field{display:grid;gap:5px;margin:10px 0}
-  input{background:#0b1110;border:1px solid var(--line);color:#fff;border-radius:7px;padding:10px;font-family:'JetBrains Mono',monospace;outline:none}input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(62,207,142,.12)}
-  .row{display:grid;grid-template-columns:1fr auto;gap:8px}.small{font-size:12px;color:var(--muted);margin-top:14px}.hint{font-size:12px;color:#a7b8af;line-height:1.5;margin:8px 0 0}.section-title{font-size:14px;font-weight:900;color:#fff;margin-bottom:8px}.section-title:before{content:"";display:inline-block;width:6px;height:14px;background:var(--green);border-radius:99px;margin-right:8px;vertical-align:-2px}.warn{display:none;border:1px solid #755f21;background:#191405;color:#ffe59b;border-radius:8px;padding:10px;margin:12px 0;font-size:13px;line-height:1.5}.offline .warn{display:block}.offline .needs-net{opacity:.38;pointer-events:none;filter:grayscale(1)}[data-section]{display:none}[data-section].show{display:block}.mode-active{background:var(--green);border-color:var(--green);color:#06110c}details.card summary{cursor:pointer;list-style:none}details.card summary::-webkit-details-marker{display:none}
+  :root{--bg:#0c0c0c;--panel:#111111;--panel2:#1c1c1c;--line:#2a2a2a;--line2:#3e3e3e;--text:#ededed;--muted:#9e9e9e;--muted2:#636363;--accent:#ff7070;--green:#3fb950;--amber:#e3b341;--red:#f85149;--r:16px}
+  *{box-sizing:border-box}body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font-family:Kanit,Sarabun,Arial,sans-serif;-webkit-text-size-adjust:100%}
+  .wrap{max-width:1100px;margin:auto;padding:14px}.mono{font-family:'JetBrains Mono','Source Code Pro',monospace}
+  .top{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:16px;border:1px solid var(--line);background:var(--panel);border-radius:var(--r);box-shadow:0 10px 30px rgba(0,0,0,.25);position:sticky;top:8px;z-index:5}
+  .brand{display:flex;align-items:center;gap:12px;min-width:0}.brand-mark{width:46px;height:46px;border-radius:14px;background:rgba(255,112,112,.12);border:1px solid rgba(255,112,112,.35);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:20px;flex:0 0 auto}.brand h1{font-size:18px;margin:0;color:#fff;font-weight:900;line-height:1.15}.subhead{font-size:12px;color:var(--muted);margin-top:2px}
+  .pill{display:inline-flex;align-items:center;gap:7px;background:rgba(255,112,112,.12);color:var(--accent);border:1px solid rgba(255,112,112,.35);border-radius:999px;padding:4px 10px;font-size:11px;font-weight:800;margin-bottom:6px}.dot{width:8px;height:8px;border-radius:50%;background:var(--green)}.dot.live{animation:pulse 1.4s infinite}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .head-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}#online{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line2);background:var(--bg);color:var(--green);border-radius:999px;padding:8px 12px;font-size:12px;font-weight:800}.admin-link{border:1px solid var(--line2);background:var(--panel2);color:#fff;border-radius:12px;padding:9px 12px;font-size:12px;text-decoration:none;font-weight:800;display:inline-flex;gap:7px;align-items:center}.admin-link:hover{border-color:var(--accent);color:var(--accent)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:14px 0}
+  .card{border:1px solid var(--line);background:var(--panel);border-radius:var(--r);padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.18)}.card+.card{margin-top:14px}.label{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--accent);font-weight:800;text-transform:uppercase;letter-spacing:.04em}.val{font-size:20px;font-weight:900;word-break:break-word;color:#fff;margin-top:6px}
+  .bar{display:flex;gap:8px;flex-wrap:wrap}.bar .btn{flex:1 1 auto}.btn{border:1px solid var(--line2);background:var(--panel2);color:var(--text);border-radius:12px;padding:11px 14px;min-height:44px;font-weight:800;font-family:inherit;font-size:13px;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;justify-content:center;gap:8px}.btn i{font-size:14px}
+  .btn:hover{border-color:var(--accent);color:var(--accent)}.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 4px 20px rgba(255,112,112,.22)}.btn.primary:hover{filter:brightness(1.06);color:#fff}.btn.danger{border-color:#5a2a2a;background:rgba(248,81,73,.1);color:var(--red)}.btn.danger:hover{background:var(--red);border-color:var(--red);color:#fff}.mode-active{background:rgba(255,112,112,.12);border-color:var(--accent);color:var(--accent)}.field{display:grid;gap:6px;margin:10px 0}.field>.label{color:var(--muted);text-transform:none;letter-spacing:0;font-size:12px}
+  input{width:100%;background:var(--bg);border:1px solid var(--line2);color:#fff;border-radius:12px;padding:12px;font-family:'JetBrains Mono',monospace;font-size:13px;outline:none}input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(255,112,112,.14)}
+  .row{display:flex;gap:8px;flex-wrap:wrap}.row input{flex:1 1 160px;min-width:0}.small{font-size:12px;color:var(--muted);margin-top:14px;line-height:1.5}.hint{font-size:12px;color:var(--muted);line-height:1.55;margin:8px 0 0}.hint b,.hint .mono{color:var(--text)}.section-title{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:900;color:#fff;margin-bottom:10px}.section-title i{color:var(--accent)}.warn{display:none;border:1px solid #5a4a1a;background:rgba(227,179,65,.08);color:#ffe59b;border-radius:12px;padding:12px;margin:12px 0;font-size:13px;line-height:1.5}.offline .warn{display:block}.offline .needs-net{opacity:.4;pointer-events:none;filter:grayscale(1)}[data-section]{display:none}[data-section].show{display:block}details.card summary{cursor:pointer;list-style:none}details.card summary::-webkit-details-marker{display:none}#logs{display:grid;gap:6px;max-height:280px;overflow:auto;font-size:12px}#logs>div{border-bottom:1px solid var(--line);padding-bottom:5px;color:var(--green)}@media(max-width:560px){.wrap{padding:10px}.card{padding:13px;border-radius:14px}.brand h1{font-size:16px}.brand-mark{width:40px;height:40px}.val{font-size:18px}.bar .btn{flex:1 1 100%}.head-actions{width:100%;justify-content:space-between}}
+  .stu-list{display:grid;gap:6px;margin-top:4px;max-height:300px;overflow:auto}.stu{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:8px 10px;border:1px solid var(--line);background:var(--panel2);border-radius:12px;cursor:pointer;color:var(--text);font-family:inherit}.stu:hover{border-color:var(--accent);background:rgba(255,112,112,.08)}.stu .av{width:40px;height:40px;border-radius:50%;flex:0 0 auto;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#2a2a2a;color:#fff;font-weight:800;font-size:13px}.stu .av img{width:100%;height:100%;object-fit:cover}.stu .si{display:flex;flex-direction:column;min-width:0;flex:1}.stu .si b{color:#fff;font-size:14px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.stu .si span{color:var(--muted);font-size:12px;font-family:'JetBrains Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #bomb{display:none;position:fixed;inset:0;z-index:100;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:radial-gradient(circle at 50% 45%,#1a0606,#000 70%);padding:20px;text-align:center}#bomb.show{display:flex}#bombIcon{font-size:64px;line-height:1;filter:drop-shadow(0 0 22px rgba(248,81,73,.6))}#bombNum{font-family:'JetBrains Mono','Source Code Pro',monospace;font-size:clamp(78px,26vw,170px);font-weight:900;line-height:1;color:var(--red);text-shadow:0 0 42px rgba(248,81,73,.85)}#bomb .blabel{color:var(--muted);font-size:14px;max-width:320px}@keyframes tickpulse{0%{transform:scale(1.35)}100%{transform:scale(1)}}.tickpulse{animation:tickpulse .3s ease-out}@keyframes bshake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}.danger-shake{animation:bshake .1s infinite}
   </style></head><body><div class="wrap">
-  <div class="top"><div class="brand"><div class="brand-mark"><i class="fa-solid fa-id-card-clip"></i></div><div><h1>ตัวควบคุม RFID ASIA-BOT</h1><div class="subhead">ESP32 Attendance Controller</div></div></div><div class="head-actions"><span class="mono" id="online">...</span><a class="admin-link" href="https://asia-bot.xyz/admin" target="_blank"><i class="fa-solid fa-arrow-up-right-from-square"></i>Admin</a></div></div>
+  <div class="top"><div class="brand"><div class="brand-mark"><i class="fa-solid fa-id-card-clip"></i></div><div><div class="pill"><span class="dot live"></span>ESP32 RFID Controller</div><h1>ตัวควบคุม RFID ASIA-BOT</h1><div class="subhead">RFID Control Console · ESP32 Attendance</div></div></div><div class="head-actions"><span class="mono" id="online"><span class="dot"></span>...</span><a class="admin-link" href="https://asia-bot.xyz/admin" target="_blank"><i class="fa-solid fa-arrow-up-right-from-square"></i>Admin</a></div></div>
   <div class="warn" id="apWarn">ตอนนี้เครื่องอยู่ใน AP Mode / ออฟไลน์ ใช้สำหรับตั้งค่า WiFi และ API เท่านั้น ยังอัพ UID, รีเซ็ตบัตร, โหลดแคช หรือส่งข้อมูลเข้า database ไม่ได้</div>
   <div class="grid">
   <div class="card"><div class="label"><i class="fa-solid fa-sliders"></i> โหมดปัจจุบัน</div><div class="val" id="mode">-</div></div>
@@ -921,14 +989,14 @@ void oledStatus() {
   <div class="card"><div class="label"><i class="fa-solid fa-list-check"></i> คิวรอส่ง</div><div class="val" id="pending">-</div></div>
   </div>
   <div class="card">
-  <div class="section-title">เลือกโหมดเครื่อง</div>
+  <div class="section-title"><i class="fa-solid fa-sliders"></i>เลือกโหมดเครื่อง</div>
   <div class="bar">
   <button class="btn" data-mode-btn="0" onclick="mode(0)"><i class="fa-solid fa-pause"></i>พักเครื่อง</button><button class="btn" data-mode-btn="2" onclick="mode(2)"><i class="fa-solid fa-school"></i>เช็กชื่อโรงเรียน</button><button class="btn" data-mode-btn="3" onclick="mode(3)"><i class="fa-solid fa-book-open"></i>เช็กชื่อห้องสมุด</button>
   <button class="btn needs-net" data-mode-btn="4" onclick="mode(4)"><i class="fa-solid fa-users"></i>เช็กชื่อห้องประชุม</button><button class="btn needs-net" data-mode-btn="1" onclick="mode(1)"><i class="fa-solid fa-link"></i>บัตรเขียนได้</button><button class="btn needs-net" data-mode-btn="6" onclick="mode(6)"><i class="fa-solid fa-microchip"></i>บัตรเขียนไม่ได้</button>
   <button class="btn danger needs-net" data-mode-btn="5" onclick="mode(5)"><i class="fa-solid fa-rotate-left"></i>รีเซ็ตบัตร</button></div>
   </div>
   <div class="card" data-section="scan">
-  <div class="section-title">พร้อมเช็กชื่อ</div>
+  <div class="section-title"><i class="fa-solid fa-satellite-dish"></i>พร้อมเช็กชื่อ</div>
   <div class="hint">แตะบัตรที่เครื่อง ระบบจะส่ง UID ไปตรวจที่ฐานข้อมูลทันที</div>
   <div class="hint">สถานที่ปัจจุบัน: <span class="mono" id="scanLoc">-</span></div>
   <div class="hint">นักเรียนล่าสุด: <span id="scanName">-</span></div>
@@ -936,8 +1004,10 @@ void oledStatus() {
   <div class="hint">UID ที่อ่านได้: <span class="mono" id="scanUid">-</span></div>
   </div>
   <div class="card" data-section="bind">
-  <div class="section-title">ผูกบัตรนักเรียน</div>
-  <div class="field"><label class="label">รหัสนักเรียน</label><div class="row"><input id="sid" placeholder="เช่น 3130"><button class="btn needs-net" onclick="student()"><i class="fa-solid fa-cloud-arrow-down"></i>โหลด UID</button></div></div>
+  <div class="section-title"><i class="fa-solid fa-id-badge"></i>ผูกบัตรนักเรียน</div>
+  <div class="field"><label class="label">ค้นหานักเรียนที่ยังไม่ผูกบัตร</label><input id="stuSearch" placeholder="พิมพ์ชื่อ / รหัสนักเรียน แล้วเลือกจากรายการ" autocomplete="off" oninput="searchStudents()"></div>
+  <div id="stuList" class="stu-list"></div>
+  <div class="field"><label class="label">รหัสนักเรียนที่เลือก</label><div class="row"><input id="sid" placeholder="เช่น 3130"><button class="btn needs-net" onclick="student()"><i class="fa-solid fa-cloud-arrow-down"></i>โหลด UID</button></div></div>
   <div class="hint">นักเรียน: <span id="bindName">-</span></div>
   <div class="hint">ข้อมูล: <span id="bindMeta">-</span> · สถานะบัตร: <span id="bindStatus">-</span></div>
   <div class="hint">UID จากฐานข้อมูล: <span class="mono" id="bindUid">-</span></div>
@@ -946,47 +1016,82 @@ void oledStatus() {
   <div class="hint">แบบที่ 2: บัตรเขียนไม่ได้ → แตะบัตรแล้วใช้ Hardware UID จริงผูกกับนักเรียนแทน</div>
   </div>
   <div class="card" data-section="reset">
-  <div class="section-title">รีเซ็ตบัตร</div>
+  <div class="section-title"><i class="fa-solid fa-rotate-left"></i>รีเซ็ตบัตร</div>
   <div class="bar"><button class="btn danger needs-net" onclick="resetCard()"><i class="fa-solid fa-triangle-exclamation"></i>ยืนยันรีเซ็ตบัตร</button><button class="btn" onclick="mode(0)"><i class="fa-solid fa-xmark"></i>ยกเลิก</button></div>
   <div class="hint">ขั้นตอน: กด “ยืนยันรีเซ็ตบัตร” → แตะบัตรที่ต้องการลบ/ปิดใช้งาน</div>
-  </div>
-  <div class="card" data-section="tools">
-  <div class="section-title">เครื่องมือทดสอบ</div>
-  <div class="bar"><button class="btn" onclick="get('/test_oled')"><i class="fa-solid fa-display"></i>ทดสอบจอ OLED</button><button class="btn" onclick="get('/test_speaker')"><i class="fa-solid fa-volume-high"></i>ทดสอบลำโพง</button><button class="btn" onclick="get('/test_led')"><i class="fa-solid fa-lightbulb"></i>ทดสอบไฟ LED</button></div>
+  <div class="hint"><b>บัตรเขียนได้</b>: ลบ UID บนบัตร แล้วตั้ง record เป็น inactive</div>
+  <div class="hint"><b>บัตรเขียนไม่ได้</b>: หา record จาก Hardware UID ของบัตร แล้วล้าง uid + ตั้ง inactive (ตัวบัตรลบไม่ได้)</div>
   </div>
   <div class="card">
-  <div class="section-title">บันทึกการทำงาน</div>
-  <div id="logs" class="mono small" style="display:grid;gap:6px;max-height:260px;overflow:auto"></div>
+  <div class="section-title"><i class="fa-solid fa-screwdriver-wrench"></i>เครื่องมือทดสอบฮาร์ดแวร์</div>
+  <div class="bar"><button class="btn" onclick="get('/test_oled')"><i class="fa-solid fa-display"></i>ทดสอบจอ OLED</button><button class="btn" onclick="get('/test_speaker')"><i class="fa-solid fa-volume-high"></i>ทดสอบลำโพง</button><button class="btn" onclick="get('/test_led')"><i class="fa-solid fa-lightbulb"></i>ทดสอบไฟ LED</button></div>
+  <div class="bar" style="margin-top:8px"><button class="btn danger" onclick="testAll()"><i class="fa-solid fa-bomb"></i>ทดสอบรวม (นับถอยหลัง 30 วิ)</button></div>
+  <div class="hint">ใช้ได้ทุกโหมด · OLED จะโชว์ข้อความ, ลำโพงจะมีเสียง beep, LED จะกระพริบ</div>
+  <div class="hint"><b>ทดสอบรวม</b>: เช็ก OLED + ลำโพง + LED พร้อมกัน นับถอยหลังแบบระเบิดเวลา 30 วินาที (จังหวะถี่ขึ้นจนระเบิด)</div>
   </div>
-  <details class="card"><summary><div class="section-title">ตั้งค่าเครื่อง</div><div class="hint">กดเพื่อแก้ API, Device ID, Device Key หรือ WiFi</div></summary>
+  <div class="card">
+  <div class="section-title"><i class="fa-solid fa-clock-rotate-left"></i>บันทึกการทำงาน</div>
+  <div id="logs" class="mono small" style="margin-top:0"></div>
+  </div>
+  <details class="card"><summary><div class="section-title"><i class="fa-solid fa-gear"></i>ตั้งค่าเครื่อง</div><div class="hint">กดเพื่อแก้ API, Device ID, Device Key หรือ WiFi</div></summary>
   <div class="field"><input id="api" placeholder="https://your-domain.com/api/rfid/check"></div>
   <div class="field"><input id="did" placeholder="device_id"></div>
   <div class="field"><input id="key" placeholder="รหัสลับอุปกรณ์ / device key"></div>
   <div class="field"><input id="ssid" placeholder="ชื่อ WiFi"></div>
   <div class="field"><input id="pass" placeholder="รหัสผ่าน WiFi"></div>
   <button class="btn" onclick="config()">บันทึกการตั้งค่า</button><div class="small">ถ้าเปลี่ยน WiFi เครื่องจะรีสตาร์ทหลังบันทึก</div></details>
-  </div><script>
+  </div>
+  <div id="bomb"><div id="bombIcon">💣</div><div id="bombNum">30</div><div class="blabel">ทดสอบรวม: OLED · ลำโพง · LED — แตะ/ฟัง/ดูจอ ESP32 ขณะนับถอยหลัง</div><button class="btn" onclick="stopBomb()"><i class="fa-solid fa-xmark"></i>ยกเลิก</button></div>
+  <script>
   async function get(u){try{await fetch(u);poll()}catch(e){}}
+  let _bombT,_bombN=0;
+  function testAll(){get('/test_all');_bombN=30;var b=document.getElementById('bomb'),n=document.getElementById('bombNum'),ic=document.getElementById('bombIcon');ic.textContent='💣';n.textContent=_bombN;n.style.color='';b.classList.add('show');b.classList.remove('danger-shake');clearInterval(_bombT);_bombT=setInterval(_bombTick,1000)}
+  function _bombTick(){_bombN--;var b=document.getElementById('bomb'),n=document.getElementById('bombNum');if(_bombN<=0){clearInterval(_bombT);return _bombBoom()}n.textContent=_bombN;n.style.color=_bombN<=5?'#ff2020':_bombN<=10?'#ff7070':'';n.classList.remove('tickpulse');void n.offsetWidth;n.classList.add('tickpulse');if(_bombN<=5)b.classList.add('danger-shake')}
+  function _bombBoom(){var b=document.getElementById('bomb'),n=document.getElementById('bombNum'),ic=document.getElementById('bombIcon');b.classList.remove('danger-shake');ic.textContent='💥';n.textContent='BOOM';n.style.color='#ffb000';setTimeout(function(){b.classList.remove('show')},1800)}
+  function stopBomb(){clearInterval(_bombT);document.getElementById('bomb').classList.remove('show','danger-shake')}
   function mode(n){get('/mode?set='+n)}
   async function student(){try{let r=await fetch('/set_student?id='+encodeURIComponent(document.getElementById('sid').value));let j=await r.json();poll();return j.status==='ok'}catch(e){return false}}
+  let _stuT;
+  function searchStudents(){clearTimeout(_stuT);_stuT=setTimeout(loadStudents,250)}
+  async function loadStudents(){
+    const box=document.getElementById('stuList');if(!box)return;
+    const q=document.getElementById('stuSearch').value.trim();
+    box.innerHTML='<div class="hint" style="margin:0;padding:8px 4px">กำลังโหลด...</div>';
+    try{
+      const r=await fetch('/students?q='+encodeURIComponent(q));const j=await r.json();const arr=(j&&j.data)||[];
+      if(!arr.length){box.innerHTML='<div class="hint" style="margin:0;padding:8px 4px">ไม่พบนักเรียนที่ยังไม่ผูกบัตร</div>';return}
+      box.innerHTML=arr.map(s=>{
+        const nm=((s.first_name||'')+' '+(s.last_name||'')).trim()+(s.nickname?(' ('+s.nickname+')'):'');
+        const meta=[s.student_id,s.program,s.department].filter(Boolean).join(' · ');
+        const av=s.photo_url?('<img src="'+s.photo_url+'" alt="">'):((s.first_name||'?').slice(0,2));
+        return '<button type="button" class="stu" data-sid="'+s.student_id+'"><span class="av">'+av+'</span><span class="si"><b>'+nm+'</b><span>'+meta+'</span></span></button>';
+      }).join('');
+      box.querySelectorAll('.stu').forEach(b=>b.onclick=()=>pickStudent(b.dataset.sid));
+    }catch(e){box.innerHTML='<div class="hint" style="margin:0;padding:8px 4px">ค้นหาไม่สำเร็จ</div>'}
+  }
+  async function pickStudent(id){document.getElementById('sid').value=id;document.getElementById('stuSearch').value='';document.getElementById('stuList').innerHTML='';await student()}
   async function bindCard(){if(await student())mode(1)}
   async function uploadHw(){if(await student())mode(6)}
   function resetCard(){mode(5);setTimeout(()=>get('/confirm_reset'),200)}
   function config(){let p=new URLSearchParams();['api','did','key','ssid','pass'].forEach(id=>{let v=document.getElementById(id).value;if(v)p.set(id,v)});get('/config?'+p)}
-  async function pollLogs(){try{let r=await fetch('/logs');let arr=await r.json();logs.innerHTML=arr.map(x=>'<div style="border-bottom:1px solid #26332d;padding-bottom:4px">'+x+'</div>').join('')}catch(e){}}
+  async function pollLogs(){try{let r=await fetch('/logs');let arr=await r.json();logs.innerHTML=arr.map(x=>'<div>'+x+'</div>').join('')}catch(e){}}
   function showModeSections(m){
     document.querySelectorAll('[data-section]').forEach(el=>el.classList.remove('show'));
     if(m===1||m===6)document.querySelector('[data-section="bind"]')?.classList.add('show');
     else if(m===5)document.querySelector('[data-section="reset"]')?.classList.add('show');
-    else if(m===0)document.querySelector('[data-section="tools"]')?.classList.add('show');
-    else document.querySelector('[data-section="scan"]')?.classList.add('show');
+    else if(m!==0)document.querySelector('[data-section="scan"]')?.classList.add('show');
     document.querySelectorAll('[data-mode-btn]').forEach(b=>b.classList.toggle('mode-active',Number(b.dataset.modeBtn)===m));
+    var bindOn=(m===1||m===6);
+    if(bindOn&&!window._stuMode){window._stuMode=true;loadStudents()}
+    if(!bindOn)window._stuMode=false;
   }
   function thResult(v){
     const m={
       boot:'เริ่มระบบ',read:'อ่านบัตรแล้ว',queued:'เข้าคิวรอส่ง',ok:'สำเร็จ',
       wifi_reconnect:'กำลังต่อ WiFi ใหม่',mode_changed:'เปลี่ยนโหมดแล้ว',
       student_set:'ตั้งรหัสนักเรียนแล้ว',reset_confirmed:'ยืนยันรีเซ็ตแล้ว',
+      reset_queued:'รีเซ็ตบัตร: ลบ UID บนบัตร + ปิดใช้งาน',
+      reset_hw_queued:'บัตรเขียนไม่ได้: ปิดใช้งานด้วย Hardware UID',
       missing_student_id:'ยังไม่ได้ใส่รหัสนักเรียน',reset_not_confirmed:'ยังไม่ได้ยืนยันรีเซ็ต',
       json_error:'อ่านข้อมูลตอบกลับไม่ได้',
       unauthorized:'รหัส Device Key ไม่ถูกต้อง',
@@ -1011,7 +1116,7 @@ void oledStatus() {
     if(v.indexOf('http_code_')===0)return 'เชื่อมต่อ API ไม่สำเร็จ: '+v;
     return v;
   }
-  async function poll(){try{let r=await fetch('/status');let s=await r.json();let off=s.wifi!=='connected';document.body.classList.toggle('offline',off);online.textContent=s.wifi==='connected'?'ออนไลน์':(s.wifi==='ap'?'AP Mode':s.wifi);mode.textContent=s.mode_label;ip.textContent=s.ip;uid.textContent=s.uid||'-';result.textContent=thResult(s.result);pending.textContent=s.pending;bindUid.textContent=s.bind_uid||'-';bindName.textContent=s.bind_student_name||'-';bindMeta.textContent=s.bind_student_meta||'-';bindStatus.textContent=s.bind_card_status||'-';scanLoc.textContent=s.location||'-';scanName.textContent=s.name||'-';scanResult.textContent=thResult(s.result);scanUid.textContent=s.uid||'-';showModeSections(Number(s.mode))}catch(e){document.body.classList.add('offline');online.textContent='ออฟไลน์'}}
+  async function poll(){try{let r=await fetch('/status');let s=await r.json();let off=s.wifi!=='connected';document.body.classList.toggle('offline',off);let oc=s.wifi==='connected'?'#3fb950':(s.wifi==='ap'?'#e3b341':'#f85149');let ot=s.wifi==='connected'?'ออนไลน์':(s.wifi==='ap'?'AP Mode':s.wifi);online.innerHTML='<span class="dot'+(s.wifi==='connected'?' live':'')+'" style="background:'+oc+'"></span>'+ot;online.style.color=oc;mode.textContent=s.mode_label;ip.textContent=s.ip;uid.textContent=s.uid||'-';result.textContent=thResult(s.result);pending.textContent=s.pending;bindUid.textContent=s.bind_uid||'-';bindName.textContent=s.bind_student_name||'-';bindMeta.textContent=s.bind_student_meta||'-';bindStatus.textContent=s.bind_card_status||'-';scanLoc.textContent=s.location||'-';scanName.textContent=s.name||'-';scanResult.textContent=thResult(s.result);scanUid.textContent=s.uid||'-';showModeSections(Number(s.mode))}catch(e){document.body.classList.add('offline');online.innerHTML='<span class="dot"></span>ออฟไลน์'}}
   setInterval(poll,1200);setInterval(pollLogs,1500);poll();pollLogs();
   </script></body></html>
   )HTML";
@@ -1176,6 +1281,15 @@ async function scanWifi(){
     sendJson(200, "{\"status\":\"ok\",\"student_id\":\"" + jsonEscape(bindStudentId) + "\",\"uid\":\"" + jsonEscape(bindCardUid) + "\",\"name\":\"" + jsonEscape(bindStudentName) + "\",\"meta\":\"" + jsonEscape(bindStudentMeta) + "\",\"card_status\":\"" + jsonEscape(bindCardStatus) + "\"}");
   }
 
+  void handleStudents() {
+    if (!requireControllerAuth()) return;
+    String q = server.arg("q");
+    String url = endpointFor("students") + "?unbound=1&device_id=" + urlEncode(deviceId);
+    if (q.length()) url += "&q=" + urlEncode(q);
+    String resp = httpRequest("GET", url);
+    sendJson(200, resp);
+  }
+
   void handleConfirmReset() {
     if (!requireControllerAuth()) return;
     resetConfirmed = true;
@@ -1206,6 +1320,17 @@ void handleTestLed() {
   if (!requireControllerAuth()) return;
   oledSuccess("OLED OK", "ASIA-BOT RFID", ipText, MODE_LABELS[(int)currentMode]);
     sendJson(200, "{\"status\":\"ok\"}");
+  }
+
+  void handleTestAll() {
+    if (!requireControllerAuth()) return;
+    if (testAllRunning) {
+      sendJson(200, "{\"status\":\"ok\",\"running\":true}");
+      return;
+    }
+    addWebLog("INFO", "เริ่มทดสอบรวม นับถอยหลัง 30 วินาที");
+    xTaskCreatePinnedToCore(testAllTask, "testAll", 4096, NULL, 1, NULL, 0);
+    sendJson(200, "{\"status\":\"ok\",\"running\":true,\"seconds\":30}");
   }
 
   void handleConfig() {
@@ -1239,10 +1364,12 @@ void handleTestLed() {
     server.on("/wifi_scan", HTTP_GET, handleWifiScan);
     server.on("/mode", HTTP_GET, handleMode);
     server.on("/set_student", HTTP_GET, handleSetStudent);
+    server.on("/students", HTTP_GET, handleStudents);
     server.on("/confirm_reset", HTTP_GET, handleConfirmReset);
   server.on("/test_led", HTTP_GET, handleTestLed);
     server.on("/test_speaker", HTTP_GET, handleTestSpeaker);
     server.on("/test_oled", HTTP_GET, handleTestOled);
+    server.on("/test_all", HTTP_GET, handleTestAll);
     server.on("/config", HTTP_GET, handleConfig);
     server.onNotFound(handleNotFound);
     server.enableCORS(true);
@@ -1285,7 +1412,7 @@ void handleTestLed() {
   void loop() {
     server.handleClient();
     static unsigned long lastUi = 0;
-    if (millis() - lastUi > 2500) {
+    if (!testAllRunning && millis() - lastUi > 2500) {
       lastUi = millis();
       oledStatus();
     }

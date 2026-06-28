@@ -459,7 +459,7 @@ function AdminLogin({ onLogin }: { onLogin: (a: AdminUser) => void }) {
 
       {/* ADMIN watermark */}
       <div className="absolute bottom-8 right-8 text-[120px] font-black select-none pointer-events-none"
-        style={{ color: "rgba(255,112,112,0.05)", letterSpacing: "-0.05em" }}>ดูแล</div>
+        style={{ color: "rgba(255,112,112,0.05)", letterSpacing: "-0.03em" }}>Admin ASIA-BOT</div>
 
       <div className="relative z-10 w-full max-w-sm px-4">
         {/* Logo */}

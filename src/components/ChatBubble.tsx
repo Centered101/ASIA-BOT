@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
+import Image from "next/image";
+import Markdown from "./Markdown";
 
 type NavButton = { path: string; label: string };
 type RichCard = { type: string; payload: Record<string, unknown> };
@@ -456,7 +458,7 @@ export default function ChatBubble() {
           {/* Header */}
           <div style={{ background: T.headerBg, borderBottom: T.headerBorder, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
             <div style={{ width: 32, height: 32, borderRadius: "50%", overflow: "hidden", border: ctx.isAdmin ? `2px solid ${accent}` : "none" }}>
-              <img src={headerAvatar} alt="ASIA-BOT" style={{ width: 32, height: 32, objectFit: "cover" }} />
+              <Image src={headerAvatar} alt="ASIA-BOT" width={32} height={32} style={{ width: 32, height: 32, objectFit: "cover" }} />
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ color: "#fff", fontWeight: 700, fontSize: 14, lineHeight: 1.2 }}>ASIA-BOT AI</div>
@@ -477,7 +479,7 @@ export default function ChatBubble() {
           {/* ── Not logged in ─────────────────────────────────────────── */}
           {!loggedIn ? (
             <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, textAlign: "center", gap: 16 }}>
-              <img src={BOT.helper} alt="bot" style={{ width: 72, height: 72, objectFit: "cover", borderRadius: "50%" }} />
+              <Image src={BOT.helper} alt="bot" width={72} height={72} style={{ width: 72, height: 72, objectFit: "cover", borderRadius: "50%" }} />
               <div>
                 <div style={{ fontWeight: 700, fontSize: 16, color: T.botText, marginBottom: 6 }}>กรุณาเข้าสู่ระบบก่อน</div>
                 <div style={{ fontSize: 13, color: T.mutedText, lineHeight: 1.7 }}>
@@ -505,7 +507,7 @@ export default function ChatBubble() {
               <div style={{ flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
                 {messages.length === 0 && (
                   <div style={{ textAlign: "center", padding: "24px 8px" }}>
-                    <img src={welcomeAvatar} alt="ASIA-BOT" style={{ width: 56, height: 56, objectFit: "cover", borderRadius: "50%", marginBottom: 8 }} />
+                    <Image src={welcomeAvatar} alt="ASIA-BOT" width={56} height={56} style={{ width: 56, height: 56, objectFit: "cover", borderRadius: "50%", marginBottom: 8 }} />
                     <div style={{ color: T.mutedText, fontSize: 13, lineHeight: 1.6 }}>
                       สวัสดี{ctx.userName ? ` ${ctx.userName}` : ""}!<br />
                       ถามอะไรก็ได้เลยครับ ฉันรู้ข้อมูลของคุณ
@@ -524,7 +526,7 @@ export default function ChatBubble() {
                   <div key={msg.id} style={{ display: "flex", flexDirection: msg.role === "user" ? "row-reverse" : "row", gap: 8, alignItems: "flex-end" }}>
                     {msg.role === "assistant" && (
                       <div style={{ width: 28, height: 28, borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
-                        <img src={getMsgAvatar(msg.id)} alt="bot" style={{ width: 28, height: 28, objectFit: "cover" }} />
+                        <Image src={getMsgAvatar(msg.id)} alt="bot" width={28} height={28} style={{ width: 28, height: 28, objectFit: "cover" }} />
                       </div>
                     )}
                     <div style={{ display: "flex", flexDirection: "column", gap: 6, maxWidth: "78%" }}>
@@ -533,16 +535,22 @@ export default function ChatBubble() {
                         borderRadius: msg.role === "user" ? "16px 4px 16px 16px" : "4px 16px 16px 16px",
                         background: msg.role === "user" ? accent : T.botBubbleBg,
                         color: msg.role === "user" ? "#fff" : T.botText,
-                        fontSize: 13, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word",
+                        fontSize: 13, lineHeight: 1.6,
+                        whiteSpace: msg.role === "user" ? "pre-wrap" : "normal",
+                        wordBreak: "break-word",
                         boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
                       }}>
-                        {msg.content || (msg.role === "assistant" && streaming
-                          ? <span style={{ display: "inline-flex", gap: 3 }}>
-                              {[0, 1, 2].map(i => (
-                                <span key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: "#94a3b8", display: "inline-block", animation: `chatbounce 1.2s ${i * 0.2}s infinite` }} />
-                              ))}
-                            </span>
-                          : "")}
+                        {msg.content
+                          ? (msg.role === "assistant"
+                              ? <Markdown text={msg.content} textColor={T.botText} accent={accent} isDark={ctx.isAdmin} />
+                              : msg.content)
+                          : (msg.role === "assistant" && streaming
+                              ? <span style={{ display: "inline-flex", gap: 3 }}>
+                                  {[0, 1, 2].map(i => (
+                                    <span key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: "#94a3b8", display: "inline-block", animation: `chatbounce 1.2s ${i * 0.2}s infinite` }} />
+                                  ))}
+                                </span>
+                              : "")}
                       </div>
                       {msg.role === "assistant" && msg.card && (
                         <AttendanceCard card={msg.card} accent={accent} ctx={ctx} />
@@ -624,7 +632,7 @@ export default function ChatBubble() {
       >
         {open && !dragging
           ? <span style={{ color: accent, fontSize: 20, lineHeight: 1, fontWeight: 700, pointerEvents: "none" }}>✕</span>
-          : <img src={btnAvatar} alt="ASIA-BOT" draggable={false} style={{ width: 36, height: 36, objectFit: "cover", borderRadius: "50%", pointerEvents: "none" }} />
+          : <Image src={btnAvatar} alt="ASIA-BOT" width={36} height={36} draggable={false} priority style={{ width: 36, height: 36, objectFit: "cover", borderRadius: "50%", pointerEvents: "none" }} />
         }
       </button>
 

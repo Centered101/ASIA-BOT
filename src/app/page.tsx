@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import TeamSection from "@/components/TeamSection";
@@ -105,8 +106,7 @@ export default function HomePage() {
               ) : null}
 
               <div className="flex items-center gap-2 mb-2">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/favicon.png" alt="logo" className="w-8 h-8" />
+                <Image src="/favicon.png" alt="logo" width={32} height={32} className="w-8 h-8" priority />
                 <h1 className="text-3xl sm:text-4xl font-extrabold leading-tight">ASIA-BOT</h1>
               </div>
               <p className="text-sm sm:text-base text-slate-600 mb-5 leading-relaxed">

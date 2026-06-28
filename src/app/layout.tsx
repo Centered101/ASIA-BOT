@@ -101,27 +101,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossOrigin="anonymous" />
 
-        {/* Kanit (only weights actually used) + Font Awesome — loaded media="print"
-            then flipped to "all" after first paint so neither blocks rendering. */}
-        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
+        {/* Preload Kanit + Font Awesome CSS (non-blocking fetch). The actual
+            stylesheet <link>s are injected by the script below — outside React's
+            tree — so they never block first paint and don't cause hydration drift. */}
         <link
-          rel="stylesheet"
+          rel="preload"
+          as="style"
           href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap"
-          media="print"
-          data-defer-css
         />
         <link
-          rel="stylesheet"
+          rel="preload"
+          as="style"
           href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
-          media="print"
-          data-defer-css
         />
       </head>
       <body suppressHydrationWarning>
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "(function(){function s(){var l=document.querySelectorAll('link[data-defer-css]');for(var i=0;i<l.length;i++)l[i].media='all';}if(document.readyState!=='loading')s();else window.addEventListener('DOMContentLoaded',s);})();",
+              "(function(){var u=['https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap','https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css'];function l(){u.forEach(function(h){var k=document.createElement('link');k.rel='stylesheet';k.href=h;document.head.appendChild(k);});}if(document.readyState==='loading')window.addEventListener('DOMContentLoaded',l);else l();})();",
           }}
         />
         <script

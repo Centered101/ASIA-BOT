@@ -36,6 +36,7 @@ ASIA-BOT คือระบบเว็บแอปสำหรับบริ�
 - Feedback และคำขอแก้ไขข้อมูลนักเรียน
 - Admin Panel แบบ Single-page พร้อม Role-based Access (superadmin / admin / staff)
 - LINE Flex Messages 5 ประเภทและการส่งข่าวสารจริง
+- **ASIA-BOT AI** — ผู้ช่วย AI ส่วนกลาง (Claude) ที่ตอบคำถามและ **ทำงานแทนได้** (จองห้อง/สั่งอาหาร/ค้นเอกสาร) ผ่านทั้งเว็บและ LINE
 
 > รายงานโครงงานฉบับสมบูรณ์อยู่ที่ [docs/report.md](./docs/report.md)
 
@@ -58,6 +59,9 @@ ASIA-BOT คือระบบเว็บแอปสำหรับบริ�
 | Admin Roles | superadmin, admin, staff พร้อมการจำกัดสิทธิ์แต่ละ tab |
 | LINE Broadcast | ส่งข่าวสาร LINE จริง ทั้งข้อความ รูปภาพ Flex ข่าวสาร ด่วน กิจกรรม และ Custom JSON |
 | LINE Flex Test | ทดสอบ Order, Feedback, RFID, Booking, Student Data Change และ Custom JSON |
+| **AI Agent (ASIA-BOT AI)** | ผู้ช่วย AI ส่วนกลาง (Claude Haiku) แบบ tool-calling — ดูข้อมูล + ทำ action (จองห้อง/สั่งอาหาร/ยกเลิก/ค้น PDF) พร้อม RBAC, conversation memory และ rich card |
+| AI Channels | ใช้ agent core เดียวกันทั้ง **เว็บ** (`ChatBubble`) และ **LINE** (webhook) — แยกธีม student/admin |
+| Mascot System | คาแรกเตอร์ ASIA-BOT 12 อารมณ์ ใช้ใน empty state / สถานะต่างๆ ผ่าน `<Mascot>` component |
 | Analytics | Vercel Analytics ผ่าน `@vercel/analytics/next` |
 
 ---
@@ -73,6 +77,7 @@ ASIA-BOT คือระบบเว็บแอปสำหรับบริ�
 | Auth | Custom session (students) + bcryptjs (admins) |
 | Hosting | Vercel (Fluid Compute) + Vercel Analytics |
 | Notifications | LINE Messaging API — Flex Messages + Broadcast |
+| AI | Anthropic Claude (`@anthropic-ai/sdk`) — agent core แบบ tool-calling (model `claude-haiku-4-5`) |
 | Charts | Chart.js 4 + react-chartjs-2 |
 | Hardware | ESP32 DevKit V1 + MFRC522 RFID + OLED SSD1306 + Buzzer |
 | Payment | Stripe |
@@ -110,6 +115,7 @@ graph TB
 
   LINE[LINE Messaging API]
   Vercel[Vercel Hosting + Analytics]
+  Agent[AI Agent Core - Claude]
 
   Student --> Pages
   Pages --> API
@@ -117,8 +123,13 @@ graph TB
   API --> DB
   API --> Storage
   API --> LINE
+  API --> Agent
+  LINE --> Agent
+  Agent --> DB
   Next --> Vercel
 ```
+
+> AI Agent core เป็นตัวกลางตัวเดียว (`src/lib/agent`) ที่ทั้ง `/api/chat` (เว็บ) และ LINE webhook เรียกใช้ — ดูรายละเอียดที่ [AI Agent (ASIA-BOT AI)](#ai-agent-asia-bot-ai)
 
 ---
 
@@ -144,13 +155,21 @@ src/
 │   ├── Header.tsx
 │   ├── Footer.tsx
 │   ├── StudentAvatar.tsx
+│   ├── ChatBubble.tsx              # AI chat widget (web) — student + admin theme
+│   ├── Mascot.tsx                  # คาแรกเตอร์ ASIA-BOT (12 อารมณ์) + empty state
 │   └── admin/RfidConsole.tsx
 ├── lib/
 │   ├── admin-auth.ts               # Admin auth/session guard
 │   ├── amenities.ts                # Room amenities
 │   ├── config.ts                   # Site config / quick links
 │   ├── line.ts                     # LINE Flex builders
-│   └── session.ts                  # Student session helpers
+│   ├── session.ts                  # Student session helpers
+│   └── agent/                      # AI Agent core (ASIA-BOT AI)
+│       ├── core.ts                 # tool-calling loop (Claude)
+│       ├── context.ts              # system prompt builder
+│       ├── nav.ts                  # [NAV:] tag parser (web + LINE)
+│       ├── channels/               # web.ts, line.ts request builders
+│       └── tools/                  # attendance, booking, shop, schedule, …
 └── types/
     └── database.ts
 
@@ -278,6 +297,43 @@ Content-Type: application/json
 
 ---
 
+## AI Agent (ASIA-BOT AI)
+
+ASIA-BOT AI คือผู้ช่วย AI ส่วนกลางที่ขับเคลื่อนด้วย **Anthropic Claude** (`claude-haiku-4-5`) แบบ tool-calling — core ตัวเดียว (`src/lib/agent`) ใช้ร่วมกันทุกช่องทาง ตอบได้ทั้งคำถามและ **ลงมือทำ action** แทนผู้ใช้
+
+### ความสามารถ
+
+| ประเภท | Tools |
+|---|---|
+| ดูข้อมูล | เข้า-ออกโรงเรียน (รายวัน/สรุป/ช่วงเวลา), ตารางเรียน, การจอง, ออเดอร์, สินค้า, โปรไฟล์ |
+| **ทำ action** | `create_booking` / `cancel_booking` (จองห้อง), `place_order` / `cancel_order` (สั่ง/ยกเลิกอาหาร), `submit_feedback` |
+| ค้นเอกสาร | `list_documents` / `search_documents` — ถาม-ตอบจากไฟล์ PDF ที่อัปโหลด |
+| Admin | สถิติโรงเรียน, ค้นหานักเรียน, ดู feedback/ออเดอร์/การจองทั้งหมด |
+
+### สถาปัตยกรรม
+
+- **Tool-calling loop** (`core.ts`) — วนเรียก tools สูงสุด 5 รอบจนได้คำตอบ
+- **RBAC** — `tools/index.ts` กำหนด tool ที่อนุญาตต่อ role (least-privilege) ตั้งแต่ guest → superadmin
+- **Conversation memory** — เก็บประวัติแชทต่อ session เพื่อตอบต่อเนื่อง
+- **Channels** — `channels/web.ts` และ `channels/line.ts` สร้าง `AgentRequest` มาตรฐานเดียวกัน
+- **Rich card** — ผลลัพธ์ attendance ส่งกลับเป็น `richData` ให้เว็บ render การ์ดสวยงาม
+- **Nav tags** — AI แนบ `[NAV:/path:label]` ในคำตอบ → เว็บแปลงเป็นปุ่ม, LINE แปลงเป็น quick reply (parser ร่วมใน `nav.ts`)
+
+### ช่องทางใช้งาน
+
+| Channel | Entry | หมายเหตุ |
+|---|---|---|
+| เว็บ | `ChatBubble` → `/api/chat` | ปุ่มลอยทุกหน้า, ธีม student (ฟ้า) / admin (ดำ-แดง), ต้อง login ก่อน |
+| LINE | webhook `/api/line/webhook` | ผูกบัญชีด้วยรหัสนักเรียน, รองรับ action + อัปโหลด PDF |
+
+### Environment
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+---
+
 ## Environment Variables
 
 ```env
@@ -305,6 +361,9 @@ RFID_STATION_SECRET=optional_station_secret
 STRIPE_SECRET_KEY=sk_live_or_test
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_or_test
 STRIPE_WEBHOOK_SECRET=whsec_xxx
+
+# AI Agent (ASIA-BOT AI)
+ANTHROPIC_API_KEY=sk-ant-xxx
 ```
 
 ---

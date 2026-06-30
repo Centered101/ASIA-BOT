@@ -27,6 +27,7 @@ ASIA-BOT ถูกพัฒนาขึ้นเพื่อแก้ปัญ�
 3. ส่งการแจ้งเตือนแบบ Real-time ผ่าน LINE Messaging API
 4. ออกแบบระบบสิทธิ์ผู้ใช้ (Role-based Access Control) สำหรับหลายระดับ
 5. ให้นักเรียนและผู้ดูแลระบบสามารถเข้าถึงข้อมูลได้จากทุกอุปกรณ์
+6. พัฒนาผู้ช่วย AI ส่วนกลาง (ASIA-BOT AI) ที่ตอบคำถามและทำงานแทนผู้ใช้ได้ ผ่านทั้งเว็บและ LINE
 
 ### 1.3 ขอบเขตของโครงงาน
 
@@ -48,6 +49,11 @@ ASIA-BOT ถูกพัฒนาขึ้นเพื่อแก้ปัญ�
 **ฝั่งการสื่อสาร**
 - LINE Messaging API สำหรับแจ้งเตือน 5 ประเภทและการส่งข่าวสารจริง
 
+**ฝั่งปัญญาประดิษฐ์ (AI Agent)**
+- ผู้ช่วย AI ส่วนกลางขับเคลื่อนด้วย Anthropic Claude แบบ tool-calling
+- ใช้ core เดียวกันทั้งเว็บ (ChatBubble) และ LINE webhook
+- รองรับทั้งการดูข้อมูลและการทำ action (จองห้อง/สั่งอาหาร/ค้นเอกสาร PDF) พร้อม RBAC
+
 ---
 
 ## บทที่ 2 ทบทวนวรรณกรรม / เทคโนโลยีที่เกี่ยวข้อง
@@ -68,7 +74,11 @@ ESP32 เป็น microcontroller ที่มี WiFi และ Bluetooth ใ�
 
 LINE Messaging API ช่วยให้พัฒนา Chatbot และการส่งข้อความแบบ Push Message ไปยังกลุ่ม LINE ได้ LINE Flex Message เป็น component ที่ออกแบบหน้าตาข้อความได้อิสระในรูปแบบ JSON ทำให้สื่อสารข้อมูลได้ชัดเจนและมีความน่าสนใจมากกว่าข้อความธรรมดา
 
-### 2.5 Vercel
+### 2.5 Anthropic Claude (AI Agent)
+
+Anthropic Claude เป็น Large Language Model ที่รองรับ **tool-calling** (function calling) ทำให้ AI สามารถเรียกใช้ฟังก์ชันที่กำหนดไว้เพื่อดึงข้อมูลจริงจากฐานข้อมูลและลงมือทำงานแทนผู้ใช้ได้ แทนการตอบจากความรู้ทั่วไปเพียงอย่างเดียว โครงงานนี้ใช้โมเดล `claude-haiku-4-5` ผ่าน `@anthropic-ai/sdk` ออกแบบเป็น agent core ส่วนกลางที่ใช้ร่วมกันได้ทุกช่องทาง
+
+### 2.6 Vercel
 
 Vercel เป็น cloud platform ที่รองรับการ deploy Next.js โดยตรง รองรับ Fluid Compute ที่สามารถรัน Node.js เต็มรูปแบบ มีระบบ Preview Deployments, Analytics และ Edge Network ครอบคลุมทั่วโลก
 
@@ -306,7 +316,43 @@ Admin ดูข้อมูลเดิมและข้อมูลใหม�
 | Notice Flex | แจ้งเตือน |
 | Custom JSON | payload ที่ผู้ดูแลเขียนเอง |
 
-### 4.4 ESP32 Hardware
+### 4.4 AI Agent Core (ASIA-BOT AI)
+
+ผู้ช่วย AI ออกแบบเป็น **core ส่วนกลางตัวเดียว** (`src/lib/agent`) ที่ทั้งเว็บและ LINE เรียกใช้ร่วมกัน ทำงานเป็นวงจร tool-calling
+
+```txt
+ผู้ใช้ (เว็บ / LINE)
+        │
+        ▼
+buildContext + system prompt (ตาม role)
+        │
+        ▼
+Claude  ◄────────────┐
+   │                 │ (วนสูงสุด 5 รอบ)
+   │ ต้องใช้ tool?   │
+   ▼ ใช่             │
+executeToolCall ──► Supabase (ดูข้อมูล / ทำ action)
+   │                 │
+   └─────────────────┘
+        │ ไม่ใช้แล้ว
+        ▼
+คำตอบ + richData (การ์ด) + [NAV:] (ปุ่มลิงก์)
+```
+
+**องค์ประกอบหลัก**
+
+| ส่วน | หน้าที่ |
+|---|---|
+| `core.ts` | วงจร tool-calling, รวบรวม richData, บันทึก conversation memory |
+| `context.ts` | สร้าง system prompt ตามผู้ใช้/บทบาท/เวลา |
+| `tools/` | กลุ่มเครื่องมือ — attendance, booking, shop, schedule, feedback, dashboard, documents |
+| `tools/index.ts` | ทะเบียน tool + **RBAC** กำหนดสิทธิ์ต่อ role (least-privilege) |
+| `channels/` | แปลง request จากเว็บ/LINE ให้เป็น `AgentRequest` มาตรฐาน |
+| `nav.ts` | แปลง `[NAV:/path:label]` เป็นปุ่ม (เว็บ) / quick reply (LINE) |
+
+**ความสามารถระดับ action** — นอกจากดูข้อมูล AI ยังจองห้อง (`create_booking`), ยกเลิกจอง, สั่งอาหาร (`place_order`), ยกเลิกออเดอร์ และค้นเอกสาร PDF ได้ โดยตรวจสิทธิ์และยืนยันกับผู้ใช้ก่อนทำงานจริง
+
+### 4.5 ESP32 Hardware
 
 **อุปกรณ์ที่ใช้**
 

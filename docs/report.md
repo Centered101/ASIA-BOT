@@ -393,6 +393,8 @@ executeToolCall ──► Supabase (ดูข้อมูล / ทำ action)
 
 Admin ใช้ path เดียวคือ `/admin?tab=` ตามตาราง:
 
+> **หมายเหตุ:** กลุ่ม "เช็กชื่อ" (`entrylogs`, `checkin_school`, `checkin_library`, `checkin_meeting`, `rfid`) ถูกซ่อนออกจากเมนูฝั่งซ้ายชั่วคราว แต่ tab/route ยังทำงานได้ตามปกติหากเข้าผ่าน URL ตรง
+
 | Tab | กลุ่ม | หน้าที่ |
 |---|---|---|
 | `dashboard` | ภาพรวม | สถิตินักเรียน Chart.js สถานะรายวัน |

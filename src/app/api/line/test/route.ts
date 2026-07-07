@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { buildBookingFlexMessage, buildFeedbackFlexMessage, buildOrderFlexMessage, buildRfidScanFlexMessage, buildStudentDataChangeFlexMessage } from "@/lib/line";
+import { buildBookingFlexMessage, buildEquipmentRequestFlexMessage, buildFeedbackFlexMessage, buildOrderFlexMessage, buildRfidScanFlexMessage, buildStudentDataChangeFlexMessage } from "@/lib/line";
 import { checkAdminAuth } from "@/lib/admin-auth";
 
 const supabase = createClient(
@@ -9,7 +9,7 @@ const supabase = createClient(
 );
 
 type LineMessage = Record<string, unknown>;
-type TestMode = "order_flex" | "feedback_flex" | "attendance_flex" | "booking_flex" | "data_change_flex" | "custom_json";
+type TestMode = "order_flex" | "feedback_flex" | "attendance_flex" | "booking_flex" | "data_change_flex" | "equipment_flex" | "custom_json";
 const lineTestCooldowns = new Map<string, number>();
 const LINE_TEST_COOLDOWN_MS = 15_000;
 
@@ -234,6 +234,28 @@ export async function POST(req: NextRequest) {
             { label: "แผนก/สาขา", oldValue: "คอมพิวเตอร์", newValue: "เทคโนโลยี" },
             { label: "หมายเหตุ", oldValue: null, newValue: `ส่งทดสอบโดย: ${adminName}` },
           ],
+        }),
+      });
+    }
+
+    if (mode === "equipment_flex") {
+      messages.push({
+        type: "flex",
+        altText: "🧰 LINE test — equipment flex",
+        contents: buildEquipmentRequestFlexMessage({
+          requestCode: "test-equipment",
+          itemName: "โปรเจกเตอร์",
+          itemImageUrl: dummyProductImage,
+          department: "555 ASIA-BOT Test",
+          requesterName: adminName,
+          requesterPhotoUrl: testerPhotoUrl,
+          requesterPhone: "08x-xxx-xxxx",
+          quantity: 1,
+          unit: "เครื่อง",
+          borrowDate: new Date().toISOString().slice(0, 10),
+          dueDate: new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10),
+          purpose: `ทดสอบรูปแบบแจ้งเตือนคำขอยืม-คืนคุรุภัณฑ์\nส่งทดสอบโดย: ${adminName}`,
+          status: "pending",
         }),
       });
     }

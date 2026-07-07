@@ -29,6 +29,7 @@ export async function GET(req: NextRequest) {
     pendingNameRequests,
     lowStockProducts,
     pendingTeacherApps,
+    pendingEquipmentRequests,
   ] =
     await Promise.all([
       supabase.from("students").select("id", { count: "exact", head: true }),
@@ -51,6 +52,7 @@ export async function GET(req: NextRequest) {
       (supabase.from("teachers") as any)
         .select("id", { count: "exact", head: true })
         .in("status", ["pending", "reviewing"]),
+      supabase.from("equipment_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
     ]);
 
   const inactiveCardCount = inactiveCards.count ?? 0;
@@ -76,6 +78,7 @@ export async function GET(req: NextRequest) {
       rfidIssues: inactiveCardCount + lostCardCount,
       lowStockProducts: lowStockProducts.count ?? 0,
       pendingTeacherApps: pendingTeacherApps.count ?? 0,
+      pendingEquipmentRequests: pendingEquipmentRequests.count ?? 0,
     },
   });
 }

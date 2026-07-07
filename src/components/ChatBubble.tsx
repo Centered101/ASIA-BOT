@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import Markdown from "./Markdown";
@@ -222,6 +223,7 @@ function AttendanceCard({ card, accent, ctx }: { card: RichCard; accent: string;
 }
 
 export default function ChatBubble() {
+  const pathname = usePathname();
   const [open, setOpen]         = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput]       = useState("");
@@ -237,8 +239,8 @@ export default function ChatBubble() {
   const abortRef  = useRef<AbortController | null>(null);
   const drag      = useRef({ startX: 0, startY: 0, startR: 16, startB: 16, moved: false });
 
-  // ── Init: read session ─────────────────────────────────────────────────────
-  useEffect(() => {
+  // ── Read session (student/admin) from storage ──────────────────────────────
+  const readSession = useCallback(() => {
     const isAdmin = window.location.pathname.startsWith("/admin");
     let loggedIn = false;
     let userName = "";
@@ -250,7 +252,7 @@ export default function ChatBubble() {
 
     if (isAdmin) {
       try {
-        const raw = sessionStorage.getItem("asia_admin_session");
+        const raw = localStorage.getItem("asia_admin_session");
         if (raw) {
           const s = JSON.parse(raw);
           adminId   = s.admin_id ?? s.id;
@@ -279,6 +281,11 @@ export default function ChatBubble() {
 
     setLoggedIn(loggedIn);
     setCtx({ isAdmin, userName, studentId, adminId, adminRole, userProgram, userDepartment });
+  }, []);
+
+  // ── Init: read session + restore bubble position ───────────────────────────
+  useEffect(() => {
+    readSession();
 
     try {
       const saved = localStorage.getItem("asia-bot-bubble-pos");
@@ -290,6 +297,26 @@ export default function ChatBubble() {
         });
       }
     } catch { /* silent */ }
+  }, [readSession]);
+
+  // Re-check session every time the chat window opens, and on every route change —
+  // this component stays mounted across navigation (e.g. to /login and back via
+  // router.replace), so storage reads would otherwise go stale until a full reload.
+  useEffect(() => { if (open) readSession(); }, [open, readSession]);
+  useEffect(() => { readSession(); }, [pathname, readSession]);
+
+  // Cross-tab logout: localStorage.removeItem fires a native "storage" event in every
+  // OTHER open tab (never the tab that made the change). Catch it here — this component
+  // is mounted on every page via the root layout — and reload so each page's own
+  // auth guard re-runs and boots the user out immediately, everywhere.
+  useEffect(() => {
+    function onStorage(e: StorageEvent) {
+      if ((e.key === STUDENT_SESSION_KEY || e.key === "asia_admin_session") && e.newValue === null) {
+        window.location.reload();
+      }
+    }
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);

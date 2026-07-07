@@ -97,6 +97,13 @@ function calcGrade(program: string, entryYear: number | string | null): string {
   return `${program}${diff}`;
 }
 function fmt(n: number): string { return "฿" + (+n).toLocaleString(); }
+function effectiveStatus(l: LogEntry): LogEntry["status"] {
+  if (l.status === "pending" && Date.now() - new Date(l.ts).getTime() > PAY_LIMIT) return "expired";
+  return l.status;
+}
+function isCancelledStatus(status: LogEntry["status"]): boolean {
+  return status === "cancelled" || status === "failed" || status === "expired";
+}
 function fmtTimer(ms: number): string {
   const m = Math.floor(ms / 60000);
   const s = Math.floor((ms % 60000) / 1000);
@@ -132,6 +139,7 @@ export default function ShopPage() {
 
   // ── Logs ──────────────────────────────────────────────────────────
   const [logs, setLogs]               = useState<LogEntry[]>([]);
+  const [historyTab, setHistoryTab]   = useState<"active" | "cancelled">("active");
 
   // ── Modals ────────────────────────────────────────────────────────
   const [cartOpen, setCartOpen]       = useState(false);
@@ -589,7 +597,7 @@ export default function ShopPage() {
   if (!student) return null;
 
   const sortLabels = ["ราคา ↑", "ราคา ↓", "ชื่อ A-Z"];
-  const pendingLogCount = logs.filter(l => l.status === "pending").length;
+  const pendingLogCount = logs.filter(l => effectiveStatus(l) === "pending").length;
 
   // ══════════════════════════════════════════════════════════════════
   //  RENDER
@@ -601,7 +609,7 @@ export default function ShopPage() {
 
       <Header subtitle="สหกรณ์โรงเรียน" />
 
-      <main className="max-w-7xl mx-auto px-3 sm:px-6 py-6 relative z-10" style={{ paddingBottom: cartCount > 0 ? "6.5rem" : "2.5rem" }}>
+      <main className="min-h-screen max-w-7xl mx-auto px-3 sm:px-6 py-6 relative z-10" style={{ paddingBottom: cartCount > 0 ? "6.5rem" : "2.5rem" }}>
 
         {/* ── Search bar ── */}
         <div data-aos="fade-down" className="flex items-center gap-2 mb-5">
@@ -1478,30 +1486,53 @@ export default function ShopPage() {
               <i className="fa-solid fa-xmark" />
             </button>
           </div>
+
+          <div className="flex gap-2 px-4 sm:px-5 pt-3 flex-shrink-0">
+            {([
+              { key: "active" as const, label: "ประวัติการสั่งซื้อ", count: logs.filter(l => !isCancelledStatus(effectiveStatus(l))).length },
+              { key: "cancelled" as const, label: "ยกเลิก", count: logs.filter(l => isCancelledStatus(effectiveStatus(l))).length },
+            ]).map(tab => (
+              <button key={tab.key} onClick={() => setHistoryTab(tab.key)}
+                className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border-2 transition
+                  ${historyTab === tab.key ? "border-sky-400 bg-sky-50 text-sky-600" : "border-slate-200 text-slate-400 hover:border-sky-200"}`}>
+                {tab.label}
+                <span className={`text-[10px] rounded-full px-1.5 py-0.5 ${historyTab === tab.key ? "bg-sky-100" : "bg-slate-100"}`}>{tab.count}</span>
+              </button>
+            ))}
+          </div>
+
           <div className="overflow-y-auto flex-1 px-4 sm:px-5 py-4 space-y-3 pb-8">
-            {logs.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="text-5xl mb-3">📋</div>
-                <div className="text-slate-400 text-sm">ยังไม่มีประวัติการสั่งซื้อ</div>
-              </div>
-            ) : logs.map((l, idx) => {
+            {(() => {
+              const visibleLogs = logs.filter(l => isCancelledStatus(effectiveStatus(l)) === (historyTab === "cancelled"));
+              if (visibleLogs.length === 0) {
+                return (
+                  <div className="text-center py-12">
+                    <div className="text-5xl mb-3">{historyTab === "cancelled" ? "🗑️" : "📋"}</div>
+                    <div className="text-slate-400 text-sm">
+                      {historyTab === "cancelled" ? "ไม่มีรายการที่ยกเลิก" : "ยังไม่มีประวัติการสั่งซื้อ"}
+                    </div>
+                  </div>
+                );
+              }
+              return visibleLogs.map((l, idx) => {
+              const status = effectiveStatus(l);
               const ts = new Date(l.ts);
               const dStr = ts.toLocaleDateString("th-TH", { month: "short", day: "numeric" });
               const tStr = ts.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
-              const badgeCls = l.status === "paid" ? "bg-green-50 text-green-600"
-                : l.status === "cancelled" || l.status === "failed" || l.status === "expired" ? "bg-red-50 text-red-500"
+              const badgeCls = status === "paid" ? "bg-green-50 text-green-600"
+                : isCancelledStatus(status) ? "bg-red-50 text-red-500"
                 : "bg-amber-50 text-amber-600";
-              const badgeIcon = l.status === "paid" ? "fa-check"
-                : l.status === "cancelled" || l.status === "failed" ? "fa-xmark"
-                : l.status === "expired" ? "fa-clock"
+              const badgeIcon = status === "paid" ? "fa-check"
+                : status === "cancelled" || status === "failed" ? "fa-xmark"
+                : status === "expired" ? "fa-clock"
                 : "fa-hourglass-half";
-              const badgeTxt = l.status === "paid" ? "ชำระแล้ว"
-                : l.status === "cancelled" ? "ยกเลิก"
-                : l.status === "failed" ? "ล้มเหลว"
-                : l.status === "expired" ? "หมดเวลา"
+              const badgeTxt = status === "paid" ? "ชำระแล้ว"
+                : status === "cancelled" ? "ยกเลิก"
+                : status === "failed" ? "ล้มเหลว"
+                : status === "expired" ? "หมดเวลา (เกิน 15 นาที)"
                 : "รอชำระ";
-              const borderCls = l.status === "paid" ? "border-l-4 border-l-green-400"
-                : l.status === "pending" || l.status === "expired" ? "border-l-4 border-l-amber-400"
+              const borderCls = status === "paid" ? "border-l-4 border-l-green-400"
+                : status === "pending" ? "border-l-4 border-l-amber-400"
                 : "border-l-4 border-l-red-400";
               const itemText = l.items.map(i => `${i.name} x${i.qty}`).join(", ");
               const itemPreview = itemText.length > 92 ? `${itemText.slice(0, 92)}...` : itemText;
@@ -1536,14 +1567,14 @@ export default function ShopPage() {
                     <div className="text-[10px] text-slate-400">
                       {l.studentId && <span>รหัส {l.studentId}</span>}
                     </div>
-                    {l.status === "paid" && (
+                    {status === "paid" && (
                       <button onClick={() => { setLastOrder(l); generateSlip(l); setLogsOpen(false); setSlipOpen(true); }}
                         className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-bold text-white shadow-sm active:scale-95 transition"
                         style={{ background: "linear-gradient(135deg,var(--primary-color),var(--primary-dark))" }}>
                         <i className="fa-solid fa-receipt" /> ดูสลิป
                       </button>
                     )}
-                    {l.status === "pending" && (
+                    {status === "pending" && (
                       <span className="inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-[11px] font-bold bg-amber-50 text-amber-600">
                         <i className="fa-solid fa-circle-notch fa-spin text-[10px]" /> รอชำระเงิน
                       </span>
@@ -1551,7 +1582,8 @@ export default function ShopPage() {
                   </div>
                 </div>
               );
-            })}
+              });
+            })()}
           </div>
         </div>
       </div>

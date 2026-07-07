@@ -13,7 +13,8 @@ import { getStudentSession } from "@/lib/session";
 
 type Stats = {
   students: number;
-  rooms: number;
+  bookings: number;
+  equipment: number;
   feedbackTotal: number;
   feedbackPending: number;
   todayEntries: number;
@@ -31,7 +32,8 @@ export default function HomePage() {
       .then(j => {
         if (j.ok) setStats({
           students:       j.students ?? 0,
-          rooms:          j.totalBookings ?? 0,
+          bookings:       j.totalBookings ?? 0,
+          equipment:      j.equipmentTotal ?? 0,
           feedbackTotal:  j.feedbackTotal ?? 0,
           feedbackPending: j.feedbackPending ?? 0,
           todayEntries:   j.todayEntries ?? 0,
@@ -64,11 +66,12 @@ export default function HomePage() {
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-2 border-t border-slate-100 sm:grid-cols-4">
+            <div className="grid grid-cols-2 border-t border-slate-100 sm:grid-cols-3 lg:grid-cols-5">
             {[
               { icon: "fa-users",            label: "นักเรียน",       val: stats.students,      color: "var(--primary-dark)" },
-              { icon: "fa-right-to-bracket", label: "เข้าวันนี้",     val: stats.todayEntries,  color: "#059669" },
-              { icon: "fa-calendar-check",   label: "การจองทั้งหมด", val: stats.rooms,         color: "#F59E0B" },
+              { icon: "fa-right-to-bracket", label: "เข้าวันนี้",     val: stats.todayEntries,  color: "#0284C7" },
+              { icon: "fa-calendar-check",   label: "การจองทั้งหมด", val: stats.bookings,      color: "#F59E0B" },
+              { icon: "fa-toolbox",          label: "เบิกคุรุภัณฑ์",   val: stats.equipment,     color: "#059669" },
               { icon: "fa-comment-dots",     label: "ความคิดเห็น",   val: stats.feedbackTotal, color: "#14B8A6" },
             ].map(s => (
               <div key={s.label} className="group relative border-b border-r border-slate-100 p-4 transition-colors hover:bg-slate-50/70 last:border-r-0 sm:border-b-0">
@@ -111,7 +114,7 @@ export default function HomePage() {
               </div>
               <p className="text-sm sm:text-base text-slate-600 mb-5 leading-relaxed">
                 แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร — ติดตามห้องเรียน, สแกนบัตรเข้าออก,
-                จองห้องประชุม, สหกรณ์โรงเรียน และแสดงความคิดเห็น ในที่เดียว
+                จองห้องประชุม, เบิกคุรุภัณฑ์, สหกรณ์โรงเรียน และแสดงความคิดเห็น ในที่เดียว
               </p>
 
               <div className="flex flex-col sm:flex-row gap-2 mb-6">
@@ -140,8 +143,8 @@ export default function HomePage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {[
                   { href: "/class-track-room",      icon: "fa-chalkboard-user", color: "var(--primary-dark)", label: "สถานะห้องเรียน", desc: "ดูห้องว่างและจองห้อง" },
-                  { href: "/student-entry-scanner", icon: "fa-qrcode",          color: "#059669",              label: "เช็กชื่อเข้าออก",    desc: "บันทึกเวลาเข้า-ออกนักเรียน" },
                   { href: "/class-track-room?view=booking", icon: "fa-calendar-check",  color: "#F59E0B",              label: "จองห้องประชุม",     desc: "ระบบจองห้องออนไลน์" },
+                  { href: "/equipment-request",     icon: "fa-toolbox",         color: "#059669",              label: "เบิกคุรุภัณฑ์",       desc: "ยื่นคำขอยืมอุปกรณ์" },
                   { href: "/feedback",              icon: "fa-comment-dots",    color: "#14B8A6",              label: "ความคิดเห็น",        desc: "ส่งข้อเสนอแนะและรายงาน" },
                 ].map(f => (
                   <Link key={f.href} href={f.href}
@@ -188,7 +191,7 @@ export default function HomePage() {
                 ข้อมูลทั้งหมดเชื่อมต่อกับฐานข้อมูลกลาง และอัปเดตสถานะให้เห็นใกล้เคียงเวลาจริง
               </p>
               <div className="flex flex-wrap gap-2 mt-4">
-                {["บัตรนักเรียน", "เช็กชื่อ", "จองห้อง", "สหกรณ์", "ความคิดเห็น"].map(t => (
+                {["บัตรนักเรียน", "เช็กชื่อ", "จองห้อง", "เบิกคุรุภัณฑ์", "สหกรณ์", "ความคิดเห็น"].map(t => (
                   <span key={t} className="text-xs font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-600">{t}</span>
                 ))}
               </div>

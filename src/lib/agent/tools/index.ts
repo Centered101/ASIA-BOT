@@ -8,7 +8,6 @@ import { shopTools, executeShopTool } from './shop'
 import { scheduleTools, executeScheduleTool } from './schedule'
 import { feedbackTools, executeFeedbackTool } from './feedback'
 import { dashboardTools, executeDashboardTool } from './dashboard'
-import { documentTools, executeDocumentTool } from './documents'
 
 // Full tool registry — every tool the agent can call
 export const ALL_TOOLS = [
@@ -19,10 +18,7 @@ export const ALL_TOOLS = [
   ...scheduleTools,
   ...feedbackTools,
   ...dashboardTools,
-  ...documentTools,
 ]
-
-const DOC_TOOLS = ['list_documents', 'search_documents']
 
 // Tools available for each role (least-privilege)
 const TOOL_ALLOW: Record<UserRole, string[]> = {
@@ -45,14 +41,12 @@ const TOOL_ALLOW: Record<UserRole, string[]> = {
     'get_schedule_week',
     'submit_feedback',
     'get_school_info',
-    ...DOC_TOOLS,
   ],
   parent: [
     'get_attendance_status',
     'get_student_profile',
     'get_schedule_today',
     'get_school_info',
-    ...DOC_TOOLS,
   ],
   teacher: [
     'get_attendance_status',
@@ -70,19 +64,16 @@ const TOOL_ALLOW: Record<UserRole, string[]> = {
     'get_schedule_week',
     'get_school_info',
     'submit_feedback',
-    ...DOC_TOOLS,
   ],
   librarian: [
     'get_student_profile',
     'search_students',
     'get_school_info',
-    ...DOC_TOOLS,
   ],
   cooperative_staff: [
     'get_products',
     'get_all_orders',
     'get_school_info',
-    ...DOC_TOOLS,
   ],
   school_admin: [
     'get_attendance_status',
@@ -105,7 +96,6 @@ const TOOL_ALLOW: Record<UserRole, string[]> = {
     'get_pending_feedback',
     'get_school_stats',
     'get_school_info',
-    ...DOC_TOOLS,
   ],
   executive: [
     'get_school_stats',
@@ -113,14 +103,12 @@ const TOOL_ALLOW: Record<UserRole, string[]> = {
     'get_schedule_today',
     'get_school_info',
     'get_pending_feedback',
-    ...DOC_TOOLS,
   ],
   it_admin: [
     'get_school_stats',
     'get_student_profile',
     'search_students',
     'get_school_info',
-    ...DOC_TOOLS,
   ],
   superadmin: ALL_TOOLS.map(t => t.name),
 }
@@ -153,8 +141,6 @@ const TOOL_MODULES: Record<string, string> = {
   get_pending_feedback: 'feedback',
   get_school_stats: 'dashboard',
   get_school_info: 'dashboard',
-  list_documents: 'documents',
-  search_documents: 'documents',
 }
 
 export async function executeToolCall(
@@ -173,7 +159,6 @@ export async function executeToolCall(
     case 'schedule':   return executeScheduleTool(toolName, input, ctx, supabase)
     case 'feedback':   return executeFeedbackTool(toolName, input, ctx, supabase)
     case 'dashboard':  return executeDashboardTool(toolName, input, ctx, supabase)
-    case 'documents':  return executeDocumentTool(toolName, input, ctx, supabase)
     default:           return { error: `Unknown tool: ${toolName}` }
   }
 }

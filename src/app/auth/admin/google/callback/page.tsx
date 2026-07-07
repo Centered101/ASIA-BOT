@@ -62,11 +62,11 @@ function AdminGoogleCallbackContent() {
             if (json.ok) {
               // อัปเดต google_email ใน session ที่มีอยู่
               try {
-                const raw = sessionStorage.getItem("asia_admin_session");
+                const raw = localStorage.getItem("asia_admin_session");
                 if (raw) {
                   const sess = JSON.parse(raw);
                   sess.google_email = googlePayload.google_email;
-                  sessionStorage.setItem("asia_admin_session", JSON.stringify(sess));
+                  localStorage.setItem("asia_admin_session", JSON.stringify(sess));
                 }
               } catch { /* silent */ }
               window.location.replace("/admin?google_linked=1");
@@ -96,8 +96,8 @@ function AdminGoogleCallbackContent() {
         const json = await res.json();
 
         if (json.ok) {
-          sessionStorage.setItem(STORAGE_KEY, JSON.stringify(json.admin));
-          sessionStorage.setItem(STORAGE_TIME_KEY, new Date().toISOString());
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(json.admin));
+          localStorage.setItem(STORAGE_TIME_KEY, new Date().toISOString());
           await supabase.auth.signOut();
           window.location.replace("/admin");
         } else {

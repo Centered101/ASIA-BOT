@@ -819,7 +819,6 @@ export default function StudentPage() {
             {([
               { icon: "fa-solid fa-folder-open",     color: "#6366F1", bg: "#EEF2FF", path: "/projects",               title: "ประเมินโปรเจค",  desc: "ผลงานนักเรียน"          },
               { icon: "fa-solid fa-calendar-check",  color: "#F59E0B", bg: "#FFFBEB", path: "/class-track-room?view=booking", title: "จองห้อง",        desc: "ห้องประชุม/ห้องเรียน"  },
-              { icon: "fa-solid fa-qrcode",          color: "#059669", bg: "#ECFDF5", path: "/student-entry-scanner",   title: "สแกนเข้า/ออก",  desc: "ตรวจสอบการเข้าเรียน"  },
               { icon: "fa-solid fa-store",           color: "#EC4899", bg: "#FDF2F8", path: "/shop",                    title: "สหกรณ์",         desc: "ซื้อสินค้าในโรงเรียน" },
               { icon: "fa-solid fa-chalkboard-user", color: "#7C3AED", bg: "#F5F3FF", path: "/class-track-room",        title: "Class Track",    desc: "ติดตามห้องเรียน"       },
               { icon: "fa-solid fa-comment-dots",    color: "#14B8A6", bg: "#F0FDFA", path: "/feedback",                title: "ความคิดเห็น",    desc: "ข้อเสนอแนะ"            },

@@ -4,6 +4,7 @@ import { memo, useEffect, useState, useCallback, useMemo, useRef, Suspense } fro
 import { useRouter, useSearchParams } from "next/navigation";
 import { getGoogleSupabase } from "@/lib/supabase-google";
 import type { CustomField } from "@/lib/config";
+import { DEPARTMENTS } from "@/lib/config";
 import { AMENITY_OPTIONS, getAmenityInfo } from "@/lib/amenities";
 import RfidConsole from "@/components/admin/RfidConsole";
 import { Chart, registerables } from "chart.js";
@@ -29,6 +30,7 @@ type Stats = {
   inactiveCards: number; lostCards: number; paidOrders: number;
   pendingOrders: number; orderUpdates: number; pendingDataRequests: number;
   rfidIssues: number; lowStockProducts: number; pendingTeacherApps: number;
+  pendingEquipmentRequests: number;
 };
 
 type Booking = {
@@ -126,6 +128,25 @@ type Room = {
   capacity: number; location: string | null;
   image_url: string | null; amenities: string[] | null;
   status: string; created_at: string;
+};
+
+type EquipmentItem = {
+  id: string; asset_code: string | null; name: string; category: string; department: string | null; unit: string;
+  total_quantity: number; available_quantity: number;
+  image_url: string | null; description: string | null;
+  active: boolean; deleted_at: string | null; created_at: string;
+};
+
+type EquipmentRequest = {
+  id: string; request_code: string; equipment_item_id: string;
+  department: string; requester_name: string; requester_phone: string | null;
+  quantity: number; purpose: string | null;
+  borrow_date: string; due_date: string; returned_at: string | null;
+  delivery_mode: "pickup" | "delivery"; delivery_loc: string | null; time_slot: string | null; picked_up_at: string | null;
+  status: "pending" | "approved" | "picked_up" | "rejected" | "cancelled" | "returned";
+  admin_note: string | null; reviewed_by: string | null; reviewed_at: string | null;
+  created_at: string; updated_at: string;
+  equipment_items?: { name: string; category: string; unit: string; asset_code: string | null } | null;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -235,16 +256,6 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: "เช็กชื่อและอุปกรณ์",
-    items: [
-      { id: "entrylogs",       label: "เช็กชื่อ ทั้งหมด",          icon: "fa-list-ul",          badge: "todayEntries" },
-      { id: "checkin_school",  label: "เช็กชื่อ โรงเรียน",   icon: "fa-school" },
-      { id: "checkin_library", label: "เช็กชื่อ ห้องสมุด",    icon: "fa-book-open" },
-      { id: "checkin_meeting", label: "เช็กชื่อ ห้องประชุม",  icon: "fa-door-open" },
-      { id: "rfid",            label: "เครื่องอ่านบัตร",      icon: "fa-microchip", badge: "rfidIssues" },
-    ],
-  },
-  {
     title: "จองห้อง",
     items: [
       { id: "bookings", label: "รายการจองห้อง", icon: "fa-calendar-check", badge: "pendingBookings" },
@@ -256,6 +267,13 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { id: "products",   label: "สินค้า",  icon: "fa-box", badge: "lowStockProducts" },
       { id: "shoporders", label: "คำสั่งซื้อ", icon: "fa-receipt", badge: "orderUpdates" },
+    ],
+  },
+  {
+    title: "เบิกคุรุภัณฑ์",
+    items: [
+      { id: "equipment_items",    label: "คุรุภัณฑ์ทั้งหมด", icon: "fa-toolbox" },
+      { id: "equipment_requests", label: "คำขอยืม-คืน",     icon: "fa-hand-holding", badge: "pendingEquipmentRequests" },
     ],
   },
   {
@@ -289,12 +307,6 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: "เอกสาร",
-    items: [
-      { id: "documents", label: "เอกสาร PDF", icon: "fa-file-pdf" },
-    ],
-  },
-  {
     title: "ระบบ",
     items: [
       { id: "teacher_applications", label: "ใบสมัครครู", icon: "fa-chalkboard-user", badge: "pendingTeacherApps" },
@@ -317,6 +329,8 @@ const TAB_ACCESS: Record<string, AdminRole[]> = {
   rooms: ["superadmin", "admin"],
   products: ["superadmin", "admin", "staff"],
   shoporders: ["superadmin", "admin", "staff"],
+  equipment_items: ["superadmin", "admin", "staff"],
+  equipment_requests: ["superadmin", "admin", "staff"],
   projects: ["superadmin", "admin", "staff"],
   evaluations: ["superadmin", "admin", "staff"],
   class_groups: ["superadmin", "admin"],
@@ -328,7 +342,6 @@ const TAB_ACCESS: Record<string, AdminRole[]> = {
   teacher_applications: ["superadmin"],
   admins: ["superadmin", "admin", "staff"],
   line_broadcast: ["superadmin", "admin", "staff"],
-  documents: ["superadmin", "admin", "staff"],
   settings: ["superadmin", "admin", "staff"],
 };
 
@@ -360,29 +373,45 @@ function visibleNavSections(role: string): NavSection[] {
 export default function AdminPage() {
   const [admin, setAdmin] = useState<AdminUser | null>(null);
 
+  // Admin session lives in localStorage (shared across tabs) with an 8h TTL — so
+  // opening the admin panel in a new tab reuses the same login instead of prompting again.
   useEffect(() => {
-    const saved = sessionStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try { setAdmin(JSON.parse(saved)); } catch { sessionStorage.removeItem(STORAGE_KEY); }
+    const saved = localStorage.getItem(STORAGE_KEY);
+    const savedTime = localStorage.getItem(STORAGE_TIME_KEY);
+    if (saved && savedTime && Date.now() - new Date(savedTime).getTime() < SESSION_8H) {
+      try { setAdmin(JSON.parse(saved)); } catch { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(STORAGE_TIME_KEY); }
+    } else if (saved) {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(STORAGE_TIME_KEY);
     }
   }, []);
 
+  // Cross-tab sync: logging out (or session expiring) in one tab removes STORAGE_KEY,
+  // which fires a native "storage" event in every other open admin tab.
+  useEffect(() => {
+    function onStorage(e: StorageEvent) {
+      if (e.key === STORAGE_KEY && e.newValue === null) setAdmin(null);
+    }
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
   function handleLogin(a: AdminUser) {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(a));
-    sessionStorage.setItem(STORAGE_TIME_KEY, new Date().toISOString());
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(a));
+    localStorage.setItem(STORAGE_TIME_KEY, new Date().toISOString());
     setAdmin(a);
   }
 
   function handleLogout() {
-    sessionStorage.removeItem(STORAGE_KEY);
-    sessionStorage.removeItem(STORAGE_TIME_KEY);
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_TIME_KEY);
     setAdmin(null);
   }
 
   function handleAvatarChange(url: string | null) {
     if (!admin) return;
     const updated = { ...admin, avatar: url };
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     setAdmin(updated);
   }
 
@@ -577,7 +606,7 @@ function AdminLogin({ onLogin }: { onLogin: (a: AdminUser) => void }) {
 
 // ─── Admin Shell ──────────────────────────────────────────────────────────────
 
-const VALID_TABS = new Set(["dashboard","students","data_requests","entrylogs","checkin_school","checkin_library","checkin_meeting","rfid","bookings","rooms","products","shoporders","projects","evaluations","class_groups","class_schedule","class_schedule_weekly","class_schedule_override","teachers","teacher_applications","feedbacks","admins","line_broadcast","settings"]);
+const VALID_TABS = new Set(["dashboard","students","data_requests","entrylogs","checkin_school","checkin_library","checkin_meeting","rfid","bookings","rooms","products","shoporders","equipment_items","equipment_requests","projects","evaluations","class_groups","class_schedule","class_schedule_weekly","class_schedule_override","teachers","teacher_applications","feedbacks","admins","line_broadcast","settings"]);
 
 function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onLogout: () => void; onAvatarChange: (url: string | null) => void }) {
   const router = useRouter();
@@ -825,6 +854,8 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
             {activeTab === "feedbacks"       && <FeedbacksTab   adminId={admin.admin_id} />}
             {activeTab === "products"        && <ProductsTab    adminId={admin.admin_id} role={admin.role} />}
             {activeTab === "shoporders"      && <ShopOrdersTab  adminId={admin.admin_id} />}
+            {activeTab === "equipment_items"    && <EquipmentItemsTab    adminId={admin.admin_id} role={admin.role} />}
+            {activeTab === "equipment_requests" && <EquipmentRequestsTab adminId={admin.admin_id} />}
             {activeTab === "projects"        && <ProjectsTab    adminId={admin.admin_id} role={admin.role} onViewEvals={tab => setActiveTab(tab)} />}
             {activeTab === "evaluations"     && <EvaluationsTab adminId={admin.admin_id} />}
             {activeTab === "class_groups"    && <ClassGroupsTab adminId={admin.admin_id} />}
@@ -839,7 +870,6 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
             {activeTab === "teacher_applications" && <TeacherApplicationsTab adminId={admin.admin_id} onAddTeacher={() => setActiveTab("teachers")} />}
             {activeTab === "admins"               && <AdminsTab             adminId={admin.admin_id} role={admin.role} onAvatarChange={onAvatarChange} />}
             {activeTab === "line_broadcast"  && <LineBroadcastTab adminId={admin.admin_id} />}
-            {activeTab === "documents"       && <DocumentsTab   adminId={admin.admin_id} role={admin.role} />}
             {activeTab === "settings"        && <SettingsTab    adminId={admin.admin_id} adminName={[admin.first_name, admin.last_name].filter(Boolean).join(" ") || admin.admin_id} adminRole={admin.role} adminAvatar={admin.avatar} stats={stats} />}
           </div>
         </main>
@@ -920,7 +950,7 @@ function SidebarUser({ admin, onLogout, onAvatarChange }: {
   const roleLabel = admin.role === "superadmin" ? "ผู้ดูแลสูงสุด" : admin.role === "admin" ? "ผู้ดูแลระบบ" : "เจ้าหน้าที่";
 
   useEffect(() => {
-    const raw = sessionStorage.getItem(STORAGE_TIME_KEY);
+    const raw = localStorage.getItem(STORAGE_TIME_KEY);
     if (!raw) return;
     let tid: ReturnType<typeof setInterval> | undefined;
     function tick() {
@@ -1051,7 +1081,7 @@ function SidebarUser({ admin, onLogout, onAvatarChange }: {
                   <span className="text-[11px] font-mono font-bold" style={{ color: timeLeft === "หมดอายุ" ? "#ff7070" : "#3fb950" }}>{timeLeft}</span>
                 </div>
                 {timeLeft !== "หมดอายุ" && (() => {
-                  const raw = sessionStorage.getItem(STORAGE_TIME_KEY);
+                  const raw = localStorage.getItem(STORAGE_TIME_KEY);
                   const pct = raw ? Math.max(0, (new Date(raw).getTime() + SESSION_8H - Date.now()) / SESSION_8H) : 0;
                   return (
                     <div className="h-[3px] rounded-full overflow-hidden" style={{ background: "#1a1a1a" }}>
@@ -1235,6 +1265,10 @@ function DashboardTab({ adminId, stats, onOpenTab }: { adminId: string; stats: S
     { label: "คำสั่งซื้อที่ชำระแล้ว",        val: stats?.paidOrders,                                     icon: "fa-cart-shopping",       color: "#9e9e9e" },
     { label: "ความคิดเห็นรอดำเนินการ", val: stats?.feedbackPending,                              icon: "fa-comment-dots",        color: "#9e9e9e" },
     { label: "ห้องประชุม (รอ)",     val: stats?.pendingBookings,                               icon: "fa-calendar-check",      color: "#9e9e9e" },
+    { label: "สินค้าใกล้หมด",         val: stats?.lowStockProducts,                              icon: "fa-box",                 color: "#f0883e" },
+    { label: "คำขอยืม-คืน (รอ)",     val: stats?.pendingEquipmentRequests,                      icon: "fa-hand-holding",        color: "#f0883e" },
+    { label: "ใบสมัครครู (รอ)",      val: stats?.pendingTeacherApps,                            icon: "fa-chalkboard-user",     color: "#9e9e9e" },
+    { label: "คำขอข้อมูลนักเรียน",    val: stats?.pendingDataRequests,                           icon: "fa-file-pen",            color: "#9e9e9e" },
   ];
 
   async function openStudentInfo(log: EntryLog) {
@@ -1265,7 +1299,7 @@ function DashboardTab({ adminId, stats, onOpenTab }: { adminId: string; stats: S
   useChart(systemChartRef, () => ({
     type: "bar",
     data: {
-      labels: ["นักเรียน", "เข้าออกวันที่เลือก", "จองห้อง", "คำสั่งซื้อ", "ความคิดเห็น"],
+      labels: ["นักเรียน", "เข้าออกวันที่เลือก", "จองห้อง", "คำสั่งซื้อ", "ความคิดเห็น", "คำขอยืม-คืน", "ใบสมัครครู"],
       datasets: [{
         label: "จำนวน",
         data: [
@@ -1274,9 +1308,11 @@ function DashboardTab({ adminId, stats, onOpenTab }: { adminId: string; stats: S
           stats?.totalBookings ?? 0,
           stats?.paidOrders ?? 0,
           stats?.feedbackTotal ?? 0,
+          stats?.pendingEquipmentRequests ?? 0,
+          stats?.pendingTeacherApps ?? 0,
         ],
-        backgroundColor: ["#ff7070cc", "#ff9a9acc", "#ededed55", "#9e9e9e88", "#636363aa"],
-        borderColor: ["#ff7070", "#ff9a9a", "#ededed", "#9e9e9e", "#636363"],
+        backgroundColor: ["#ff7070cc", "#ff9a9acc", "#ededed55", "#9e9e9e88", "#636363aa", "#f0883ecc", "#3fb95088"],
+        borderColor: ["#ff7070", "#ff9a9a", "#ededed", "#9e9e9e", "#636363", "#f0883e", "#3fb950"],
         borderWidth: 1,
         borderRadius: 8,
       }],
@@ -1384,8 +1420,8 @@ function DashboardTab({ adminId, stats, onOpenTab }: { adminId: string; stats: S
         </div>
       </div>
 
-      {/* Student realtime table */}
-      <div className="rounded-2xl overflow-hidden mb-5" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+      {/* Student realtime table (hidden for now — unused) */}
+      {false && <div className="rounded-2xl overflow-hidden mb-5" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid #3e3e3e" }}>
           <div className="flex items-center gap-2">
             <i className="fa-solid fa-wave-square text-sm" style={{ color: "#9e9e9e" }} />
@@ -1483,7 +1519,7 @@ function DashboardTab({ adminId, stats, onOpenTab }: { adminId: string; stats: S
             </table>
           </div>
         )}
-      </div>
+      </div>}
 
       {selectedLog && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
@@ -1562,30 +1598,6 @@ function DashboardTab({ adminId, stats, onOpenTab }: { adminId: string; stats: S
         </div>
       )}
 
-      {/* Bottom cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[
-          { label: "เช็กชื่อโรงเรียน", tab: "checkin_school", icon: "fa-school", color: "#ff7070" },
-          { label: "เช็กชื่อห้องสมุด", tab: "checkin_library", icon: "fa-book-open", color: "#ff7070" },
-          { label: "เช็กชื่อห้องประชุม", tab: "checkin_meeting", icon: "fa-door-open", color: "#ff7070" },
-        ].map((c) => (
-          <button key={c.label} type="button" onClick={() => onOpenTab(c.tab)} className="rounded-xl p-4 flex items-center justify-between cursor-pointer transition-all text-left"
-            style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}
-            onMouseEnter={(e) => (e.currentTarget.style.borderColor = c.color + "50")}
-            onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#3e3e3e")}>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${c.color}20` }}>
-                <i className={`fa-solid ${c.icon} text-sm`} style={{ color: c.color }} />
-              </div>
-              <div>
-                <div className="text-sm font-bold text-white">{c.label}</div>
-                <div className="text-xs" style={{ color: "#9e9e9e" }}>ดูรายการเข้า-ออกแบบรายวัน</div>
-              </div>
-            </div>
-            <i className="fa-solid fa-chevron-right text-xs" style={{ color: "#636363" }} />
-          </button>
-        ))}
-      </div>
     </div>
   );
 }
@@ -4084,6 +4096,558 @@ function ProductForm({ product, adminId, onClose, onSaved }: { product: Product 
   );
 }
 
+// ─── Equipment Items Tab ──────────────────────────────────────────────────────
+
+function EquipmentItemsTab({ adminId, role }: { adminId: string; role: string }) {
+  const [items, setItems] = useState<EquipmentItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<EquipmentItem | "new" | null>(null);
+  const [category, setCategory] = useState("all");
+  const [deptFilter, setDeptFilter] = useState("all");
+  const [showInactive, setShowInactive] = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
+  const canEdit = canAccessTab(role, "equipment_items");
+
+  const fetch_ = useCallback(async () => {
+    setLoading(true);
+    const res = await adminFetch("/api/admin/equipment-items", adminId);
+    const json = await res.json();
+    if (json.status === "success") setItems(json.data ?? []);
+    setLoading(false);
+  }, [adminId]);
+
+  useEffect(() => { fetch_(); }, [fetch_]);
+
+  const categories = useMemo(() => [...new Set(items.map(i => i.category))], [items]);
+  const units = useMemo(() => [...new Set(items.map(i => i.unit))], [items]);
+  const displayed = items.filter(i => {
+    if (i.deleted_at) { if (!showDeleted) return false; }
+    else if (!i.active) { if (!showInactive) return false; }
+    if (category !== "all" && i.category !== category) return false;
+    if (deptFilter === "general" && i.department) return false;
+    if (deptFilter !== "all" && deptFilter !== "general" && i.department !== deptFilter) return false;
+    return true;
+  });
+
+  const activeItems = items.filter(i => !i.deleted_at && i.active);
+  const totalUnits = activeItems.reduce((s, i) => s + i.total_quantity, 0);
+  const availableUnits = activeItems.reduce((s, i) => s + i.available_quantity, 0);
+  const outOfStock = activeItems.filter(i => i.available_quantity === 0);
+
+  async function toggleActive(i: EquipmentItem) {
+    await adminFetch(`/api/admin/equipment-items/${i.id}`, adminId, { method: "PATCH", body: JSON.stringify({ active: !i.active }) });
+    fetch_();
+  }
+
+  async function deleteItem(i: EquipmentItem) {
+    if (!confirm(`ลบคุรุภัณฑ์ "${i.name}" ? (สามารถกู้คืนได้ภายหลัง)`)) return;
+    const res = await adminFetch(`/api/admin/equipment-items/${i.id}`, adminId, { method: "DELETE" });
+    const json = await res.json();
+    if (json.status !== "success") { toast.error(`ลบไม่สำเร็จ: ${json.message ?? "unknown error"}`); return; }
+    fetch_();
+  }
+
+  async function restoreItem(i: EquipmentItem) {
+    const res = await adminFetch(`/api/admin/equipment-items/${i.id}`, adminId, {
+      method: "PATCH", body: JSON.stringify({ deleted_at: null, active: true }),
+    });
+    const json = await res.json();
+    if (json.status !== "success") { toast.error(`กู้คืนไม่สำเร็จ: ${json.message ?? "unknown error"}`); return; }
+    fetch_();
+  }
+
+  return (
+    <div>
+      <DarkSectionHeader title="คุรุภัณฑ์ทั้งหมด" icon="fa-toolbox" count={displayed.length} />
+
+      {!loading && items.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 mb-5">
+          {[
+            { label: "รายการทั้งหมด", val: activeItems.length.toString(), icon: "fa-boxes-stacked", color: "#3fb950" },
+            { label: "จำนวนรวม",      val: totalUnits.toString(),         icon: "fa-layer-group",   color: "#84D4FA" },
+            { label: "พร้อมให้ยืม",   val: availableUnits.toString(),     icon: "fa-hand-holding",  color: "#059669" },
+            { label: "ยืมหมด",        val: outOfStock.length.toString(),  icon: "fa-triangle-exclamation", color: "#ff7070" },
+          ].map(c => (
+            <div key={c.label} className="rounded-2xl p-4 flex flex-col gap-2" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: `${c.color}20` }}>
+                <i className={`fa-solid ${c.icon} text-[10px]`} style={{ color: c.color }} />
+              </div>
+              <div className="text-lg font-black leading-tight" style={{ color: c.color }}>{c.val}</div>
+              <div className="text-[10px] font-semibold leading-tight" style={{ color: "#9e9e9e" }}>{c.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex items-center gap-3 mt-4 mb-4 flex-wrap">
+        {canEdit && (
+          <button onClick={() => setEditing("new")}
+            className="flex items-center gap-2 text-sm font-bold px-4 py-2 rounded-xl text-white transition-all"
+            style={{ background: "#ff7070", boxShadow: "0 4px 12px rgba(255,112,112,0.3)" }}>
+            <i className="fa-solid fa-plus" /> เพิ่มคุรุภัณฑ์
+          </button>
+        )}
+        <select value={category} onChange={e => setCategory(e.target.value)}
+          className="text-sm px-3 py-2 rounded-xl font-semibold"
+          style={{ background: "#2a2a2a", color: "#ededed", border: "1px solid #3e3e3e" }}>
+          <option value="all">ทุกประเภท</option>
+          {categories.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={deptFilter} onChange={e => setDeptFilter(e.target.value)}
+          className="text-sm px-3 py-2 rounded-xl font-semibold"
+          style={{ background: "#2a2a2a", color: "#ededed", border: "1px solid #3e3e3e" }}>
+          <option value="all">ทุกสาขา</option>
+          <option value="general">ทั่วไป (ทุกสาขาใช้ได้)</option>
+          {DEPARTMENTS.flatMap(d => d.items).map(d => <option key={d} value={d}>{d}</option>)}
+        </select>
+        <button onClick={() => setShowInactive(!showInactive)}
+          className="text-sm px-3 py-2 rounded-xl font-semibold transition-all"
+          style={{ background: "#2a2a2a", color: showInactive ? "#f0b429" : "#9e9e9e", border: `1px solid ${showInactive ? "#f0b429" : "#3e3e3e"}` }}>
+          <i className={`fa-solid fa-eye${showInactive ? "" : "-slash"} mr-1.5 text-xs`} />
+          {showInactive ? "ซ่อนรายการปิด" : "แสดงรายการปิด"}
+        </button>
+        <button onClick={() => setShowDeleted(!showDeleted)}
+          className="text-sm px-3 py-2 rounded-xl font-semibold transition-all"
+          style={{ background: "#2a2a2a", color: showDeleted ? "#ff7070" : "#9e9e9e", border: `1px solid ${showDeleted ? "#ff7070" : "#3e3e3e"}` }}>
+          <i className="fa-solid fa-trash-can mr-1.5 text-xs" />
+          {showDeleted ? "ซ่อนที่ลบแล้ว" : "แสดงที่ลบแล้ว"}
+        </button>
+      </div>
+
+      {loading ? <DarkSpinner /> : displayed.length === 0 ? <DarkEmpty text="ไม่มีคุรุภัณฑ์" /> : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {displayed.map(i => (
+            <div key={i.id} className={`rounded-2xl overflow-hidden transition-all ${!i.active && !i.deleted_at ? "opacity-50" : ""} ${i.deleted_at ? "opacity-40" : ""}`}
+              style={{ background: "#1c1c1c", border: `1px solid ${i.deleted_at ? "#ff7070" : "#3e3e3e"}` }}>
+              <div className="h-40 relative overflow-hidden" style={{ background: "#2a2a2a" }}>
+                {i.image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={i.image_url} alt={i.name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center" style={{ color: "#636363" }}>
+                    <i className="fa-solid fa-toolbox text-3xl" />
+                  </div>
+                )}
+                {i.deleted_at ? (
+                  <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(255,112,112,0.18)" }}>
+                    <span className="text-xs font-bold px-2 py-1 rounded-lg text-white flex items-center gap-1" style={{ background: "rgba(255,112,112,0.7)" }}>
+                      <i className="fa-solid fa-trash text-[10px]" /> ลบแล้ว
+                    </span>
+                  </div>
+                ) : !i.active && (
+                  <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(13,17,23,0.7)" }}>
+                    <span className="text-xs font-bold px-2 py-1 rounded-lg text-white" style={{ background: "#3e3e3e" }}>ปิดใช้งาน</span>
+                  </div>
+                )}
+                <div className="absolute top-2 left-2 flex flex-wrap gap-1 max-w-[85%]">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: "rgba(13,17,23,0.8)" }}>{i.category}</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: i.department ? "rgba(124,58,237,0.8)" : "rgba(63,185,80,0.8)" }}>
+                    {i.department || "ทั่วไป"}
+                  </span>
+                </div>
+              </div>
+              <div className="p-3">
+                <div className="font-bold text-white text-sm leading-tight mb-1">{i.name}</div>
+                {i.asset_code && <div className="text-[10px] mb-1" style={{ color: "#636363" }}>รหัส: {i.asset_code}</div>}
+                <div className="flex items-center gap-2 text-xs mb-3">
+                  <span className={`font-semibold`} style={{ color: i.available_quantity === 0 ? "#ff7070" : "#3fb950" }}>
+                    พร้อมยืม {i.available_quantity}/{i.total_quantity} {i.unit}
+                  </span>
+                </div>
+                {canEdit && (
+                  <div className="flex gap-1.5">
+                    {i.deleted_at ? (
+                      <button onClick={() => restoreItem(i)}
+                        className="flex-1 text-xs font-semibold py-1.5 rounded-lg transition-all flex items-center justify-center gap-1"
+                        style={{ background: "rgba(63,185,80,0.12)", color: "#3fb950", border: "1px solid rgba(63,185,80,0.3)" }}>
+                        <i className="fa-solid fa-rotate-left text-[10px]" /> กู้คืน
+                      </button>
+                    ) : (
+                      <>
+                        <button onClick={() => setEditing(i)}
+                          className="flex-1 text-xs font-semibold py-1.5 rounded-lg transition-all text-[#9e9e9e] hover:text-white"
+                          style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>
+                          <i className="fa-solid fa-pen mr-1" /> แก้ไข
+                        </button>
+                        <button onClick={() => toggleActive(i)}
+                          className="text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-all"
+                          style={{ background: i.active ? "rgba(255,112,112,0.1)" : "rgba(63,185,80,0.1)", color: i.active ? "#ff7070" : "#3fb950", border: `1px solid ${i.active ? "rgba(255,112,112,0.3)" : "rgba(63,185,80,0.3)"}` }}>
+                          {i.active ? "ปิด" : "เปิด"}
+                        </button>
+                        <button onClick={() => deleteItem(i)}
+                          className="text-xs font-semibold px-2 py-1.5 rounded-lg transition-all"
+                          style={{ background: "rgba(255,112,112,0.08)", color: "#ff7070", border: "1px solid rgba(255,112,112,0.2)" }}>
+                          <i className="fa-solid fa-trash" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {editing !== null && (
+        <EquipmentItemForm item={editing === "new" ? null : editing} adminId={adminId} existingCategories={categories} existingUnits={units}
+          onClose={() => setEditing(null)} onSaved={() => { setEditing(null); fetch_(); }} />
+      )}
+    </div>
+  );
+}
+
+function EquipmentItemForm({ item, adminId, existingCategories, existingUnits, onClose, onSaved }: { item: EquipmentItem | null; adminId: string; existingCategories: string[]; existingUnits: string[]; onClose: () => void; onSaved: () => void }) {
+  const [name, setName] = useState(item?.name ?? "");
+  const [assetCode, setAssetCode] = useState(item?.asset_code ?? "");
+  const [category, setCategory] = useState(item?.category ?? "");
+  const [department, setDepartment] = useState(item?.department ?? "");
+  const [unit, setUnit] = useState(item?.unit ?? "ชิ้น");
+  const [totalQuantity, setTotalQuantity] = useState(item?.total_quantity?.toString() ?? "1");
+  const [imgUrl, setImgUrl] = useState(item?.image_url ?? "");
+  const [description, setDescription] = useState(item?.description ?? "");
+  const [active, setActive] = useState(item?.active ?? true);
+  const [saving, setSaving] = useState(false);
+  const [imageBusy, setImageBusy] = useState(false);
+  const [error, setError] = useState("");
+  const originalImgUrl = item?.image_url ?? "";
+
+  const inputCls = "w-full px-3 py-2.5 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none transition-colors";
+  const inputStyle = { background: "#0c0c0c", border: "1px solid #3e3e3e" };
+
+  async function handleSave() {
+    if (!name.trim() || !category.trim()) { setError("กรุณากรอกชื่อและประเภทเครื่อง"); return; }
+    setSaving(true);
+    setError("");
+    const body = {
+      name: name.trim(), category: category.trim(),
+      department: department.trim() || null,
+      asset_code: assetCode.trim() || null, unit: unit.trim() || "ชิ้น",
+      total_quantity: parseInt(totalQuantity) || 0,
+      image_url: imgUrl.trim() || null,
+      description: description.trim() || null,
+      active,
+    };
+    const url = item ? `/api/admin/equipment-items/${item.id}` : "/api/admin/equipment-items";
+    try {
+      const res = await adminFetch(url, adminId, { method: item ? "PATCH" : "POST", body: JSON.stringify(body) });
+      const json = await res.json();
+      if (json.status === "success") {
+        const nextImgUrl = imgUrl.trim();
+        if (item && originalImgUrl && originalImgUrl !== nextImgUrl) {
+          await deleteStorageFile(originalImgUrl, adminId, "/api/admin/upload");
+        }
+        onSaved();
+      } else {
+        setError(json.message ?? "บันทึกไม่สำเร็จ");
+      }
+    } catch {
+      setError("เชื่อมต่อระบบไม่ได้");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }} onClick={onClose} />
+      <div className="relative w-full sm:max-w-lg sm:mx-4 sm:rounded-2xl rounded-t-2xl overflow-y-auto max-h-[90vh]"
+        style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+        <div className="flex items-center justify-between px-5 pt-5 pb-4 sticky top-0 z-10" style={{ background: "#1c1c1c", borderBottom: "1px solid #3e3e3e" }}>
+          <h3 className="font-bold text-white text-lg">{item ? "แก้ไขคุรุภัณฑ์" : "เพิ่มคุรุภัณฑ์ใหม่"}</h3>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#2a2a2a] text-[#9e9e9e] hover:text-white transition-colors">
+            <i className="fa-solid fa-xmark" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-[#ededed] mb-2">รูปภาพ</label>
+            <ImgUpload value={imgUrl} onChange={setImgUrl} adminId={adminId}
+              onBusyChange={setImageBusy}
+              endpoint="/api/admin/upload" placeholder="https://... หรืออัปโหลดไฟล์ (jpg, png, svg, ico…)" />
+            {imageBusy && (
+              <p className="mt-1 text-[11px]" style={{ color: "#e3b341" }}>
+                <i className="fa-solid fa-spinner fa-spin mr-1" />กำลังจัดการรูป กรุณารอให้เสร็จก่อนบันทึก
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#ededed] mb-1.5">ชื่อคุรุภัณฑ์ *</label>
+            <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="เช่น โปรเจคเตอร์ Epson" className={inputCls} style={inputStyle} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-[#ededed] mb-1.5">ประเภทเครื่อง *</label>
+              <input type="text" list="equipment-category-list" value={category} onChange={e => setCategory(e.target.value)} placeholder="เช่น โสตทัศนูปกรณ์" className={inputCls} style={inputStyle} />
+              <datalist id="equipment-category-list">
+                {existingCategories.map(c => <option key={c} value={c} />)}
+              </datalist>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-[#ededed] mb-1.5">รหัสครุภัณฑ์</label>
+              <input type="text" value={assetCode} onChange={e => setAssetCode(e.target.value)} placeholder="ไม่บังคับ" className={inputCls} style={inputStyle} />
+            </div>
+          </div>
+
+          <div className="rounded-xl p-3.5 space-y-2" style={{ background: "#111111", border: "1px solid #2a2a2a" }}>
+            <div className="flex items-center gap-2">
+              <i className="fa-solid fa-building-columns text-xs" style={{ color: "#9e9e9e" }} />
+              <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "#9e9e9e" }}>สาขาเจ้าของเครื่อง</span>
+            </div>
+            <select value={department} onChange={e => setDepartment(e.target.value)} className={inputCls} style={inputStyle}>
+              <option value="">ทั่วไป (ทุกสาขาใช้ได้)</option>
+              {DEPARTMENTS.map(cat => (
+                <optgroup key={cat.label} label={cat.label}>
+                  {cat.items.map(d => <option key={d} value={d}>{d}</option>)}
+                </optgroup>
+              ))}
+            </select>
+            <p className="text-[11px]" style={{ color: "#636363" }}>เว้นว่างหากคุรุภัณฑ์นี้เปิดให้ทุกสาขายืมได้</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-[#ededed] mb-1.5">จำนวนทั้งหมด</label>
+              <input type="number" min="0" value={totalQuantity} onChange={e => setTotalQuantity(e.target.value)} className={inputCls} style={inputStyle} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-[#ededed] mb-1.5">หน่วย</label>
+              <input type="text" list="equipment-unit-list" value={unit} onChange={e => setUnit(e.target.value)} placeholder="เช่น ชิ้น, เครื่อง" className={inputCls} style={inputStyle} />
+              <datalist id="equipment-unit-list">
+                {existingUnits.map(u => <option key={u} value={u} />)}
+              </datalist>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#ededed] mb-1.5">รายละเอียด</label>
+            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2}
+              className={inputCls} style={inputStyle} placeholder="ไม่บังคับ" />
+          </div>
+
+          <div className="flex items-center justify-between py-2">
+            <label className="text-sm font-semibold text-[#ededed]">เปิดให้เบิกได้</label>
+            <button type="button" onClick={() => setActive(!active)}
+              className="w-12 h-6 rounded-full relative transition-colors"
+              style={{ background: active ? "#ff7070" : "#3e3e3e" }}>
+              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${active ? "left-6" : "left-0.5"}`} />
+            </button>
+          </div>
+
+          {item && (
+            <p className="text-[11px]" style={{ color: "#636363" }}>
+              คงเหลือพร้อมให้ยืมปัจจุบัน: {item.available_quantity} {item.unit} (ปรับอัตโนมัติเมื่อเปลี่ยนจำนวนทั้งหมด)
+            </p>
+          )}
+
+          {error && (
+            <div className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm"
+              style={{ background: "rgba(255,112,112,0.1)", border: "1px solid rgba(255,112,112,0.3)", color: "#ff7070" }}>
+              <i className="fa-solid fa-circle-xmark" /> {error}
+            </div>
+          )}
+        </div>
+
+        <div className="px-5 pb-6 flex gap-3 sticky bottom-0 pt-4" style={{ borderTop: "1px solid #3e3e3e", background: "#1c1c1c" }}>
+          <button onClick={onClose} className="flex-1 py-3 text-sm font-bold rounded-xl transition-all text-[#9e9e9e] hover:text-white" style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>
+            ยกเลิก
+          </button>
+          <button onClick={handleSave} disabled={saving || imageBusy}
+            className="flex-1 py-3 text-sm font-bold rounded-xl text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ background: "#ff7070" }}>
+            {saving
+              ? <><i className="fa-solid fa-spinner fa-spin mr-1.5" />กำลังบันทึก...</>
+              : imageBusy
+                ? <><i className="fa-solid fa-spinner fa-spin mr-1.5" />กำลังอัปโหลดรูป...</>
+                : <><i className="fa-solid fa-floppy-disk mr-1.5" />บันทึก</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Equipment Requests Tab ───────────────────────────────────────────────────
+
+const EQUIP_REQUEST_STATUS: Record<string, string> = { pending: "รออนุมัติ", approved: "อนุมัติแล้ว", picked_up: "รับของแล้ว", rejected: "ไม่อนุมัติ", cancelled: "ยกเลิก", returned: "คืนแล้ว" };
+const EQUIP_REQUEST_STYLE: Record<string, { bg: string; text: string }> = {
+  pending:   { bg: "rgba(227,179,65,0.15)", text: "#e3b341" },
+  approved:  { bg: "rgba(63,185,80,0.15)",  text: "#3fb950" },
+  picked_up: { bg: "rgba(132,212,250,0.15)", text: "#84D4FA" },
+  rejected:  { bg: "rgba(255,112,112,0.15)", text: "#ff7070" },
+  cancelled: { bg: "rgba(72,79,88,0.3)",    text: "#9e9e9e" },
+  returned:  { bg: "rgba(56,139,253,0.15)", text: "#84D4FA" },
+};
+
+function EquipmentRequestsTab({ adminId }: { adminId: string }) {
+  const [requests, setRequests] = useState<EquipmentRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("pending");
+  const [deptFilter, setDeptFilter] = useState("all");
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [noteEdit, setNoteEdit] = useState<Record<string, string>>({});
+  const [scanUid, setScanUid] = useState("");
+  const [scanning, setScanning] = useState<"pickup" | "return" | null>(null);
+
+  const fetch_ = useCallback(async () => {
+    setLoading(true);
+    const res = await adminFetch(`/api/admin/equipment-requests?status=${filter}&department=${encodeURIComponent(deptFilter)}`, adminId);
+    const json = await res.json();
+    if (json.status === "success") setRequests(json.data ?? []);
+    setLoading(false);
+  }, [adminId, filter, deptFilter]);
+
+  useEffect(() => { fetch_(); }, [fetch_]);
+
+  async function updateStatus(r: EquipmentRequest, status: EquipmentRequest["status"]) {
+    setBusyId(r.id);
+    try {
+      const res = await adminFetch(`/api/admin/equipment-requests/${r.id}`, adminId, {
+        method: "PATCH",
+        body: JSON.stringify({ status, admin_note: noteEdit[r.id] ?? r.admin_note }),
+      });
+      const json = await res.json();
+      if (json.status !== "success") { toast.error(json.message ?? "ดำเนินการไม่สำเร็จ"); return; }
+      fetch_();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function doScan(action: "pickup" | "return") {
+    const uid = scanUid.trim();
+    if (!uid) { toast.error("กรุณากรอก/สแกน UID บัตรนักเรียนก่อน"); return; }
+    setScanning(action);
+    try {
+      const res = await adminFetch("/api/equipment/scan", adminId, {
+        method: "POST",
+        body: JSON.stringify({ uid, action }),
+      });
+      const json = await res.json();
+      if (json.status !== "success") { toast.error(json.message ?? "สแกนไม่สำเร็จ"); return; }
+      toast.success(json.message ?? (action === "pickup" ? "ยืนยันรับของสำเร็จ" : "ยืนยันคืนของสำเร็จ"));
+      setScanUid("");
+      fetch_();
+    } finally {
+      setScanning(null);
+    }
+  }
+
+  const allDepartments = useMemo(() => DEPARTMENTS.flatMap(d => d.items), []);
+  const pendingCount = requests.filter(r => r.status === "pending").length;
+
+  return (
+    <div>
+      <div className="rounded-2xl p-4 mb-4" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+        <div className="flex items-center gap-2 mb-3">
+          <i className="fa-solid fa-id-card text-[#84D4FA]" />
+          <span className="font-bold text-white text-sm">สแกนบัตรนักเรียนรับ-คืนคุรุภัณฑ์</span>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            value={scanUid}
+            onChange={e => setScanUid(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") doScan("pickup"); }}
+            placeholder="สแกนหรือกรอก UID บัตรนักเรียน"
+            className="flex-1 px-3 py-2.5 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none font-mono"
+            style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }}
+          />
+          <div className="flex gap-2">
+            <DarkAction onClick={() => doScan("pickup")} loading={scanning === "pickup"} color="blue" icon="fa-hand-holding" label="สแกนรับของ" />
+            <DarkAction onClick={() => doScan("return")} loading={scanning === "return"} color="green" icon="fa-box-archive" label="สแกนคืนของ" />
+          </div>
+        </div>
+        <p className="mt-2 text-[11px]" style={{ color: "#636363" }}>สแกนรับของ = คำขอสถานะ &quot;อนุมัติแล้ว&quot; ที่เก่าที่สุดของนักเรียนคนนั้นจะเปลี่ยนเป็น &quot;รับของแล้ว&quot; · สแกนคืนของ = คำขอสถานะ &quot;รับของแล้ว&quot; ที่เก่าที่สุดจะเปลี่ยนเป็น &quot;คืนแล้ว&quot;</p>
+      </div>
+      <DarkSectionHeader title="คำขอยืม-คืนคุรุภัณฑ์" icon="fa-hand-holding" count={requests.length} />
+
+      <div className="flex items-center gap-3 mt-4 mb-4 flex-wrap">
+        <div className="flex bg-[#1c1c1c] border border-[#2e2e2e] rounded-xl p-1">
+          {(["pending", "approved", "returned", "rejected", "cancelled", "all"] as const).map(s => (
+            <button key={s} onClick={() => setFilter(s)}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${filter === s ? "text-white" : "text-[#9e9e9e] hover:text-white"}`}
+              style={{ background: filter === s ? "#ff7070" : "transparent" }}>
+              {s === "all" ? "ทั้งหมด" : EQUIP_REQUEST_STATUS[s]}
+              {s === "pending" && pendingCount > 0 && filter !== "pending" ? ` (${pendingCount})` : ""}
+            </button>
+          ))}
+        </div>
+        <select value={deptFilter} onChange={e => setDeptFilter(e.target.value)}
+          className="text-sm px-3 py-2 rounded-xl font-semibold"
+          style={{ background: "#2a2a2a", color: "#ededed", border: "1px solid #3e3e3e" }}>
+          <option value="all">ทุกสาขา</option>
+          {allDepartments.map(d => <option key={d} value={d}>{d}</option>)}
+        </select>
+      </div>
+
+      {loading ? <DarkSpinner /> : requests.length === 0 ? <DarkEmpty text="ไม่มีคำขอ" /> : (
+        <div className="space-y-3">
+          {requests.map(r => {
+            const overdue = r.status === "approved" && r.due_date < todayISODate();
+            const style = EQUIP_REQUEST_STYLE[r.status];
+            return (
+              <div key={r.id} className="rounded-2xl p-4" style={{ background: "#1c1c1c", border: `1px solid ${overdue ? "#ff7070" : "#2e2e2e"}` }}>
+                <div className="flex items-start justify-between gap-3 flex-wrap mb-2">
+                  <div>
+                    <div className="font-bold text-white text-sm">{r.equipment_items?.name ?? "คุรุภัณฑ์"}</div>
+                    <div className="text-[11px]" style={{ color: "#9e9e9e" }}>
+                      {r.department} · {r.requester_name}{r.requester_phone ? ` · ${r.requester_phone}` : ""}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {overdue && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "rgba(255,112,112,0.15)", color: "#ff7070" }}>เกินกำหนดคืน</span>
+                    )}
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: style.bg, color: style.text }}>{EQUIP_REQUEST_STATUS[r.status]}</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] mb-3" style={{ color: "#9e9e9e" }}>
+                  <div>จำนวน: <span className="text-white font-semibold">{r.quantity} {r.equipment_items?.unit ?? ""}</span></div>
+                  <div>วันที่ยืม: <span className="text-white">{formatDate(r.borrow_date)}</span></div>
+                  <div>กำหนดคืน: <span className="text-white">{formatDate(r.due_date)}</span></div>
+                  <div>รหัสคำขอ: <span className="text-white">{r.request_code}</span></div>
+                  <div>รับที่: <span className="text-white">{r.delivery_mode === "delivery" ? `ส่งที่ ${r.delivery_loc ?? "-"}` : "มารับเอง"}</span></div>
+                  {r.time_slot && <div>ช่วงเวลา: <span className="text-white">{r.time_slot}</span></div>}
+                </div>
+                {r.purpose && <div className="text-xs mb-3" style={{ color: "#9e9e9e" }}>วัตถุประสงค์: {r.purpose}</div>}
+
+                <input
+                  value={noteEdit[r.id] ?? r.admin_note ?? ""}
+                  onChange={e => setNoteEdit(prev => ({ ...prev, [r.id]: e.target.value }))}
+                  placeholder="หมายเหตุแอดมิน (ไม่บังคับ)"
+                  className="w-full px-3 py-2 rounded-lg text-xs text-white placeholder:text-[#636363] mb-3 focus:outline-none"
+                  style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }}
+                />
+
+                <div className="flex gap-2 flex-wrap">
+                  {r.status === "pending" && (
+                    <>
+                      <DarkAction onClick={() => updateStatus(r, "approved")} loading={busyId === r.id} color="green" icon="fa-check" label="อนุมัติ" small />
+                      <DarkAction onClick={() => updateStatus(r, "rejected")} loading={busyId === r.id} color="red" icon="fa-xmark" label="ไม่อนุมัติ" small />
+                    </>
+                  )}
+                  {r.status === "approved" && (
+                    <>
+                      <DarkAction onClick={() => updateStatus(r, "picked_up")} loading={busyId === r.id} color="blue" icon="fa-id-card" label="รับของแล้ว (ไม่สแกน)" small />
+                      <DarkAction onClick={() => updateStatus(r, "cancelled")} loading={busyId === r.id} color="gray" icon="fa-ban" label="ยกเลิก" small />
+                    </>
+                  )}
+                  {r.status === "picked_up" && (
+                    <DarkAction onClick={() => updateStatus(r, "returned")} loading={busyId === r.id} color="blue" icon="fa-box-archive" label="รับคืนแล้ว (ไม่สแกน)" small />
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Shop Orders Tab ──────────────────────────────────────────────────────────
 
 const ORDER_STATUS: Record<string, string> = { pending: "รอชำระ", paid: "ชำระแล้ว", cancelled: "ยกเลิก", refunded: "คืนเงิน", delivered: "ส่งมอบแล้ว" };
@@ -5575,145 +6139,6 @@ function TeacherApplicationsTab({ adminId, onAddTeacher }: { adminId: string; on
 
 // ─── Documents Tab ────────────────────────────────────────────────────────────
 
-type PdfDocument = {
-  id: string
-  name: string
-  description: string | null
-  file_url: string
-  file_size: number | null
-  uploaded_by: string
-  upload_source: 'admin' | 'line'
-  is_public: boolean
-  created_at: string
-}
-
-function DocumentsTab({ adminId, role }: { adminId: string; role: string }) {
-  const [docs, setDocs] = useState<PdfDocument[]>([])
-  const [loading, setLoading] = useState(true)
-  const [uploading, setUploading] = useState(false)
-  const [form, setForm] = useState({ name: '', description: '', is_public: true })
-  const fileRef = useRef<HTMLInputElement>(null)
-
-  const canEdit = role === 'superadmin' || role === 'admin'
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    const res = await adminFetch('/api/documents', adminId)
-    const json = await res.json()
-    if (json.status === 'success') setDocs(json.data ?? [])
-    setLoading(false)
-  }, [adminId])
-
-  useEffect(() => { load() }, [load])
-
-  async function handleUpload(e: React.FormEvent) {
-    e.preventDefault()
-    const file = fileRef.current?.files?.[0]
-    if (!file || !form.name.trim()) { toast.error('กรุณาเลือกไฟล์และระบุชื่อเอกสาร'); return }
-
-    setUploading(true)
-    const fd = new FormData()
-    fd.append('file', file)
-    fd.append('name', form.name.trim())
-    fd.append('description', form.description.trim())
-    fd.append('is_public', String(form.is_public))
-
-    const res = await fetch('/api/documents/upload', {
-      method: 'POST',
-      headers: { 'x-admin-id': adminId },
-      body: fd,
-    })
-    const json = await res.json()
-    setUploading(false)
-
-    if (json.status === 'success') {
-      toast.success(`อัปโหลดสำเร็จ (${json.chunk_count} ส่วน)`)
-      setForm({ name: '', description: '', is_public: true })
-      if (fileRef.current) fileRef.current.value = ''
-      load()
-    } else {
-      toast.error(json.message ?? 'อัปโหลดไม่สำเร็จ')
-    }
-  }
-
-  async function handleDelete(doc: PdfDocument) {
-    if (!confirm(`ลบเอกสาร "${doc.name}" ?`)) return
-    const res = await adminFetch('/api/documents/upload', adminId, {
-      method: 'DELETE',
-      body: JSON.stringify({ id: doc.id }),
-    })
-    const json = await res.json()
-    if (json.status === 'success') { toast.success('ลบแล้ว'); load() }
-    else toast.error(json.message ?? 'ลบไม่สำเร็จ')
-  }
-
-  return (
-    <div style={{ padding: 24, maxWidth: 900 }}>
-      <h2 style={{ color: '#fff', fontWeight: 700, fontSize: 20, marginBottom: 20 }}>
-        <i className="fa-solid fa-file-pdf" style={{ color: '#ff7070', marginRight: 8 }} />
-        เอกสาร PDF
-      </h2>
-
-      {canEdit && (
-        <form onSubmit={handleUpload} style={{ background: '#1a1a1a', borderRadius: 12, padding: 20, marginBottom: 24, border: '1px solid #2a2a2a' }}>
-          <p style={{ color: '#9e9e9e', fontSize: 13, marginBottom: 12 }}>อัปโหลด PDF ใหม่</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <input type="file" accept=".pdf" ref={fileRef} style={{ color: '#ccc', fontSize: 13 }} />
-            <input
-              type="text" placeholder="ชื่อเอกสาร *"
-              value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              style={{ background: '#111', border: '1px solid #333', borderRadius: 8, padding: '8px 12px', color: '#fff', fontSize: 13 }} />
-            <input
-              type="text" placeholder="คำอธิบาย (ไม่บังคับ)"
-              value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-              style={{ background: '#111', border: '1px solid #333', borderRadius: 8, padding: '8px 12px', color: '#fff', fontSize: 13 }} />
-            <label style={{ color: '#9e9e9e', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input type="checkbox" checked={form.is_public} onChange={e => setForm(f => ({ ...f, is_public: e.target.checked }))} />
-              เปิดให้นักเรียนค้นหาได้ (สาธารณะ)
-            </label>
-            <button type="submit" disabled={uploading}
-              style={{ background: '#ff7070', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 20px', fontWeight: 600, cursor: uploading ? 'not-allowed' : 'pointer', opacity: uploading ? 0.6 : 1, width: 'fit-content' }}>
-              {uploading ? 'กำลังอัปโหลด…' : 'อัปโหลด PDF'}
-            </button>
-          </div>
-        </form>
-      )}
-
-      {loading ? (
-        <p style={{ color: '#9e9e9e' }}>กำลังโหลด…</p>
-      ) : docs.length === 0 ? (
-        <p style={{ color: '#9e9e9e' }}>ยังไม่มีเอกสาร</p>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {docs.map(doc => (
-            <div key={doc.id} style={{ background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 10, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
-              <i className="fa-solid fa-file-pdf" style={{ color: '#ff7070', fontSize: 22, flexShrink: 0 }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ color: '#fff', fontWeight: 600, fontSize: 14, margin: 0 }}>{doc.name}</p>
-                {doc.description && <p style={{ color: '#9e9e9e', fontSize: 12, margin: '2px 0 0' }}>{doc.description}</p>}
-                <p style={{ color: '#636363', fontSize: 11, margin: '4px 0 0' }}>
-                  {doc.upload_source === 'line' ? '📱 LINE' : '🖥 Admin'} ·{' '}
-                  {doc.is_public ? '🌐 สาธารณะ' : '🔒 ส่วนตัว'} ·{' '}
-                  {doc.file_size ? `${(doc.file_size / 1024).toFixed(0)} KB` : ''} ·{' '}
-                  {formatDate(doc.created_at)}
-                </p>
-              </div>
-              <a href={doc.file_url} target="_blank" rel="noopener noreferrer"
-                style={{ color: '#84D4FA', fontSize: 12, textDecoration: 'none', flexShrink: 0 }}>ดูไฟล์</a>
-              {canEdit && (
-                <button onClick={() => handleDelete(doc)}
-                  style={{ background: 'rgba(239,68,68,0.15)', color: '#ff7070', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer', flexShrink: 0 }}>
-                  ลบ
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ─── Settings Tab ─────────────────────────────────────────────────────────────
 
 function LineBroadcastTab({ adminId }: { adminId: string }) {
@@ -5898,7 +6323,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
   }>({ state: "idle", message: "" });
   const [lineCooldown, setLineCooldown] = useState(0);
   const [lineTargetId, setLineTargetId] = useState("");
-  const [lineMode, setLineMode] = useState<"order_flex" | "feedback_flex" | "attendance_flex" | "booking_flex" | "data_change_flex" | "custom_json">("order_flex");
+  const [lineMode, setLineMode] = useState<"order_flex" | "feedback_flex" | "attendance_flex" | "booking_flex" | "data_change_flex" | "equipment_flex" | "custom_json">("order_flex");
   const [lineStudentId, setLineStudentId] = useState("");
   const [lineJson, setLineJson] = useState(`{
   "type": "text",
@@ -6160,6 +6585,28 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
         ["รหัสบัตร", lineStudentId.trim() ? `${lineStudentId.trim()}-TESTLINE` : `${adminId}-TESTLINE`],
       ] as [string, string][],
       button: "ดูประวัติการสแกน",
+    };
+    if (lineMode === "equipment_flex") return {
+      header: "ASIA-BOT เบิกคุรุภัณฑ์",
+      subheader: "คำขอยืม-คืนคุรุภัณฑ์",
+      color: "#059669",
+      title: "คำขอยืม โปรเจกเตอร์",
+      titleColor: "#059669",
+      titleImage: dummyProductImage,
+      avatar: studentImage,
+      buttonColor: "#059669",
+      rows: [
+        ["ผู้ขอเบิก", adminName],
+        ["สาขา", "555 ASIA-BOT Test"],
+        ["อุปกรณ์", "โปรเจกเตอร์"],
+        ["จำนวน", "1 เครื่อง"],
+        ["วันที่ยืม", new Date().toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", year: "numeric" })],
+        ["กำหนดคืน", new Date(Date.now() + 3 * 86400000).toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok", day: "numeric", month: "short", year: "numeric" })],
+        ["เบอร์", "08x-xxx-xxxx"],
+        ["รหัสคำขอ", "test-equipment"],
+      ] as [string, string][],
+      note: `ทดสอบรูปแบบแจ้งเตือนคำขอยืม-คืนคุรุภัณฑ์\nส่งทดสอบโดย: ${adminName}`,
+      button: "เปิดรายการคำขอเบิก",
     };
     if (lineMode === "custom_json") return {
       header: "ข้อความกำหนดเอง",
@@ -6454,6 +6901,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
                   ["attendance_flex", "เช็กชื่อ"],
                   ["booking_flex", "จองห้อง"],
                   ["data_change_flex", "แก้ข้อมูล"],
+                  ["equipment_flex", "ยืมคุรุภัณฑ์"],
                   ["custom_json", "กำหนดเอง"],
                 ].map(([value, label]) => (
                   <button key={value} type="button" onClick={() => setLineMode(value as typeof lineMode)}
@@ -6596,7 +7044,15 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
                       {linePreview.statusLabel}
                     </div>
                   )}
-                  <div className="text-xl font-black leading-tight" style={{ color: linePreview.titleColor }}>{linePreview.title}</div>
+                  {"titleImage" in linePreview && typeof linePreview.titleImage === "string" && linePreview.titleImage ? (
+                    <div className="flex items-center gap-3">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={linePreview.titleImage} alt="" className="w-14 h-14 rounded object-cover flex-shrink-0 bg-slate-100" />
+                      <div className="text-xl font-black leading-tight" style={{ color: linePreview.titleColor }}>{linePreview.title}</div>
+                    </div>
+                  ) : (
+                    <div className="text-xl font-black leading-tight" style={{ color: linePreview.titleColor }}>{linePreview.title}</div>
+                  )}
                   {"badge" in linePreview && linePreview.badge && (
                     <div className="text-xs mt-3">{linePreview.badge}</div>
                   )}

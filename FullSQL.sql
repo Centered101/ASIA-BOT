@@ -531,3 +531,46 @@ CREATE TABLE public.agent_logs (
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT agent_logs_pkey PRIMARY KEY (id)
 );
+CREATE TABLE public.equipment_items (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  asset_code text,
+  name text NOT NULL,
+  category text NOT NULL,
+  unit text NOT NULL DEFAULT 'ชิ้น'::text,
+  total_quantity integer NOT NULL DEFAULT 1 CHECK (total_quantity >= 0),
+  available_quantity integer NOT NULL DEFAULT 1 CHECK (available_quantity >= 0),
+  image_url text,
+  description text,
+  active boolean NOT NULL DEFAULT true,
+  deleted_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  department text,
+  CONSTRAINT equipment_items_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.equipment_requests (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  request_code text NOT NULL,
+  equipment_item_id uuid NOT NULL,
+  student_id text,
+  department text NOT NULL,
+  requester_name text NOT NULL,
+  requester_phone text,
+  quantity integer NOT NULL CHECK (quantity > 0),
+  purpose text,
+  borrow_date date NOT NULL,
+  due_date date NOT NULL,
+  returned_at timestamp with time zone,
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'approved'::text, 'picked_up'::text, 'rejected'::text, 'cancelled'::text, 'returned'::text])),
+  admin_note text,
+  reviewed_by text,
+  reviewed_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  delivery_mode text NOT NULL DEFAULT 'pickup'::text CHECK (delivery_mode = ANY (ARRAY['pickup'::text, 'delivery'::text])),
+  delivery_loc text,
+  time_slot text,
+  picked_up_at timestamp with time zone,
+  CONSTRAINT equipment_requests_pkey PRIMARY KEY (id),
+  CONSTRAINT equipment_requests_equipment_item_id_fkey FOREIGN KEY (equipment_item_id) REFERENCES public.equipment_items(id)
+);

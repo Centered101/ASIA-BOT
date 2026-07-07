@@ -54,11 +54,6 @@ async function handleEvent(event: LineEvent) {
     await handleTextMessage(userId, text, replyToken, groupId)
     return
   }
-
-  if (event.message?.type === 'file') {
-    await handleFileMessage(userId, event.message, replyToken)
-    return
-  }
 }
 
 async function handleTextMessage(
@@ -156,97 +151,3 @@ async function handleTextMessage(
   }
 }
 
-// ─── File message handler (PDF upload via LINE) ───────────────────────────────
-
-async function handleFileMessage(
-  userId: string,
-  message: { id?: string; fileName?: string; fileSize?: number },
-  replyToken: string
-) {
-  const fileName = message.fileName ?? ''
-  if (!fileName.toLowerCase().endsWith('.pdf')) {
-    await replyLineMessage(replyToken, [{ type: 'text', text: '📄 รองรับเฉพาะไฟล์ PDF ครับ/ค่ะ' }])
-    return
-  }
-
-  const { data: student } = await (supabase as any)
-    .from('students')
-    .select('student_id, first_name')
-    .eq('line_user_id', userId)
-    .maybeSingle()
-
-  if (!student) {
-    await replyLineMessage(replyToken, [{ type: 'text', text: '🔗 กรุณาเชื่อมต่อบัญชีก่อนส่งเอกสารครับ/ค่ะ' }])
-    return
-  }
-
-  const MAX_LINE_PDF = 10 * 1024 * 1024
-  if (message.fileSize && message.fileSize > MAX_LINE_PDF) {
-    await replyLineMessage(replyToken, [{ type: 'text', text: '📄 ไฟล์ PDF ต้องไม่เกิน 10MB ครับ/ค่ะ' }])
-    return
-  }
-
-  // Reply immediately — LINE requires reply within 30s
-  await replyLineMessage(replyToken, [{
-    type: 'text',
-    text: `📄 กำลังประมวลผล "${fileName}" กรุณารอสักครู่…`,
-  }])
-
-  try {
-    const token = process.env.LINE_TOKEN!
-    const contentRes = await fetch(
-      `https://api-data.line.me/v2/bot/message/${message.id}/content`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
-    if (!contentRes.ok) throw new Error(`LINE content download failed: ${contentRes.status}`)
-
-    const buffer = Buffer.from(await contentRes.arrayBuffer())
-
-    const { extractTextFromPdf, chunkText } = await import('@/lib/pdf-utils')
-    const text = await extractTextFromPdf(buffer)
-    if (!text.trim()) {
-      await sendLineMessage(userId, '❌ ไม่สามารถอ่านข้อความจาก PDF นี้ได้ครับ/ค่ะ (อาจเป็นไฟล์รูปภาพ)')
-      return
-    }
-    const chunks = chunkText(text)
-
-    const BUCKET = 'pdf-documents'
-    const path = `line/${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`
-    const { error: storageErr } = await supabase.storage
-      .from(BUCKET)
-      .upload(path, buffer, { contentType: 'application/pdf', upsert: false })
-    if (storageErr) throw storageErr
-
-    const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(path)
-
-    const docName = fileName.replace(/\.pdf$/i, '')
-    const { data: doc, error: docErr } = await (supabase as any)
-      .from('pdf_documents')
-      .insert({
-        name: docName,
-        file_url: publicUrl,
-        file_size: buffer.length,
-        uploaded_by: `line:${userId}`,
-        upload_source: 'line',
-        is_public: false,
-      })
-      .select('id')
-      .single()
-    if (docErr) throw docErr
-
-    const chunkRows = chunks.map((content: string, chunk_index: number) => ({
-      document_id: doc.id,
-      chunk_index,
-      content,
-    }))
-    await (supabase as any).from('pdf_chunks').insert(chunkRows)
-
-    await sendLineMessage(
-      userId,
-      `✅ อัปโหลด "${docName}" สำเร็จ! (${chunks.length} ส่วน)\n\nถามเนื้อหาในเอกสารนี้ได้เลยครับ/ค่ะ\nเช่น "สรุปเนื้อหาของ ${docName}"`
-    )
-  } catch (err) {
-    console.error('[PDF Upload LINE]', err)
-    await sendLineMessage(userId, '❌ เกิดข้อผิดพลาดในการประมวลผล PDF กรุณาลองใหม่อีกครั้งครับ/ค่ะ')
-  }
-}

@@ -12,10 +12,11 @@ export async function GET() {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  const [students, rooms, feedbackTotal, feedbackPending, feedbackResolved, feedbackInProgress, todayEntries] =
+  const [students, totalBookings, equipmentTotal, feedbackTotal, feedbackPending, feedbackResolved, feedbackInProgress, todayEntries] =
     await Promise.all([
       supabase.from("students").select("id", { count: "exact", head: true }),
-      supabase.from("rooms").select("id", { count: "exact", head: true }).eq("status", "active"),
+      supabase.from("bookings").select("id", { count: "exact", head: true }),
+      supabase.from("equipment_requests").select("id", { count: "exact", head: true }),
       supabase.from("feedback").select("id", { count: "exact", head: true }),
       supabase.from("feedback").select("id", { count: "exact", head: true }).eq("status", "pending"),
       supabase.from("feedback").select("id", { count: "exact", head: true }).eq("status", "resolved"),
@@ -26,7 +27,8 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     students:        students.count        ?? 0,
-    rooms:           rooms.count           ?? 0,
+    totalBookings:   totalBookings.count   ?? 0,
+    equipmentTotal:  equipmentTotal.count  ?? 0,
     feedbackTotal:   feedbackTotal.count   ?? 0,
     feedbackPending: feedbackPending.count ?? 0,
     feedbackResolved: feedbackResolved.count ?? 0,

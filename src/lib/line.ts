@@ -522,6 +522,129 @@ export function buildBookingFlexMessage(params: {
   };
 }
 
+// ─── Equipment Request Flex Message builder ──────────────────────────────────
+
+export function buildEquipmentRequestFlexMessage(params: {
+  requestCode: string;
+  itemName: string;
+  itemImageUrl?: string | null;
+  department: string;
+  requesterName: string;
+  requesterPhotoUrl?: string | null;
+  requesterPhone?: string | null;
+  quantity: number;
+  unit?: string | null;
+  borrowDate: string;
+  dueDate: string;
+  purpose?: string | null;
+  status?: "pending" | "approved" | "rejected" | "cancelled" | "returned";
+}) {
+  const { requestCode, itemName, itemImageUrl, department, requesterName, requesterPhotoUrl, requesterPhone, quantity, unit, borrowDate, dueDate, purpose, status = "pending" } = params;
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-bot.xyz";
+  const cfg = {
+    pending: { header: "#059669", badge: "#059669", label: "รออนุมัติ", icon: "🧰" },
+    approved: { header: "#059669", badge: "#059669", label: "อนุมัติแล้ว", icon: "✅" },
+    rejected: { header: "#059669", badge: "#059669", label: "ไม่อนุมัติ", icon: "🚫" },
+    cancelled: { header: "#059669", badge: "#059669", label: "ยกเลิก", icon: "❌" },
+    returned: { header: "#059669", badge: "#059669", label: "คืนแล้ว", icon: "📦" },
+  }[status];
+  const fmtDate = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString("th-TH", {
+    timeZone: "Asia/Bangkok",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+  const row = (label: string, value?: string | number | null) => value ? ({
+    type: "box" as const,
+    layout: "horizontal" as const,
+    contents: [
+      { type: "text" as const, text: label, size: "sm" as const, color: "#64748B", flex: 2 },
+      { type: "text" as const, text: String(value), size: "sm" as const, color: "#0F172A", weight: "bold" as const, align: "end" as const, flex: 3, wrap: true },
+    ],
+  }) : null;
+  const rows = [
+    row("ผู้ขอเบิก", requesterName),
+    row("สาขา", department),
+    row("อุปกรณ์", itemName),
+    row("จำนวน", `${quantity}${unit ? ` ${unit}` : ""}`),
+    row("วันที่ยืม", fmtDate(borrowDate)),
+    row("กำหนดคืน", fmtDate(dueDate)),
+    row("เบอร์", requesterPhone),
+    row("รหัสคำขอ", requestCode),
+  ].filter(Boolean) as object[];
+
+  return {
+    type: "bubble",
+    size: "giga",
+    header: buildLineFlexHeader({
+      title: "ASIA-BOT เบิกคุรุภัณฑ์",
+      subtitle: "คำขอยืม-คืนคุรุภัณฑ์",
+      backgroundColor: cfg.header,
+      photoUrl: requesterPhotoUrl,
+    }),
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "md",
+      contents: [
+        {
+          type: "box" as const,
+          layout: "horizontal" as const,
+          spacing: "md" as const,
+          contents: [
+            itemImageUrl
+              ? {
+                  type: "image" as const,
+                  url: itemImageUrl,
+                  size: "sm" as const,
+                  aspectMode: "cover" as const,
+                  aspectRatio: "1:1",
+                  flex: 1,
+                }
+              : {
+                  type: "box" as const,
+                  layout: "vertical" as const,
+                  flex: 1,
+                  justifyContent: "center" as const,
+                  alignItems: "center" as const,
+                  backgroundColor: "#F1F5F9",
+                  cornerRadius: "8px",
+                  contents: [{ type: "text" as const, text: cfg.icon, size: "xl" as const }],
+                },
+            {
+              type: "box" as const,
+              layout: "vertical" as const,
+              flex: 3,
+              justifyContent: "center" as const,
+              contents: [{ type: "text" as const, text: `คำขอยืม ${itemName}`, weight: "bold" as const, size: "xl" as const, color: cfg.badge, wrap: true }],
+            },
+          ],
+        },
+        { type: "separator", margin: "sm" },
+        { type: "box", layout: "vertical", spacing: "sm", contents: rows },
+        ...(purpose ? [{
+          type: "box" as const,
+          layout: "vertical" as const,
+          backgroundColor: "#F8FAFC",
+          cornerRadius: "12px",
+          paddingAll: "12px",
+          contents: [{ type: "text" as const, text: purpose, size: "sm" as const, color: "#475569", wrap: true }],
+        }] : []),
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      contents: [{
+        type: "button",
+        style: "primary",
+        color: cfg.badge,
+        action: { type: "uri", label: "เปิดรายการคำขอเบิก", uri: `${siteUrl}/admin?tab=equipment_requests` },
+      }],
+    },
+  };
+}
+
 // ─── Student Data Change Flex Message builder ────────────────────────────────
 
 export function buildStudentDataChangeFlexMessage(params: {

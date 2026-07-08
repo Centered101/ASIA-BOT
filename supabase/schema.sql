@@ -545,6 +545,7 @@ CREATE TABLE public.equipment_items (
   deleted_at timestamp with time zone,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  department text,
   CONSTRAINT equipment_items_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.equipment_requests (
@@ -560,12 +561,16 @@ CREATE TABLE public.equipment_requests (
   borrow_date date NOT NULL,
   due_date date NOT NULL,
   returned_at timestamp with time zone,
-  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text, 'cancelled'::text, 'returned'::text])),
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'approved'::text, 'picked_up'::text, 'rejected'::text, 'cancelled'::text, 'returned'::text])),
   admin_note text,
   reviewed_by text,
   reviewed_at timestamp with time zone,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  delivery_mode text NOT NULL DEFAULT 'pickup'::text CHECK (delivery_mode = ANY (ARRAY['pickup'::text, 'delivery'::text])),
+  delivery_loc text,
+  time_slot text,
+  picked_up_at timestamp with time zone,
   CONSTRAINT equipment_requests_pkey PRIMARY KEY (id),
   CONSTRAINT equipment_requests_equipment_item_id_fkey FOREIGN KEY (equipment_item_id) REFERENCES public.equipment_items(id)
 );

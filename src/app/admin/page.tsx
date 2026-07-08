@@ -4335,7 +4335,7 @@ function EquipmentItemForm({ item, adminId, existingCategories, existingUnits, o
       if (json.status === "success") {
         const nextImgUrl = imgUrl.trim();
         if (item && originalImgUrl && originalImgUrl !== nextImgUrl) {
-          await deleteStorageFile(originalImgUrl, adminId, "/api/admin/upload");
+          await deleteStorageFile(originalImgUrl, adminId, "/api/admin/upload-equipment");
         }
         onSaved();
       } else {
@@ -4365,7 +4365,7 @@ function EquipmentItemForm({ item, adminId, existingCategories, existingUnits, o
             <label className="block text-xs font-semibold text-[#ededed] mb-2">รูปภาพ</label>
             <ImgUpload value={imgUrl} onChange={setImgUrl} adminId={adminId}
               onBusyChange={setImageBusy}
-              endpoint="/api/admin/upload" placeholder="https://... หรืออัปโหลดไฟล์ (jpg, png, svg, ico…)" />
+              endpoint="/api/admin/upload-equipment" placeholder="https://... หรืออัปโหลดไฟล์ (jpg, png, svg, ico…)" />
             {imageBusy && (
               <p className="mt-1 text-[11px]" style={{ color: "#e3b341" }}>
                 <i className="fa-solid fa-spinner fa-spin mr-1" />กำลังจัดการรูป กรุณารอให้เสร็จก่อนบันทึก
@@ -7232,7 +7232,7 @@ function autoSlug(name: string) { return name.toLowerCase().replace(/[^a-z0-9]+/
 // ── ImgUpload — URL input + file upload button ────────────────────────────────
 
 const IMG_ACCEPT = ".jpg,.jpeg,.png,.webp,.gif,.svg,.ico,image/*";
-const STORAGE_MARKERS = ["/object/public/project-images/", "/object/public/product-images/"];
+const STORAGE_MARKERS = ["/object/public/project-images/", "/object/public/product-images/", "/object/public/equipment-images/"];
 
 async function deleteStorageFile(url: string, adminId: string, endpoint = "/api/admin/upload-project") {
   if (!STORAGE_MARKERS.some(m => url.includes(m))) return;

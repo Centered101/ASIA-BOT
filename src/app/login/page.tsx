@@ -156,14 +156,14 @@ function LoginForm() {
                   className={`form-input ${passErr ? "error" : ""}`}
                   placeholder="กรอกเบอร์โทรนักเรียน" inputMode="tel" maxLength={255} autoComplete="current-password"
                 />
-                <button type="button" className="eye-btn" onClick={() => setShowPass((v) => !v)}>
+                <button type="button" suppressHydrationWarning className="eye-btn" onClick={() => setShowPass((v) => !v)}>
                   <i className={`fa-solid ${showPass ? "fa-eye-slash" : "fa-eye"}`} />
                 </button>
               </div>
             </div>
           </div>
 
-          <button onClick={handleLogin} disabled={loading} className="btn-primary w-full mb-4 overflow-hidden">
+          <button onClick={handleLogin} disabled={loading} suppressHydrationWarning className="btn-primary w-full mb-4 overflow-hidden">
             {loading
               ? <><span className="spinner w-4 h-4 border-2 border-white border-t-transparent" />&nbsp;กำลังตรวจสอบ...</>
               : <><i className="fa-solid fa-right-to-bracket text-sm" /> เข้าสู่ระบบ</>}
@@ -179,6 +179,7 @@ function LoginForm() {
             type="button"
             onClick={handleGoogleLogin}
             disabled={googleLoading || loading}
+            suppressHydrationWarning
             className="w-full mb-4 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm hover:border-sky-200 hover:bg-sky-50 transition disabled:opacity-60 flex items-center justify-center gap-2"
           >
             {googleLoading

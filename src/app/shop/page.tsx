@@ -6,6 +6,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { toast } from "sonner";
 import { SESSION_KEY, SESSION_TIME_KEY, SESSION_TTL } from "@/lib/config";
+import { isDisplayableImageUrl, safeImageSrc } from "@/lib/image-url";
 
 let _welcomeShown = false;
 
@@ -81,7 +82,7 @@ const CAT_ICONS: Record<string, string> = {
 };
 
 function getEmoji(p: Omit<Product, "emoji">): string {
-  if (p.images?.trim() && !p.images.startsWith("http")) return p.images.trim();
+  if (p.images?.trim() && !isDisplayableImageUrl(p.images)) return p.images.trim();
   for (const [k, v] of EMOJI_MAP) { if (p.name.includes(k)) return v; }
   return CAT_EMOJI[p.cat] || "🏷️";
 }
@@ -665,13 +666,13 @@ export default function ShopPage() {
               <div className="flex items-center gap-3 relative">
                 {/* Avatar */}
                 <div className="w-12 h-12 rounded-2xl border-2 border-white/40 flex-shrink-0 overflow-hidden bg-white/20 flex items-center justify-center">
-                  {student.photo_url ? (
+                  {safeImageSrc(student.photo_url) ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={student.photo_url} alt={student.first_name}
+                    <img src={safeImageSrc(student.photo_url) ?? ""} alt={student.first_name}
                       className="w-full h-full object-cover"
                       onError={e => { e.currentTarget.style.display = "none"; (e.currentTarget.nextElementSibling as HTMLElement | null)?.style && ((e.currentTarget.nextElementSibling as HTMLElement).style.display = "flex"); }} />
                   ) : null}
-                  <span className={`text-sm font-bold ${student.photo_url ? "hidden" : "flex"} items-center justify-center w-full h-full`}>
+                  <span className={`text-sm font-bold ${safeImageSrc(student.photo_url) ? "hidden" : "flex"} items-center justify-center w-full h-full`}>
                     {((student.first_name?.[0] || "?") + (student.last_name?.[0] || "?")).toUpperCase()}
                   </span>
                 </div>
@@ -871,7 +872,8 @@ export default function ShopPage() {
                       const qty = cart[p.id] || 0;
                       const out = p.stock <= 0;
                       const low = !out && p.stock <= 10;
-                      const isImg = p.images?.startsWith("http");
+                      const imageSrc = safeImageSrc(p.images);
+                      const isImg = !!imageSrc;
                       return (
                         <div key={p.id}
                           data-aos="fade-up" data-aos-delay={`${Math.min(i * 40, 200)}`}
@@ -879,7 +881,7 @@ export default function ShopPage() {
                           <div className="relative aspect-square w-full flex items-center justify-center bg-gradient-to-br from-sky-50 to-slate-50">
                             {isImg ? (
                               <>
-                                <img src={p.images} alt={p.name} className="w-full h-full aspect-square object-cover" loading="lazy"
+                                <img src={imageSrc} alt={p.name} className="w-full h-full aspect-square object-cover" loading="lazy"
                                   onError={e => { e.currentTarget.style.display = "none"; const fb = e.currentTarget.nextElementSibling as HTMLElement; if (fb) fb.style.display = "flex"; }} />
                                 <span className="text-5xl absolute inset-0 items-center justify-center" style={{ display: "none" }}>{p.emoji}</span>
                               </>
@@ -972,14 +974,15 @@ export default function ShopPage() {
                   const qty = cart[p.id] || 0;
                   const out = p.stock <= 0;
                   const low = !out && p.stock <= 10;
-                  const isImg = p.images?.startsWith("http");
+                  const imageSrc = safeImageSrc(p.images);
+                  const isImg = !!imageSrc;
                   return (
                     <div key={p.id} className={`rounded-2xl border border-slate-100 bg-white p-3 shadow-sm ${out ? "opacity-60" : ""}`}>
                       <div className="flex gap-3">
                         <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-sky-50 to-slate-50 flex items-center justify-center overflow-hidden flex-shrink-0">
                           {isImg ? (
                             <>
-                              <img src={p.images} alt={p.name} className="w-full h-full aspect-square object-cover" loading="lazy"
+                              <img src={imageSrc} alt={p.name} className="w-full h-full aspect-square object-cover" loading="lazy"
                                 onError={e => { e.currentTarget.style.display = "none"; const fb = e.currentTarget.nextElementSibling as HTMLElement; if (fb) fb.style.display = "inline"; }} />
                               <span className="text-2xl" style={{ display: "none" }}>{p.emoji}</span>
                             </>
@@ -1058,13 +1061,14 @@ export default function ShopPage() {
                       const qty = cart[p.id] || 0;
                       const out = p.stock <= 0;
                       const low = !out && p.stock <= 10;
-                      const isImg = p.images?.startsWith("http");
+                      const imageSrc = safeImageSrc(p.images);
+                      const isImg = !!imageSrc;
                       return (
                         <tr key={p.id} className={`h-[76px] border-b border-slate-50 hover:bg-sky-50/50 transition ${out ? "opacity-50" : ""}`}>
                           <td className="p-3 align-middle">
                             {isImg ? (
                               <>
-                                <img src={p.images} alt={p.name} className="w-14 h-14 aspect-square rounded-xl object-cover" loading="lazy"
+                                <img src={imageSrc} alt={p.name} className="w-14 h-14 aspect-square rounded-xl object-cover" loading="lazy"
                                   onError={e => { e.currentTarget.style.display = "none"; const fb = e.currentTarget.nextElementSibling as HTMLElement; if (fb) fb.style.display = "inline"; }} />
                                 <span className="text-3xl" style={{ display: "none" }}>{p.emoji}</span>
                               </>
@@ -1168,12 +1172,13 @@ export default function ShopPage() {
                 {cartEntries.map(([id, qty]) => {
                   const p = products.find(x => x.id === id)!;
                   if (!p) return null;
-                  const isImg = p.images?.startsWith("http");
+                  const imageSrc = safeImageSrc(p.images);
+                  const isImg = !!imageSrc;
                   return (
                     <div key={id} className="flex items-center gap-3 py-3 border-b border-slate-50 last:border-0">
                       {isImg ? (
                         <>
-                          <img src={p.images} alt={p.name} className="w-10 h-10 aspect-square rounded-xl object-cover flex-shrink-0"
+                          <img src={imageSrc} alt={p.name} className="w-10 h-10 aspect-square rounded-xl object-cover flex-shrink-0"
                             onError={e => { e.currentTarget.style.display = "none"; const fb = e.currentTarget.nextElementSibling as HTMLElement; if (fb) fb.style.display = "inline"; }} />
                           <span className="text-2xl flex-shrink-0" style={{ display: "none" }}>{p.emoji}</span>
                         </>

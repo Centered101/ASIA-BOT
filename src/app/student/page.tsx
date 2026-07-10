@@ -11,6 +11,7 @@ import { SESSION_KEY, SESSION_TIME_KEY, SESSION_TTL, DEPARTMENTS } from "@/lib/c
 import type { Database } from "@/types/database";
 import QRCode from "qrcode";
 import { getGoogleSupabase } from "@/lib/supabase-google";
+import { safeImageSrc } from "@/lib/image-url";
 
 type Student = Database["public"]["Tables"]["students"]["Row"] & {
   photo_url?: string | null;
@@ -48,6 +49,7 @@ export default function StudentPage() {
   const [googleLinking, setGoogleLinking] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [sessionCountdown, setSessionCountdown] = useState("");
+  const studentPhotoSrc = safeImageSrc(student?.photo_url);
 
   const [cropOpen, setCropOpen] = useState(false);
   const [cropRawSrc, setCropRawSrc] = useState("");
@@ -488,9 +490,9 @@ export default function StudentPage() {
         {/* Avatar */}
         <div className="w-9 h-9 rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-white text-sm shadow-sm"
           style={{ background: isPvs ? "linear-gradient(135deg,#EF4444,#F87171)" : "linear-gradient(135deg,#0EA5E9,#38BDF8)" }}>
-          {student.photo_url
+          {studentPhotoSrc
             // eslint-disable-next-line @next/next/no-img-element
-            ? <img src={student.photo_url} alt="" className="w-full h-full object-cover" />
+            ? <img src={studentPhotoSrc} alt="" className="w-full h-full object-cover" />
             : initials}
         </div>
 
@@ -570,9 +572,9 @@ export default function StudentPage() {
                           background: "rgba(255,255,255,0.22)",
                           border: "2px solid rgba(255,255,255,0.5)",
                         }}>
-                        {student.photo_url
+                        {studentPhotoSrc
                           // eslint-disable-next-line @next/next/no-img-element
-                          ? <img src={student.photo_url} alt={initials} className="w-full h-full object-cover" />
+                          ? <img src={studentPhotoSrc} alt={initials} className="w-full h-full object-cover" />
                           : initials}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -872,9 +874,9 @@ export default function StudentPage() {
                   <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-slate-200 bg-slate-100 flex items-center justify-center font-bold text-slate-400 text-2xl">
                     {uploadingPhoto
                       ? <span className="spinner w-6 h-6 border-2 border-sky-400 border-t-transparent inline-block" />
-                      : student.photo_url
+                      : studentPhotoSrc
                         // eslint-disable-next-line @next/next/no-img-element
-                        ? <img src={student.photo_url} alt="" className="w-full h-full object-cover" />
+                        ? <img src={studentPhotoSrc} alt="" className="w-full h-full object-cover" />
                         : <span>{initials}</span>}
                   </div>
                   <div className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-sky-500 border-2 border-white flex items-center justify-center shadow group-hover:bg-sky-600 transition">

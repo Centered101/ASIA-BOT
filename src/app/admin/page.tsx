@@ -3,6 +3,7 @@
 import { memo, useEffect, useState, useCallback, useMemo, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getGoogleSupabase } from "@/lib/supabase-google";
+import { safeImageSrc } from "@/lib/image-url";
 import type { CustomField } from "@/lib/config";
 import { DEPARTMENTS } from "@/lib/config";
 import { AMENITY_OPTIONS, getAmenityInfo } from "@/lib/amenities";
@@ -191,15 +192,16 @@ function Avatar({ name, url, size = 32, rounded = "full", fixedColor }: {
   name: string; url?: string | null; size?: number; rounded?: "full" | "xl" | "lg"; fixedColor?: string;
 }) {
   const [err, setErr] = useState(false);
+  const src = safeImageSrc(url);
   const initial = avatarInitials(name || "?");
   const color = fixedColor ?? ADMIN_PRIMARY;
   const br = rounded === "full" ? "9999px" : rounded === "xl" ? "12px" : "8px";
   const fs = Math.round(size * 0.42);
 
-  if (url && !err) {
+  if (src && !err) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={url} alt={name} onError={() => setErr(true)}
+      <img src={src} alt={name} onError={() => setErr(true)}
         style={{ width: size, height: size, borderRadius: br, objectFit: "cover", flexShrink: 0, display: "block" }} />
     );
   }
@@ -2298,17 +2300,21 @@ function FeedbackCard({ f, adminId, onUpdated }: { f: Feedback; adminId: string;
         {f.image_urls && f.image_urls.length > 0 && (
           <div className="px-4 pb-3">
             <div className={`grid gap-2 ${f.image_urls.length === 1 ? "grid-cols-1" : f.image_urls.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
-              {f.image_urls.map((url, i) => (
-                <button key={i} onClick={() => setLightbox(url)} className="rounded-xl overflow-hidden relative group"
-                  style={{ aspectRatio: "4/3", background: "#252525" }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={url} alt="" className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    style={{ background: "rgba(0,0,0,0.4)" }}>
-                    <i className="fa-solid fa-magnifying-glass-plus text-white text-lg" />
-                  </div>
-                </button>
-              ))}
+              {f.image_urls.map((url, i) => {
+                const src = safeImageSrc(url);
+                if (!src) return null;
+                return (
+                  <button key={i} onClick={() => setLightbox(src)} className="rounded-xl overflow-hidden relative group"
+                    style={{ aspectRatio: "4/3", background: "#252525" }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={src} alt="" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      style={{ background: "rgba(0,0,0,0.4)" }}>
+                      <i className="fa-solid fa-magnifying-glass-plus text-white text-lg" />
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}

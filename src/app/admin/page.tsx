@@ -869,7 +869,7 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
             {activeTab === "teachers"             && <TeachersTab           adminId={admin.admin_id} />}
             {activeTab === "teacher_applications" && <TeacherApplicationsTab adminId={admin.admin_id} onAddTeacher={() => setActiveTab("teachers")} />}
             {activeTab === "admins"               && <AdminsTab             adminId={admin.admin_id} role={admin.role} onAvatarChange={onAvatarChange} />}
-            {activeTab === "line_broadcast"  && <LineBroadcastTab adminId={admin.admin_id} />}
+            {activeTab === "line_broadcast"  && <LineBroadcastTab adminId={admin.admin_id} adminRole={admin.role} />}
             {activeTab === "settings"        && <SettingsTab    adminId={admin.admin_id} adminName={[admin.first_name, admin.last_name].filter(Boolean).join(" ") || admin.admin_id} adminRole={admin.role} adminAvatar={admin.avatar} stats={stats} />}
           </div>
         </main>
@@ -6141,10 +6141,59 @@ function TeacherApplicationsTab({ adminId, onAddTeacher }: { adminId: string; on
 
 // ─── Settings Tab ─────────────────────────────────────────────────────────────
 
-function LineBroadcastTab({ adminId }: { adminId: string }) {
+type LineGroup = {
+  id: string;
+  group_id: string;
+  name: string;
+  category_key: string;
+  is_active: boolean;
+  is_default: boolean;
+  notes: string | null;
+  last_seen_at: string | null;
+};
+
+type LineCategory = {
+  key: string;
+  label: string;
+  description: string | null;
+  sort_order: number;
+};
+
+const DEFAULT_LINE_CATEGORIES: LineCategory[] = [
+  { key: "admin", label: "ผู้ดูแล", description: null, sort_order: 10 },
+  { key: "broadcast", label: "ข่าวสาร", description: null, sort_order: 20 },
+  { key: "booking", label: "จองห้อง", description: null, sort_order: 30 },
+  { key: "feedback", label: "Feedback", description: null, sort_order: 40 },
+  { key: "order", label: "ออเดอร์", description: null, sort_order: 50 },
+  { key: "attendance", label: "เข้า-ออก", description: null, sort_order: 60 },
+  { key: "data_change", label: "แก้ไขข้อมูล", description: null, sort_order: 70 },
+  { key: "equipment", label: "คุรุภัณฑ์", description: null, sort_order: 80 },
+];
+
+function LineBroadcastTab({ adminId, adminRole }: { adminId: string; adminRole: string }) {
   const [state, setState] = useState<{ state: "idle" | "sending" | "ok" | "error"; message: string; detail?: string }>({ state: "idle", message: "" });
   const [cooldown, setCooldown] = useState(0);
   const [targetId, setTargetId] = useState("");
+  const [lineGroups, setLineGroups] = useState<LineGroup[]>([]);
+  const [lineCategories, setLineCategories] = useState<LineCategory[]>(DEFAULT_LINE_CATEGORIES);
+  const [groupState, setGroupState] = useState<{ state: "idle" | "loading" | "ok" | "error"; message: string }>({ state: "idle", message: "" });
+  const [categoryState, setCategoryState] = useState<{ state: "idle" | "loading" | "ok" | "error"; message: string }>({ state: "idle", message: "" });
+  const [editingGroupId, setEditingGroupId] = useState("");
+  const [editingCategoryKey, setEditingCategoryKey] = useState("");
+  const [categoryForm, setCategoryForm] = useState({
+    key: "",
+    label: "",
+    description: "",
+    sort_order: "90",
+  });
+  const [groupForm, setGroupForm] = useState({
+    name: "",
+    group_id: "",
+    category_key: "admin",
+    notes: "",
+    is_active: true,
+    is_default: false,
+  });
   const [mode, setMode] = useState<"news_flex" | "urgent_flex" | "event_flex" | "notice_flex" | "text" | "image" | "custom_json">("news_flex");
   const [title, setTitle] = useState("ข่าวสารจาก ASIA-BOT");
   const [subtitle, setSubtitle] = useState("แจ้งข่าวสารถึงนักเรียนและผู้เกี่ยวข้อง");
@@ -6162,6 +6211,153 @@ function LineBroadcastTab({ adminId }: { adminId: string }) {
     const timer = window.setTimeout(() => setCooldown(v => Math.max(0, v - 1)), 1000);
     return () => window.clearTimeout(timer);
   }, [cooldown]);
+
+  async function loadLineGroups() {
+    setGroupState({ state: "loading", message: "กำลังโหลดกลุ่ม LINE..." });
+    try {
+      const res = await adminFetch("/api/admin/line-groups", adminId);
+      const j = await res.json();
+      if (res.ok && j.status === "success") {
+        setLineGroups(j.data ?? []);
+        setLineCategories(j.categories?.length ? j.categories : DEFAULT_LINE_CATEGORIES);
+        setGroupState({ state: "idle", message: "" });
+      } else {
+        setGroupState({ state: "error", message: j.message || "โหลดกลุ่ม LINE ไม่สำเร็จ" });
+      }
+    } catch (err) {
+      setGroupState({ state: "error", message: err instanceof Error ? err.message : "เชื่อมต่อไม่ได้" });
+    }
+  }
+
+  useEffect(() => { loadLineGroups(); }, [adminId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function resetGroupForm() {
+    setEditingGroupId("");
+    setGroupForm({ name: "", group_id: "", category_key: "admin", notes: "", is_active: true, is_default: false });
+  }
+
+  function resetCategoryForm() {
+    setEditingCategoryKey("");
+    setCategoryForm({ key: "", label: "", description: "", sort_order: "90" });
+  }
+
+  function editCategory(category: LineCategory) {
+    setEditingCategoryKey(category.key);
+    setCategoryForm({
+      key: category.key,
+      label: category.label,
+      description: category.description ?? "",
+      sort_order: String(category.sort_order ?? 0),
+    });
+  }
+
+  async function saveCategory() {
+    if (adminRole !== "superadmin") return;
+    if (!categoryForm.key.trim() || !categoryForm.label.trim()) {
+      setCategoryState({ state: "error", message: "กรุณากรอก key และชื่อหมวดหมู่" });
+      return;
+    }
+
+    setCategoryState({ state: "loading", message: editingCategoryKey ? "กำลังแก้ไขหมวด..." : "กำลังเพิ่มหมวด..." });
+    try {
+      const res = await adminFetch("/api/admin/line-categories", adminId, {
+        method: editingCategoryKey ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          key: editingCategoryKey || categoryForm.key,
+          new_key: editingCategoryKey ? categoryForm.key : undefined,
+          label: categoryForm.label,
+          description: categoryForm.description,
+          sort_order: Number(categoryForm.sort_order) || 0,
+        }),
+      });
+      const j = await res.json();
+      if (res.ok && j.status === "success") {
+        setCategoryState({ state: "ok", message: editingCategoryKey ? "แก้ไขหมวดแล้ว" : "เพิ่มหมวดแล้ว" });
+        resetCategoryForm();
+        await loadLineGroups();
+      } else {
+        setCategoryState({ state: "error", message: j.message || "บันทึกหมวดไม่สำเร็จ" });
+      }
+    } catch (err) {
+      setCategoryState({ state: "error", message: err instanceof Error ? err.message : "เชื่อมต่อไม่ได้" });
+    }
+  }
+
+  async function removeCategory(key: string) {
+    if (adminRole !== "superadmin") return;
+    setCategoryState({ state: "loading", message: "กำลังลบหมวด..." });
+    try {
+      const res = await adminFetch(`/api/admin/line-categories?key=${encodeURIComponent(key)}`, adminId, { method: "DELETE" });
+      const j = await res.json();
+      if (res.ok && j.status === "success") {
+        setCategoryState({ state: "ok", message: "ลบหมวดแล้ว" });
+        if (editingCategoryKey === key) resetCategoryForm();
+        await loadLineGroups();
+      } else {
+        setCategoryState({ state: "error", message: j.message || "ลบหมวดไม่สำเร็จ" });
+      }
+    } catch (err) {
+      setCategoryState({ state: "error", message: err instanceof Error ? err.message : "เชื่อมต่อไม่ได้" });
+    }
+  }
+
+  function editGroup(group: LineGroup) {
+    setEditingGroupId(group.id);
+    setGroupForm({
+      name: group.name,
+      group_id: group.group_id,
+      category_key: group.category_key,
+      notes: group.notes ?? "",
+      is_active: group.is_active,
+      is_default: group.is_default,
+    });
+  }
+
+  async function saveGroup() {
+    if (adminRole !== "superadmin") return;
+    if (!groupForm.name.trim() || !groupForm.group_id.trim()) {
+      setGroupState({ state: "error", message: "กรุณากรอกชื่อกลุ่มและ LINE group ID" });
+      return;
+    }
+
+    setGroupState({ state: "loading", message: editingGroupId ? "กำลังแก้ไขกลุ่ม..." : "กำลังเพิ่มกลุ่ม..." });
+    try {
+      const res = await adminFetch("/api/admin/line-groups", adminId, {
+        method: editingGroupId ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...groupForm, id: editingGroupId || undefined, current_category_key: groupForm.category_key }),
+      });
+      const j = await res.json();
+      if (res.ok && j.status === "success") {
+        setGroupState({ state: "ok", message: editingGroupId ? "แก้ไขกลุ่มแล้ว" : "เพิ่มกลุ่มแล้ว" });
+        resetGroupForm();
+        await loadLineGroups();
+      } else {
+        setGroupState({ state: "error", message: j.message || "บันทึกกลุ่มไม่สำเร็จ" });
+      }
+    } catch (err) {
+      setGroupState({ state: "error", message: err instanceof Error ? err.message : "เชื่อมต่อไม่ได้" });
+    }
+  }
+
+  async function removeGroup(id: string) {
+    if (adminRole !== "superadmin") return;
+    setGroupState({ state: "loading", message: "กำลังลบกลุ่ม..." });
+    try {
+      const res = await adminFetch(`/api/admin/line-groups?id=${encodeURIComponent(id)}`, adminId, { method: "DELETE" });
+      const j = await res.json();
+      if (res.ok && j.status === "success") {
+        setGroupState({ state: "ok", message: "ลบกลุ่มแล้ว" });
+        if (editingGroupId === id) resetGroupForm();
+        await loadLineGroups();
+      } else {
+        setGroupState({ state: "error", message: j.message || "ลบกลุ่มไม่สำเร็จ" });
+      }
+    } catch (err) {
+      setGroupState({ state: "error", message: err instanceof Error ? err.message : "เชื่อมต่อไม่ได้" });
+    }
+  }
 
   const style = {
     idle: { color: "#636363", bg: "#2a2a2a", icon: "fa-bullhorn" },
@@ -6217,6 +6413,124 @@ function LineBroadcastTab({ adminId }: { adminId: string }) {
   return (
     <div className="max-w-4xl space-y-5">
       <DarkSectionHeader title="ส่งข่าวสาร LINE" icon="fa-bullhorn" />
+      {adminRole === "superadmin" && (
+        <div className="rounded-xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+          <div className="px-4 py-3 flex items-center justify-between gap-2" style={{ borderBottom: "1px solid #3e3e3e" }}>
+            <div className="flex items-center gap-2">
+              <i className="fa-solid fa-users-gear text-sm" style={{ color: "#84d4fa" }} />
+              <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "#9e9e9e" }}>จัดการกลุ่มแจ้งเตือน</span>
+            </div>
+            <button onClick={loadLineGroups} className="px-2.5 py-1 rounded-lg text-[11px] font-bold" style={{ background: "#0c0c0c", color: "#ededed", border: "1px solid #3e3e3e" }}>
+              <i className="fa-solid fa-rotate-right mr-1" />โหลดใหม่
+            </button>
+          </div>
+          <div className="p-4 space-y-4">
+            <div className="rounded-xl p-3 space-y-3" style={{ background: "#141414", border: "1px solid #2a2a2a" }}>
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-sm font-bold text-white">หมวดหมู่แจ้งเตือน</div>
+                  <div className="text-[11px] mt-0.5" style={{ color: "#636363" }}>เพิ่ม แก้ไข ลบ และจัดลำดับหมวดที่ใช้กับ LINE channel</div>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <DarkField label="key" value={categoryForm.key} onChange={v => setCategoryForm(f => ({ ...f, key: v }))} placeholder="เช่น transport" mono />
+                <DarkField label="ชื่อหมวด" value={categoryForm.label} onChange={v => setCategoryForm(f => ({ ...f, label: v }))} placeholder="เช่น รถรับส่ง" />
+                <DarkField label="ลำดับ" value={categoryForm.sort_order} onChange={v => setCategoryForm(f => ({ ...f, sort_order: v }))} placeholder="90" mono />
+                <div className="flex items-end gap-2">
+                  <button onClick={saveCategory} disabled={categoryState.state === "loading"} className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold text-white disabled:opacity-50" style={{ background: "#1f6feb" }}>
+                    <i className={`fa-solid ${categoryState.state === "loading" ? "fa-spinner fa-spin" : "fa-layer-group"}`} />
+                    {editingCategoryKey ? "บันทึกหมวด" : "เพิ่มหมวด"}
+                  </button>
+                  {editingCategoryKey && (
+                    <button onClick={resetCategoryForm} className="px-3 py-2 rounded-lg text-xs font-bold" style={{ background: "#2a2a2a", color: "#ededed" }}>ยกเลิก</button>
+                  )}
+                </div>
+              </div>
+              <DarkField label="คำอธิบายหมวด" value={categoryForm.description} onChange={v => setCategoryForm(f => ({ ...f, description: v }))} placeholder="อธิบายว่าหมวดนี้ใช้กับแจ้งเตือนอะไร" />
+              {categoryState.state !== "idle" && (
+                <div className="rounded-lg px-3 py-2 text-xs" style={{ background: categoryState.state === "error" ? "rgba(255,112,112,.1)" : "rgba(63,185,80,.1)", color: categoryState.state === "error" ? "#ff7070" : "#3fb950", border: `1px solid ${categoryState.state === "error" ? "#ff7070" : "#3fb950"}33` }}>
+                  {categoryState.message}
+                </div>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {lineCategories.map(category => {
+                  const channelCount = lineGroups.filter(group => group.category_key === category.key).length;
+                  return (
+                    <div key={category.key} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ background: "#0c0c0c", border: "1px solid #2a2a2a" }}>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-white truncate">{category.label}</span>
+                          <span className="text-[10px]" style={{ color: "#636363" }}>{channelCount} กลุ่ม</span>
+                        </div>
+                        <div className="text-[11px] font-mono truncate" style={{ color: "#9e9e9e" }}>{category.key}</div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => editCategory(category)} className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold" style={{ background: "#1f6feb", color: "#fff" }}>แก้ไข</button>
+                        <button onClick={() => removeCategory(category.key)} disabled={channelCount > 0} className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold disabled:opacity-40" style={{ background: "#3a1515", color: "#ff7070" }}>ลบ</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <DarkField label="ชื่อกลุ่ม" value={groupForm.name} onChange={v => setGroupForm(f => ({ ...f, name: v }))} placeholder="เช่น กลุ่มแอดมินหลัก" />
+              <DarkField label="LINE group ID" value={groupForm.group_id} onChange={v => setGroupForm(f => ({ ...f, group_id: v }))} placeholder="Cxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" mono />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#9e9e9e" }}>ประเภทแจ้งเตือน</label>
+                <select value={groupForm.category_key} onChange={e => setGroupForm(f => ({ ...f, category_key: e.target.value }))} className="w-full px-3 py-2 rounded-lg text-xs outline-none" style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}>
+                  {lineCategories.map(category => <option key={category.key} value={category.key}>{category.label}</option>)}
+                </select>
+              </div>
+              <label className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}>
+                <input type="checkbox" checked={groupForm.is_active} onChange={e => setGroupForm(f => ({ ...f, is_active: e.target.checked }))} />
+                เปิดใช้งาน
+              </label>
+              <label className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}>
+                <input type="checkbox" checked={groupForm.is_default} onChange={e => setGroupForm(f => ({ ...f, is_default: e.target.checked }))} />
+                ค่าเริ่มต้นของประเภทนี้
+              </label>
+            </div>
+            <DarkField label="หมายเหตุ" value={groupForm.notes} onChange={v => setGroupForm(f => ({ ...f, notes: v }))} placeholder="เช่น ใช้รับแจ้งเตือนคำสั่งซื้อช่วงเปิดเทอม" />
+            {groupState.state !== "idle" && (
+              <div className="rounded-lg px-3 py-2 text-xs" style={{ background: groupState.state === "error" ? "rgba(255,112,112,.1)" : "rgba(63,185,80,.1)", color: groupState.state === "error" ? "#ff7070" : "#3fb950", border: `1px solid ${groupState.state === "error" ? "#ff7070" : "#3fb950"}33` }}>
+                {groupState.message}
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <button onClick={saveGroup} disabled={groupState.state === "loading"} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold text-white disabled:opacity-50" style={{ background: "#1f6feb" }}>
+                <i className={`fa-solid ${groupState.state === "loading" ? "fa-spinner fa-spin" : "fa-floppy-disk"}`} />
+                {editingGroupId ? "บันทึกการแก้ไข" : "เพิ่มกลุ่ม"}
+              </button>
+              {editingGroupId && (
+                <button onClick={resetGroupForm} className="px-4 py-2 rounded-lg text-xs font-bold" style={{ background: "#2a2a2a", color: "#ededed" }}>ยกเลิกแก้ไข</button>
+              )}
+            </div>
+            <div className="space-y-2">
+              {lineGroups.map(group => (
+                <div key={group.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ background: "#0c0c0c", border: "1px solid #2a2a2a" }}>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-bold text-white">{group.name}</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: group.is_active ? "rgba(63,185,80,.12)" : "rgba(99,99,99,.15)", color: group.is_active ? "#3fb950" : "#9e9e9e" }}>{group.is_active ? "active" : "off"}</span>
+                      {group.is_default && <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: "rgba(132,212,250,.12)", color: "#84d4fa" }}>default</span>}
+                    </div>
+                    <div className="mt-1 text-[11px] font-mono truncate" style={{ color: "#9e9e9e" }}>{group.group_id}</div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => editGroup(group)} className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold" style={{ background: "#1f6feb", color: "#fff" }}>แก้ไข</button>
+                    <button onClick={() => removeGroup(group.id)} className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold" style={{ background: "#3a1515", color: "#ff7070" }}>ลบ</button>
+                  </div>
+                </div>
+              ))}
+              {lineGroups.length === 0 && <div className="text-xs" style={{ color: "#636363" }}>ยังไม่มีกลุ่ม LINE ในระบบ</div>}
+            </div>
+          </div>
+        </div>
+      )}
       <div className="rounded-xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
         <div className="px-4 py-3 flex items-center justify-between gap-2" style={{ borderBottom: "1px solid #3e3e3e" }}>
           <div className="flex items-center gap-2">
@@ -6253,6 +6567,18 @@ function LineBroadcastTab({ adminId }: { adminId: string }) {
               ))}
             </div>
           </div>
+
+          {lineGroups.filter(g => g.is_active).length > 0 && (
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#9e9e9e" }}>เลือกกลุ่มจากระบบ</label>
+              <select value={targetId} onChange={e => setTargetId(e.target.value)} className="w-full px-3 py-2 rounded-lg text-xs outline-none" style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}>
+                <option value="">ค่าเริ่มต้นตามประเภทแจ้งเตือน</option>
+                {lineGroups.filter(g => g.is_active).map(group => (
+                  <option key={group.id} value={group.group_id}>{group.name} · {lineCategories.find(category => category.key === group.category_key)?.label ?? group.category_key}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <DarkField label="ผู้รับ LINE" value={targetId} onChange={setTargetId} placeholder="เว้นว่าง = กลุ่มผู้ดูแล" mono />

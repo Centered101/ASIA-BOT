@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
 import type { Database } from "@/types/database";
 import { sendLineFlexMessage, buildOrderFlexMessage } from "@/lib/line";
+import { getLineNotificationTarget } from "@/lib/line-targets";
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -92,7 +93,7 @@ export async function GET(
     });
 
     // ── Notify admin group (Flex) ─────────────────────────────────────
-    await sendLineFlexMessage(process.env.LINE_GROUP_ADMIN ?? "", flexAltText, flexContents);
+    await sendLineFlexMessage(await getLineNotificationTarget(supabase as any, "order"), flexAltText, flexContents);
 
     // ── Notify student (Flex) ─────────────────────────────────────────
     if (studentData?.line_user_id) {
@@ -117,7 +118,7 @@ export async function GET(
     if (cancelUpdated?.length) {
       const reason = stripeStatus === "requires_payment_method" ? "QR หมดเวลา" : "ยกเลิก/ชำระไม่สำเร็จ";
       await sendLineFlexMessage(
-        process.env.LINE_GROUP_ADMIN ?? "",
+        await getLineNotificationTarget(supabase as any, "order"),
         `❌ ออเดอร์ถูกยกเลิก #${orderId.slice(-8).toUpperCase()} — ${order.student_name}`,
         buildOrderFlexMessage({
           orderId,

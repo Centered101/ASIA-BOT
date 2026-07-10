@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { buildStorageImagePath } from "@/lib/storage-path";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -23,26 +24,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ status: "error", message: "ขนาดไฟล์ไม่เกิน 3MB" }, { status: 400 });
 
     const ext  = (file.name.split(".").pop() ?? "jpg").toLowerCase();
-    const path = `avatars/${sid}-${Date.now()}.${ext}`;
+    const path = buildStorageImagePath({ fileName: file.name || sid, ext });
 
     const { error: upErr } = await supabase.storage
       .from(BUCKET)
-      .upload(path, await file.arrayBuffer(), { contentType: file.type, upsert: true });
+      .upload(path, await file.arrayBuffer(), { contentType: file.type, upsert: false });
     if (upErr)
       return NextResponse.json({ status: "error", message: upErr.message }, { status: 500 });
 
-    const { data: { publicUrl: photo_url } } = supabase.storage.from(BUCKET).getPublicUrl(path);
+    const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(path);
+    const photo_url = `${publicUrl}?t=${Date.now()}`;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase.from("students") as any)
       .update({ photo_url, updated_at: new Date().toISOString() })
       .eq("student_id", sid);
 
-    // Delete old photo immediately
     if (old_url) {
       const prefix = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${BUCKET}/`;
-      if (old_url.startsWith(prefix)) {
-        await supabase.storage.from(BUCKET).remove([old_url.slice(prefix.length)]);
+      const oldPath = old_url.split("?")[0]; // ตัด query ?t= ออกก่อน
+      if (oldPath.startsWith(prefix)) {
+        // Thai ใน path ถูก encode เป็น %E0%B8... ต้อง decode ก่อนถึงจะ match/ลบได้
+        const oldKey = decodeURIComponent(oldPath.slice(prefix.length));
+        if (oldKey !== path) {
+          await supabase.storage.from(BUCKET).remove([oldKey]);
+        }
       }
     }
 

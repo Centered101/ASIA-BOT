@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { buildStorageImagePath } from "@/lib/storage-path";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ status: "error", message: `ขนาดไฟล์เกิน ${MAX_MB} MB` }, { status: 400 });
 
     const ext  = (file.name.split(".").pop() ?? "jpg").toLowerCase();
-    const path = `uploads/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const path = buildStorageImagePath({ fileName: file.name, ext });
 
     // Ensure bucket exists (creates if not found)
     const { error: bucketErr } = await supabase.storage.createBucket(BUCKET, { public: true });

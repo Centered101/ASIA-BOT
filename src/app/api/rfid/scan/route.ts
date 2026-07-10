@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { buildRfidScanFlexMessage, sendLineFlexMessage } from "@/lib/line";
+import { getLineNotificationTarget } from "@/lib/line-targets";
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -449,8 +450,9 @@ export async function POST(req: NextRequest) {
     });
     const nicknameText = student.nickname ? ` (${student.nickname})` : "";
     const flexAltText = `แจ้งเตือน${action === "checkin" ? "เข้า" : "ออก"}${LOCATION_LABEL[location]} ${fullName}${nicknameText} รหัส ${student.student_id}`;
+    const attendanceTarget = await getLineNotificationTarget(supabase as any, "attendance");
     await Promise.allSettled([
-      process.env.LINE_GROUP_ATTEND ? sendLineFlexMessage(process.env.LINE_GROUP_ATTEND, flexAltText, flex) : Promise.resolve(),
+      attendanceTarget ? sendLineFlexMessage(attendanceTarget, flexAltText, flex) : Promise.resolve(),
       student.line_user_id ? sendLineFlexMessage(student.line_user_id, flexAltText, flex) : Promise.resolve(),
     ]);
 

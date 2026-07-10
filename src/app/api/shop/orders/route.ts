@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
 import type { Database } from "@/types/database";
 import { sendLineFlexMessage, buildOrderFlexMessage } from "@/lib/line";
+import { getLineNotificationTarget } from "@/lib/line-targets";
 
 
 export async function GET(req: NextRequest) {
@@ -199,7 +200,7 @@ export async function POST(req: NextRequest) {
           .map(p => [p.id, p.images?.[0] ?? null])
       );
       await sendLineFlexMessage(
-        process.env.LINE_GROUP_ADMIN ?? "",
+        await getLineNotificationTarget(supabase as any, "order"),
         `🛍️ ออเดอร์ใหม่ #${order.order_id.slice(-8).toUpperCase()} — ${student_name} — ฿${total.toFixed(2)}`,
         buildOrderFlexMessage({
           orderId: order.order_id,

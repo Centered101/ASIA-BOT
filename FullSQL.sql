@@ -45,6 +45,31 @@ CREATE TABLE public.admins (
   google_email text UNIQUE,
   CONSTRAINT admins_pkey PRIMARY KEY (id)
 );
+CREATE TABLE public.line_notification_categories (
+  key text NOT NULL,
+  label text NOT NULL,
+  description text,
+  sort_order integer NOT NULL DEFAULT 0,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT line_notification_categories_pkey PRIMARY KEY (key)
+);
+CREATE TABLE public.line_notification_channels (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  group_id text NOT NULL UNIQUE,
+  name text NOT NULL,
+  category_key text NOT NULL DEFAULT 'admin'::text,
+  is_active boolean NOT NULL DEFAULT true,
+  is_default boolean NOT NULL DEFAULT false,
+  notes text,
+  last_seen_at timestamp with time zone,
+  created_by text,
+  updated_by text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT line_notification_channels_pkey PRIMARY KEY (id),
+  CONSTRAINT line_notification_channels_category_key_fkey FOREIGN KEY (category_key) REFERENCES public.line_notification_categories(key)
+);
 CREATE TABLE public.login_logs (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   log_time timestamp with time zone DEFAULT now(),
@@ -165,7 +190,7 @@ CREATE TABLE public.rooms (
   CONSTRAINT rooms_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.time_slots (
-  id integer NOT NULL DEFAULT nextval('time_slots_id_seq'::regclass),
+  id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
   label text NOT NULL,
   start_time time without time zone NOT NULL,
   end_time time without time zone NOT NULL,
@@ -387,7 +412,7 @@ CREATE TABLE public.qq_stores (
   CONSTRAINT qq_stores_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.qq_menu_items (
-  id integer NOT NULL DEFAULT nextval('qq_menu_items_id_seq'::regclass),
+  id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
   store_id integer,
   name text NOT NULL,
   category text DEFAULT 'ทั่วไป'::text,
@@ -408,7 +433,7 @@ CREATE TABLE public.qq_orders (
   CONSTRAINT qq_orders_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.qq_order_items (
-  id integer NOT NULL DEFAULT nextval('qq_order_items_id_seq'::regclass),
+  id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
   order_id uuid,
   store_id integer NOT NULL,
   item_name text NOT NULL,
@@ -419,7 +444,7 @@ CREATE TABLE public.qq_order_items (
   CONSTRAINT qq_order_items_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.qq_orders(id)
 );
 CREATE TABLE public.qq_store_order_status (
-  id integer NOT NULL DEFAULT nextval('qq_store_order_status_id_seq'::regclass),
+  id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
   order_id uuid,
   store_id integer NOT NULL,
   status text DEFAULT 'pending'::text,
@@ -436,7 +461,7 @@ CREATE TABLE public.qman_categories (
   CONSTRAINT qman_categories_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.qman_shops (
-  id integer NOT NULL DEFAULT nextval('qman_shops_id_seq'::regclass),
+  id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
   category_id integer,
   name text NOT NULL,
   branch text NOT NULL,

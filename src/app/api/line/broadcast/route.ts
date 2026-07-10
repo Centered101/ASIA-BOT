@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkAdminAuth } from "@/lib/admin-auth";
+import { createClient } from "@supabase/supabase-js";
+import { getLineNotificationTarget } from "@/lib/line-targets";
 
 type LineMessage = Record<string, unknown>;
 type BroadcastMode = "text" | "image" | "news_flex" | "urgent_flex" | "event_flex" | "notice_flex" | "custom_json";
 
 const cooldowns = new Map<string, number>();
 const COOLDOWN_MS = 20_000;
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 async function pushLineMessage(to: string, messages: LineMessage[]) {
   const token = process.env.LINE_TOKEN;
@@ -128,7 +134,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}));
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-bot.xyz";
-  const targetId = String(body.to || "").trim() || process.env.LINE_GROUP_ADMIN || "";
+  const targetId = String(body.to || "").trim() || await getLineNotificationTarget(supabase as any, "broadcast");
   if (!targetId) return NextResponse.json({ status: "error", message: "ยังไม่ได้ตั้งค่าผู้รับ LINE" }, { status: 500 });
 
   const mode = String(body.mode || "news_flex") as BroadcastMode;

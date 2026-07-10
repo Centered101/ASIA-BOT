@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyLineSignature, replyLineMessage, sendLineMessage } from '@/lib/line'
 import { handleAdminGroupMessage } from '@/lib/line-admin-commands'
+import { isLineNotificationGroup, recordLineGroupSeen } from '@/lib/line-targets'
 import { runAgent } from '@/lib/agent/core'
 import { buildLineRequest } from '@/lib/agent/channels/line'
 import { parseNavTags, toAbsoluteUrl } from '@/lib/agent/nav'
@@ -48,6 +49,7 @@ async function handleEvent(event: LineEvent) {
 
   const replyToken = event.replyToken ?? ''
   const groupId = event.source.groupId
+  if (groupId) await recordLineGroupSeen(supabase as any, groupId)
 
   if (event.message?.type === 'text') {
     const text = event.message.text?.trim() ?? ''
@@ -83,7 +85,7 @@ async function handleTextMessage(
   }
 
   // ── Admin group → preserve legacy admin commands ──────────────────────────
-  if (groupId && groupId === process.env.LINE_GROUP_ADMIN) {
+  if (groupId && await isLineNotificationGroup(supabase as any, groupId)) {
     await handleAdminGroupMessage(supabase as any, text, replyToken)
     return
   }
@@ -150,4 +152,3 @@ async function handleTextMessage(
     }])
   }
 }
-

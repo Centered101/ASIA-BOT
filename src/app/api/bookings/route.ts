@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { buildBookingFlexMessage, sendLineFlexMessage } from "@/lib/line";
+import { getLineNotificationTarget } from "@/lib/line-targets";
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -188,7 +189,7 @@ export async function POST(req: NextRequest) {
         .eq("student_id", student_id.trim())
         .maybeSingle();
       await sendLineFlexMessage(
-        process.env.LINE_GROUP_ADMIN ?? "",
+        await getLineNotificationTarget(supabase as any, "booking"),
         `📅 คำขอจองห้องใหม่: ${room.name} — ${student_name.trim()}`,
         buildBookingFlexMessage({
           bookingId: booking?.id ?? null,

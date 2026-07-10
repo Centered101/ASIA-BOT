@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { checkAdminAuth } from "@/lib/admin-auth";
+import { buildStorageImagePath } from "@/lib/storage-path";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -21,10 +22,8 @@ export async function POST(req: NextRequest) {
 
   const CONTENT_TYPES: Record<string, string> = { svg: "image/svg+xml", ico: "image/x-icon" };
   const contentType = CONTENT_TYPES[ext] ?? file.type;
-  const folder = (form.get("folder") as string | null)?.trim().replace(/\s+/g, "-").replace(/[/\\?%*:|"<>\x00-\x1f]/g, "").replace(/^-+|-+$/g, "") || null;
-  const path = folder
-    ? `${folder}/${Date.now()}.${ext}`
-    : `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const folder = form.get("folder") as string | null;
+  const path = buildStorageImagePath({ fileName: file.name, ext, folder });
   const buffer = Buffer.from(await file.arrayBuffer());
 
   const { error } = await supabase.storage

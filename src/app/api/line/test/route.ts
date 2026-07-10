@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { buildBookingFlexMessage, buildEquipmentRequestFlexMessage, buildFeedbackFlexMessage, buildOrderFlexMessage, buildRfidScanFlexMessage, buildStudentDataChangeFlexMessage } from "@/lib/line";
 import { checkAdminAuth } from "@/lib/admin-auth";
+import { getLineNotificationTarget } from "@/lib/line-targets";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -138,7 +139,7 @@ export async function POST(req: NextRequest) {
   if (!token) return NextResponse.json({ status: "error", message: "LINE_TOKEN not set" }, { status: 500 });
 
   const body = await req.json().catch(() => ({}));
-  const fallbackGroupId = process.env.LINE_GROUP_ADMIN;
+  const fallbackGroupId = await getLineNotificationTarget(supabase as any, "admin");
   const targetId = String(body.to || "").trim() || fallbackGroupId;
   if (!targetId) return NextResponse.json({ status: "error", message: "LINE target not set" }, { status: 500 });
 

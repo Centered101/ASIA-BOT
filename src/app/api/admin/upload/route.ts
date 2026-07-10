@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { buildStorageImagePath } from "@/lib/storage-path";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ status: "error", message: "ไฟล์ต้องเป็น jpg, png, webp, gif, svg หรือ ico" }, { status: 400 });
 
   const contentType = CONTENT_TYPES[ext] ?? file.type;
-  const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const path = buildStorageImagePath({ fileName: file.name, ext });
   const buffer = Buffer.from(await file.arrayBuffer());
 
   const { error } = await supabase.storage

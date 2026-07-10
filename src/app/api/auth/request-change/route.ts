@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { buildStudentDataChangeFlexMessage, sendLineFlexMessage } from "@/lib/line";
+import { getLineNotificationTarget } from "@/lib/line-targets";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
         newValue: String(newValue),
       }));
       await sendLineFlexMessage(
-        process.env.LINE_GROUP_ADMIN ?? "",
+        await getLineNotificationTarget(supabase as any, "data_change"),
         `📝 คำขอแก้ไขข้อมูล: ${student_id}`,
         buildStudentDataChangeFlexMessage({
           studentId: student_id,

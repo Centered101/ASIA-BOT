@@ -31,6 +31,19 @@ function absoluteUrl(url: string, siteUrl: string) {
   return `${siteUrl.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
 }
 
+function lineHttpsUrl(url: string, siteUrl: string) {
+  const abs = absoluteUrl(url, siteUrl).trim();
+  if (!abs) return "";
+  try {
+    const parsed = new URL(abs);
+    if (parsed.protocol !== "https:") return "";
+    if (!parsed.hostname.includes(".")) return "";
+    return parsed.toString();
+  } catch {
+    return "";
+  }
+}
+
 function customMessagesFromPayload(payload: unknown, altText: string): LineMessage[] {
   if (!payload || typeof payload !== "object") throw new Error("ข้อความกำหนดเองต้องเป็น object");
   const obj = payload as Record<string, unknown>;
@@ -141,7 +154,8 @@ export async function POST(req: NextRequest) {
   const title = String(body.title || "").trim();
   const subtitle = String(body.subtitle || "").trim();
   const text = String(body.text || "").trim();
-  const imageUrl = absoluteUrl(String(body.imageUrl || "").trim(), siteUrl);
+  const rawImageUrl = String(body.imageUrl || "").trim();
+  const imageUrl = lineHttpsUrl(rawImageUrl, siteUrl);
   const buttonLabel = String(body.buttonLabel || "เปิดดูเพิ่มเติม").trim();
   const buttonUrl = absoluteUrl(String(body.buttonUrl || "").trim(), siteUrl);
   const altText = String(body.altText || title || "ข่าวสารจาก ASIA-BOT").slice(0, 400);
@@ -152,7 +166,7 @@ export async function POST(req: NextRequest) {
       if (!text && !title) throw new Error("กรุณากรอกข้อความ");
       messages.push({ type: "text", text: [title, subtitle, text, `ส่งโดย: ${adminName}`].filter(Boolean).join("\n") });
     } else if (mode === "image") {
-      if (!imageUrl) throw new Error("กรุณาใส่ URL รูปภาพ");
+      if (!imageUrl) throw new Error("กรุณาใส่ URL รูปภาพแบบ HTTPS เท่านั้น เช่น https://...jpg");
       messages.push({
         type: "image",
         originalContentUrl: imageUrl,
@@ -161,6 +175,7 @@ export async function POST(req: NextRequest) {
     } else if (mode === "custom_json") {
       messages.push(...customMessagesFromPayload(body.payload, altText));
     } else {
+      if (rawImageUrl && !imageUrl) throw new Error("URL รูปภาพสำหรับ LINE ต้องเป็น HTTPS เท่านั้น เช่น https://...jpg");
       messages.push({
         type: "flex",
         altText,

@@ -1,5 +1,18 @@
 import crypto from "crypto";
 
+function lineImageUrl(value?: string | null): string | null {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:") return null;
+    if (!url.hostname.includes(".")) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 // ─── Push text ────────────────────────────────────────────────────────────────
 
 export async function sendLineMessage(to: string, text: string): Promise<void> {
@@ -68,6 +81,7 @@ function buildLineFlexHeader(params: {
   subtitleColor?: string;
 }) {
   const { title, subtitle, backgroundColor, photoUrl, subtitleColor = "#000000" } = params;
+  const safePhotoUrl = lineImageUrl(photoUrl);
   return {
     type: "box" as const,
     layout: "horizontal" as const,
@@ -84,7 +98,7 @@ function buildLineFlexHeader(params: {
           { type: "text" as const, text: subtitle, color: subtitleColor, size: "sm" as const, margin: "sm" as const },
         ],
       },
-      ...(photoUrl ? [{
+      ...(safePhotoUrl ? [{
         type: "box" as const,
         layout: "vertical" as const,
         width: "56px",
@@ -92,7 +106,7 @@ function buildLineFlexHeader(params: {
         cornerRadius: "8px",
         contents: [{
           type: "image" as const,
-          url: photoUrl,
+          url: safePhotoUrl,
           size: "full" as const,
           aspectRatio: "1:1",
           aspectMode: "cover" as const,
@@ -188,10 +202,10 @@ export function buildOrderFlexMessage(params: {
             layout: "horizontal" as const,
             spacing: "md" as const,
             contents: [
-              item.imageUrl
+              lineImageUrl(item.imageUrl)
                 ? {
                     type: "image" as const,
-                    url: item.imageUrl,
+                    url: lineImageUrl(item.imageUrl)!,
                     size: "sm" as const,
                     aspectMode: "cover" as const,
                     aspectRatio: "1:1",
@@ -309,7 +323,7 @@ export function buildFeedbackFlexMessage(params: {
   const siteUrl     = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-bot.xyz";
   const typeLabel   = type === "comment" ? "ความคิดเห็น" : "รายงานปัญหา";
   const headerColor = type === "comment" ? "#84D4FA" : "#FF7070";
-  const imgs        = (imageUrls ?? []).filter(Boolean);
+  const imgs        = (imageUrls ?? []).map(lineImageUrl).filter(Boolean) as string[];
   const heroUrl     = imgs[0] ?? null;
   const extraImgs   = imgs.slice(1, 3);
 
@@ -572,6 +586,7 @@ export function buildEquipmentRequestFlexMessage(params: {
     row("เบอร์", requesterPhone),
     row("รหัสคำขอ", requestCode),
   ].filter(Boolean) as object[];
+  const safeItemImageUrl = lineImageUrl(itemImageUrl);
 
   return {
     type: "bubble",
@@ -592,10 +607,10 @@ export function buildEquipmentRequestFlexMessage(params: {
           layout: "horizontal" as const,
           spacing: "md" as const,
           contents: [
-            itemImageUrl
+            safeItemImageUrl
               ? {
                   type: "image" as const,
-                  url: itemImageUrl,
+                  url: safeItemImageUrl,
                   size: "sm" as const,
                   aspectMode: "cover" as const,
                   aspectRatio: "1:1",

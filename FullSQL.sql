@@ -599,3 +599,57 @@ CREATE TABLE public.equipment_requests (
   CONSTRAINT equipment_requests_pkey PRIMARY KEY (id),
   CONSTRAINT equipment_requests_equipment_item_id_fkey FOREIGN KEY (equipment_item_id) REFERENCES public.equipment_items(id)
 );
+
+-- Enable Supabase Realtime for admin pages that need immediate cross-admin updates.
+DO $$
+DECLARE
+  realtime_table text;
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    FOREACH realtime_table IN ARRAY ARRAY[
+      'students',
+      'admins',
+      'login_logs',
+      'admin_logs',
+      'attendance',
+      'attendance_logs',
+      'entry_logs',
+      'feedback',
+      'feedbacks',
+      'products',
+      'orders',
+      'pay_logs',
+      'rooms',
+      'time_slots',
+      'bookings',
+      'room_bookings',
+      'projects',
+      'evaluations',
+      'class_groups',
+      'class_schedules',
+      'class_schedule_overrides',
+      'teachers',
+      'teacher_applications',
+      'change_requests',
+      'name_change_requests',
+      'student_cards',
+      'rfid_cards',
+      'rfid_devices',
+      'equipment_items',
+      'equipment_requests',
+      'line_notification_categories',
+      'line_notification_channels'
+    ]
+    LOOP
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_publication_tables
+        WHERE pubname = 'supabase_realtime'
+          AND schemaname = 'public'
+          AND tablename = realtime_table
+      ) THEN
+        EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I', realtime_table);
+      END IF;
+    END LOOP;
+  END IF;
+END $$;

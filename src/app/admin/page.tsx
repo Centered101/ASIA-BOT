@@ -4,6 +4,7 @@ import { memo, useEffect, useState, useCallback, useMemo, useRef, Suspense } fro
 import { useRouter, useSearchParams } from "next/navigation";
 import { getGoogleSupabase } from "@/lib/supabase-google";
 import { safeImageSrc } from "@/lib/image-url";
+import { supabase as realtimeSupabase } from "@/lib/supabase";
 import type { CustomField } from "@/lib/config";
 import { DEPARTMENTS } from "@/lib/config";
 import { AMENITY_OPTIONS, getAmenityInfo } from "@/lib/amenities";
@@ -610,6 +611,43 @@ function AdminLogin({ onLogin }: { onLogin: (a: AdminUser) => void }) {
 
 const VALID_TABS = new Set(["dashboard","students","data_requests","entrylogs","checkin_school","checkin_library","checkin_meeting","rfid","bookings","rooms","products","shoporders","equipment_items","equipment_requests","projects","evaluations","class_groups","class_schedule","class_schedule_weekly","class_schedule_override","teachers","teacher_applications","feedbacks","admins","line_broadcast","settings"]);
 
+const ADMIN_REALTIME_TABLE_TABS: Record<string, string[]> = {
+  students: ["dashboard", "students", "entrylogs", "checkin_school", "checkin_library", "checkin_meeting", "rfid", "bookings", "shoporders", "equipment_requests", "data_requests", "admins"],
+  admins: ["dashboard", "admins", "settings"],
+  login_logs: ["dashboard", "settings"],
+  admin_logs: ["dashboard", "settings"],
+  attendance: ["dashboard", "entrylogs", "checkin_school", "checkin_library", "checkin_meeting"],
+  attendance_logs: ["dashboard", "entrylogs", "checkin_school", "checkin_library", "checkin_meeting"],
+  entry_logs: ["dashboard", "entrylogs", "checkin_school", "checkin_library", "checkin_meeting"],
+  feedback: ["dashboard", "feedbacks"],
+  feedbacks: ["dashboard", "feedbacks"],
+  products: ["dashboard", "products", "shoporders"],
+  orders: ["dashboard", "shoporders", "products"],
+  pay_logs: ["dashboard", "shoporders"],
+  rooms: ["dashboard", "rooms", "bookings"],
+  time_slots: ["dashboard", "rooms", "bookings"],
+  bookings: ["dashboard", "bookings", "rooms"],
+  room_bookings: ["dashboard", "bookings", "rooms"],
+  projects: ["dashboard", "projects", "evaluations"],
+  evaluations: ["dashboard", "evaluations", "projects"],
+  class_groups: ["dashboard", "class_groups", "class_schedule", "class_schedule_weekly", "class_schedule_override"],
+  class_schedules: ["dashboard", "class_schedule", "class_schedule_weekly"],
+  class_schedule_overrides: ["dashboard", "class_schedule", "class_schedule_override"],
+  teachers: ["dashboard", "teachers", "class_schedule", "class_schedule_weekly"],
+  teacher_applications: ["dashboard", "teacher_applications"],
+  change_requests: ["dashboard", "data_requests"],
+  name_change_requests: ["dashboard", "data_requests"],
+  student_cards: ["dashboard", "rfid", "students"],
+  rfid_cards: ["dashboard", "rfid", "students"],
+  rfid_devices: ["dashboard", "rfid"],
+  equipment_items: ["dashboard", "equipment_items", "equipment_requests"],
+  equipment_requests: ["dashboard", "equipment_requests", "equipment_items"],
+  line_notification_categories: ["line_broadcast"],
+  line_notification_channels: ["line_broadcast"],
+};
+
+const ADMIN_REALTIME_TABLES = Object.keys(ADMIN_REALTIME_TABLE_TABS);
+
 function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onLogout: () => void; onAvatarChange: (url: string | null) => void }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -628,8 +666,15 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
   const [now, setNow] = useState(new Date());
   const [showAddStudent, setShowAddStudent] = useState(false);
   const [studentsRefreshKey, setStudentsRefreshKey] = useState(0);
+  const [adminDataVersion, setAdminDataVersion] = useState(0);
   const [refreshingStats, setRefreshingStats] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const activeTabRef = useRef(activeTab);
+  const realtimeRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
 
   useEffect(() => {
     if (searchParams.get("google_linked") === "1") {
@@ -648,6 +693,44 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
+
+  useEffect(() => {
+    const fetchStats = () => {
+      adminFetch("/api/admin/stats", admin.admin_id)
+        .then((r) => r.json())
+        .then((j) => { if (j.status === "success") setStats(j.data); })
+        .catch(() => {});
+    };
+
+    const scheduleRefresh = (table: string) => {
+      if (realtimeRefreshTimer.current) clearTimeout(realtimeRefreshTimer.current);
+      realtimeRefreshTimer.current = setTimeout(() => {
+        const tabs = ADMIN_REALTIME_TABLE_TABS[table] ?? [];
+        const currentTab = activeTabRef.current;
+        fetchStats();
+        if (tabs.includes(currentTab)) setAdminDataVersion((v) => v + 1);
+        if (table === "students") setStudentsRefreshKey((v) => v + 1);
+      }, 350);
+    };
+
+    const channel = realtimeSupabase.channel(`admin-live-data:${admin.admin_id}`);
+    for (const table of ADMIN_REALTIME_TABLES) {
+      channel.on("postgres_changes", { event: "*", schema: "public", table }, () => scheduleRefresh(table));
+    }
+    channel.subscribe();
+
+    const onFocus = () => {
+      fetchStats();
+      setAdminDataVersion((v) => v + 1);
+    };
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      if (realtimeRefreshTimer.current) clearTimeout(realtimeRefreshTimer.current);
+      window.removeEventListener("focus", onFocus);
+      realtimeSupabase.removeChannel(channel);
+    };
+  }, [admin.admin_id]);
 
   useEffect(() => {
     if (requestedTab !== activeTab) router.replace(`/admin?tab=${activeTab}`, { scroll: false });
@@ -842,7 +925,7 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
 
         {/* Page content */}
         <main className="flex-1 overflow-auto" style={{ background: "#0c0c0c" }}>
-          <div className="p-3 sm:p-4 lg:p-6 min-w-0">
+          <div key={`${activeTab}-${adminDataVersion}`} className="p-3 sm:p-4 lg:p-6 min-w-0">
             {activeTab === "dashboard"       && <DashboardTab   adminId={admin.admin_id} stats={stats} onOpenTab={setActiveTab} />}
             {activeTab === "students"        && <StudentsTab    adminId={admin.admin_id} refreshKey={studentsRefreshKey} role={admin.role} />}
             {activeTab === "data_requests"   && <AllRequestsTab adminId={admin.admin_id} />}

@@ -8801,7 +8801,7 @@ function ProjectsTab({ adminId, role, onViewEvals }: { adminId: string; role: st
     }
     setMsg("บันทึกรูปแล้ว");
     setEditing(p => p ? { ...p, [field]: url } : p);
-    load();
+    setProjects(list => list.map(p => p.id === editing.id ? { ...p, [field]: url } : p));
   }
 
   async function del(p: DBProject) {

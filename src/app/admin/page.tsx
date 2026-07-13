@@ -2259,6 +2259,20 @@ function RoomForm({ room, adminId, onClose, onSaved }: { room: Room | null; admi
     else setError(json.message ?? "บันทึกไม่สำเร็จ");
   }
 
+  async function autoSaveImage(url: string) {
+    if (!room) return;
+    const res = await adminFetch(`/api/admin/rooms/${room.id}`, adminId, {
+      method: "PATCH",
+      body: JSON.stringify({ image_url: url.trim() || null }),
+    });
+    const json = await res.json();
+    if (json.status !== "success") {
+      setError(json.message ?? "บันทึกรูปไม่สำเร็จ");
+      throw new Error(json.message ?? "บันทึกรูปไม่สำเร็จ");
+    }
+    setError("");
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }} onClick={onClose} />
@@ -2273,7 +2287,7 @@ function RoomForm({ room, adminId, onClose, onSaved }: { room: Room | null; admi
         <div className="p-5 space-y-4">
           <div>
             <label className="block text-xs font-semibold text-[#ededed] mb-2">รูปห้อง</label>
-            <ImgUpload value={imageUrl} onChange={setImageUrl} adminId={adminId} endpoint="/api/admin/upload-project" placeholder="https://... หรืออัปโหลดรูปห้อง" />
+            <ImgUpload value={imageUrl} onChange={setImageUrl} adminId={adminId} endpoint="/api/admin/upload-project" placeholder="https://... หรืออัปโหลดรูปห้อง" onUploaded={autoSaveImage} />
           </div>
           <div><label className="block text-xs font-semibold text-[#ededed] mb-1.5">ชื่อห้อง *</label>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="เช่น ห้องประชุม 1" className={inputCls} style={inputStyle} /></div>
@@ -4636,6 +4650,20 @@ function ProductForm({ product, adminId, unitOptions, categoryOptions, tagOption
     }
   }
 
+  async function autoSaveImage(url: string) {
+    if (!product) return;
+    const res = await adminFetch(`/api/admin/products/${product.id}`, adminId, {
+      method: "PATCH",
+      body: JSON.stringify({ images: url.trim() ? [url.trim()] : null }),
+    });
+    const json = await res.json();
+    if (json.status !== "success") {
+      setError(json.message ?? "บันทึกรูปไม่สำเร็จ");
+      throw new Error(json.message ?? "บันทึกรูปไม่สำเร็จ");
+    }
+    setError("");
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }} onClick={onClose} />
@@ -4654,6 +4682,7 @@ function ProductForm({ product, adminId, unitOptions, categoryOptions, tagOption
             <label className="block text-xs font-semibold text-[#ededed] mb-2">รูปสินค้า</label>
             <ImgUpload value={imgUrl} onChange={setImgUrl} adminId={adminId}
               onBusyChange={setImageBusy}
+              onUploaded={autoSaveImage}
               endpoint="/api/admin/upload" placeholder="https://... หรืออัปโหลดไฟล์ (jpg, png, svg, ico…)" />
             {imageBusy && (
               <p className="mt-1 text-[11px]" style={{ color: "#e3b341" }}>
@@ -5141,6 +5170,20 @@ function EquipmentItemForm({ item, adminId, existingCategories, existingUnits, o
     }
   }
 
+  async function autoSaveImage(url: string) {
+    if (!item) return;
+    const res = await adminFetch(`/api/admin/equipment-items/${item.id}`, adminId, {
+      method: "PATCH",
+      body: JSON.stringify({ image_url: url.trim() || null }),
+    });
+    const json = await res.json();
+    if (json.status !== "success") {
+      setError(json.message ?? "บันทึกรูปไม่สำเร็จ");
+      throw new Error(json.message ?? "บันทึกรูปไม่สำเร็จ");
+    }
+    setError("");
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }} onClick={onClose} />
@@ -5158,6 +5201,7 @@ function EquipmentItemForm({ item, adminId, existingCategories, existingUnits, o
             <label className="block text-xs font-semibold text-[#ededed] mb-2">รูปภาพ</label>
             <ImgUpload value={imgUrl} onChange={setImgUrl} adminId={adminId}
               onBusyChange={setImageBusy}
+              onUploaded={autoSaveImage}
               endpoint="/api/admin/upload-equipment" placeholder="https://... หรืออัปโหลดไฟล์ (jpg, png, svg, ico…)" />
             {imageBusy && (
               <p className="mt-1 text-[11px]" style={{ color: "#e3b341" }}>
@@ -8484,8 +8528,8 @@ async function deleteStorageFile(url: string, adminId: string, endpoint = "/api/
   }).catch(() => {});
 }
 
-function ImgUpload({ value, onChange, placeholder, adminId, endpoint = "/api/admin/upload-project", folder, onBusyChange }: {
-  value: string; onChange: (v: string) => void; placeholder?: string; adminId: string; endpoint?: string; folder?: string; onBusyChange?: (busy: boolean) => void;
+function ImgUpload({ value, onChange, placeholder, adminId, endpoint = "/api/admin/upload-project", folder, onBusyChange, onUploaded }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; adminId: string; endpoint?: string; folder?: string; onBusyChange?: (busy: boolean) => void; onUploaded?: (url: string) => Promise<void> | void;
 }) {
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting]   = useState(false);
@@ -8502,15 +8546,19 @@ function ImgUpload({ value, onChange, placeholder, adminId, endpoint = "/api/adm
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true); setErr("");
-    if (isOwned) await deleteStorageFile(value, adminId, endpoint);
+    const oldValue = value;
+    const oldIsOwned = isOwned;
     const fd = new FormData();
     fd.append("file", file);
     if (folder) fd.append("folder", folder);
     try {
       const res = await fetch(endpoint, { method: "POST", headers: { "x-admin-id": adminId }, body: fd });
       const j = await res.json();
-      if (j.status === "success") onChange(j.url);
-      else setErr(j.message ?? "อัปโหลดไม่สำเร็จ");
+      if (j.status === "success") {
+        onChange(j.url);
+        await onUploaded?.(j.url);
+        if (oldIsOwned && oldValue && oldValue !== j.url) await deleteStorageFile(oldValue, adminId, endpoint);
+      } else setErr(j.message ?? "อัปโหลดไม่สำเร็จ");
     } catch { setErr("เชื่อมต่อไม่ได้"); }
     finally { setUploading(false); if (ref.current) ref.current.value = ""; }
   }
@@ -8518,9 +8566,16 @@ function ImgUpload({ value, onChange, placeholder, adminId, endpoint = "/api/adm
   async function onDelete() {
     if (!value) return;
     setDeleting(true); setErr("");
-    await deleteStorageFile(value, adminId, endpoint);
-    setDeleting(false);
-    onChange("");
+    const oldValue = value;
+    try {
+      await onUploaded?.("");
+      await deleteStorageFile(oldValue, adminId, endpoint);
+      onChange("");
+    } catch {
+      setErr("ลบรูปไม่สำเร็จ");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   const inp = { background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" };
@@ -8732,6 +8787,23 @@ function ProjectsTab({ adminId, role, onViewEvals }: { adminId: string; role: st
     } catch { setMsg("เชื่อมต่อไม่ได้"); } finally { setSaving(false); }
   }
 
+  async function autoSaveProjectImage(field: "poster_url" | "bg_image_url" | "logo_url" | "mascot_url", url: string) {
+    if (!editing) return;
+    const res = await adminFetch(`/api/admin/projects/${editing.id}`, adminId, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [field]: url.trim() || null }),
+    });
+    const j = await res.json();
+    if (j.status !== "success") {
+      setMsg(j.message || "บันทึกรูปไม่สำเร็จ");
+      throw new Error(j.message || "บันทึกรูปไม่สำเร็จ");
+    }
+    setMsg("บันทึกรูปแล้ว");
+    setEditing(p => p ? { ...p, [field]: url } : p);
+    load();
+  }
+
   async function del(p: DBProject) {
     if (!confirm(`ลบโปรเจค "${p.name}"?`)) return;
     await adminFetch(`/api/admin/projects/${p.id}`, adminId, { method: "DELETE" });
@@ -8837,7 +8909,7 @@ function ProjectsTab({ adminId, role, onViewEvals }: { adminId: string; role: st
                 </div>
                 <div>
                   <label className={labelCls} style={{ color: "#9e9e9e" }}>URL Poster</label>
-                  <ImgUpload value={form.poster_url} onChange={fi("poster_url")} placeholder="https://..." adminId={adminId} folder={form.slug || undefined} />
+                  <ImgUpload value={form.poster_url} onChange={fi("poster_url")} placeholder="https://..." adminId={adminId} folder={form.slug || undefined} onUploaded={url => autoSaveProjectImage("poster_url", url)} />
                 </div>
                 <div>
                   <label className={labelCls} style={{ color: "#9e9e9e" }}>URL Demo</label>
@@ -8867,7 +8939,7 @@ function ProjectsTab({ adminId, role, onViewEvals }: { adminId: string; role: st
                 </div>
                 <div className="sm:col-span-2">
                   <label className={labelCls} style={{ color: "#9e9e9e" }}>URL รูปพื้นหลัง (BG Image)</label>
-                  <ImgUpload value={form.bg_image_url} onChange={fi("bg_image_url")} placeholder="https://... (เว้นว่างหากไม่ใช้)" adminId={adminId} folder={form.slug || undefined} />
+                  <ImgUpload value={form.bg_image_url} onChange={fi("bg_image_url")} placeholder="https://... (เว้นว่างหากไม่ใช้)" adminId={adminId} folder={form.slug || undefined} onUploaded={url => autoSaveProjectImage("bg_image_url", url)} />
                 </div>
                 <div>
                   <label className={labelCls} style={{ color: "#9e9e9e" }}>BG Size</label>
@@ -8905,11 +8977,11 @@ function ProjectsTab({ adminId, role, onViewEvals }: { adminId: string; role: st
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls} style={{ color: "#9e9e9e" }}>URL Logo</label>
-                  <ImgUpload value={form.logo_url} onChange={fi("logo_url")} placeholder="https://..." adminId={adminId} folder={form.slug || undefined} />
+                  <ImgUpload value={form.logo_url} onChange={fi("logo_url")} placeholder="https://..." adminId={adminId} folder={form.slug || undefined} onUploaded={url => autoSaveProjectImage("logo_url", url)} />
                 </div>
                 <div>
                   <label className={labelCls} style={{ color: "#9e9e9e" }}>URL Mascot</label>
-                  <ImgUpload value={form.mascot_url} onChange={fi("mascot_url")} placeholder="https://... (SVG/PNG)" adminId={adminId} folder={form.slug || undefined} />
+                  <ImgUpload value={form.mascot_url} onChange={fi("mascot_url")} placeholder="https://... (SVG/PNG)" adminId={adminId} folder={form.slug || undefined} onUploaded={url => autoSaveProjectImage("mascot_url", url)} />
                 </div>
                 <div>
                   <label className={labelCls} style={{ color: "#9e9e9e" }}>ข้อความต้อนรับ (Mascot)</label>

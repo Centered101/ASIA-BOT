@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import ProfileImageCropModal from "@/components/ProfileImageCropModal";
 import { toast } from "sonner";
 import { DEPARTMENTS, SESSION_KEY, SESSION_TIME_KEY } from "@/lib/config";
 import { getGoogleSupabase } from "@/lib/supabase-google";
@@ -88,6 +89,7 @@ function RegisterForm() {
   const [panOffset,   setPanOffset]   = useState({ x: 0, y: 0 });
   const [imgNat,      setImgNat]      = useState({ w: 0, h: 0 });
   const [cropDragging, setCropDragging] = useState(false);
+  const [cropZoom, setCropZoom] = useState(1);
   const dragD      = useRef({ mx: 0, my: 0, ox: 0, oy: 0 });
   const cropImgRef = useRef<HTMLImageElement>(null);
 
@@ -251,6 +253,7 @@ function RegisterForm() {
     setCropRawSrc(URL.createObjectURL(file));
     setImgNat({ w: 0, h: 0 });
     setPanOffset({ x: 0, y: 0 });
+    setCropZoom(1);
     setCropOpen(true);
   }
 
@@ -262,11 +265,23 @@ function RegisterForm() {
   }
 
   function cropClamp(off: { x: number; y: number }, nw: number, nh: number) {
-    const s = Math.max(CROP_SIZE / nw, CROP_SIZE / nh);
+    const s = Math.max(CROP_SIZE / nw, CROP_SIZE / nh) * cropZoom;
     return {
       x: Math.max(-(nw * s - CROP_SIZE), Math.min(0, off.x)),
       y: Math.max(-(nh * s - CROP_SIZE), Math.min(0, off.y)),
     };
+  }
+
+  function setZoomAndClamp(value: number) {
+    const zoom = Math.max(1, Math.min(3, value));
+    setCropZoom(zoom);
+    if (imgNat.w) {
+      const s = Math.max(CROP_SIZE / imgNat.w, CROP_SIZE / imgNat.h) * zoom;
+      setPanOffset(off => ({
+        x: Math.max(-(imgNat.w * s - CROP_SIZE), Math.min(0, off.x)),
+        y: Math.max(-(imgNat.h * s - CROP_SIZE), Math.min(0, off.y)),
+      }));
+    }
   }
 
   function onCropMouseDown(e: React.MouseEvent) {
@@ -282,12 +297,16 @@ function RegisterForm() {
     ));
   }
   function onCropTouchStart(e: React.TouchEvent) {
+    e.preventDefault();
+    e.stopPropagation();
     const t = e.touches[0];
     dragD.current = { mx: t.clientX, my: t.clientY, ox: panOffset.x, oy: panOffset.y };
     setCropDragging(true);
   }
   function onCropTouchMove(e: React.TouchEvent) {
     if (!cropDragging || !imgNat.w) return;
+    e.preventDefault();
+    e.stopPropagation();
     const t = e.touches[0];
     setPanOffset(cropClamp(
       { x: dragD.current.ox + t.clientX - dragD.current.mx, y: dragD.current.oy + t.clientY - dragD.current.my },
@@ -298,7 +317,7 @@ function RegisterForm() {
 
   function confirmCrop() {
     if (!cropImgRef.current || !cropRawFile || !imgNat.w) return;
-    const s = Math.max(CROP_SIZE / imgNat.w, CROP_SIZE / imgNat.h);
+    const s = Math.max(CROP_SIZE / imgNat.w, CROP_SIZE / imgNat.h) * cropZoom;
     const canvas = document.createElement("canvas");
     canvas.width = 400; canvas.height = 400;
     canvas.getContext("2d")!.drawImage(
@@ -350,7 +369,7 @@ function RegisterForm() {
   const wrapCls  = (field: keyof FormData) => `field-wrap${errs[field] ? " has-error" : ""}`;
 
   // display scale for crop modal image
-  const cropScale = imgNat.w ? Math.max(CROP_SIZE / imgNat.w, CROP_SIZE / imgNat.h) : 1;
+  const cropScale = imgNat.w ? Math.max(CROP_SIZE / imgNat.w, CROP_SIZE / imgNat.h) * cropZoom : 1;
 
   return (
     <>
@@ -764,74 +783,31 @@ function RegisterForm() {
       </main>
       <Footer />
 
-      {/* ── Crop Modal ── */}
       {cropOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[95dvh] overflow-y-auto p-5 flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-slate-800 text-sm">ครอปรูปโปรไฟล์</h3>
-                <p className="text-xs text-slate-400">ลากรูปเพื่อปรับตำแหน่ง · อัตราส่วน 1:1</p>
-              </div>
-              <button onClick={() => setCropOpen(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-400 transition">
-                <i className="fa-solid fa-xmark" />
-              </button>
-            </div>
-
-            {/* Viewport */}
-            <div className="mx-auto rounded-2xl overflow-hidden relative select-none border-2 border-slate-100"
-              style={{
-                width: CROP_SIZE, height: CROP_SIZE,
-                background: "#0f172a",
-                cursor: cropDragging ? "grabbing" : "grab",
-              }}
-              onMouseDown={onCropMouseDown}
-              onMouseMove={onCropMouseMove}
-              onMouseUp={stopCropDrag}
-              onMouseLeave={stopCropDrag}
-              onTouchStart={onCropTouchStart}
-              onTouchMove={onCropTouchMove}
-              onTouchEnd={stopCropDrag}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                ref={cropImgRef}
-                src={cropRawSrc}
-                alt="crop"
-                onLoad={onCropLoad}
-                draggable={false}
-                style={{
-                  position: "absolute",
-                  left: panOffset.x,
-                  top: panOffset.y,
-                  width:  imgNat.w ? imgNat.w * cropScale : "auto",
-                  height: imgNat.h ? imgNat.h * cropScale : "auto",
-                  pointerEvents: "none",
-                  userSelect: "none",
-                }}
-              />
-              {/* Rule-of-thirds grid */}
-              <svg className="absolute inset-0 pointer-events-none" width={CROP_SIZE} height={CROP_SIZE}>
-                <line x1={CROP_SIZE / 3}     y1={0}         x2={CROP_SIZE / 3}     y2={CROP_SIZE} stroke="rgba(255,255,255,.25)" strokeWidth="1" />
-                <line x1={CROP_SIZE * 2 / 3} y1={0}         x2={CROP_SIZE * 2 / 3} y2={CROP_SIZE} stroke="rgba(255,255,255,.25)" strokeWidth="1" />
-                <line x1={0}         y1={CROP_SIZE / 3}     x2={CROP_SIZE} y2={CROP_SIZE / 3}     stroke="rgba(255,255,255,.25)" strokeWidth="1" />
-                <line x1={0}         y1={CROP_SIZE * 2 / 3} x2={CROP_SIZE} y2={CROP_SIZE * 2 / 3} stroke="rgba(255,255,255,.25)" strokeWidth="1" />
-                <rect x={1} y={1} width={CROP_SIZE - 2} height={CROP_SIZE - 2} fill="none" stroke="white" strokeWidth="2" rx="14" />
-              </svg>
-            </div>
-
-            <div className="flex gap-3">
-              <button onClick={() => setCropOpen(false)}
-                className="btn-secondary flex-1 flex items-center justify-center gap-1.5 text-sm py-2">
-                <i className="fa-solid fa-xmark" />ยกเลิก
-              </button>
-              <button onClick={confirmCrop}
-                className="btn-primary flex-1 flex items-center justify-center gap-1.5 text-sm py-2">
-                <i className="fa-solid fa-check" />ยืนยันครอป
-              </button>
-            </div>
-          </div>
-        </div>
+        <ProfileImageCropModal
+          title="ครอปรูปโปรไฟล์"
+          subtitle="ลากรูปเพื่อปรับตำแหน่ง · อัตราส่วน 1:1"
+          imageSrc={cropRawSrc}
+          imageRef={cropImgRef}
+          cropSize={CROP_SIZE}
+          panOffset={panOffset}
+          imageNaturalSize={imgNat}
+          cropScale={cropScale}
+          isDragging={cropDragging}
+          onClose={() => setCropOpen(false)}
+          onConfirm={confirmCrop}
+          onImageLoad={onCropLoad}
+          onMouseDown={onCropMouseDown}
+          onMouseMove={onCropMouseMove}
+          onMouseUp={stopCropDrag}
+          onTouchStart={onCropTouchStart}
+          onTouchMove={onCropTouchMove}
+          onTouchEnd={stopCropDrag}
+          showZoom
+          zoomValue={cropZoom}
+          onZoomChange={setZoomAndClamp}
+          confirmLabel={<><i className="fa-solid fa-check" />ยืนยันครอป</>}
+        />
       )}
     </>
   );

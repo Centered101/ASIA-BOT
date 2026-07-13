@@ -36,9 +36,10 @@ ASIA-BOT คือระบบเว็บแอปสำหรับบริ�
 - Feedback และคำขอแก้ไขข้อมูลนักเรียน
 - Admin Panel แบบ Single-page พร้อม Role-based Access (superadmin / admin / staff)
 - LINE Flex Messages 5 ประเภทและการส่งข่าวสารจริง
-- **ASIA-BOT AI** — ผู้ช่วย AI ส่วนกลาง (Claude) ที่ตอบคำถามและ **ทำงานแทนได้** (จองห้อง/สั่งอาหาร/ค้นเอกสาร) ผ่านทั้งเว็บและ LINE
+- **ASIA-BOT AI** — ผู้ช่วย AI ส่วนกลาง (Claude) ที่ตอบคำถามและ **ทำงานแทนได้** (จองห้อง/ส่ง feedback/ค้นเอกสาร) ผ่านทั้งเว็บและ LINE
 
-> รายงานโครงงานฉบับสมบูรณ์อยู่ที่ [docs/report.md](./docs/report.md)
+> รายงานโครงงานฉบับสมบูรณ์อยู่ที่ [docs/report.md](./docs/report.md)  
+> เอกสารกำกับการใช้งาน: [คู่มือผู้ใช้](./docs/user-manual.md), [นโยบายความเป็นส่วนตัว](./docs/privacy-policy.md), [เงื่อนไขการใช้งาน](./docs/terms-of-service.md)
 
 ---
 
@@ -59,7 +60,7 @@ ASIA-BOT คือระบบเว็บแอปสำหรับบริ�
 | Admin Roles | superadmin, admin, staff พร้อมการจำกัดสิทธิ์แต่ละ tab |
 | LINE Broadcast | ส่งข่าวสาร LINE จริง ทั้งข้อความ รูปภาพ Flex ข่าวสาร ด่วน กิจกรรม และ Custom JSON |
 | LINE Flex Test | ทดสอบ Order, Feedback, RFID, Booking, Student Data Change และ Custom JSON |
-| **AI Agent (ASIA-BOT AI)** | ผู้ช่วย AI ส่วนกลาง (Claude Haiku) แบบ tool-calling — ดูข้อมูล + ทำ action (จองห้อง/สั่งอาหาร/ยกเลิก/ค้น PDF) พร้อม RBAC, conversation memory และ rich card |
+| **AI Agent (ASIA-BOT AI)** | ผู้ช่วย AI ส่วนกลาง (Claude Haiku) แบบ tool-calling — ดูข้อมูล + ทำ action (จองห้อง/ส่ง feedback/ยกเลิก/ค้น PDF) พร้อม RBAC, conversation memory, rich card และ Markdown table |
 | AI Channels | ใช้ agent core เดียวกันทั้ง **เว็บ** (`ChatBubble`) และ **LINE** (webhook) — แยกธีม student/admin |
 | Mascot System | คาแรกเตอร์ ASIA-BOT 12 อารมณ์ ใช้ใน empty state / สถานะต่างๆ ผ่าน `<Mascot>` component |
 | Analytics | Vercel Analytics ผ่าน `@vercel/analytics/next` |
@@ -306,7 +307,7 @@ ASIA-BOT AI คือผู้ช่วย AI ส่วนกลางที่�
 | ประเภท | Tools |
 |---|---|
 | ดูข้อมูล | เข้า-ออกโรงเรียน (รายวัน/สรุป/ช่วงเวลา), ตารางเรียน, การจอง, ออเดอร์, สินค้า, โปรไฟล์ |
-| **ทำ action** | `create_booking` / `cancel_booking` (จองห้อง), `place_order` / `cancel_order` (สั่ง/ยกเลิกอาหาร), `submit_feedback` |
+| **ทำ action** | `create_booking` / `cancel_booking` (จองห้อง), `submit_feedback`, และ action อื่นตามสิทธิ์ที่เปิดใช้งานในระบบ |
 | ค้นเอกสาร | `list_documents` / `search_documents` — ถาม-ตอบจากไฟล์ PDF ที่อัปโหลด |
 | Admin | สถิติโรงเรียน, ค้นหานักเรียน, ดู feedback/ออเดอร์/การจองทั้งหมด |
 

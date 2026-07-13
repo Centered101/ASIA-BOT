@@ -6,12 +6,17 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import ProfileImageCropModal from "@/components/ProfileImageCropModal";
 import { toast } from "sonner";
 import { SESSION_KEY, SESSION_TIME_KEY, SESSION_TTL, DEPARTMENTS } from "@/lib/config";
 import type { Database } from "@/types/database";
 import QRCode from "qrcode";
 import { getGoogleSupabase } from "@/lib/supabase-google";
 import { safeImageSrc } from "@/lib/image-url";
+import { Chart, registerables } from "chart.js";
+import { Bar, Doughnut } from "react-chartjs-2";
+
+Chart.register(...registerables);
 
 type Student = Database["public"]["Tables"]["students"]["Row"] & {
   photo_url?: string | null;
@@ -19,6 +24,23 @@ type Student = Database["public"]["Tables"]["students"]["Row"] & {
   google_id?: string | null;
   google_name?: string | null;
   google_avatar_url?: string | null;
+};
+
+type StudentActivityStats = {
+  activity: { label: string; value: number }[];
+  statusBreakdown: { label: string; value: number }[];
+  summary: {
+    totalSpent: number;
+    paidOrders: number;
+    borrowedQuantity: number;
+    activeRequests: number;
+  };
+  recent: {
+    type: "shop" | "booking" | "equipment" | "feedback";
+    title: string;
+    status: string;
+    created_at: string;
+  }[];
 };
 
 const CROP_SIZE = 280;
@@ -45,6 +67,8 @@ export default function StudentPage() {
   const [saving, setSaving] = useState(false);
   const [requesting, setRequesting] = useState(false);
   const [adminRole, setAdminRole] = useState<string | null>(null);
+  const [activityStats, setActivityStats] = useState<StudentActivityStats | null>(null);
+  const [activityLoading, setActivityLoading] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [googleLinking, setGoogleLinking] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -156,6 +180,8 @@ export default function StudentPage() {
   }
 
   function onCropTouchStart(e: React.TouchEvent) {
+    e.preventDefault();
+    e.stopPropagation();
     const t = e.touches[0];
     dragD.current = { mx: t.clientX, my: t.clientY, ox: panOffset.x, oy: panOffset.y };
     setCropDragging(true);
@@ -163,6 +189,8 @@ export default function StudentPage() {
 
   function onCropTouchMove(e: React.TouchEvent) {
     if (!cropDragging || !imgNat.w) return;
+    e.preventDefault();
+    e.stopPropagation();
     const t = e.touches[0];
     setPanOffset(cropClamp(
       { x: dragD.current.ox + t.clientX - dragD.current.mx, y: dragD.current.oy + t.clientY - dragD.current.my },
@@ -305,12 +333,29 @@ export default function StudentPage() {
 
   useEffect(() => {
     if (!student) return;
-    const isPvs = student.program === "ปวส";
+    let cancelled = false;
+    setActivityLoading(true);
+    fetch(`/api/student/activity?student_id=${encodeURIComponent(student.student_id)}`)
+      .then(r => r.json())
+      .then(j => {
+        if (!cancelled && j?.status === "success") setActivityStats(j.data ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setActivityStats(null);
+      })
+      .finally(() => {
+        if (!cancelled) setActivityLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [student?.student_id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!student) return;
     QRCode.toDataURL(String(student.student_id), {
-      width: 108,
-      margin: 1,
+      width: 180,
+      margin: 2,
       errorCorrectionLevel: "H",
-      color: { dark: isPvs ? "#DC2626" : "#0EA5E9", light: "#FFFFFF" },
+      color: { dark: "#0EA5E9", light: "#FFFFFF" },
     }).then(setQrUrl);
   }, [student]);
 
@@ -476,6 +521,46 @@ export default function StudentPage() {
   const cardShadow = isPvs
     ? "0 24px 60px rgba(239,68,68,0.42)"
     : "0 24px 60px rgba(14,165,233,0.38)";
+  const activityItems = activityStats?.activity ?? [
+    { label: "ซื้อสหกรณ์", value: 0 },
+    { label: "จองห้อง", value: 0 },
+    { label: "เบิกคุรุภัณฑ์", value: 0 },
+    { label: "ส่งเรื่อง", value: 0 },
+  ];
+  const statusItems = activityStats?.statusBreakdown?.length
+    ? activityStats.statusBreakdown
+    : [{ label: "ยังไม่มีรายการ", value: 1 }];
+  const activityTotal = activityItems.reduce((sum, item) => sum + item.value, 0);
+  const maxActivityValue = Math.max(3, ...activityItems.map(item => item.value));
+  const baht = new Intl.NumberFormat("th-TH", { maximumFractionDigits: 0 });
+  const activityTypeIcon: Record<StudentActivityStats["recent"][number]["type"], string> = {
+    shop: "fa-store",
+    booking: "fa-calendar-check",
+    equipment: "fa-box-open",
+    feedback: "fa-comment-dots",
+  };
+  const activityStatusLabel: Record<string, string> = {
+    pending: "รอดำเนินการ",
+    paid: "ชำระแล้ว",
+    approved: "อนุมัติแล้ว",
+    picked_up: "รับแล้ว",
+    returned: "คืนแล้ว",
+    rejected: "ไม่ผ่าน",
+    cancelled: "ยกเลิก",
+    refunded: "คืนเงิน",
+    in_progress: "กำลังดำเนินการ",
+    resolved: "เสร็จแล้ว",
+  };
+  const studentChartText = "#64748B";
+  const studentBarOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: { enabled: true } },
+    scales: {
+      x: { grid: { display: false }, ticks: { color: studentChartText, font: { family: "Kanit, sans-serif", size: 10 } } },
+      y: { beginAtZero: true, suggestedMax: maxActivityValue, grid: { color: "rgba(148,163,184,0.18)" }, ticks: { precision: 0, color: studentChartText, font: { family: "Kanit, sans-serif", size: 10 } } },
+    },
+  } as const;
 
   return (
     <>
@@ -521,10 +606,10 @@ export default function StudentPage() {
       </div>
 
       <main className="min-h-screen max-w-6xl mx-auto px-3 sm:px-6 py-8 pb-16 relative z-10">
-        <div className="flex flex-col md:flex-row gap-8 items-start">
+        <div className="flex flex-col md:flex-row gap-6 lg:gap-8 items-start">
 
           {/* ── LEFT: Flip Card ── */}
-          <div className="w-full md:max-w-[400px] flex-shrink-0">
+          <div className="w-full md:basis-[400px] lg:basis-[420px] flex-shrink-0">
             <p data-aos="fade-up" className="text-xs font-bold tracking-widest text-slate-500 uppercase flex items-center gap-1.5 mb-3">
               <i className="fa-solid fa-id-card text-primary-dark" /> บัตรประจำตัวนักเรียน
             </p>
@@ -623,7 +708,7 @@ export default function StudentPage() {
                         </div>
                       </div>
 
-                      {/* QR Code + favicon overlay */}
+                      {/* QR Code */}
                       <div className="flex flex-col items-center gap-0.5 flex-shrink-0">
                         <div className="relative bg-white rounded shadow-lg"
                           style={{ padding: "clamp(2px,0.6vw,4px)" }}>
@@ -631,11 +716,10 @@ export default function StudentPage() {
                             ? <img src={qrUrl} alt="QR" style={{ display: "block", width: "clamp(40px,11vw,56px)", height: "clamp(40px,11vw,56px)" }} />
                             : <div style={{ width: "clamp(40px,11vw,56px)", height: "clamp(40px,11vw,56px)" }} />
                           }
-                          {/* favicon logo centered on QR */}
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src="/favicon.png" alt="logo"
-                            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-sm shadow"
-                            style={{ width: "clamp(10px,3vw,16px)", height: "clamp(10px,3vw,16px)" }} />
+                            className="absolute top-1/2 left-1/2 block -translate-x-1/2 -translate-y-1/2 object-contain"
+                            style={{ width: "clamp(12px,3.2vw,18px)", height: "clamp(12px,3.2vw,18px)" }} />
                         </div>
                         <span className="text-white/55 font-bold uppercase tracking-wider" style={{ fontSize: "clamp(4px,1.1vw,6px)" }}>
                           QR Code
@@ -768,6 +852,130 @@ export default function StudentPage() {
                   <span className={`text-sm font-semibold flex-1 ${row.cls || "text-slate-800"}`}>{String(row.val)}</span>
                 </div>
               ))}
+              <div className="flex justify-end pt-3">
+                <button
+                  type="button"
+                  onClick={openEdit}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-[11px] font-bold text-sky-600 transition hover:bg-sky-100 active:scale-[0.97]"
+                >
+                  <i className="fa-solid fa-pen-to-square text-[10px]" />
+                  แก้ไข
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div className="mt-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+              <div className="rounded-2xl border border-sky-100 bg-white/80 p-3.5">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <i className="fa-solid fa-chart-column text-primary-dark" /> กิจกรรมของฉัน
+                  </div>
+                  <span className="text-[11px] font-black text-sky-500">
+                    {activityLoading ? "กำลังโหลด" : `${activityTotal} รายการ`}
+                  </span>
+                </div>
+                <div className="relative h-[150px]">
+                  <Bar
+                    data={{
+                      labels: activityItems.map(item => item.label),
+                      datasets: [{
+                        label: "จำนวนครั้ง",
+                        data: activityItems.map(item => item.value),
+                        backgroundColor: ["#0EA5E9", "#F59E0B", "#EF4444", "#14B8A6"],
+                        borderRadius: 8,
+                        borderSkipped: false,
+                      }],
+                    }}
+                    options={studentBarOptions}
+                  />
+                </div>
+                {activityTotal === 0 && !activityLoading && (
+                  <p className="mt-2 text-[11px] text-slate-400">ยังไม่มีประวัติการใช้งานในระบบ</p>
+                )}
+              </div>
+
+              <div className="rounded-2xl border border-slate-100 bg-white/80 p-3.5">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <i className="fa-solid fa-chart-pie text-primary-dark" /> สถานะคำขอของฉัน
+                  </div>
+                  <span className="text-[11px] font-bold text-slate-400">
+                    {activityStats?.summary.activeRequests ?? 0} กำลังดำเนินการ
+                  </span>
+                </div>
+                <div className="relative h-[150px]">
+                  <Doughnut
+                    data={{
+                      labels: statusItems.map(item => item.label),
+                      datasets: [{
+                        data: statusItems.map(item => item.value),
+                        backgroundColor: statusItems[0]?.label === "ยังไม่มีรายการ"
+                          ? ["#E2E8F0"]
+                          : ["#F59E0B", "#3B82F6", "#22C55E", "#EF4444", "#14B8A6", "#6366F1", "#EC4899"],
+                        borderColor: "#fff",
+                        borderWidth: 4,
+                      }],
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      cutout: "68%",
+                      plugins: {
+                        legend: { position: "bottom", labels: { boxWidth: 10, usePointStyle: true, color: studentChartText, font: { family: "Kanit, sans-serif", size: 10 } } },
+                      },
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-100 bg-white/80 p-3.5 mb-4">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <i className="fa-solid fa-clock-rotate-left text-primary-dark" /> ประวัติล่าสุด
+                </div>
+                <span className="text-[11px] font-bold text-slate-400">
+                  ฿{baht.format(activityStats?.summary.totalSpent ?? 0)} จากสหกรณ์
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                {[
+                  { label: "ออเดอร์สำเร็จ", value: activityStats?.summary.paidOrders ?? 0, icon: "fa-receipt", color: "#0EA5E9" },
+                  { label: "จำนวนที่เบิก", value: activityStats?.summary.borrowedQuantity ?? 0, icon: "fa-boxes-stacked", color: "#EF4444" },
+                ].map(item => (
+                  <div key={item.label} className="rounded-xl bg-slate-50 border border-slate-100 px-3 py-2">
+                    <div className="flex items-center gap-2 text-[11px] text-slate-400 font-bold">
+                      <i className={`fa-solid ${item.icon}`} style={{ color: item.color }} />
+                      {item.label}
+                    </div>
+                    <div className="mt-1 text-lg font-black text-slate-800">{item.value}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-2">
+                {activityStats?.recent.length ? activityStats.recent.map(item => (
+                  <div key={`${item.type}-${item.created_at}-${item.title}`} className="flex items-center gap-3 rounded-xl bg-slate-50 border border-slate-100 px-3 py-2">
+                    <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-slate-500">
+                      <i className={`fa-solid ${activityTypeIcon[item.type]} text-xs`} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold text-slate-700 truncate">{item.title}</div>
+                      <div className="text-[10px] text-slate-400">{new Date(item.created_at).toLocaleDateString("th-TH")}</div>
+                    </div>
+                    <span className="text-[10px] font-black text-slate-500 bg-white rounded-full px-2 py-1 border border-slate-100">
+                      {activityStatusLabel[item.status] ?? item.status}
+                    </span>
+                  </div>
+                )) : (
+                  <div className="rounded-xl bg-slate-50 border border-dashed border-slate-200 px-3 py-4 text-center text-[11px] text-slate-400">
+                    ยังไม่มีประวัติล่าสุด
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className={`rounded-2xl border px-3.5 py-3 mb-4 flex items-start gap-3 ${isGoogleLinked ? "bg-sky-50 border-sky-100" : "bg-slate-50 border-slate-200"}`}>
@@ -798,44 +1006,52 @@ export default function StudentPage() {
               </div>
             </div>
 
-            <button onClick={openEdit}
-              className="btn-ghost w-full text-blue-500 text-sm overflow-hidden mb-3"
-              style={{ background: "#EFF6FF", borderColor: "rgba(37,99,235,0.5)" }}>
-              <i className="fa-solid fa-pen-to-square text-[13px]" /> แก้ไขข้อมูล
-            </button>
-
-            <button onClick={() => { toast.info("ออกจากระบบแล้ว"); setTimeout(doLogout, 600); }}
-              className="btn-ghost w-full text-red-500 text-sm overflow-hidden"
-              style={{ background: "#FEF2F2", borderColor: "rgba(239,68,68,0.5)" }}>
-              <i className="fa-solid fa-right-from-bracket text-[13px]" /> ออกจากระบบ
-            </button>
-          </div>
         </div>
 
         {/* ── Student services ── */}
         <div className="mt-10">
-          <p data-aos="fade-up" className="text-xs font-bold tracking-widest text-slate-500 uppercase flex items-center gap-1.5 mb-4">
-            <i className="fa-solid fa-compass text-primary-dark" /> บริการสำหรับนักเรียน
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div data-aos="fade-up" className="flex items-end justify-between gap-3 mb-4">
+            <div>
+              <p className="text-xs font-bold tracking-widest text-slate-500 uppercase flex items-center gap-1.5">
+                <i className="fa-solid fa-compass text-primary-dark" /> บริการสำหรับนักเรียน
+              </p>
+              <p className="text-[11px] text-slate-400 mt-1">ทางลัดสำหรับดูข้อมูล จอง และส่งคำขอที่ใช้บ่อย</p>
+            </div>
+            <span className="shrink-0 text-[11px] font-bold text-slate-500 bg-white/80 border border-slate-200 rounded-full px-3 py-1 shadow-sm">
+              ใช้งานเร็ว
+            </span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {([
-              { icon: "fa-solid fa-folder-open",     color: "#6366F1", bg: "#EEF2FF", path: "/projects",               title: "ประเมินโปรเจค",  desc: "ผลงานนักเรียน"          },
-              { icon: "fa-solid fa-calendar-check",  color: "#F59E0B", bg: "#FFFBEB", path: "/class-track-room?view=booking", title: "จองห้อง",        desc: "ห้องประชุม/ห้องเรียน"  },
-              { icon: "fa-solid fa-store",           color: "#EC4899", bg: "#FDF2F8", path: "/shop",                    title: "สหกรณ์",         desc: "ซื้อสินค้าในโรงเรียน" },
-              { icon: "fa-solid fa-chalkboard-user", color: "#7C3AED", bg: "#F5F3FF", path: "/class-track-room",        title: "Class Track",    desc: "ติดตามห้องเรียน"       },
-              { icon: "fa-solid fa-comment-dots",    color: "#14B8A6", bg: "#F0FDFA", path: "/feedback",                title: "ความคิดเห็น",    desc: "ข้อเสนอแนะ"            },
-            ] as { icon: string; color: string; bg: string; path: string; title: string; desc: string }[]).map((item, i) => (
+              { icon: "fa-solid fa-calendar-days",     color: "#3B82F6", bg: "#EFF6FF", path: "/class-track-room?view=classroom", title: "ตารางเรียน",       desc: "ดูห้องเรียนวันนี้",      tag: "เรียน" },
+              { icon: "fa-solid fa-calendar-check",    color: "#F59E0B", bg: "#FFFBEB", path: "/class-track-room?view=booking",   title: "จองห้อง",          desc: "ห้องประชุม/ห้องเรียน",  tag: "จอง" },
+              { icon: "fa-solid fa-box-open",          color: "#EF4444", bg: "#FEF2F2", path: "/equipment-request",              title: "เบิกคุรุภัณฑ์",     desc: "เลือกและส่งคำขอ",       tag: "คำขอ" },
+              { icon: "fa-solid fa-store",             color: "#EC4899", bg: "#FDF2F8", path: "/shop",                           title: "สหกรณ์",           desc: "ซื้อสินค้าในโรงเรียน",  tag: "Shop" },
+              { icon: "fa-solid fa-folder-open",       color: "#6366F1", bg: "#EEF2FF", path: "/projects",                       title: "ประเมินโปรเจค",    desc: "ผลงานและการประเมิน",    tag: "งาน" },
+              { icon: "fa-solid fa-comment-dots",      color: "#14B8A6", bg: "#F0FDFA", path: "/feedback",                       title: "ความคิดเห็น",      desc: "แจ้งปัญหา/ข้อเสนอแนะ", tag: "ติดต่อ" },
+            ] as { icon: string; color: string; bg: string; path: string; title: string; desc: string; tag: string }[]).map((item, i) => (
               <Link key={item.path} href={item.path}
                 data-aos="zoom-in-up" data-aos-delay={String(i * 50)}
-                className="flex flex-col gap-3 p-4 rounded-2xl border transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:scale-[0.97]"
+                className="group relative min-h-[128px] flex flex-col gap-3 p-4 rounded-2xl border overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:scale-[0.97]"
                 style={{ background: item.bg, borderColor: item.color + "25" }}>
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-                  style={{ background: item.color + "18", color: item.color }}>
-                  <i className={`${item.icon} text-sm`} />
+                <div className="flex items-start justify-between gap-2">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                    style={{ background: item.color + "18", color: item.color }}>
+                    <i className={`${item.icon} text-sm`} />
+                  </div>
+                  <span className="text-[10px] font-black rounded-full px-2 py-0.5"
+                    style={{ background: item.color + "16", color: item.color }}>
+                    {item.tag}
+                  </span>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="text-sm font-bold text-slate-800">{item.title}</div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">{item.desc}</div>
+                  <div className="text-[11px] leading-snug text-slate-400 mt-1">{item.desc}</div>
+                </div>
+                <div className="mt-auto flex items-center justify-between text-[11px] font-bold"
+                  style={{ color: item.color }}>
+                  <span>เปิดบริการ</span>
+                  <i className="fa-solid fa-arrow-right transition-transform group-hover:translate-x-1" />
                 </div>
               </Link>
             ))}
@@ -1011,85 +1227,33 @@ export default function StudentPage() {
       </div>
 
       {portalReady && cropOpen && createPortal((
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/55 backdrop-blur-sm p-3 sm:p-4">
-          <div className="bg-white rounded-[28px] shadow-2xl w-full max-w-md max-h-[95dvh] overflow-y-auto flex flex-col">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-              <div>
-                <h3 className="font-semibold text-slate-900 text-base">เปลี่ยนรูปโปรไฟล์</h3>
-                <p className="text-xs text-slate-500 mt-0.5">ปรับรูปให้พอดีกับกรอบวงกลม</p>
-              </div>
-              <button onClick={closeCrop}
-                className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-500 transition">
-                <i className="fa-solid fa-xmark" />
-              </button>
-            </div>
-
-            <div className="px-5 py-6 flex flex-col items-center gap-5">
-              <div className="relative rounded-full overflow-hidden select-none bg-slate-950 shadow-inner"
-                style={{
-                  width: CROP_SIZE, height: CROP_SIZE,
-                  cursor: cropDragging ? "grabbing" : "grab",
-                  maxWidth: "min(280px, calc(100vw - 56px))",
-                  maxHeight: "min(280px, calc(100vw - 56px))",
-                }}
-                onMouseDown={onCropMouseDown}
-                onMouseMove={onCropMouseMove}
-                onMouseUp={stopCropDrag}
-                onMouseLeave={stopCropDrag}
-                onTouchStart={onCropTouchStart}
-                onTouchMove={onCropTouchMove}
-                onTouchEnd={stopCropDrag}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  ref={cropImgRef}
-                  src={cropRawSrc}
-                  alt="crop"
-                  onLoad={onCropLoad}
-                  draggable={false}
-                  style={{
-                    position: "absolute",
-                    left: panOffset.x,
-                    top: panOffset.y,
-                    width: imgNat.w ? imgNat.w * cropScale : "auto",
-                    height: imgNat.h ? imgNat.h * cropScale : "auto",
-                    pointerEvents: "none",
-                    userSelect: "none",
-                  }}
-                />
-                <div className="absolute inset-0 rounded-full ring-2 ring-white/95 ring-inset pointer-events-none" />
-                <div className="absolute inset-0 pointer-events-none" style={{ boxShadow: "inset 0 0 0 999px rgba(15,23,42,.14)" }} />
-              </div>
-
-              <div className="w-full flex items-center gap-3 px-1">
-                <i className="fa-solid fa-image text-slate-400 text-xs" />
-                <input
-                  aria-label="ซูมรูป"
-                  type="range"
-                  min="1"
-                  max="3"
-                  step="0.05"
-                  value={cropZoom}
-                  onChange={e => setZoomAndClamp(Number(e.target.value))}
-                  className="w-full accent-sky-500"
-                />
-                <i className="fa-solid fa-image text-slate-500 text-base" />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100">
-              <button onClick={closeCrop}
-                className="px-4 py-2 rounded-full text-sm font-semibold text-sky-600 hover:bg-sky-50 transition">
-                ยกเลิก
-              </button>
-              <button onClick={confirmCrop} disabled={uploadingPhoto}
-                className="px-5 py-2 rounded-full text-sm font-semibold text-white bg-sky-500 hover:bg-sky-600 disabled:opacity-60 transition inline-flex items-center gap-2">
-                {uploadingPhoto
-                  ? <><span className="spinner w-4 h-4 border-2 border-white border-t-transparent inline-block" />กำลังบันทึก</>
-                  : "บันทึกเป็นรูปโปรไฟล์"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ProfileImageCropModal
+          title="เปลี่ยนรูปโปรไฟล์"
+          subtitle="ลากรูปเพื่อปรับตำแหน่ง · อัตราส่วน 1:1"
+          imageSrc={cropRawSrc}
+          imageRef={cropImgRef}
+          cropSize={CROP_SIZE}
+          panOffset={panOffset}
+          imageNaturalSize={imgNat}
+          cropScale={cropScale}
+          isDragging={cropDragging}
+          onClose={closeCrop}
+          onConfirm={confirmCrop}
+          onImageLoad={onCropLoad}
+          onMouseDown={onCropMouseDown}
+          onMouseMove={onCropMouseMove}
+          onMouseUp={stopCropDrag}
+          onTouchStart={onCropTouchStart}
+          onTouchMove={onCropTouchMove}
+          onTouchEnd={stopCropDrag}
+          showZoom
+          zoomValue={cropZoom}
+          onZoomChange={setZoomAndClamp}
+          confirmDisabled={uploadingPhoto}
+          confirmLabel={uploadingPhoto
+            ? <><span className="spinner w-4 h-4 border-2 border-white border-t-transparent inline-block" />กำลังบันทึก</>
+            : "บันทึกเป็นรูปโปรไฟล์"}
+        />
       ), document.body)}
 
       <Footer />

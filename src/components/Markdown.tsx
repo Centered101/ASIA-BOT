@@ -129,6 +129,26 @@ function parseInline(text: string, keyPrefix: string, theme: InlineTheme): React
 
 const HEADING_SIZE: Record<number, number> = { 1: 17, 2: 16, 3: 15, 4: 14, 5: 13.5, 6: 13 };
 
+function splitTableRow(line: string): string[] {
+  let trimmed = line.trim();
+  if (trimmed.startsWith("|")) trimmed = trimmed.slice(1);
+  if (trimmed.endsWith("|")) trimmed = trimmed.slice(0, -1);
+  return trimmed.split("|").map(cell => cell.trim());
+}
+
+function isTableSeparator(line: string): boolean {
+  const cells = splitTableRow(line);
+  return cells.length >= 2 && cells.every(cell => /^:?-{3,}:?$/.test(cell.trim()));
+}
+
+function isTableStart(lines: string[], index: number): boolean {
+  return (
+    index + 1 < lines.length &&
+    lines[index].includes("|") &&
+    isTableSeparator(lines[index + 1])
+  );
+}
+
 export default function Markdown({ text, textColor, accent, isDark }: MarkdownProps) {
   const theme: InlineTheme = { accent, isDark };
   const lines = text.replace(/\r\n/g, "\n").split("\n");
@@ -171,6 +191,83 @@ export default function Markdown({ text, textColor, accent, isDark }: MarkdownPr
         >
           <code>{buf.join("\n")}</code>
         </pre>,
+      );
+      continue;
+    }
+
+    // pipe table
+    if (isTableStart(lines, i)) {
+      const headers = splitTableRow(lines[i]);
+      i += 2; // consume header + separator
+      const rows: string[][] = [];
+      while (i < lines.length && lines[i].trim() !== "" && lines[i].includes("|")) {
+        const row = splitTableRow(lines[i]);
+        rows.push(headers.map((_, idx) => row[idx] ?? ""));
+        i++;
+      }
+
+      blocks.push(
+        <div
+          key={key++}
+          style={{
+            margin: blocks.length ? "8px 0" : "0 0 8px",
+            overflowX: "auto",
+            border: `1px solid ${isDark ? "#333" : "#dbeafe"}`,
+            borderRadius: 10,
+            background: isDark ? "rgba(255,255,255,0.04)" : "#fff",
+          }}
+        >
+          <table
+            style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              minWidth: headers.length > 2 ? 320 : 220,
+              fontSize: 12,
+              lineHeight: 1.45,
+            }}
+          >
+            <thead>
+              <tr>
+                {headers.map((cell, idx) => (
+                  <th
+                    key={idx}
+                    style={{
+                      textAlign: "left",
+                      padding: "7px 9px",
+                      color: isDark ? "#fff" : "#0f172a",
+                      background: isDark ? "rgba(255,112,112,0.14)" : `${accent}12`,
+                      borderBottom: `1px solid ${isDark ? "#333" : "#dbeafe"}`,
+                      fontWeight: 800,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {parseInline(cell, `th${key}-${idx}`, theme)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, rIdx) => (
+                <tr key={rIdx}>
+                  {row.map((cell, cIdx) => (
+                    <td
+                      key={cIdx}
+                      style={{
+                        padding: "7px 9px",
+                        color: textColor,
+                        borderTop: rIdx === 0 ? "none" : `1px solid ${isDark ? "#2a2a2a" : "#eef2ff"}`,
+                        verticalAlign: "top",
+                        fontWeight: cIdx === 0 ? 700 : 600,
+                      }}
+                    >
+                      {parseInline(cell, `td${key}-${rIdx}-${cIdx}`, theme)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>,
       );
       continue;
     }
@@ -273,6 +370,7 @@ export default function Markdown({ text, textColor, accent, isDark }: MarkdownPr
       !/^\s*>\s?/.test(lines[i]) &&
       !/^\s*[-*+]\s+/.test(lines[i]) &&
       !/^\s*\d+[.)]\s+/.test(lines[i]) &&
+      !isTableStart(lines, i) &&
       !/^\s*([-*_])(\s*\1){2,}\s*$/.test(lines[i])
     ) {
       para.push(lines[i]);

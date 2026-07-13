@@ -25,8 +25,22 @@ const STUDENT_SESSION_KEY  = "asia_lb_session";
 const STUDENT_TIME_KEY     = "asia_lb_session_time";
 const STUDENT_SESSION_TTL  = 7 * 24 * 60 * 60 * 1000;
 
-const STUDENT_QUICK_REPLIES = ["ฉันเข้าโรงเรียนวันนี้หรือยัง", "ตารางเรียนวันนี้", "จองห้องเรียน", "สั่งอาหารสหกรณ์"];
-const ADMIN_QUICK_REPLIES   = ["สถิตินักเรียนวันนี้", "การจองห้องรอ approve", "ดู feedback ทั้งหมด", "รายงานการเข้าออก"];
+const STUDENT_QUICK_REPLIES = [
+  "ตารางเรียนวันนี้",
+  "จองห้องเรียน",
+  "เบิกคุรุภัณฑ์",
+  "ขอดูข้อมูลของฉัน",
+  "ประเมินโปรเจค",
+  "แจ้งปัญหา/ข้อเสนอแนะ",
+];
+const ADMIN_QUICK_REPLIES   = [
+  "สถิตินักเรียนวันนี้",
+  "จองรออนุมัติ",
+  "ข้อเสนอแนะ",
+  "ออเดอร์ล่าสุด",
+  "คำขอคุรุภัณฑ์",
+  "ค้นหานักเรียน",
+];
 const BTN = 52;
 const GAP = 8;
 
@@ -239,6 +253,11 @@ export default function ChatBubble() {
   const abortRef  = useRef<AbortController | null>(null);
   const drag      = useRef({ startX: 0, startY: 0, startR: 16, startB: 16, moved: false });
 
+  const minBubbleBottom = useCallback(() => {
+    const isAdmin = window.location.pathname.startsWith("/admin");
+    return isAdmin && window.innerWidth < 640 ? 88 : GAP;
+  }, []);
+
   // ── Read session (student/admin) from storage ──────────────────────────────
   const readSession = useCallback(() => {
     const isAdmin = window.location.pathname.startsWith("/admin");
@@ -291,13 +310,16 @@ export default function ChatBubble() {
       const saved = localStorage.getItem("asia-bot-bubble-pos");
       if (saved) {
         const p = JSON.parse(saved) as Pos;
+        const minB = minBubbleBottom();
         setPos({
           r: Math.max(GAP, Math.min(window.innerWidth  - BTN - GAP, p.r)),
-          b: Math.max(GAP, Math.min(window.innerHeight - BTN - GAP, p.b)),
+          b: Math.max(minB, Math.min(window.innerHeight - BTN - GAP, p.b)),
         });
+      } else if (window.location.pathname.startsWith("/admin") && window.innerWidth < 640) {
+        setPos({ r: 16, b: 88 });
       }
     } catch { /* silent */ }
-  }, [readSession]);
+  }, [readSession, minBubbleBottom]);
 
   // Re-check session every time the chat window opens, and on every route change —
   // this component stays mounted across navigation (e.g. to /login and back via
@@ -334,9 +356,10 @@ export default function ChatBubble() {
     const dx = e.clientX - drag.current.startX;
     const dy = e.clientY - drag.current.startY;
     if (Math.abs(dx) > 4 || Math.abs(dy) > 4) drag.current.moved = true;
+    const minB = minBubbleBottom();
     setPos({
       r: Math.max(GAP, Math.min(window.innerWidth  - BTN - GAP, drag.current.startR - dx)),
-      b: Math.max(GAP, Math.min(window.innerHeight - BTN - GAP, drag.current.startB - dy)),
+      b: Math.max(minB, Math.min(window.innerHeight - BTN - GAP, drag.current.startB - dy)),
     });
   };
 
@@ -511,7 +534,7 @@ export default function ChatBubble() {
                 <div style={{ fontWeight: 700, fontSize: 16, color: T.botText, marginBottom: 6 }}>กรุณาเข้าสู่ระบบก่อน</div>
                 <div style={{ fontSize: 13, color: T.mutedText, lineHeight: 1.7 }}>
                   ASIA-BOT AI สามารถตอบคำถามเฉพาะตัวได้<br />
-                  เช่น การเข้าออกโรงเรียน, ตารางเรียน,<br />
+                  เช่น ตารางเรียน, การจองห้อง,<br />
                   คำสั่งซื้อ และข้อมูลส่วนตัวของคุณ
                 </div>
               </div>
@@ -533,8 +556,8 @@ export default function ChatBubble() {
               {/* ── Messages ──────────────────────────────────────────── */}
               <div style={{ flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
                 {messages.length === 0 && (
-                  <div style={{ textAlign: "center", padding: "24px 8px" }}>
-                    <Image src={welcomeAvatar} alt="ASIA-BOT" width={56} height={56} style={{ width: 56, height: 56, objectFit: "cover", borderRadius: "50%", marginBottom: 8 }} />
+                  <div style={{ textAlign: "center", padding: "24px 8px", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    <Image src={welcomeAvatar} alt="ASIA-BOT" width={56} height={56} style={{ display: "block", width: 56, height: 56, objectFit: "cover", borderRadius: "50%", marginBottom: 8, flexShrink: 0 }} />
                     <div style={{ color: T.mutedText, fontSize: 13, lineHeight: 1.6 }}>
                       สวัสดี{ctx.userName ? ` ${ctx.userName}` : ""}!<br />
                       ถามอะไรก็ได้เลยครับ ฉันรู้ข้อมูลของคุณ
@@ -579,9 +602,6 @@ export default function ChatBubble() {
                                 </span>
                               : "")}
                       </div>
-                      {msg.role === "assistant" && msg.card && (
-                        <AttendanceCard card={msg.card} accent={accent} ctx={ctx} />
-                      )}
                       {msg.role === "assistant" && msg.navButtons && msg.navButtons.length > 0 && (
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                           {msg.navButtons.map(btn => (
@@ -628,9 +648,25 @@ export default function ChatBubble() {
                 <button
                   onClick={() => sendMessage(input)}
                   disabled={!input.trim() || streaming}
-                  style={{ background: !input.trim() || streaming ? (ctx.isAdmin ? "#3e3e3e" : "#CBD5E1") : accent, border: "none", borderRadius: 10, width: 36, height: 36, cursor: !input.trim() || streaming ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "background 0.2s" }}
+                  style={{
+                    background: ctx.isAdmin
+                      ? (!input.trim() || streaming ? "#3e3e3e" : accent)
+                      : "#fff",
+                    border: ctx.isAdmin ? "none" : `1px solid ${!input.trim() || streaming ? "#BAE6FD" : "#fff"}`,
+                    borderRadius: 10,
+                    width: 36,
+                    height: 36,
+                    cursor: !input.trim() || streaming ? "not-allowed" : "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                    boxShadow: ctx.isAdmin ? "none" : "0 2px 8px rgba(2,132,199,0.18)",
+                    opacity: !input.trim() || streaming ? 0.72 : 1,
+                    transition: "background 0.2s, opacity 0.2s, transform 0.2s",
+                  }}
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M2 21L23 12 2 3v7l15 2-15 2v7z" /></svg>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill={ctx.isAdmin ? "white" : accent}><path d="M2 21L23 12 2 3v7l15 2-15 2v7z" /></svg>
                 </button>
               </div>
             </>

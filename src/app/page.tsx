@@ -113,7 +113,7 @@ export default function HomePage() {
                 <h1 className="text-3xl sm:text-4xl font-extrabold leading-tight">ASIA-BOT</h1>
               </div>
               <p className="text-sm sm:text-base text-slate-600 mb-5 leading-relaxed">
-                แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร — ติดตามห้องเรียน, สแกนบัตรเข้าออก,
+                แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร — ติดตามห้องเรียน,
                 จองห้องประชุม, เบิกคุรุภัณฑ์, สหกรณ์โรงเรียน และแสดงความคิดเห็น ในที่เดียว
               </p>
 
@@ -191,7 +191,7 @@ export default function HomePage() {
                 ข้อมูลทั้งหมดเชื่อมต่อกับฐานข้อมูลกลาง และอัปเดตสถานะให้เห็นใกล้เคียงเวลาจริง
               </p>
               <div className="flex flex-wrap gap-2 mt-4">
-                {["บัตรนักเรียน", "เช็กชื่อ", "จองห้อง", "เบิกคุรุภัณฑ์", "สหกรณ์", "ความคิดเห็น"].map(t => (
+                {["บัตรนักเรียน", "จองห้อง", "เบิกคุรุภัณฑ์", "สหกรณ์", "ความคิดเห็น"].map(t => (
                   <span key={t} className="text-xs font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-600">{t}</span>
                 ))}
               </div>

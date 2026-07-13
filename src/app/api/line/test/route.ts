@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { buildBookingFlexMessage, buildEquipmentRequestFlexMessage, buildFeedbackFlexMessage, buildOrderFlexMessage, buildRfidScanFlexMessage, buildStudentDataChangeFlexMessage } from "@/lib/line";
+import { buildBookingFlexMessage, buildEquipmentRequestFlexMessage, buildFeedbackFlexMessage, buildOrderFlexMessage, buildStudentDataChangeFlexMessage } from "@/lib/line";
 import { checkAdminAuth } from "@/lib/admin-auth";
 import { getLineNotificationTarget } from "@/lib/line-targets";
 
@@ -10,7 +10,7 @@ const supabase = createClient(
 );
 
 type LineMessage = Record<string, unknown>;
-type TestMode = "order_flex" | "feedback_flex" | "attendance_flex" | "booking_flex" | "data_change_flex" | "equipment_flex" | "custom_json";
+type TestMode = "order_flex" | "feedback_flex" | "booking_flex" | "data_change_flex" | "equipment_flex" | "custom_json";
 const lineTestCooldowns = new Map<string, number>();
 const LINE_TEST_COOLDOWN_MS = 15_000;
 
@@ -24,55 +24,6 @@ async function pushLineMessage(to: string, messages: LineMessage[]) {
   }).catch(err => ({ ok: false, status: 0, text: async () => String(err) } as Response));
   const body = await res.text().catch(() => "");
   return { ok: res.ok, status: res.status, body };
-}
-
-async function buildStudentAttendanceMessage(
-  studentId?: string | null,
-  tester?: { name: string; adminId: string; role: string; avatar: string | null },
-): Promise<{ altText: string; contents: object; studentLabel: string }> {
-  let student = null as null | {
-    student_id: string;
-    first_name: string;
-    last_name: string;
-    nickname: string | null;
-    program: string;
-    department: string | null;
-    photo_url: string | null;
-    uid: string | null;
-  };
-
-  if (studentId?.trim()) {
-    const { data, error } = await supabase
-      .from("students")
-      .select("student_id,first_name,last_name,nickname,program,department,photo_url,uid")
-      .eq("student_id", studentId.trim())
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    student = data;
-  }
-
-  const fullName = student ? `${student.first_name} ${student.last_name}`.trim() : tester?.name || "ทดสอบ ระบบ";
-  const sid = student?.student_id ?? tester?.adminId ?? "9999";
-  const nicknameText = student?.nickname ? ` (${student.nickname})` : "";
-  const contents = buildRfidScanFlexMessage({
-    action: "checkin",
-    studentName: fullName,
-    studentId: sid,
-    nickname: student?.nickname ?? "ทดสอบ",
-    program: student?.program ?? tester?.role ?? "admin",
-    department: student?.department ?? "555 ASIA-BOT Test",
-    studentPhotoUrl: student?.photo_url ?? tester?.avatar ?? null,
-    location: "school",
-    locationLabel: "โรงเรียน",
-    uid: student?.uid ?? `${sid}-TESTLINE`,
-    scannedAt: new Date().toISOString(),
-  });
-
-  return {
-    altText: `แจ้งเตือนเข้าโรงเรียน ${fullName}${nicknameText} รหัส ${sid}`,
-    contents,
-    studentLabel: `${fullName}${nicknameText} (${sid})`,
-  };
 }
 
 function customMessagesFromPayload(payload: unknown, altText: string): LineMessage[] {
@@ -182,17 +133,6 @@ export async function POST(req: NextRequest) {
           imageUrls: [dummyFeedbackImage],
         }),
       });
-    }
-
-    if (mode === "attendance_flex") {
-      const built = await buildStudentAttendanceMessage(String(body.student_id || ""), {
-        name: adminName,
-        adminId: admin.admin_id,
-        role: admin.role,
-        avatar: testerPhotoUrl,
-      });
-      studentLabel = built.studentLabel;
-      messages.push({ type: "flex", altText: `${built.altText} · ทดสอบโดย ${adminName}`, contents: built.contents });
     }
 
     if (mode === "booking_flex") {

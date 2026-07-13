@@ -82,7 +82,7 @@ export async function executeDashboardTool(
         name: 'โรงเรียน ASIA เทคโนโลยีและนวัตกรรม',
         name_en: 'ASIA Technology and Innovation School',
         system: 'ASIA-BOT — AI Operating System สำหรับโรงเรียน',
-        features: ['ระบบสแกนบัตร RFID', 'จองห้องเรียน', 'สหกรณ์', 'ตารางเรียน', 'ฟีดแบ็ก'],
+        features: ['จองห้องเรียน', 'สหกรณ์', 'ตารางเรียน', 'ฟีดแบ็ก', 'เบิกคุรุภัณฑ์'],
       },
       programs: {
         programs: ['ปวช (ประกาศนียบัตรวิชาชีพ)', 'ปวส (ประกาศนียบัตรวิชาชีพชั้นสูง)'],

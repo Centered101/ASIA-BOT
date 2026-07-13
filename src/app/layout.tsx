@@ -23,12 +23,11 @@ export const metadata: Metadata = {
     template: "%s | ASIA-BOT",
   },
   description:
-    "ASIA-BOT แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร สำหรับ ABAC — สแกนบัตรเข้าห้องเรียน ติดตาม Class Track Room จองห้อง สหกรณ์ออนไลน์ และอีกมากมาย",
+    "ASIA-BOT แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร สำหรับ ABAC — ติดตาม Class Track Room จองห้อง สหกรณ์ออนไลน์ และอีกมากมาย",
   keywords: [
     "ASIA-BOT", "asialb", "abac", "Assumption University",
-    "Student Entry Scanner", "สแกนบัตรนักเรียน", "เข้าห้องเรียน",
     "Class Track Room", "ติดตามห้องเรียน", "จองห้อง",
-    "สหกรณ์", "สหกรณ์ออนไลน์", "RFID", "ระบบนักเรียน",
+    "สหกรณ์", "สหกรณ์ออนไลน์", "ระบบนักเรียน",
     "student management", "Centered101", "asia-bot.xyz",
   ],
   authors: [{ name: "Centered101", url: siteUrl }],
@@ -51,7 +50,7 @@ export const metadata: Metadata = {
     locale: "th_TH",
     title: "ASIA-BOT — แพลตฟอร์มบริหารจัดการระบบนักเรียน",
     description:
-      "แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร — สแกนบัตร ติดตามห้องเรียน จองห้อง สหกรณ์",
+      "แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร — ติดตามห้องเรียน จองห้อง สหกรณ์",
     images: [{ url: metaImage, width: 1200, height: 630, alt: "ASIA-BOT Platform" }],
   },
   twitter: {
@@ -60,7 +59,7 @@ export const metadata: Metadata = {
     creator: "@centered101",
     title: "ASIA-BOT — แพลตฟอร์มบริหารจัดการระบบนักเรียน",
     description:
-      "แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร — สแกนบัตร ติดตามห้องเรียน จองห้อง สหกรณ์",
+      "แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร — ติดตามห้องเรียน จองห้อง สหกรณ์",
     images: [metaImage],
   },
   robots: {

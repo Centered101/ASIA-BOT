@@ -77,7 +77,37 @@ maintenance: { label: "ปิดให้บริการ", color: "#2563eb", 
 };
 
 function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+  const thNow = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Bangkok" }));
+  return toDateInputValue(thNow);
+}
+
+function toDateInputValue(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function dateFromInputValue(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function addDays(value: string, amount: number) {
+  const nextDate = dateFromInputValue(value);
+  nextDate.setDate(nextDate.getDate() + amount);
+  return toDateInputValue(nextDate);
+}
+
+function thaiDateLabel(value: string, long = false) {
+  return dateFromInputValue(value).toLocaleDateString("th-TH", {
+    weekday: long ? "long" : "short",
+    day: "numeric",
+    month: long ? "long" : "short",
+    year: "numeric",
+  });
+}
+
+function dayLabelFromDate(value: string) {
+  const day = dateFromInputValue(value).getDay();
+  return DAYS[day === 0 ? 7 : day];
 }
 
 function statusOf(room: Room): RoomStatus {
@@ -152,6 +182,7 @@ function ClassTrackRoomPageContent() {
   const [success, setSuccess] = useState(false);
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
   const [schedLoading, setSchedLoading] = useState(true);
+  const [scheduleDate, setScheduleDate] = useState(todayStr());
   const [currentTime, setCurrentTime] = useState("");
   const [lastUpdate, setLastUpdate] = useState("");
 
@@ -163,7 +194,7 @@ function ClassTrackRoomPageContent() {
   const fetchSchedule = useCallback(async () => {
     setSchedLoading(true);
     try {
-      const res = await fetch("/api/schedules/current");
+      const res = await fetch(`/api/schedules/current?date=${scheduleDate}`);
       const json = await res.json();
       if (json.status === "success") {
         setSchedule(json.data ?? []);
@@ -175,7 +206,7 @@ function ClassTrackRoomPageContent() {
     } finally {
       setSchedLoading(false);
     }
-  }, []);
+  }, [scheduleDate]);
 
   const fetchTodayBookings = useCallback(async () => {
     try {
@@ -374,8 +405,9 @@ function ClassTrackRoomPageContent() {
     closed: closedClassroomNames.size,
     available: Math.max(scheduleRoomNames.length - occupiedClassroomNames.size - closedClassroomNames.size, 0),
   };
-  const thNow = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Bangkok" }));
-  const todayLabel = DAYS[thNow.getDay() === 0 ? 7 : thNow.getDay()];
+  const scheduleDayLabel = dayLabelFromDate(scheduleDate);
+  const scheduleDateLabel = thaiDateLabel(scheduleDate, true);
+  const isScheduleToday = scheduleDate === todayStr();
   const bookedSlotIds = new Set(bookedSlots.map((b) => b.slot_id));
   const selectedSlot = timeSlots.find((s) => s.id === slotId);
 
@@ -386,7 +418,7 @@ function ClassTrackRoomPageContent() {
       <Header subtitle="สถานะห้องเรียน" />
       <main className="min-h-screen bg-slate-50/70">
         <section className="bg-white border-b border-slate-100 overflow-hidden">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 sm:py-8">
             <div className="grid lg:grid-cols-[1fr_380px] gap-6 items-center">
               <div>
                 <div className="inline-flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full mb-4"
@@ -394,7 +426,7 @@ function ClassTrackRoomPageContent() {
                   <i className="fa-solid fa-door-open" />
                   สถานะห้องเรียน
                 </div>
-                <h1 className="text-3xl sm:text-4xl font-black leading-tight">
+                <h1 className="text-2xl sm:text-4xl font-black leading-tight">
                   <span className="text-green-500">Class</span>{" "}
                   <span className="text-red-500">Track</span>{" "}
                   <span className="text-blue-500">Room</span>
@@ -408,18 +440,18 @@ function ClassTrackRoomPageContent() {
                     return (
                       <div key={status} className="rounded-2xl border p-2 text-center" style={{ background: cfg.bg, borderColor: cfg.border }}>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={cfg.mascot} alt={cfg.label} className="h-16 sm:h-20 w-full object-contain" />
+                        <img src={cfg.mascot} alt={cfg.label} className="h-12 sm:h-20 w-full object-contain" />
                         <div className="text-[10px] sm:text-xs font-bold mt-1" style={{ color: cfg.color }}>{cfg.label}</div>
                       </div>
                     );
                   })}
                 </div>
               </div>
-              <div className="relative rounded-3xl border border-slate-200 bg-slate-900 p-4 shadow-sm overflow-hidden">
+              <div className="relative hidden sm:block rounded-3xl border border-slate-200 bg-slate-900 p-4 shadow-sm overflow-hidden">
                 <div className="absolute inset-x-6 top-5 h-28 rounded-2xl border border-emerald-500/30 bg-emerald-950/80 shadow-inner" />
                 <div className="relative pt-4 text-center text-emerald-100">
                   <div className="text-xs font-bold opacity-80">CLASS STATUS BOARD</div>
-                  <div className="text-2xl font-black mt-1">ห้องเรียนวันนี้</div>
+                  <div className="text-2xl font-black mt-1">{isScheduleToday ? "ห้องเรียนวันนี้" : "ตารางเรียนที่เลือก"}</div>
                   <div className="mt-3 flex justify-center gap-2">
                     {lastUpdate && (
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/10 text-[10px]">
@@ -427,7 +459,7 @@ function ClassTrackRoomPageContent() {
                       </span>
                     )}
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/10 text-[10px]">
-                      <i className="fa-solid fa-calendar-day" />วัน{todayLabel} {currentTime ? `${currentTime} น.` : ""}
+                      <i className="fa-solid fa-calendar-day" />วัน{scheduleDayLabel} {currentTime ? `${currentTime} น.` : scheduleDateLabel}
                     </span>
                   </div>
                 </div>
@@ -457,15 +489,54 @@ function ClassTrackRoomPageContent() {
                   className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary-light)] text-sm text-slate-800"
                 />
               </div>
-              <div className="flex gap-2 overflow-x-auto pb-1 lg:pb-0">
+              <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_auto_2.5rem] sm:flex sm:items-center gap-1.5 rounded-xl border border-slate-200 bg-white p-1 shadow-sm w-full lg:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setScheduleDate(prev => addDays(prev, -1))}
+                  className="h-10 w-10 rounded-lg text-slate-500 hover:bg-slate-50"
+                  title="วันก่อนหน้า"
+                  aria-label="วันก่อนหน้า"
+                >
+                  <i className="fa-solid fa-chevron-left text-xs" />
+                </button>
+                <label className="relative min-w-0 sm:min-w-[158px]">
+                  <span className="sr-only">เลือกวันที่ตารางเรียน</span>
+                  <i className="fa-solid fa-calendar-days absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs" />
+                  <input
+                    type="date"
+                    value={scheduleDate}
+                    onChange={(e) => {
+                      if (e.target.value) setScheduleDate(e.target.value);
+                    }}
+                    className="h-10 w-full rounded-lg border border-slate-100 bg-slate-50 pl-9 pr-2 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[var(--primary-light)]"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setScheduleDate(todayStr())}
+                  className="h-10 px-3 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50 whitespace-nowrap"
+                >
+                  วันนี้
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScheduleDate(prev => addDays(prev, 1))}
+                  className="h-10 w-10 rounded-lg text-slate-500 hover:bg-slate-50"
+                  title="วันถัดไป"
+                  aria-label="วันถัดไป"
+                >
+                  <i className="fa-solid fa-chevron-right text-xs" />
+                </button>
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-1 lg:pb-0 -mx-1 px-1">
                 {([
                   { key: "booking" as const, label: "จองห้องและสถานะ", icon: "fa-calendar-check", count: filtered.length },
-                  { key: "classroom" as const, label: "ห้องเรียนวันนี้", icon: "fa-chalkboard-user", count: schedule.length },
+                  { key: "classroom" as const, label: isScheduleToday ? "ห้องเรียนวันนี้" : "ตารางเรียนที่เลือก", icon: "fa-chalkboard-user", count: schedule.length },
                 ]).map(t => (
                   <button
                     key={t.key}
                     onClick={() => setView(t.key)}
-                    className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-bold border transition-all whitespace-nowrap"
+                    className="flex min-w-fit items-center gap-2 px-3 sm:px-4 py-3 rounded-xl text-sm font-bold border transition-all whitespace-nowrap"
                     style={view === t.key
                       ? { background: "var(--primary-color)", color: "#fff", borderColor: "var(--primary-color)" }
                       : { background: "#fff", color: "#64748b", borderColor: "#e2e8f0" }}>
@@ -478,7 +549,7 @@ function ClassTrackRoomPageContent() {
                   </button>
                 ))}
                 <button onClick={() => { setLoading(true); fetch("/api/rooms").then(r => r.json()).then(j => { if (j.status === "success") setRooms(j.data ?? []); setLoading(false); }); fetchSchedule(); fetchTodayBookings(); }}
-                  className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-bold border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition whitespace-nowrap">
+                  className="flex min-w-fit items-center gap-2 px-3 sm:px-4 py-3 rounded-xl text-sm font-bold border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition whitespace-nowrap">
                   <i className={`fa-solid fa-arrows-rotate${(loading || schedLoading) ? " fa-spin" : ""}`} /> รีเฟรช
                 </button>
               </div>
@@ -486,7 +557,7 @@ function ClassTrackRoomPageContent() {
           </div>
 
           {view !== "classroom" && (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 mb-6">
               <SummaryCard icon="fa-door-open" label="ห้องทั้งหมด" value={rooms.length} />
               {(["available", "occupied", "maintenance"] as RoomStatus[]).map(s => (
                 <SummaryCard
@@ -507,7 +578,7 @@ function ClassTrackRoomPageContent() {
               {loading ? <LoadingState /> : filtered.length === 0 ? <EmptyState text="ไม่พบห้องที่ค้นหา" /> : (
                 <>
                   <SectionTitle icon="fa-calendar-check" title="ห้องที่พร้อมให้จองและดูสถานะ" count={filtered.length} />
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                     {filtered.map((room) => (
                       (() => {
                         const status = statusOfRoomNow(room, occupiedByBookingRoomIds);
@@ -532,7 +603,9 @@ function ClassTrackRoomPageContent() {
             <ClassroomView
               loading={schedLoading}
               currentTime={currentTime}
-              todayLabel={todayLabel}
+              scheduleDayLabel={scheduleDayLabel}
+              scheduleDateLabel={scheduleDateLabel}
+              isScheduleToday={isScheduleToday}
               currentEntries={currentEntries}
               cancelledEntries={cancelledEntries}
               upcomingEntries={upcomingEntries}
@@ -546,8 +619,8 @@ function ClassTrackRoomPageContent() {
       {showModal && selectedRoom && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closeModal} />
-          <div className="relative w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto animate-slideUp">
-            <div className="sticky top-0 bg-white border-b border-slate-100 px-6 py-4 rounded-t-3xl sm:rounded-t-2xl z-10">
+          <div className="relative w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[96dvh] sm:max-h-[92vh] overflow-y-auto animate-slideUp">
+            <div className="sticky top-0 bg-white border-b border-slate-100 px-4 sm:px-6 py-4 rounded-t-3xl sm:rounded-t-2xl z-10">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="font-bold text-slate-800 text-lg">จองห้อง</h2>
@@ -561,7 +634,7 @@ function ClassTrackRoomPageContent() {
               </div>
             </div>
 
-            <div className="px-6 py-5">
+            <div className="px-4 sm:px-6 py-4 sm:py-5">
               {success ? (
                 <SuccessView
                   room={selectedRoom}
@@ -600,7 +673,7 @@ function ClassTrackRoomPageContent() {
 
                     {/* Student ID */}
                     <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
-                      <div className="flex items-center justify-between gap-3 mb-3">
+                      <div className="flex items-start sm:items-center justify-between gap-3 mb-3">
                         <div>
                           <div className="text-sm font-bold text-slate-800">
                             <i className="fa-solid fa-user-check mr-1.5 text-sky-400" />ผู้จองจากบัญชีที่เข้าสู่ระบบ
@@ -669,14 +742,14 @@ function ClassTrackRoomPageContent() {
                           );
                         })}
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex flex-col sm:flex-row gap-2">
                         <input
                           type="text"
                           placeholder="เพิ่มเพื่อนด้วยรหัสนักเรียน"
                           value={friendId}
                           onChange={(e) => { setFriendId(e.target.value); setFriendError(""); }}
                           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addFriendById(); } }}
-                          className="flex-1 px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-300 text-slate-800 placeholder-slate-300"
+                          className="flex-1 min-w-0 px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-300 text-slate-800 placeholder-slate-300"
                         />
                         <button type="button" onClick={addFriendById} disabled={friendLoading} className="px-4 py-2.5 rounded-xl font-bold text-sm text-white disabled:opacity-60" style={{ background: "var(--primary-color)" }}>
                           {friendLoading ? <i className="fa-solid fa-spinner fa-spin" /> : <><i className="fa-solid fa-plus mr-1" />เพิ่ม</>}
@@ -685,7 +758,7 @@ function ClassTrackRoomPageContent() {
                       {friendError && <div className="text-xs text-red-500 mt-2"><i className="fa-solid fa-circle-exclamation mr-1" />{friendError}</div>}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-sm font-semibold text-slate-700 mb-1">
                           <i className="fa-solid fa-phone mr-1.5 text-sky-400" /> โทรศัพท์
@@ -891,10 +964,12 @@ function RoomStatusCard({ room }: { room: Room }) {
   );
 }
 
-function ClassroomView({ loading, currentTime, todayLabel, currentEntries, cancelledEntries, upcomingEntries, stats }: {
+function ClassroomView({ loading, currentTime, scheduleDayLabel, scheduleDateLabel, isScheduleToday, currentEntries, cancelledEntries, upcomingEntries, stats }: {
   loading: boolean;
   currentTime: string;
-  todayLabel: string;
+  scheduleDayLabel: string;
+  scheduleDateLabel: string;
+  isScheduleToday: boolean;
   currentEntries: ScheduleEntry[];
   cancelledEntries: ScheduleEntry[];
   upcomingEntries: ScheduleEntry[];
@@ -902,7 +977,7 @@ function ClassroomView({ loading, currentTime, todayLabel, currentEntries, cance
 }) {
   if (loading) return <LoadingState />;
   if (currentEntries.length + cancelledEntries.length + upcomingEntries.length === 0) {
-    return <EmptyState text="ยังไม่มีข้อมูลตารางเรียนวันนี้" />;
+    return <EmptyState text={`ยังไม่มีข้อมูลตารางเรียนสำหรับ${scheduleDateLabel}`} />;
   }
 
   return (
@@ -941,11 +1016,15 @@ function ClassroomView({ loading, currentTime, todayLabel, currentEntries, cance
       <div>
         <div className="flex items-center gap-2 mb-4">
           <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
-          <h2 className="text-sm font-extrabold text-slate-700 uppercase">กำลังเรียนอยู่</h2>
+          <h2 className="text-sm font-extrabold text-slate-700 uppercase">{isScheduleToday ? "กำลังเรียนอยู่" : "คาบเรียนของวันที่เลือก"}</h2>
           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-50 text-red-500 border border-red-100">{currentEntries.length} ห้อง</span>
           {currentTime && <span className="ml-auto text-[10px] text-slate-400"><i className="fa-solid fa-clock mr-1" />{currentTime} น.</span>}
         </div>
-        {currentEntries.length === 0 ? (
+        {!isScheduleToday ? (
+          <div className="rounded-2xl bg-sky-50 border border-sky-100 p-4 text-sm font-bold text-sky-700">
+            <i className="fa-solid fa-calendar-days mr-2" />กำลังแสดงตารางวันที่ {scheduleDateLabel}
+          </div>
+        ) : currentEntries.length === 0 ? (
           <div className="rounded-2xl bg-green-50 border border-green-100 p-4 text-sm font-bold text-green-700">
             <i className="fa-solid fa-circle-check mr-2" />ไม่มีการเรียนในขณะนี้
           </div>
@@ -957,11 +1036,11 @@ function ClassroomView({ loading, currentTime, todayLabel, currentEntries, cance
       </div>
 
       {cancelledEntries.length > 0 && (
-        <ScheduleList icon="fa-ban" title="ยกเลิกเรียนวันนี้" count={cancelledEntries.length} entries={cancelledEntries} cancelled />
+        <ScheduleList icon="fa-ban" title={`ยกเลิกเรียนวัน${scheduleDayLabel}`} count={cancelledEntries.length} entries={cancelledEntries} cancelled />
       )}
 
       {upcomingEntries.length > 0 && (
-        <ScheduleList icon="fa-calendar-day" title={`ตารางวัน${todayLabel}`} count={upcomingEntries.length} entries={upcomingEntries} />
+        <ScheduleList icon="fa-calendar-day" title={`ตารางวัน${scheduleDayLabel}`} count={upcomingEntries.length} entries={upcomingEntries} />
       )}
     </div>
   );
@@ -1166,7 +1245,7 @@ function RoomCard({ room, status, onBook, disabled }: { room: Room; status?: Roo
   const cfg = STATUS_CFG[effectiveStatus];
   return (
     <div className={`bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col transition-all duration-200 ${!disabled ? "hover:shadow-md hover:-translate-y-0.5" : ""}`}>
-      <div className="h-72 relative flex items-center justify-center overflow-hidden" style={{ background: cfg.bg }}>
+      <div className="h-52 sm:h-72 relative flex items-center justify-center overflow-hidden" style={{ background: cfg.bg }}>
         {room.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={room.image_url} alt={room.name} className="absolute inset-0 w-full h-full object-cover aspect-video opacity-75" />
@@ -1175,14 +1254,14 @@ function RoomCard({ room, status, onBook, disabled }: { room: Room; status?: Roo
         )}
         <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-amber-100/95 to-amber-200 border-t border-amber-200" />
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={cfg.mascot} alt={cfg.label} className="absolute bottom-2 right-5 h-36 w-auto object-contain drop-shadow-lg" />
+        <img src={cfg.mascot} alt={cfg.label} className="absolute bottom-2 right-5 h-28 sm:h-36 w-auto object-contain drop-shadow-lg" />
         <span className="absolute top-3 right-3 inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full shadow"
           style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
           <span className="w-1.5 h-1.5 rounded-full" style={{ background: cfg.color }} />
           {cfg.label}
         </span>
       </div>
-      <div className="p-4 flex flex-col flex-1">
+      <div className="p-3.5 sm:p-4 flex flex-col flex-1">
         <h3 className="font-bold text-slate-800 text-base leading-tight mb-1">{room.name}</h3>
         {room.location && (
           <p className="text-xs text-slate-500 flex items-center gap-1 mb-1">
@@ -1239,7 +1318,7 @@ function SuccessView({ room, date, slot, onClose, onAgain }: {
         <div className="flex items-center gap-2 text-sm"><i className="fa-solid fa-calendar text-sky-400 w-4" /><span className="text-slate-600">{displayDate}</span></div>
         {slot && <div className="flex items-center gap-2 text-sm"><i className="fa-solid fa-clock text-sky-400 w-4" /><span className="text-slate-600">{slot.label} ({slot.start_time.slice(0, 5)}–{slot.end_time.slice(0, 5)})</span></div>}
       </div>
-      <div className="flex gap-3">
+      <div className="flex flex-col sm:flex-row gap-3">
         <button onClick={onAgain} className="btn-secondary flex-1 py-2.5 rounded-xl text-sm font-semibold"><i className="fa-solid fa-plus mr-1" /> จองอีกครั้ง</button>
         <button onClick={onClose} className="btn-primary flex-1 py-2.5 rounded-xl text-sm font-semibold"><i className="fa-solid fa-check mr-1" /> เสร็จสิ้น</button>
       </div>

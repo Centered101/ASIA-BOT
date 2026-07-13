@@ -1,17 +1,12 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Student Entry Scanner — สแกนบัตรเข้าห้องเรียน",
-  description:
-    "ระบบสแกนบัตรนักเรียนเพื่อบันทึกการเข้าห้องเรียน รองรับ RFID และ QR Code แบบเรียลไทม์ ดูสถิติการเข้าเรียนได้ทันที",
-  keywords: [
-    "Student Entry Scanner", "สแกนบัตร", "เข้าห้องเรียน",
-    "RFID scanner", "QR Code นักเรียน", "บันทึกการเข้าเรียน",
-    "ABAC", "ASIA-BOT",
-  ],
+  title: "ASIA-BOT",
+  description: "แพลตฟอร์มบริหารจัดการระบบนักเรียน ASIA-BOT",
+  keywords: ["ABAC", "ASIA-BOT", "ระบบนักเรียน"],
   openGraph: {
-    title: "Student Entry Scanner | ASIA-BOT",
-    description: "สแกนบัตรนักเรียน บันทึกการเข้าห้องเรียนแบบเรียลไทม์",
+    title: "ASIA-BOT",
+    description: "แพลตฟอร์มบริหารจัดการระบบนักเรียน ASIA-BOT",
     type: "website",
   },
 };

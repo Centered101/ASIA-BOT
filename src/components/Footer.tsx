@@ -23,7 +23,7 @@ export default function Footer() {
               </div>
             </div>
             <p className="text-slate-400 text-sm leading-relaxed mb-5">
-              แพลตฟอร์มรวมระบบสำหรับนักศึกษาและบุคลากร — ติดตามห้องเรียน, สแกนบัตร, จองห้อง และสหกรณ์ในที่เดียว
+              แพลตฟอร์มรวมระบบสำหรับนักศึกษาและบุคลากร — ติดตามห้องเรียน, จองห้อง, เบิกคุรุภัณฑ์ และสหกรณ์ในที่เดียว
             </p>
             <div className="flex gap-2">
               <Link href="https://github.com/Centered101" target="_blank" rel="noopener noreferrer"

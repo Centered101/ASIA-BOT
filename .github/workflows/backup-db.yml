@@ -1,0 +1,39 @@
+name: Supabase DB Backup
+
+# สำรองฐานข้อมูล Supabase อัตโนมัติ + กดรันเองได้
+on:
+  schedule:
+    - cron: "0 19 * * *" # ทุกวัน 02:00 น. เวลาไทย (19:00 UTC ของวันก่อนหน้า)
+  workflow_dispatch: {} # ปุ่มกดรันเองได้จากแท็บ Actions
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      # ติดตั้ง pg_dump เวอร์ชัน 17 (ต้องตรงกับเวอร์ชัน Postgres ของ Supabase ไม่งั้น dump ไม่ผ่าน)
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Dump database
+        env:
+          # ตั้งค่าใน GitHub: Settings → Secrets and variables → Actions → New repository secret
+          # ชื่อ SUPABASE_DB_URL = connection string จาก Supabase Dashboard → Connect → Session pooler
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::error::ยังไม่ได้ตั้ง secret SUPABASE_DB_URL"; exit 1
+          fi
+          TS=$(date -u +%Y-%m-%d_%H%M)
+          pg_dump "$SUPABASE_DB_URL" --no-owner --no-privileges | gzip > "backup_${TS}.sql.gz"
+          ls -lh backup_*.sql.gz
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_id }}
+          path: backup_*.sql.gz
+          retention-days: 90 # เก็บ backup ไว้ 90 วัน (ปรับได้)

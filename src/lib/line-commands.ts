@@ -2,7 +2,6 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import {
   replyLineMessage,
   buildHelpMenuFlex,
-  buildEntryStatusFlex,
   buildBookingListFlex,
   buildOrderStatusFlex,
   buildScheduleTodayFlex,
@@ -40,27 +39,6 @@ export async function handleStudentMessage(
       type: "flex",
       altText: "ASIA-BOT — รายการคำสั่ง",
       contents: buildHelpMenuFlex(displayName),
-    }]);
-    return;
-  }
-
-  // ── สถานะ (check-in/out) ───────────────────────────────────────────────────
-  if (t === "สถานะ" || t === "เช็คอิน" || t === "อยู่ที่ไหน" || t === "checkin") {
-    const { data: entries } = await (supabase as any)
-      .from("entry_logs")
-      .select("action, scanned_at, location")
-      .eq("student_id", student.student_id)
-      .order("scanned_at", { ascending: false })
-      .limit(5);
-
-    if (!entries || entries.length === 0) {
-      await replyLineMessage(replyToken, [{ type: "text", text: "ยังไม่มีประวัติการสแกนบัตรของคุณ" }]);
-      return;
-    }
-    await replyLineMessage(replyToken, [{
-      type: "flex",
-      altText: "สถานะการเข้า-ออก",
-      contents: buildEntryStatusFlex({ studentName: `${student.first_name} ${student.last_name}`, entries }),
     }]);
     return;
   }

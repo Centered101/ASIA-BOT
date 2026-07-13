@@ -1,16 +1,12 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "RFID Management — ระบบจัดการบัตร RFID",
-  description:
-    "ระบบจัดการบัตร RFID สำหรับบันทึกการเข้า-ออกห้องเรียน ลงทะเบียนบัตรนักเรียน และตรวจสอบประวัติการใช้งาน",
-  keywords: [
-    "RFID", "บัตร RFID", "ระบบ RFID", "RFID scanner",
-    "เข้าห้องเรียน RFID", "ABAC", "ASIA-BOT",
-  ],
+  title: "ASIA-BOT",
+  description: "แพลตฟอร์มบริหารจัดการระบบนักเรียน ASIA-BOT",
+  keywords: ["ABAC", "ASIA-BOT", "ระบบนักเรียน"],
   openGraph: {
-    title: "RFID Management | ASIA-BOT",
-    description: "ระบบจัดการบัตร RFID สำหรับบันทึกการเข้า-ออกห้องเรียน",
+    title: "ASIA-BOT",
+    description: "แพลตฟอร์มบริหารจัดการระบบนักเรียน ASIA-BOT",
     type: "website",
   },
 };

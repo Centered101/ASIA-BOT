@@ -19,6 +19,7 @@ type EquipmentItem = {
 
 const GENERAL_DEPT = "ทั่วไป";
 const MAX_BORROW_QUANTITY = 6;
+type CartMap = Record<string, number>;
 
 type RequestStatus = "pending" | "approved" | "picked_up" | "rejected" | "cancelled" | "returned";
 type HistoryEntry = {
@@ -43,8 +44,8 @@ const CAT_ICONS: Record<string, string> = { "ทั้งหมด": "fa-solid f
 function catIcon(cat: string) { return CAT_ICONS[cat] || "fa-solid fa-toolbox"; }
 
 const HISTORY_STATUS: Record<RequestStatus, string> = {
-  pending: "รออนุมัติ", approved: "อนุมัติแล้ว", picked_up: "รับของแล้ว",
-  rejected: "ไม่อนุมัติ", cancelled: "ยกเลิก", returned: "คืนแล้ว",
+  pending: "รออนุมัติ", approved: "อนุมัติแล้ว", picked_up: "ส่งมอบแล้ว",
+  rejected: "ไม่อนุมัติ", cancelled: "ยกเลิก", returned: "ปิดรายการ",
 };
 const HISTORY_STYLE: Record<RequestStatus, { bg: string; text: string }> = {
   pending:   { bg: "bg-amber-50", text: "text-amber-600" },
@@ -74,9 +75,9 @@ export default function EquipmentRequestPage() {
   const [sortIdx, setSortIdx]       = useState(0); // 0=ชื่อ A-Z  1=คงเหลือมาก→น้อย  2=คงเหลือน้อย→มาก
   const [viewMode, setViewMode]     = useState<"grid" | "table">("grid");
 
-  const [selected, setSelected]     = useState<EquipmentItem | null>(null);
+  const [cart, setCart]             = useState<CartMap>({});
+  const [cartOpen, setCartOpen]     = useState(false);
   const [requesterPhone, setRequesterPhone] = useState("");
-  const [quantity, setQuantity]     = useState(1);
   const [borrowDate, setBorrowDate] = useState("");
   const [dueDate, setDueDate]       = useState("");
   const [purpose, setPurpose]       = useState("");
@@ -133,9 +134,9 @@ export default function EquipmentRequestPage() {
   useEffect(() => { if (student) fetchHistory(); }, [student, fetchHistory]);
 
   useEffect(() => {
-    document.body.style.overflow = (selected || historyOpen) ? "hidden" : "";
+    document.body.style.overflow = (cartOpen || historyOpen) ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
-  }, [selected, historyOpen]);
+  }, [cartOpen, historyOpen]);
 
   const cats = useMemo(() => ["ทั้งหมด", ...Array.from(new Set(items.map(i => i.category)))], [items]);
   const depts = useMemo(() => {
@@ -175,24 +176,52 @@ export default function EquipmentRequestPage() {
     return keys.map(dept => ({ dept, items: groups.get(dept)! }));
   }, [filtered, studentDept]);
 
-  function openItem(item: EquipmentItem) {
+  const cartCount = Object.values(cart).reduce((sum, qty) => sum + qty, 0);
+  const cartEntries = Object.entries(cart)
+    .map(([id, qty]) => ({ item: items.find(x => x.id === id), qty }))
+    .filter((entry): entry is { item: EquipmentItem; qty: number } => !!entry.item && entry.qty > 0);
+
+  function addToCart(item: EquipmentItem) {
     if (item.available_quantity <= 0) return;
-    setSelected(item);
-    setQuantity(1); setBorrowDate(""); setDueDate(""); setPurpose(""); setErrs({});
-    setDeliveryMode("pickup"); setSelectedLoc(""); setCustomLoc(""); setDeliveryLoc(""); setTimeSlot("");
+    const current = cart[item.id] || 0;
+    if (current >= item.available_quantity || current >= MAX_BORROW_QUANTITY) {
+      toast.error("จำนวนในตะกร้าเกินคงเหลือหรือเกินกำหนด");
+      return;
+    }
+    setCart(prev => ({ ...prev, [item.id]: current + 1 }));
+    toast.success(`เพิ่ม ${item.name} ลงตะกร้า`);
   }
-  function closeModal() { setSelected(null); }
+
+  function changeCartQty(id: string, delta: number) {
+    const item = items.find(x => x.id === id);
+    setCart(prev => {
+      const current = prev[id] || 0;
+      const next = current + delta;
+      if (next <= 0) {
+        const copy = { ...prev };
+        delete copy[id];
+        return copy;
+      }
+      if (item && (next > item.available_quantity || next > MAX_BORROW_QUANTITY)) return prev;
+      return { ...prev, [id]: next };
+    });
+  }
+
+  function openCart() {
+    if (cartCount === 0) { toast.error("ยังไม่มีคุรุภัณฑ์ในตะกร้า"); return; }
+    setBorrowDate(""); setDueDate(""); setPurpose(""); setErrs({});
+    setDeliveryMode("pickup"); setSelectedLoc(""); setCustomLoc(""); setDeliveryLoc("คุรุภัณฑ์"); setTimeSlot("");
+    setCartOpen(true);
+  }
 
   const locOK = deliveryMode === "pickup" ? true : !!deliveryLoc;
   const deliveryReady = locOK && !!timeSlot;
 
   async function handleSubmit() {
-    if (!student || !selected) return;
+    if (!student || cartEntries.length === 0) return;
     const nextErrs: Record<string, boolean> = {};
-    if (!quantity || quantity <= 0 || quantity > selected.available_quantity || quantity > MAX_BORROW_QUANTITY) nextErrs.quantity = true;
+    if (cartEntries.some(({ item, qty }) => qty <= 0 || qty > item.available_quantity || qty > MAX_BORROW_QUANTITY)) nextErrs.quantity = true;
     if (!borrowDate) nextErrs.borrowDate = true;
-    if (!dueDate) nextErrs.dueDate = true;
-    if (borrowDate && dueDate && borrowDate > dueDate) nextErrs.dueDate = true;
 
     setErrs(nextErrs);
     if (Object.keys(nextErrs).length > 0) {
@@ -210,17 +239,18 @@ export default function EquipmentRequestPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          equipment_item_id: selected.id,
           student_id: student.student_id,
           requester_phone: requesterPhone,
-          quantity, purpose, borrow_date: borrowDate, due_date: dueDate,
+          items: cartEntries.map(({ item, qty }) => ({ equipment_item_id: item.id, quantity: qty })),
+          purpose, borrow_date: borrowDate, due_date: borrowDate,
           delivery_mode: deliveryMode, delivery_loc: deliveryLoc, time_slot: timeSlot,
         }),
       });
       const data = await res.json();
       if (data.status === "success") {
         setSuccessCode(data.request_code);
-        setSelected(null);
+        setCartOpen(false);
+        setCart({});
         toast.success("ส่งคำขอเบิกคุรุภัณฑ์สำเร็จ!");
         fetchItems();
         fetchHistory();
@@ -302,6 +332,14 @@ export default function EquipmentRequestPage() {
           </div>
           {/* mobile-only history */}
           <div className="flex lg:hidden items-center gap-1">
+            <button onClick={openCart} className="relative p-2.5 rounded-2xl bg-white/90 border border-slate-200 shadow-sm hover:bg-slate-50 transition text-emerald-600">
+              <i className="fa-solid fa-basket-shopping text-sm" />
+              {cartCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-emerald-500 text-white rounded-full w-4 h-4 text-[9px] font-bold flex items-center justify-center">
+                  {cartCount}
+                </span>
+              )}
+            </button>
             <button onClick={() => setHistoryOpen(true)} className="relative p-2.5 rounded-2xl bg-white/90 border border-slate-200 shadow-sm hover:bg-slate-50 transition text-slate-500">
               <i className="fa-solid fa-clock-rotate-left text-sm" />
               {history.filter(h => h.status === "pending" || h.status === "approved" || h.status === "picked_up").length > 0 && (
@@ -361,6 +399,21 @@ export default function EquipmentRequestPage() {
 
             {/* History button */}
             <div data-aos="fade-right" data-aos-delay="270" className="hidden lg:block">
+              <button onClick={openCart}
+                className="relative w-full flex items-center gap-3 px-4 py-3 mb-3 bg-white/80 backdrop-blur-sm rounded-2xl border border-emerald-100 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all text-left">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                  <i className="fa-solid fa-basket-shopping text-emerald-500 text-sm" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-bold text-slate-700">ตะกร้าเบิกคุรุภัณฑ์</div>
+                  <div className="text-xs text-slate-400">{cartCount > 0 ? `${cartCount} รายการ` : "ยังไม่มีรายการ"}</div>
+                </div>
+                {cartCount > 0 && (
+                  <span className="bg-emerald-500 text-white rounded-full w-5 h-5 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                    {cartCount}
+                  </span>
+                )}
+              </button>
               <button onClick={() => setHistoryOpen(true)}
                 className="relative w-full flex items-center gap-3 px-4 py-3 bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all text-left">
                 <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0">
@@ -571,7 +624,7 @@ export default function EquipmentRequestPage() {
                           return (
                             <div key={it.id}
                               data-aos="fade-up" data-aos-delay={`${Math.min(i * 40, 200)}`}
-                              onClick={() => openItem(it)}
+                              onClick={() => addToCart(it)}
                               className={`bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm transition-all duration-200 ${out ? "opacity-50" : "hover:shadow-md hover:-translate-y-1 cursor-pointer"}`}>
                               <div className="relative aspect-square w-full flex items-center justify-center bg-gradient-to-br from-emerald-50 to-slate-50">
                                 {it.image_url ? (
@@ -597,10 +650,10 @@ export default function EquipmentRequestPage() {
                                 {out ? (
                                   <span className="text-xs text-red-400 font-medium">ไม่ว่างให้ยืม</span>
                                 ) : (
-                                  <button onClick={e => { e.stopPropagation(); openItem(it); }}
+                                  <button onClick={e => { e.stopPropagation(); addToCart(it); }}
                                     className="w-full h-9 rounded-xl text-white text-xs font-bold flex items-center justify-center gap-1.5 hover:scale-[1.02] active:scale-95 transition-transform"
                                     style={{ background: "linear-gradient(135deg,var(--primary-color),var(--primary-dark))", boxShadow: "0 3px 8px rgba(14,165,233,.3)" }}>
-                                    <i className="fa-solid fa-hand-holding" /> เลือกยืม
+                                    <i className="fa-solid fa-cart-plus" /> เพิ่มลงตะกร้า
                                   </button>
                                 )}
                               </div>
@@ -646,10 +699,10 @@ export default function EquipmentRequestPage() {
                               {out ? (
                                 <span className="text-xs text-red-300">—</span>
                               ) : (
-                                <button onClick={() => openItem(it)}
+                                <button onClick={() => addToCart(it)}
                                   className="h-9 px-3 rounded-xl text-white text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-transform"
                                   style={{ background: "linear-gradient(135deg,var(--primary-color),var(--primary-dark))" }}>
-                                  <i className="fa-solid fa-hand-holding" /> เลือกยืม
+                                  <i className="fa-solid fa-cart-plus" /> เพิ่มลงตะกร้า
                                 </button>
                               )}
                             </div>
@@ -709,7 +762,7 @@ export default function EquipmentRequestPage() {
                             <td className="p-3 align-middle">
                               {out
                                 ? <span className="text-xs text-red-300">—</span>
-                                : <button onClick={() => openItem(it)}
+                                : <button onClick={() => addToCart(it)}
                                     className="w-9 h-9 rounded-xl text-white text-xs flex items-center justify-center hover:scale-110 active:scale-95 transition-transform"
                                     style={{ background: "linear-gradient(135deg,var(--primary-color),var(--primary-dark))" }}>
                                     <i className="fa-solid fa-hand-holding" />
@@ -727,26 +780,52 @@ export default function EquipmentRequestPage() {
         </div>
       </main>
 
-      {/* ════ MODAL: Borrow details (bottom sheet) ════ */}
-      <div className={`fixed inset-0 z-[999] bg-black/40 backdrop-blur-sm flex items-end justify-center transition-all duration-300 ${selected ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
-        onClick={e => { if (e.target === e.currentTarget) closeModal(); }}>
-        <div className={`bg-white rounded-t-3xl w-full max-w-lg max-h-[92vh] flex flex-col transition-transform duration-300 ${selected ? "translate-y-0" : "translate-y-full"}`}>
+      {/* ════ MODAL: Equipment cart (bottom sheet) ════ */}
+      <div className={`fixed inset-0 z-[999] bg-black/40 backdrop-blur-sm flex items-end justify-center transition-all duration-300 ${cartOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+        onClick={e => { if (e.target === e.currentTarget) setCartOpen(false); }}>
+        <div className={`bg-white rounded-t-3xl w-full max-w-lg max-h-[92vh] flex flex-col transition-transform duration-300 ${cartOpen ? "translate-y-0" : "translate-y-full"}`}>
           <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mt-3 mb-1 flex-shrink-0" />
           <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-100 flex-shrink-0">
             <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center flex-shrink-0">
-              <i className="fa-solid fa-hand-holding text-sm" />
+              <i className="fa-solid fa-basket-shopping text-sm" />
             </div>
             <div className="min-w-0">
-              <div className="font-bold text-slate-800 truncate">{selected?.name}</div>
-              <div className="text-xs text-slate-400">คงเหลือ {selected?.available_quantity} {selected?.unit}</div>
+              <div className="font-bold text-slate-800 truncate">ตะกร้าเบิกคุรุภัณฑ์</div>
+              <div className="text-xs text-slate-400">{cartCount} รายการในคำขอนี้</div>
             </div>
-            <button onClick={closeModal} className="ml-auto text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition flex-shrink-0">
+            <button onClick={() => setCartOpen(false)} className="ml-auto text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition flex-shrink-0">
               <i className="fa-solid fa-xmark" />
             </button>
           </div>
 
-          {selected && (
-            <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+          <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 space-y-2">
+                {cartEntries.map(({ item, qty }) => (
+                  <div key={item.id} className="flex items-center gap-3 rounded-xl bg-white border border-slate-100 p-2">
+                    {item.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={item.image_url} alt={item.name} className="w-12 h-12 rounded-xl object-cover" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-slate-300">
+                        <i className="fa-solid fa-toolbox" />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-bold text-slate-800 truncate">{item.name}</div>
+                      <div className="text-[10px] text-slate-400">คงเหลือ {item.available_quantity} {item.unit}</div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => changeCartQty(item.id, -1)} className="w-8 h-8 rounded-lg border border-slate-200 text-slate-500">
+                        <i className="fa-solid fa-minus text-[10px]" />
+                      </button>
+                      <span className="w-8 text-center text-sm font-bold text-slate-700">{qty}</span>
+                      <button onClick={() => changeCartQty(item.id, 1)} className="w-8 h-8 rounded-lg border border-slate-200 text-slate-500">
+                        <i className="fa-solid fa-plus text-[10px]" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1.5">เบอร์โทรติดต่อ (ไม่บังคับ)</label>
                 <div className="field-wrap">
@@ -756,32 +835,14 @@ export default function EquipmentRequestPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1.5">จำนวน *</label>
-                  <div className="field-wrap">
-                    <i className="fa-solid fa-hashtag field-icon" />
-                    <input type="number" min={1} max={Math.min(selected.available_quantity, MAX_BORROW_QUANTITY)} value={quantity}
-                      onChange={e => { setQuantity(Number(e.target.value)); setErrs(p => ({ ...p, quantity: false })); }}
-                      className={`form-input text-xs sm:text-sm ${errs.quantity ? "error" : ""}`} placeholder="จำนวน" />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1.5">วันที่ยืม *</label>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1.5">วันที่ต้องใช้ *</label>
                   <div className="field-wrap">
                     <i className="fa-solid fa-calendar-day field-icon" />
                     <input type="date" value={borrowDate}
                       onChange={e => { setBorrowDate(e.target.value); setErrs(p => ({ ...p, borrowDate: false })); }}
                       className={`form-input text-xs sm:text-sm ${errs.borrowDate ? "error" : ""}`} />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1.5">กำหนดคืน *</label>
-                  <div className="field-wrap">
-                    <i className="fa-solid fa-calendar-check field-icon" />
-                    <input type="date" value={dueDate}
-                      onChange={e => { setDueDate(e.target.value); setErrs(p => ({ ...p, dueDate: false })); }}
-                      className={`form-input text-xs sm:text-sm ${errs.dueDate ? "error" : ""}`} />
                   </div>
                 </div>
               </div>
@@ -818,7 +879,7 @@ export default function EquipmentRequestPage() {
                 {deliveryMode === "pickup" ? (
                   <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-3 mb-3 text-sm text-slate-600">
                     <i className="fa-solid fa-circle-info text-emerald-500 mr-1.5" />
-                    มารับด้วยตนเองที่ <strong>ห้องคุรุภัณฑ์</strong> — สแกนบัตรนักเรียนเพื่อยืนยันรับของ
+                    มารับด้วยตนเองที่ <strong>ห้องคุรุภัณฑ์</strong> ตามช่วงเวลาที่เลือก
                   </div>
                 ) : (
                   <div className="mb-3">
@@ -870,7 +931,6 @@ export default function EquipmentRequestPage() {
                 ส่งคำขอเบิก
               </button>
             </div>
-          )}
         </div>
       </div>
 
@@ -916,7 +976,7 @@ export default function EquipmentRequestPage() {
                       </span>
                     </div>
                     <div className="text-xs text-slate-500 mt-1.5 space-y-0.5">
-                      <div>ยืม {formatDateTH(h.borrow_date)} — กำหนดคืน {formatDateTH(h.due_date)}</div>
+                      <div>วันที่ต้องใช้ {formatDateTH(h.borrow_date)}</div>
                       <div>{h.delivery_mode === "delivery" ? `ส่งที่ ${h.delivery_loc ?? "-"}` : "มารับเอง"}{h.time_slot ? ` · ${h.time_slot}` : ""}</div>
                       {h.admin_note && <div className="text-slate-400">หมายเหตุ: {h.admin_note}</div>}
                     </div>

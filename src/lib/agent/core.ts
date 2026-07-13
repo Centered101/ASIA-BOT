@@ -20,8 +20,6 @@ export async function runAgent(
   let errorMsg: string | undefined
   let richData: AgentResponse['richData']
 
-  const ATTENDANCE_TOOLS = new Set(['get_attendance_status', 'get_attendance_summary', 'get_attendance_by_date_range'])
-
   try {
     const apiKey = process.env.ANTHROPIC_API_KEY
     if (!apiKey) throw new Error('ANTHROPIC_API_KEY not configured')
@@ -71,10 +69,6 @@ export async function runAgent(
           ctx,
           supabase
         )
-        // capture attendance data for rich card rendering
-        if (ATTENDANCE_TOOLS.has(block.name) && result && !(result as Record<string,unknown>).error) {
-          richData = { type: block.name, payload: result }
-        }
         toolResults.push({
           type: 'tool_result',
           tool_use_id: block.id,

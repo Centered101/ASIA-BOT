@@ -58,3 +58,5 @@ docs/user-manual.pdf
 # Database backups (may contain PII — never commit)
 backups/
 *.sql.gz
+
+/school

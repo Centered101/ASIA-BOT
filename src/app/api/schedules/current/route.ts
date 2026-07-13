@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -6,13 +6,42 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-export async function GET() {
+function bangkokToday() {
+  const thNow = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Bangkok" }));
+  return {
+    thNow,
+    date: `${thNow.getFullYear()}-${String(thNow.getMonth() + 1).padStart(2, "0")}-${String(thNow.getDate()).padStart(2, "0")}`,
+    time: `${String(thNow.getHours()).padStart(2, "0")}:${String(thNow.getMinutes()).padStart(2, "0")}:00`,
+  };
+}
+
+function dayOfWeekFromDate(date: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!match) return null;
+  const [, y, m, d] = match;
+  const parsed = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
+  if (
+    parsed.getUTCFullYear() !== Number(y) ||
+    parsed.getUTCMonth() !== Number(m) - 1 ||
+    parsed.getUTCDate() !== Number(d)
+  ) return null;
+  const jsDay = parsed.getUTCDay();
+  return jsDay === 0 ? 7 : jsDay;
+}
+
+export async function GET(req: NextRequest) {
   try {
-    const thNow = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Bangkok" }));
-    const jsDay = thNow.getDay();
-    const dayOfWeek = jsDay === 0 ? 7 : jsDay;
-    const currentTime = `${String(thNow.getHours()).padStart(2, "0")}:${String(thNow.getMinutes()).padStart(2, "0")}:00`;
-    const todayDate = `${thNow.getFullYear()}-${String(thNow.getMonth() + 1).padStart(2, "0")}-${String(thNow.getDate()).padStart(2, "0")}`;
+    const { searchParams } = new URL(req.url);
+    const today = bangkokToday();
+    const selectedDate = searchParams.get("date") || today.date;
+    const dayOfWeek = dayOfWeekFromDate(selectedDate);
+
+    if (!dayOfWeek) {
+      return NextResponse.json({ status: "error", message: "รูปแบบวันที่ไม่ถูกต้อง" }, { status: 400 });
+    }
+
+    const isToday = selectedDate === today.date;
+    const currentTime = isToday ? today.time : null;
 
     const [schedRes, overrideRes] = await Promise.all([
       supabase
@@ -23,12 +52,12 @@ export async function GET() {
       supabase
         .from("class_schedule_overrides")
         .select("*")
-        .eq("override_date", todayDate),
+        .eq("override_date", selectedDate),
     ]);
 
     if (schedRes.error) {
       console.error("[api/schedules/current] failed:", schedRes.error.message);
-      return NextResponse.json({ status: "success", data: [], meta: { dayOfWeek, currentTime, today: todayDate } });
+      return NextResponse.json({ status: "success", data: [], meta: { dayOfWeek, currentTime, selectedDate, today: today.date, isToday } });
     }
 
     // Build lookup: "class_group_id:start_time" → override row
@@ -51,11 +80,11 @@ export async function GET() {
         is_cancelled,
         has_override,
         override_note: override?.note ?? null,
-        is_current:    !is_cancelled && s.start_time <= currentTime && s.end_time > currentTime,
+        is_current:    !!currentTime && !is_cancelled && s.start_time <= currentTime && s.end_time > currentTime,
       };
     });
 
-    return NextResponse.json({ status: "success", data: schedule, meta: { dayOfWeek, currentTime, today: todayDate } });
+    return NextResponse.json({ status: "success", data: schedule, meta: { dayOfWeek, currentTime, selectedDate, today: today.date, isToday } });
   } catch (error) {
     console.error("[api/schedules/current] failed:", error);
     return NextResponse.json({ status: "success", data: [] });

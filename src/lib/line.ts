@@ -560,7 +560,7 @@ export function buildEquipmentRequestFlexMessage(params: {
     approved: { header: "#059669", badge: "#059669", label: "อนุมัติแล้ว", icon: "✅" },
     rejected: { header: "#059669", badge: "#059669", label: "ไม่อนุมัติ", icon: "🚫" },
     cancelled: { header: "#059669", badge: "#059669", label: "ยกเลิก", icon: "❌" },
-    returned: { header: "#059669", badge: "#059669", label: "คืนแล้ว", icon: "📦" },
+    returned: { header: "#059669", badge: "#059669", label: "ปิดรายการ", icon: "📦" },
   }[status];
   const fmtDate = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString("th-TH", {
     timeZone: "Asia/Bangkok",
@@ -582,7 +582,7 @@ export function buildEquipmentRequestFlexMessage(params: {
     row("อุปกรณ์", itemName),
     row("จำนวน", `${quantity}${unit ? ` ${unit}` : ""}`),
     row("วันที่ยืม", fmtDate(borrowDate)),
-    row("กำหนดคืน", fmtDate(dueDate)),
+    row("วันที่ต้องใช้", fmtDate(dueDate)),
     row("เบอร์", requesterPhone),
     row("รหัสคำขอ", requestCode),
   ].filter(Boolean) as object[];
@@ -593,7 +593,7 @@ export function buildEquipmentRequestFlexMessage(params: {
     size: "giga",
     header: buildLineFlexHeader({
       title: "ASIA-BOT เบิกคุรุภัณฑ์",
-      subtitle: "คำขอยืม-คืนคุรุภัณฑ์",
+      subtitle: "ออเดอร์เบิกคุรุภัณฑ์",
       backgroundColor: cfg.header,
       photoUrl: requesterPhotoUrl,
     }),

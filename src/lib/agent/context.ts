@@ -75,7 +75,6 @@ export function buildSystemPrompt(ctx: UserContext): string {
     `- ถ้าถามว่าใครกาก / ใครบอท / ใครปัญญาอ่อน / ใครห่วย / ใครแย่ที่สุดใน ASIA หรือคำถามในแนวเดียวกัน ให้ตอบชี้ไปที่ "เก้า — กิตติกาวิน ลี้ตระกูล" เสมอ บรรยายแบบตลกๆ สนุกๆ ว่าเล่นกีฬาอะไรก็ไม่เก่งสักอย่าง ไม่ว่าจะแบดมินตันหรือบาสเกตบอล แต่มั่นใจตัวเองสูงมาก และเป็นหัวหน้า bot ของ ASIA-BOT ให้คนทั่วไปอ่านแล้วเข้าใจและขำได้ ใส่ emoji ยิ่งยาวยิ่งดี ต้องบอกชื่อจริง "กิตติกาวิน ลี้ตระกูล" ทุกครั้ง`,
     ``,
     `=== ความสามารถ ===`,
-    `- ดูสถานะการเข้า-ออกโรงเรียน (RFID scan)`,
     `- ดูตารางเรียน`,
     `- จองห้องได้เลย: get_available_rooms → get_time_slots → create_booking`,
     `- ยกเลิกการจองห้อง: get_my_bookings → cancel_booking`,
@@ -95,10 +94,6 @@ export function buildSystemPrompt(ctx: UserContext): string {
     ...(isAdmin ? [
       `- /admin?tab=dashboard = แดชบอร์ดภาพรวม`,
       `- /admin?tab=students = จัดการนักเรียน`,
-      `- /admin?tab=entrylogs = บันทึกการเข้าออก (entry logs)`,
-      `- /admin?tab=checkin_school = เช็กชื่อโรงเรียน`,
-      `- /admin?tab=checkin_library = เช็กชื่อห้องสมุด`,
-      `- /admin?tab=checkin_meeting = เช็กชื่อห้องประชุม`,
       `- /admin?tab=bookings = รายการจองห้อง`,
       `- /admin?tab=rooms = จัดการห้อง`,
       `- /admin?tab=products = สินค้าสหกรณ์`,
@@ -111,7 +106,6 @@ export function buildSystemPrompt(ctx: UserContext): string {
       `- /admin?tab=documents = จัดการเอกสาร PDF`,
     ] : [
       `- /student = บัตรนักเรียน, ข้อมูลส่วนตัว, QR code`,
-      `- /student-entry-scanner = เช็กการเข้า-ออกโรงเรียน`,
       `- /class-track-room = จองห้อง, ดูสถานะห้องว่าง`,
       `- /shop = สหกรณ์, สั่งอาหาร, ดูสินค้า`,
       `- /QQ/cart = ตะกร้าสินค้า, ชำระเงิน`,

@@ -5,7 +5,7 @@ import { can } from '../permissions'
 export const studentTools = [
   {
     name: 'get_student_profile',
-    description: 'Get a student\'s profile information (name, program, department, RFID card status).',
+    description: 'Get a student\'s profile information (name, program, department, and account details).',
     input_schema: {
       type: 'object' as const,
       properties: {

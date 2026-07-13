@@ -21,18 +21,22 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { equipment_item_id, student_id, requester_phone, quantity, purpose, borrow_date, due_date, delivery_mode, delivery_loc, time_slot } = body;
+    const requestItems = Array.isArray(body.items)
+      ? body.items.map((item: { equipment_item_id?: string; quantity?: number }) => ({
+          equipment_item_id: item.equipment_item_id,
+          quantity: Number(item.quantity),
+        }))
+      : [{ equipment_item_id, quantity: Number(quantity) }];
 
-    if (!equipment_item_id || !student_id?.trim() || !quantity || !borrow_date || !due_date) {
+    const dueDateFinal = due_date || borrow_date;
+    if (!student_id?.trim() || !borrow_date || requestItems.length === 0 || requestItems.some((item: { equipment_item_id?: string; quantity: number }) => !item.equipment_item_id || !item.quantity)) {
       return NextResponse.json({ status: "error", message: "กรุณาเข้าสู่ระบบและกรอกข้อมูลให้ครบ" }, { status: 400 });
     }
-    if (Number(quantity) <= 0) {
+    if (requestItems.some((item: { quantity: number }) => item.quantity <= 0)) {
       return NextResponse.json({ status: "error", message: "จำนวนต้องมากกว่า 0" }, { status: 400 });
     }
-    if (Number(quantity) > MAX_BORROW_QUANTITY) {
+    if (requestItems.some((item: { quantity: number }) => item.quantity > MAX_BORROW_QUANTITY)) {
       return NextResponse.json({ status: "error", message: `เบิกได้ไม่เกิน ${MAX_BORROW_QUANTITY} ชิ้นต่อคำขอ` }, { status: 400 });
-    }
-    if (borrow_date > due_date) {
-      return NextResponse.json({ status: "error", message: "วันที่คืนต้องไม่ก่อนวันที่ยืม" }, { status: 400 });
     }
     const deliveryModeFinal: "pickup" | "delivery" = delivery_mode === "delivery" ? "delivery" : "pickup";
     if (deliveryModeFinal === "delivery" && !delivery_loc?.trim()) {
@@ -58,61 +62,66 @@ export async function POST(req: NextRequest) {
     const requester_name = `${student.first_name} ${student.last_name}`.trim();
     const department = student.department.trim();
 
-    const { data: item, error: itemError } = await supabase
+    const itemIds = requestItems.map((item: { equipment_item_id: string }) => item.equipment_item_id);
+    const { data: itemRows, error: itemError } = await supabase
       .from("equipment_items")
       .select("id, name, unit, active, deleted_at, available_quantity, image_url")
-      .eq("id", equipment_item_id)
-      .maybeSingle();
+      .in("id", itemIds);
 
     if (itemError) return NextResponse.json({ status: "error", message: itemError.message }, { status: 500 });
-    if (!item || !item.active || item.deleted_at) {
+    if (!itemRows || itemRows.length !== itemIds.length || itemRows.some(item => !item.active || item.deleted_at)) {
       return NextResponse.json({ status: "error", message: "ไม่พบคุรุภัณฑ์ที่เลือก" }, { status: 404 });
     }
-    if (Number(quantity) > item.available_quantity) {
-      return NextResponse.json({ status: "error", message: `คุรุภัณฑ์คงเหลือไม่พอ (เหลือ ${item.available_quantity} ${item.unit})` }, { status: 409 });
+    for (const requestItem of requestItems) {
+      const item = itemRows.find(row => row.id === requestItem.equipment_item_id);
+      if (!item || requestItem.quantity > item.available_quantity) {
+        return NextResponse.json({ status: "error", message: `คุรุภัณฑ์คงเหลือไม่พอ: ${item?.name ?? "รายการที่เลือก"}` }, { status: 409 });
+      }
     }
 
     const requester_phone_final = requester_phone?.trim() || student.student_phone || null;
 
     const request_code = generateRequestCode();
+    const rows = requestItems.map((requestItem: { equipment_item_id: string; quantity: number }) => ({
+      request_code,
+      equipment_item_id: requestItem.equipment_item_id,
+      student_id: student.student_id,
+      department,
+      requester_name,
+      requester_phone: requester_phone_final,
+      quantity: requestItem.quantity,
+      purpose: purpose?.trim() || null,
+      borrow_date,
+      due_date: dueDateFinal,
+      delivery_mode: deliveryModeFinal,
+      delivery_loc: deliveryModeFinal === "delivery" ? delivery_loc.trim() : "คุรุภัณฑ์",
+      time_slot: time_slot.trim(),
+    }));
+
     const { data: created, error } = await supabase
       .from("equipment_requests")
-      .insert({
-        request_code,
-        equipment_item_id,
-        student_id: student.student_id,
-        department,
-        requester_name,
-        requester_phone: requester_phone_final,
-        quantity: Number(quantity),
-        purpose: purpose?.trim() || null,
-        borrow_date,
-        due_date,
-        delivery_mode: deliveryModeFinal,
-        delivery_loc: deliveryModeFinal === "delivery" ? delivery_loc.trim() : "คุรุภัณฑ์",
-        time_slot: time_slot.trim(),
-      })
-      .select("id")
-      .single();
+      .insert(rows)
+      .select("id");
 
     if (error) return NextResponse.json({ status: "error", message: error.message }, { status: 500 });
 
+    const firstItem = itemRows[0];
     try {
       await sendLineFlexMessage(
         await getLineNotificationTarget(supabase as any, "equipment"),
-        `🧰 คำขอเบิกคุรุภัณฑ์ใหม่: ${item.name} — ${requester_name}`,
+        `🧰 คำขอเบิกคุรุภัณฑ์ใหม่: ${requestItems.length} รายการ — ${requester_name}`,
         buildEquipmentRequestFlexMessage({
           requestCode: request_code,
-          itemName: item.name,
-          itemImageUrl: item.image_url,
+          itemName: requestItems.length > 1 ? `${firstItem.name} และอีก ${requestItems.length - 1} รายการ` : firstItem.name,
+          itemImageUrl: firstItem.image_url,
           department,
           requesterName: requester_name,
           requesterPhotoUrl: student.photo_url,
           requesterPhone: requester_phone_final,
-          quantity: Number(quantity),
-          unit: item.unit,
+          quantity: requestItems.reduce((sum: number, item: { quantity: number }) => sum + item.quantity, 0),
+          unit: "ชิ้น",
           borrowDate: borrow_date,
-          dueDate: due_date,
+          dueDate: dueDateFinal,
           purpose: purpose?.trim() || null,
           status: "pending",
         })
@@ -121,7 +130,7 @@ export async function POST(req: NextRequest) {
       console.error("[LINE] equipment request admin notify failed:", e);
     }
 
-    return NextResponse.json({ status: "success", request_code, id: created?.id });
+    return NextResponse.json({ status: "success", request_code, id: created?.[0]?.id });
   } catch (error) {
     console.error("[api/equipment/requests] post failed:", error);
     return NextResponse.json({ status: "error", message: "เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์" }, { status: 500 });

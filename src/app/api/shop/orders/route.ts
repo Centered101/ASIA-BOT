@@ -79,9 +79,10 @@ export async function POST(req: NextRequest) {
       delivery_mode: "pickup" | "delivery";
       delivery_loc: string;
       delivery_slot: string;
+      source?: "ai" | "cart";
     };
 
-    const { student_id, student_name, items, delivery_mode, delivery_loc, delivery_slot } = body;
+    const { student_id, student_name, items, delivery_mode, delivery_loc, delivery_slot, source } = body;
     if (!student_id || !items?.length) {
       return NextResponse.json({ status: "error", message: "ข้อมูลไม่ครบ" });
     }
@@ -213,6 +214,7 @@ export async function POST(req: NextRequest) {
           deliveryLoc: delivery_loc,
           deliverySlot: delivery_slot,
           status: "pending",
+          sourceLabel: source === "ai" ? "ทำงานผ่าน AI" : null,
         })
       );
       console.log(`[ORDERS] LINE sent OK`);

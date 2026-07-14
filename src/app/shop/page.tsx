@@ -52,6 +52,12 @@ type PendingOrder = {
   deliveryLoc: string;
   deliverySlot: string;
 };
+type AiCheckoutPayload = {
+  items?: OrderItem[];
+  delivery_mode?: "pickup" | "delivery";
+  delivery_loc?: string;
+  delivery_slot?: string;
+};
 type Student = {
   student_id: string;
   first_name: string;
@@ -253,6 +259,34 @@ export default function ShopPage() {
     setLoading(false);
   }, []);
 
+  useEffect(() => {
+    if (!student) return;
+    const onAiCheckoutRequired = (event: Event) => {
+      const payload = (event as CustomEvent<AiCheckoutPayload>).detail;
+      if (!payload?.items?.length) return;
+      startPaymentForItems({
+        items: payload.items,
+        deliveryMode: payload.delivery_mode === "delivery" ? "delivery" : "pickup",
+        deliveryLoc: payload.delivery_loc || "สหกรณ์",
+        deliverySlot: payload.delivery_slot || "รับเองที่สหกรณ์",
+        source: "ai",
+      });
+    };
+    const onAiOrderChanged = () => {
+      fetchOrders();
+      fetchProducts();
+      setHistoryTab("active");
+      setLogsOpen(true);
+      toast.success("อัปเดตรายการสั่งซื้อจาก AI แล้ว");
+    };
+    window.addEventListener("shop:checkout-required", onAiCheckoutRequired);
+    window.addEventListener("shop:orders-changed", onAiOrderChanged);
+    return () => {
+      window.removeEventListener("shop:checkout-required", onAiCheckoutRequired);
+      window.removeEventListener("shop:orders-changed", onAiOrderChanged);
+    };
+  }, [fetchOrders, fetchProducts, student]);
+
   // ── Filtered products ────────────────────────────────────────────
   const filtered = (() => {
     let list = products.slice();
@@ -337,6 +371,31 @@ export default function ShopPage() {
     stopCountdown();
   }
 
+  function resumePendingPayment(orderId: string) {
+    const po = pendingOrder || (() => { try { return JSON.parse(localStorage.getItem(LS_PENDING) || "null") as PendingOrder | null; } catch { return null; } })();
+    if (!po || po.orderId !== orderId) {
+      toast.error("ไม่พบ QR ชำระเงินของออเดอร์นี้ กรุณาสร้างออเดอร์ใหม่");
+      return;
+    }
+    const rem = po.expireAt - Date.now();
+    if (rem <= 0) {
+      onPaymentExpired(po.orderId);
+      toast.error("QR หมดเวลาแล้ว กรุณาสร้างออเดอร์ใหม่");
+      return;
+    }
+    setLogsOpen(false);
+    setPendingBannerMs(0);
+    setPendingOrder(po);
+    setQrUrl(po.qr_url);
+    setPayAmount(po.total);
+    setPayItems(po.items);
+    setPayDeliveryTag(`${po.deliveryMode === "pickup" ? "🏪 มารับที่สหกรณ์" : "🚶 ส่งที่ " + po.deliveryLoc} | ⏰ ${po.deliverySlot}`);
+    setPayStatus("waiting");
+    setPayOpen(true);
+    startCountdown(rem, po.orderId);
+    startPolling(po.orderId);
+  }
+
   // ── Countdown ────────────────────────────────────────────────────
   function startCountdown(durationMs: number, orderId: string) {
     stopCountdown();
@@ -414,21 +473,26 @@ export default function ShopPage() {
   }
 
   // ── Checkout flow ─────────────────────────────────────────────────
-  async function doCheckout() {
-    if (!student) return;
-    if (!cartSubtotal) return;
-    const items: OrderItem[] = Object.entries(cart).map(([id, qty]) => {
-      const p = products.find(x => x.id === id)!;
-      return { id, name: p.name, price: p.price, qty, unit: p.unit || "" };
-    });
-    setPayAmount(cartTotal);
-    setPayItems(items);
+  async function startPaymentForItems(payload: {
+    items: OrderItem[];
+    deliveryMode: "pickup" | "delivery";
+    deliveryLoc: string;
+    deliverySlot: string;
+    source?: "cart" | "ai";
+  }) {
+    if (!student || payload.items.length === 0) return;
+    const subtotal = payload.items.reduce((s, i) => s + i.price * i.qty, 0);
+    const total = subtotal
+      + Math.ceil(subtotal * STRIPE_FEE_RATE * 100) / 100
+      + Math.ceil(subtotal * SYSTEM_FEE_RATE * 100) / 100;
+    setPayAmount(total);
+    setPayItems(payload.items);
     setQrUrl("");
     setPayStatus("loading");
     setTimerMs(PAY_LIMIT);
     setTimerUrgent(false);
-    const modeLabel = deliveryMode === "pickup" ? "🏪 มารับที่สหกรณ์" : "🚶 ส่งที่ " + deliveryLoc;
-    setPayDeliveryTag(`${modeLabel} | ⏰ ${deliverySlot}`);
+    const modeLabel = payload.deliveryMode === "pickup" ? "🏪 มารับที่สหกรณ์" : "🚶 ส่งที่ " + payload.deliveryLoc;
+    setPayDeliveryTag(`${modeLabel} | ⏰ ${payload.deliverySlot}`);
     setDeliveryOpen(false);
     setPayOpen(true);
 
@@ -439,10 +503,11 @@ export default function ShopPage() {
         body: JSON.stringify({
           student_id: student.student_id,
           student_name: `${student.first_name} ${student.last_name}`,
-          items,
-          delivery_mode: deliveryMode,
-          delivery_loc: deliveryLoc,
-          delivery_slot: deliverySlot,
+          items: payload.items,
+          delivery_mode: payload.deliveryMode,
+          delivery_loc: payload.deliveryLoc,
+          delivery_slot: payload.deliverySlot,
+          source: payload.source,
         }),
       });
       const r = await res.json().catch(() => ({ status: "error", message: "เซิร์ฟเวอร์ตอบกลับไม่ถูกต้อง" })) as { status: string; message?: string; order_id?: string; qr_url?: string; total?: number };
@@ -452,11 +517,11 @@ export default function ShopPage() {
       }
       const orderId = r.order_id!;
       orderIdRef.current = orderId;
-      const confirmedTotal = r.total ?? cartTotal;
+      const confirmedTotal = r.total ?? total;
       setPayAmount(confirmedTotal);
       const newLog: LogEntry = {
         orderId, ts: new Date().toISOString(), status: "pending",
-        items, total: confirmedTotal, student: `${student.first_name} ${student.last_name}`,
+        items: payload.items, total: confirmedTotal, student: `${student.first_name} ${student.last_name}`,
         studentId: student.student_id,
         nickname: student.nickname,
         program: student.program,
@@ -465,17 +530,37 @@ export default function ShopPage() {
       };
       setLogs(prev => [newLog, ...prev].slice(0, 50));
       const expireAt = Date.now() + PAY_LIMIT;
-      const po: PendingOrder = { orderId, expireAt, total: confirmedTotal, items, qr_url: r.qr_url || "", deliveryMode: deliveryMode as "pickup" | "delivery", deliveryLoc, deliverySlot };
+      const po: PendingOrder = {
+        orderId,
+        expireAt,
+        total: confirmedTotal,
+        items: payload.items,
+        qr_url: r.qr_url || "",
+        deliveryMode: payload.deliveryMode,
+        deliveryLoc: payload.deliveryLoc,
+        deliverySlot: payload.deliverySlot,
+      };
       try { localStorage.setItem(LS_PENDING, JSON.stringify(po)); } catch { /**/ }
       setPendingOrder(po);
       if (r.qr_url) setQrUrl(r.qr_url);
       setPayStatus("waiting");
       startCountdown(PAY_LIMIT, orderId);
       startPolling(orderId);
+      if (payload.source === "ai") toast.success("เปิด QR ชำระเงินจาก AI แล้ว");
     } catch {
       toast.error("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้");
       setPayOpen(false);
     }
+  }
+
+  async function doCheckout() {
+    if (!student) return;
+    if (!cartSubtotal) return;
+    const items: OrderItem[] = Object.entries(cart).map(([id, qty]) => {
+      const p = products.find(x => x.id === id)!;
+      return { id, name: p.name, price: p.price, qty, unit: p.unit || "" };
+    });
+    await startPaymentForItems({ items, deliveryMode, deliveryLoc, deliverySlot, source: "cart" });
   }
 
   // ── Slip (Canvas) ─────────────────────────────────────────────────
@@ -1580,9 +1665,10 @@ export default function ShopPage() {
                       </button>
                     )}
                     {status === "pending" && (
-                      <span className="inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-[11px] font-bold bg-amber-50 text-amber-600">
-                        <i className="fa-solid fa-circle-notch fa-spin text-[10px]" /> รอชำระเงิน
-                      </span>
+                      <button onClick={() => resumePendingPayment(l.orderId)}
+                        className="inline-flex items-center gap-1 rounded-xl px-3 py-1.5 text-[11px] font-bold bg-amber-50 text-amber-600 hover:bg-amber-100 active:scale-95 transition">
+                        <i className="fa-solid fa-qrcode text-[10px]" /> ชำระเงิน
+                      </button>
                     )}
                   </div>
                 </div>

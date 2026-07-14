@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { UserContext } from '../types'
 import { can } from '../permissions'
+import { notifyAiFeedbackSubmitted } from '../line-notify'
 
 export const feedbackTools = [
   {
@@ -64,6 +65,13 @@ export async function executeFeedbackTool(
       .single()
 
     if (error) return { error: error.message }
+    const feedbackType = input.type === 'report' ? 'report' : 'comment'
+    await notifyAiFeedbackSubmitted(supabase, ctx, {
+      feedbackId: data?.id,
+      type: feedbackType,
+      category: (input.category as string) || null,
+      message,
+    })
     return { success: true, feedback_id: data?.id, message: 'Feedback submitted successfully.' }
   }
 

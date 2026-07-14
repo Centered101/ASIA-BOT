@@ -258,6 +258,17 @@ const FEEDBACK_STATUS: Record<string, string> = { pending: "รอดำเน�
 const ROLE_DESC: Record<string, string> = { superadmin: "ผู้ดูแลสูงสุด", admin: "ผู้ดูแลระบบ", staff: "เจ้าหน้าที่" };
 const CARD_STATUS: Record<string, string> = { active: "บัตรใช้งานได้", inactive: "บัตรไม่ได้ใช้งาน", lost: "บัตรหาย" };
 
+function isAdminModalOpen() {
+  if (typeof document === "undefined") return false;
+  return Array.from(document.querySelectorAll<HTMLElement>(".fixed")).some((el) => {
+    const classes = el.classList;
+    const isFullScreenOverlay = classes.contains("inset-0");
+    const isModalLayer = classes.contains("z-50") || classes.contains("z-[9999]");
+    const isHidden = classes.contains("pointer-events-none") || el.getAttribute("aria-hidden") === "true";
+    return isFullScreenOverlay && isModalLayer && !isHidden;
+  });
+}
+
 // ─── Navigation Config ────────────────────────────────────────────────────────
 
 type AdminRole = "superadmin" | "admin" | "staff";
@@ -728,6 +739,10 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
     };
 
     const isEditingAdminPage = () => {
+      if (!document.hasFocus()) return true;
+      if (isAdminModalOpen()) return true;
+      const filePickerAt = Number((window as any).__asiaAdminFilePickerAt ?? 0);
+      if (filePickerAt && Date.now() - filePickerAt < 120000) return true;
       if (showAddStudent) return true;
       const el = document.activeElement;
       if (!(el instanceof HTMLElement)) return false;
@@ -747,16 +762,24 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
         const tabs = ADMIN_REALTIME_TABLE_TABS[table] ?? [];
         const currentTab = activeTabRef.current;
         const shouldRefreshCurrentTab = tabs.includes(currentTab);
+        const isModalLocked = isAdminModalOpen();
+        const isEditing = isEditingAdminPage();
         fetchStats();
-        if (shouldRefreshCurrentTab && !isEditingAdminPage()) refreshVisibleTab();
-        if (shouldRefreshCurrentTab && isEditingAdminPage() && !pendingRealtimeToast.current) {
+        if (shouldRefreshCurrentTab && !isEditing) refreshVisibleTab();
+        if (shouldRefreshCurrentTab && isEditing && !pendingRealtimeToast.current) {
           pendingRealtimeToast.current = true;
-          toast.info("มีข้อมูลใหม่จากผู้ดูแลคนอื่น", {
-            description: "ระบบยังไม่รีเฟรชหน้านี้ เพื่อไม่ให้ข้อมูลที่กำลังกรอกหาย",
-            action: { label: "รีเฟรช", onClick: refreshVisibleTab },
-          });
+          if (isModalLocked) {
+            toast.info("มีข้อมูลใหม่", {
+              description: "ระบบจะไม่รีเฟรชระหว่างเปิดหน้าต่างแก้ไข กดบันทึกก่อนเพื่ออัปเดตข้อมูล",
+            });
+          } else {
+            toast.info("มีข้อมูลใหม่จากผู้ดูแลคนอื่น", {
+              description: "ระบบยังไม่รีเฟรชหน้านี้ เพื่อไม่ให้ข้อมูลที่กำลังกรอกหาย",
+              action: { label: "รีเฟรช", onClick: refreshVisibleTab },
+            });
+          }
         }
-        if (table === "students" && !isEditingAdminPage()) setStudentsRefreshKey((v) => v + 1);
+        if (table === "students" && !isEditing) setStudentsRefreshKey((v) => v + 1);
       }, 350);
     };
 
@@ -768,7 +791,6 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
 
     const onFocus = () => {
       fetchStats();
-      if (!isEditingAdminPage()) setAdminDataVersion((v) => v + 1);
     };
     window.addEventListener("focus", onFocus);
 
@@ -2352,9 +2374,11 @@ function BookingsTab({ adminId, view }: { adminId: string; view: "rooms" | "book
   const subTab = view;
   const [rooms,     setRooms]     = useState<Room[]>([]);
   const [roomsLoading, setRoomsLoading] = useState(true);
+  const [roomsError, setRoomsError] = useState("");
   const [editRoom,  setEditRoom]  = useState<Room | "new" | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [bookingsError, setBookingsError] = useState("");
   const [filter, setFilter] = useState("all");
   const [bookingSearch, setBookingSearch] = useState("");
   const [roomSearch, setRoomSearch] = useState("");
@@ -2366,18 +2390,32 @@ function BookingsTab({ adminId, view }: { adminId: string; view: "rooms" | "book
 
   const fetchRooms = useCallback(async () => {
     setRoomsLoading(true);
-    const res = await adminFetch("/api/admin/rooms", adminId);
-    const j   = await res.json();
-    if (j.status === "success") setRooms(j.data ?? []);
-    setRoomsLoading(false);
+    setRoomsError("");
+    try {
+      const res = await adminFetch("/api/admin/rooms", adminId);
+      const j   = await res.json();
+      if (j.status === "success") setRooms(j.data ?? []);
+      else setRoomsError(j.message ?? "โหลดข้อมูลห้องไม่สำเร็จ");
+    } catch {
+      setRoomsError("เชื่อมต่อข้อมูลห้องไม่ได้ กรุณาลองใหม่อีกครั้ง");
+    } finally {
+      setRoomsLoading(false);
+    }
   }, [adminId]);
 
   const fetch_ = useCallback(async () => {
     setLoading(true);
-    const res = await adminFetch(`/api/admin/bookings?status=${filter}`, adminId);
-    const json = await res.json();
-    if (json.status === "success") setBookings(json.data ?? []);
-    setLoading(false);
+    setBookingsError("");
+    try {
+      const res = await adminFetch(`/api/admin/bookings?status=${filter}`, adminId);
+      const json = await res.json();
+      if (json.status === "success") setBookings(json.data ?? []);
+      else setBookingsError(json.message ?? "โหลดรายการจองไม่สำเร็จ");
+    } catch {
+      setBookingsError("เชื่อมต่อรายการจองไม่ได้ กรุณาลองใหม่อีกครั้ง");
+    } finally {
+      setLoading(false);
+    }
   }, [adminId, filter]);
 
   useEffect(() => { fetchRooms(); }, [fetchRooms]);
@@ -2559,7 +2597,12 @@ function BookingsTab({ adminId, view }: { adminId: string; view: "rooms" | "book
               <i className="fa-solid fa-plus" /> เพิ่มห้อง
             </button>
           </div>
-          {roomsLoading ? <DarkSpinner /> : filteredRooms.length === 0 ? <DarkEmpty text="ยังไม่มีห้อง" /> : (
+          {roomsError ? (
+            <div className="rounded-2xl p-5 text-sm flex flex-col sm:flex-row sm:items-center gap-3" style={{ background: "#1c1c1c", border: "1px solid rgba(255,112,112,.45)", color: "#ffb4b4" }}>
+              <span className="flex-1"><i className="fa-solid fa-triangle-exclamation mr-2" />{roomsError}</span>
+              <button type="button" onClick={fetchRooms} className="px-3 py-2 rounded-xl text-xs font-bold text-white" style={{ background: "#ff7070" }}>ลองใหม่</button>
+            </div>
+          ) : roomsLoading ? <DarkSpinner /> : filteredRooms.length === 0 ? <DarkEmpty text="ยังไม่มีห้อง" /> : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredRooms.map(r => {
                 const isOpen = r.status === "active" || r.status === "available";
@@ -2656,7 +2699,12 @@ function BookingsTab({ adminId, view }: { adminId: string; view: "rooms" | "book
             ))}
           </div>
 
-          {loading ? <DarkSpinner /> : filteredBookings.length === 0 ? <DarkEmpty text="ไม่มีการจอง" /> : (
+          {bookingsError ? (
+            <div className="rounded-2xl p-5 text-sm flex flex-col sm:flex-row sm:items-center gap-3" style={{ background: "#1c1c1c", border: "1px solid rgba(255,112,112,.45)", color: "#ffb4b4" }}>
+              <span className="flex-1"><i className="fa-solid fa-triangle-exclamation mr-2" />{bookingsError}</span>
+              <button type="button" onClick={fetch_} className="px-3 py-2 rounded-xl text-xs font-bold text-white" style={{ background: "#ff7070" }}>ลองใหม่</button>
+            </div>
+          ) : loading ? <DarkSpinner /> : filteredBookings.length === 0 ? <DarkEmpty text="ไม่มีการจอง" /> : (
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
               {filteredBookings.map((b) => {
                 const sc = STATUS_COLOR[b.status] ?? { bg: "#2a2a2a", text: "#9e9e9e" };
@@ -8544,7 +8592,11 @@ function ImgUpload({ value, onChange, placeholder, adminId, endpoint = "/api/adm
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file) {
+      (window as any).__asiaAdminFilePickerAt = 0;
+      return;
+    }
+    (window as any).__asiaAdminFilePickerAt = Date.now();
     setUploading(true); setErr("");
     const oldValue = value;
     const oldIsOwned = isOwned;
@@ -8560,7 +8612,11 @@ function ImgUpload({ value, onChange, placeholder, adminId, endpoint = "/api/adm
         if (oldIsOwned && oldValue && oldValue !== j.url) await deleteStorageFile(oldValue, adminId, endpoint);
       } else setErr(j.message ?? "อัปโหลดไม่สำเร็จ");
     } catch { setErr("เชื่อมต่อไม่ได้"); }
-    finally { setUploading(false); if (ref.current) ref.current.value = ""; }
+    finally {
+      setUploading(false);
+      (window as any).__asiaAdminFilePickerAt = Date.now();
+      if (ref.current) ref.current.value = "";
+    }
   }
 
   async function onDelete() {
@@ -8593,7 +8649,7 @@ function ImgUpload({ value, onChange, placeholder, adminId, endpoint = "/api/adm
             style={{ border: "1px solid #3e3e3e" }}
             onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
         )}
-        <button type="button" onClick={() => ref.current?.click()} disabled={uploading || deleting}
+        <button type="button" onClick={() => { (window as any).__asiaAdminFilePickerAt = Date.now(); ref.current?.click(); }} disabled={uploading || deleting}
           className="flex-shrink-0 px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50 transition-colors"
           style={{ background: "#2a2a2a", border: "1px solid #3e3e3e", color: "#9e9e9e" }}>
           {uploading

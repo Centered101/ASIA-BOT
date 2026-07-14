@@ -7,6 +7,7 @@ import { shopTools, executeShopTool } from './shop'
 import { scheduleTools, executeScheduleTool } from './schedule'
 import { feedbackTools, executeFeedbackTool } from './feedback'
 import { dashboardTools, executeDashboardTool } from './dashboard'
+import { equipmentTools, executeEquipmentTool } from './equipment'
 
 // Full tool registry — every tool the agent can call
 export const ALL_TOOLS = [
@@ -15,6 +16,7 @@ export const ALL_TOOLS = [
   ...shopTools,
   ...scheduleTools,
   ...feedbackTools,
+  ...equipmentTools,
   ...dashboardTools,
 ]
 
@@ -32,6 +34,9 @@ const TOOL_ALLOW: Record<UserRole, string[]> = {
     'get_products',
     'place_order',
     'cancel_order',
+    'get_equipment_items',
+    'request_equipment',
+    'get_my_equipment_requests',
     'get_schedule_today',
     'get_schedule_week',
     'submit_feedback',
@@ -51,6 +56,9 @@ const TOOL_ALLOW: Record<UserRole, string[]> = {
     'create_booking',
     'cancel_booking',
     'get_all_bookings',
+    'get_equipment_items',
+    'request_equipment',
+    'get_my_equipment_requests',
     'get_schedule_today',
     'get_schedule_week',
     'get_school_info',
@@ -64,6 +72,7 @@ const TOOL_ALLOW: Record<UserRole, string[]> = {
   cooperative_staff: [
     'get_products',
     'get_all_orders',
+    'get_equipment_items',
     'get_school_info',
   ],
   school_admin: [
@@ -78,6 +87,9 @@ const TOOL_ALLOW: Record<UserRole, string[]> = {
     'get_all_orders',
     'get_products',
     'cancel_order',
+    'get_equipment_items',
+    'request_equipment',
+    'get_my_equipment_requests',
     'get_schedule_today',
     'get_schedule_week',
     'submit_feedback',
@@ -119,6 +131,9 @@ const TOOL_MODULES: Record<string, string> = {
   get_my_orders: 'shop',
   get_products: 'shop',
   get_all_orders: 'shop',
+  get_equipment_items: 'equipment',
+  request_equipment: 'equipment',
+  get_my_equipment_requests: 'equipment',
   get_schedule_today: 'schedule',
   get_schedule_week: 'schedule',
   submit_feedback: 'feedback',
@@ -139,6 +154,7 @@ export async function executeToolCall(
     case 'students':   return executeStudentTool(toolName, input, ctx, supabase)
     case 'booking':    return executeBookingTool(toolName, input, ctx, supabase)
     case 'shop':       return executeShopTool(toolName, input, ctx, supabase)
+    case 'equipment':  return executeEquipmentTool(toolName, input, ctx, supabase)
     case 'schedule':   return executeScheduleTool(toolName, input, ctx, supabase)
     case 'feedback':   return executeFeedbackTool(toolName, input, ctx, supabase)
     case 'dashboard':  return executeDashboardTool(toolName, input, ctx, supabase)

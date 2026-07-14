@@ -846,10 +846,10 @@ export default function StudentPage() {
                 { icon: "fa-brands fa-google", label: "บัญชี Google", val: isGoogleLinked ? (student.google_email ?? "เชื่อมต่อแล้ว") : "ยังไม่เชื่อมต่อ", cls: isGoogleLinked ? "text-sky-500" : "text-slate-400" },
                 ...(adminRole ? [{ icon: "fa-shield-halved", label: "สิทธิ์ผู้ดูแล", val: `${ADMIN_ROLE_LABEL[adminRole] ?? adminRole}`, cls: adminRole === "superadmin" ? "text-red-500" : adminRole === "admin" ? "text-blue-500" : "text-slate-500" }] : []),
               ].map((row) => (
-                <div key={row.label} className="flex items-center gap-2.5 py-2.5 border-b border-slate-100 last:border-0">
+                <div key={row.label} className="flex items-start gap-2.5 py-2.5 border-b border-slate-100 last:border-0">
                   <i className={`${row.icon.startsWith("fa-brands") ? row.icon : `fa-solid ${row.icon}`} text-slate-300 text-xs w-4 text-center flex-shrink-0`} />
-                  <span className="text-xs text-slate-400 font-medium min-w-[100px]">{row.label}</span>
-                  <span className={`text-sm font-semibold flex-1 ${row.cls || "text-slate-800"}`}>{String(row.val)}</span>
+                  <span className="text-xs text-slate-400 font-medium w-[94px] shrink-0 leading-5 sm:w-[110px]">{row.label}</span>
+                  <span className={`min-w-0 flex-1 break-words text-sm font-semibold leading-5 ${row.label === "บัญชี Google" ? "break-all" : ""} ${row.cls || "text-slate-800"}`}>{String(row.val)}</span>
                 </div>
               ))}
               <div className="flex justify-end pt-3">

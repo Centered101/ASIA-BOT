@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { UserContext } from '../types'
 import { can } from '../permissions'
+import { notifyAiBookingCreated } from '../line-notify'
 
 export const bookingTools = [
   {
@@ -126,6 +127,14 @@ export async function executeBookingTool(
       .single()
 
     if (error) return { error: error.message }
+    await notifyAiBookingCreated(supabase, ctx, {
+      bookingId: data?.id,
+      roomName: room.name,
+      bookingDate: booking_date,
+      slotId: slot_id,
+      attendees: attendees ?? 1,
+      purpose,
+    })
     return {
       success: true,
       booking_id: data?.id,

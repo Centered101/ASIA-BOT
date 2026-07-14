@@ -4,9 +4,10 @@ const BANGKOK_TIME_ZONE = "Asia/Bangkok";
 
 export function sanitizeStorageName(name: string) {
   const cleaned = name
+    .normalize("NFKD")
     .trim()
-    .replace(/\s+/g, "-")
-    .replace(/[/\\?%*:|"<>#\x00-\x1f]/g, "")
+    .replace(/[^\x00-\x7f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
   return cleaned.slice(0, MAX_FILE_NAME_LENGTH) || FALLBACK_FILE_NAME;
@@ -14,7 +15,8 @@ export function sanitizeStorageName(name: string) {
 
 export function buildTimedImageName(fileName: string, ext: string, time = Date.now()) {
   const baseName = fileName.replace(/\.[^/.]+$/, "");
-  return `${sanitizeStorageName(baseName)}-${time}.${ext}`;
+  const cleanExt = sanitizeStorageName(ext.toLowerCase()).replace(/[^a-z0-9]/g, "") || "jpg";
+  return `${sanitizeStorageName(baseName)}-${time}.${cleanExt}`;
 }
 
 export function getStorageDateFolder(date = new Date()) {

@@ -127,8 +127,9 @@ export function buildOrderFlexMessage(params: {
   deliveryLoc?: string | null;
   deliverySlot?: string | null;
   status?: "pending" | "paid" | "cancelled";
+  sourceLabel?: string | null;
 }) {
-  const { orderId, studentName, studentId, studentPhotoUrl, items, total, deliveryMode, deliveryLoc, deliverySlot, status = "paid" } = params;
+  const { orderId, studentName, studentId, studentPhotoUrl, items, total, deliveryMode, deliveryLoc, deliverySlot, status = "paid", sourceLabel } = params;
   const isPending = status === "pending";
   const isCancelled = status === "cancelled";
   const isDelivery = deliveryMode === "delivery";
@@ -174,6 +175,14 @@ export function buildOrderFlexMessage(params: {
             weight: "bold" as const,
           }],
         },
+        ...(sourceLabel ? [{
+          type: "box" as const,
+          layout: "horizontal" as const,
+          backgroundColor: "#FFF7ED",
+          cornerRadius: "14px",
+          paddingAll: "8px",
+          contents: [{ type: "text" as const, text: `🤖 ${sourceLabel}`, size: "xs" as const, color: "#C2410C", weight: "bold" as const, align: "center" as const }],
+        }] : []),
         { type: "text", text: orderId, weight: "bold", size: "xl", color: "#0F172A" },
         {
           type: "box" as const,
@@ -318,8 +327,9 @@ export function buildFeedbackFlexMessage(params: {
   reportUrl?: string | null;
   message: string;
   imageUrls?: string[] | null;
+  sourceLabel?: string | null;
 }) {
-  const { type, name, studentId, studentPhotoUrl, email, contact, category, reportUrl, message, imageUrls } = params;
+  const { type, name, studentId, studentPhotoUrl, email, contact, category, reportUrl, message, imageUrls, sourceLabel } = params;
   const siteUrl     = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-bot.xyz";
   const typeLabel   = type === "comment" ? "ความคิดเห็น" : "รายงานปัญหา";
   const headerColor = type === "comment" ? "#84D4FA" : "#FF7070";
@@ -352,6 +362,14 @@ export function buildFeedbackFlexMessage(params: {
   // ── Body ────────────────────────────────────────────────────────
   const bodyContents: object[] = [
     { type: "text", text: "สถานะ: รอรับเรื่อง", weight: "bold", size: "xl", color: "#FE4040" },
+    ...(sourceLabel ? [{
+      type: "box" as const,
+      layout: "horizontal" as const,
+      backgroundColor: "#F0F9FF",
+      cornerRadius: "14px",
+      paddingAll: "8px",
+      contents: [{ type: "text" as const, text: `🤖 ${sourceLabel}`, size: "xs" as const, color: "#0369A1", weight: "bold" as const, align: "center" as const }],
+    }] : []),
     { type: "text", text: `ประเภท: ${typeLabel}`, size: "sm", color: "#475569" },
   ];
 
@@ -461,8 +479,9 @@ export function buildBookingFlexMessage(params: {
   phone?: string | null;
   purpose: string;
   status?: "pending" | "approved" | "rejected" | "cancelled";
+  sourceLabel?: string | null;
 }) {
-  const { bookingId, roomName, studentName, studentId, studentPhotoUrl, nickname, program, department, bookingDate, startTime, endTime, attendees, phone, purpose, status = "pending" } = params;
+  const { bookingId, roomName, studentName, studentId, studentPhotoUrl, nickname, program, department, bookingDate, startTime, endTime, attendees, phone, purpose, status = "pending", sourceLabel } = params;
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-bot.xyz";
   const cfg = {
     pending: { header: "#F59E0B", badge: "#F59E0B", label: "รออนุมัติ", icon: "📅" },
@@ -494,6 +513,7 @@ export function buildBookingFlexMessage(params: {
     row("จำนวน", attendees ? `${attendees} คน` : null),
     row("เบอร์", phone),
     row("Booking", bookingId),
+    row("แหล่งที่มา", sourceLabel),
   ].filter(Boolean) as object[];
 
   return {
@@ -552,8 +572,9 @@ export function buildEquipmentRequestFlexMessage(params: {
   dueDate: string;
   purpose?: string | null;
   status?: "pending" | "approved" | "rejected" | "cancelled" | "returned";
+  sourceLabel?: string | null;
 }) {
-  const { requestCode, itemName, itemImageUrl, department, requesterName, requesterPhotoUrl, requesterPhone, quantity, unit, borrowDate, dueDate, purpose, status = "pending" } = params;
+  const { requestCode, itemName, itemImageUrl, department, requesterName, requesterPhotoUrl, requesterPhone, quantity, unit, borrowDate, dueDate, purpose, status = "pending", sourceLabel } = params;
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-bot.xyz";
   const cfg = {
     pending: { header: "#059669", badge: "#059669", label: "รออนุมัติ", icon: "🧰" },
@@ -585,6 +606,7 @@ export function buildEquipmentRequestFlexMessage(params: {
     row("วันที่ต้องใช้", fmtDate(dueDate)),
     row("เบอร์", requesterPhone),
     row("รหัสคำขอ", requestCode),
+    row("แหล่งที่มา", sourceLabel),
   ].filter(Boolean) as object[];
   const safeItemImageUrl = lineImageUrl(itemImageUrl);
 

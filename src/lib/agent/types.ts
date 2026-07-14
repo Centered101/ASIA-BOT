@@ -69,4 +69,5 @@ export interface AgentResponse {
   latencyMs: number
   sessionId: string
   richData?: { type: string; payload: unknown }
+  events?: { type: string; payload?: unknown }[]
 }

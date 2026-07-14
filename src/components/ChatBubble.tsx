@@ -8,6 +8,8 @@ import Markdown from "./Markdown";
 
 type NavButton = { path: string; label: string };
 type RichCard = { type: string; payload: Record<string, unknown> };
+type ChoiceOption = { label: string; value: string; description?: string };
+type ChatEvent = string | { type: string; payload?: unknown };
 type Message = { role: "user" | "assistant"; content: string; id: string; navButtons?: NavButton[]; card?: RichCard };
 type Pos = { r: number; b: number };
 
@@ -133,6 +135,61 @@ function StudentInfoBar({ ctx, accent }: { ctx: UserContext; accent: string }) {
           {ctx.studentId && <span style={{ marginRight: 8 }}><i className="fa-solid fa-id-card" style={{ marginRight: 3 }} />{ctx.studentId}</span>}
           {ctx.userProgram && <span>{ctx.userProgram}{ctx.userDepartment ? ` · ${ctx.userDepartment}` : ""}</span>}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ChoiceCard({ card, accent, isDark, onSelect }: { card: RichCard; accent: string; isDark: boolean; onSelect: (value: string) => void }) {
+  if (card.type !== "choice") return null;
+  const title = String(card.payload.title ?? "เลือกตัวเลือก");
+  const helper = String(card.payload.helper ?? "");
+  const inputPrefix = String(card.payload.inputPrefix ?? "");
+  const options = ((card.payload.options as ChoiceOption[] | undefined) ?? []).slice(0, 12);
+  if (!options.length) return null;
+
+  return (
+    <div style={{
+      background: isDark ? "#181818" : "#F8FAFC",
+      border: `1px solid ${accent}45`,
+      borderRadius: 14,
+      padding: 10,
+      display: "flex",
+      flexDirection: "column",
+      gap: 7,
+    }}>
+      <div style={{ fontSize: 12, fontWeight: 800, color: isDark ? "#ededed" : "#0F172A" }}>
+        <i className="fa-solid fa-list-check" style={{ color: accent, marginRight: 6 }} />{title}
+      </div>
+      {helper && <div style={{ fontSize: 11, color: isDark ? "#9e9e9e" : "#64748B", lineHeight: 1.5 }}>{helper}</div>}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {options.map(option => (
+          <button
+            key={`${option.label}-${option.value}`}
+            type="button"
+            onClick={() => onSelect(`${inputPrefix}${option.value}`)}
+            style={{
+              width: "100%",
+              textAlign: "left",
+              display: "flex",
+              gap: 8,
+              alignItems: "flex-start",
+              background: isDark ? "#0c0c0c" : "#fff",
+              border: `1px solid ${accent}35`,
+              borderRadius: 10,
+              padding: "8px 10px",
+              cursor: "pointer",
+              fontFamily: "'Kanit', sans-serif",
+              color: isDark ? "#ededed" : "#0F172A",
+            }}
+          >
+            <span style={{ width: 15, height: 15, borderRadius: "50%", border: `2px solid ${accent}`, marginTop: 2, flexShrink: 0 }} />
+            <span style={{ minWidth: 0 }}>
+              <span style={{ display: "block", fontSize: 12, fontWeight: 700, lineHeight: 1.35 }}>{option.label}</span>
+              {option.description && <span style={{ display: "block", fontSize: 10, color: isDark ? "#9e9e9e" : "#64748B", marginTop: 2, lineHeight: 1.35 }}>{option.description}</span>}
+            </span>
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -405,10 +462,11 @@ export default function ChatBubble() {
         return;
       }
 
-      const data = await res.json() as { text?: string; error?: string; navButtons?: NavButton[]; card?: RichCard };
+      const data = await res.json() as { text?: string; error?: string; navButtons?: NavButton[]; card?: RichCard; events?: ChatEvent[] };
       const full = data.text ?? data.error ?? "ขอโทษครับ เกิดข้อผิดพลาด ลองใหม่อีกครั้ง";
       const navButtons = data.navButtons ?? [];
       const card = data.card ?? undefined;
+      const events = data.events ?? [];
 
       for (let i = 1; i <= full.length; i++) {
         if (abortRef.current?.signal.aborted) break;
@@ -418,6 +476,11 @@ export default function ChatBubble() {
       if (navButtons.length > 0 || card) {
         setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, navButtons, card } : m));
       }
+      events.forEach(event => {
+        const eventName = typeof event === "string" ? event : event.type;
+        if (!eventName) return;
+        window.dispatchEvent(new CustomEvent(eventName, { detail: typeof event === "string" ? undefined : event.payload }));
+      });
     } catch (err: unknown) {
       if ((err as Error)?.name !== "AbortError") {
         setMessages(prev => prev.map(m =>
@@ -627,6 +690,11 @@ export default function ChatBubble() {
                             </Link>
                           ))}
                         </div>
+                      )}
+                      {msg.role === "assistant" && msg.card && (
+                        msg.card.type === "choice"
+                          ? <ChoiceCard card={msg.card} accent={accent} isDark={ctx.isAdmin} onSelect={sendMessage} />
+                          : <AttendanceCard card={msg.card} accent={accent} ctx={ctx} />
                       )}
                     </div>
                   </div>

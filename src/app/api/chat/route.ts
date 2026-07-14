@@ -70,5 +70,12 @@ export async function POST(req: NextRequest) {
 
   const result = await runAgent(agentReq, supabase)
   const { cleanText, navButtons } = parseNavTags(result.text)
-  return NextResponse.json({ text: cleanText, navButtons, card: result.richData ?? null })
+  const events = [
+    ...(result.events ?? []),
+    ...(result.toolsUsed.includes('cancel_order') ? [{ type: 'shop:orders-changed' }] : []),
+    ...(result.toolsUsed.includes('request_equipment') ? [{ type: 'equipment:requests-changed' }] : []),
+    ...(result.toolsUsed.includes('create_booking') || result.toolsUsed.includes('cancel_booking') ? [{ type: 'booking:requests-changed' }] : []),
+    ...(result.toolsUsed.includes('submit_feedback') ? [{ type: 'feedback:submitted' }] : []),
+  ]
+  return NextResponse.json({ text: cleanText, navButtons, card: result.richData ?? null, events })
 }

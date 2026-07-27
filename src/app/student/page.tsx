@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -8,7 +8,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ProfileImageCropModal from "@/components/ProfileImageCropModal";
 import { toast } from "sonner";
-import { SESSION_KEY, SESSION_TIME_KEY, SESSION_TTL, DEPARTMENTS } from "@/lib/config";
+import { SESSION_KEY, SESSION_TIME_KEY, SESSION_TTL, DEPARTMENTS, SITE_NAME } from "@/lib/config";
 import type { Database } from "@/types/database";
 import QRCode from "qrcode";
 import { getGoogleSupabase } from "@/lib/supabase-google";
@@ -72,6 +72,7 @@ export default function StudentPage() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [googleLinking, setGoogleLinking] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const deptRef = useRef<HTMLDivElement>(null);
   const [sessionCountdown, setSessionCountdown] = useState("");
   const studentPhotoSrc = safeImageSrc(student?.photo_url);
 
@@ -82,6 +83,10 @@ export default function StudentPage() {
   const [imgNat, setImgNat] = useState({ w: 0, h: 0 });
   const [cropDragging, setCropDragging] = useState(false);
   const [cropZoom, setCropZoom] = useState(1);
+  const [deptOpen, setDeptOpen] = useState(false);
+  const [deptQuery, setDeptQuery] = useState("");
+  const [deptDropUp, setDeptDropUp] = useState(false);
+  const [deptMenuMaxHeight, setDeptMenuMaxHeight] = useState(224);
   const [portalReady, setPortalReady] = useState(false);
   const dragD = useRef({ mx: 0, my: 0, ox: 0, oy: 0 });
   const cropImgRef = useRef<HTMLImageElement>(null);
@@ -252,6 +257,33 @@ export default function StudentPage() {
   const [reqProgram, setReqProgram] = useState("");
   const [reqEntryYear, setReqEntryYear] = useState("");
   const [reqDept, setReqDept] = useState("");
+  const filteredDepts = useMemo(() => DEPARTMENTS.map(cat => ({
+    ...cat,
+    items: deptQuery ? cat.items.filter(d => d.toLowerCase().includes(deptQuery.toLowerCase())) : cat.items,
+  })).filter(cat => cat.items.length > 0), [deptQuery]);
+
+  function openDeptPicker(clearQuery = true) {
+    const rect = deptRef.current?.getBoundingClientRect();
+    if (rect) {
+      const below = window.innerHeight - rect.bottom;
+      const above = rect.top;
+      const shouldDropUp = below < 240 && above > below;
+      setDeptDropUp(shouldDropUp);
+      setDeptMenuMaxHeight(Math.max(140, Math.min(224, (shouldDropUp ? above : below) - 14)));
+    }
+    if (clearQuery) setDeptQuery("");
+    setDeptOpen(true);
+  }
+
+  function highlightDept(text: string, query: string) {
+    if (!query) return text;
+    const parts = text.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi"));
+    return parts.map((part, index) =>
+      part.toLowerCase() === query.toLowerCase()
+        ? <span key={index} className="text-amber-500 font-bold">{part}</span>
+        : part
+    );
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -635,7 +667,7 @@ export default function StudentPage() {
                     <div className="flex items-start justify-between">
                       <div>
                         <div className="text-white/80 font-extrabold uppercase tracking-[3px]" style={{ fontSize: "clamp(6px,1.8vw,9px)" }}>
-                          ASIA-BOT
+                          {SITE_NAME}
                         </div>
                         <div className="text-white/65 font-semibold mt-0.5" style={{ fontSize: "clamp(5px,1.5vw,8px)" }}>
                           บัตรประจำตัวนักเรียน
@@ -782,26 +814,37 @@ export default function StudentPage() {
                     {/* Divider */}
                     <div className="bg-white/20 self-stretch flex-shrink-0" style={{ width: 1 }} />
 
-                    {/* Right column: card info */}
-                    <div className="flex-shrink-0 space-y-[2px]" style={{ width: "38%" }}>
-                      <div className="text-white/55 font-bold uppercase tracking-wider mb-1" style={{ fontSize: "clamp(4px,1.1vw,6px)" }}>
-                        สถานะ
+                    {/* Right column: QR */}
+                    <div className="flex-shrink-0 flex flex-col items-center justify-center min-w-0" style={{ width: "40%" }}>
+                      <div className="relative bg-white rounded-xl shadow-lg"
+                        style={{ padding: "clamp(4px,1vw,7px)", width: "min(82%, 112px)", aspectRatio: "1 / 1" }}>
+                        {qrUrl
+                          ? <img src={qrUrl} alt={`QR ${student.student_id}`} className="block w-full h-full object-contain" />
+                          : <div className="w-full h-full" />
+                        }
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src="/favicon.png" alt="logo"
+                          className="absolute top-1/2 left-1/2 block -translate-x-1/2 -translate-y-1/2 object-contain"
+                          style={{ width: "24%", height: "24%" }} />
+                      </div>
+                      <div className="mt-1 text-center font-mono font-bold text-white/90 leading-none" style={{ fontSize: "clamp(6px,1.6vw,9px)" }}>
+                        {student.student_id}
                       </div>
                       {adminRole && adminRoleStyle && (
-                        <div className="inline-flex items-center gap-[2px] font-bold rounded-full px-[4px] py-[1px] mb-1"
+                        <div className="mt-1 inline-flex items-center gap-[2px] font-bold rounded-full px-[4px] py-[1px]"
                           style={{ fontSize: "clamp(4px,1.1vw,7px)", background: adminRoleStyle.bg, color: adminRoleStyle.text, border: `1px solid ${adminRoleStyle.border}` }}>
                           <i className="fa-solid fa-shield-halved" style={{ fontSize: "0.85em" }} />
                           {ADMIN_ROLE_LABEL[adminRole] ?? adminRole}
                         </div>
                       )}
-                      <div className="flex items-center gap-1">
+                      <div className="mt-1 flex items-center justify-center gap-1">
                         <div className={`rounded-full flex-shrink-0 ${isGraduated ? "bg-amber-400" : isPending ? "bg-slate-400" : "bg-green-400"}`}
                           style={{ width: "clamp(4px,1vw,5px)", height: "clamp(4px,1vw,5px)" }} />
                         <span className="text-white/90 leading-tight" style={{ fontSize: "clamp(5px,1.4vw,8px)" }}>
                           {isGraduated ? "จบการศึกษา" : isPending ? "รอเข้าเรียน" : "กำลังศึกษา"}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1 pt-1 mt-1 border-t border-white/15">
+                      <div className="mt-0.5 flex items-center justify-center gap-1">
                         <div className={`rounded-full flex-shrink-0 ${student.card_status === "active" ? "bg-green-400" : "bg-amber-400"}`}
                           style={{ width: "clamp(4px,1vw,5px)", height: "clamp(4px,1vw,5px)" }} />
                         <span className="text-white/70" style={{ fontSize: "clamp(4px,1.1vw,7px)" }}>
@@ -815,7 +858,7 @@ export default function StudentPage() {
                   <div className="absolute bottom-0 left-0 right-0 bg-black/25 flex items-center justify-center"
                     style={{ height: "clamp(14px,4vw,22px)" }}>
                     <span className="font-bold tracking-[3px] text-white/40 uppercase" style={{ fontSize: "clamp(4px,1vw,7px)" }}>
-                      ASIA-BOT
+                      {SITE_NAME}
                     </span>
                   </div>
                 </div>
@@ -1181,8 +1224,8 @@ export default function StudentPage() {
                       className="w-full px-3 py-2.5 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-none focus:border-amber-400 transition"
                       value={reqProgram} onChange={(e) => setReqProgram(e.target.value)}>
                       <option value="">-- เลือก --</option>
-                      <option value="ปวช">ปวช</option>
-                      <option value="ปวส">ปวส</option>
+                      <option value="ปวช">ปวช — ประกาศนียบัตรวิชาชีพ</option>
+                      <option value="ปวส">ปวส — ประกาศนียบัตรวิชาชีพชั้นสูง</option>
                     </select>
                   </div>
                   <div>
@@ -1195,16 +1238,52 @@ export default function StudentPage() {
                 </div>
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-500 mb-1">สาขาวิชา</label>
-                  <select suppressHydrationWarning
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-none focus:border-amber-400 transition"
-                    value={reqDept} onChange={(e) => setReqDept(e.target.value)}>
-                    <option value="">-- เลือกสาขาวิชา --</option>
-                    {DEPARTMENTS.map((cat) => (
-                      <optgroup key={cat.label} label={cat.label}>
-                        {cat.items.map((d) => <option key={d} value={d}>{d}</option>)}
-                      </optgroup>
-                    ))}
-                  </select>
+                  <div ref={deptRef} className="relative">
+                    <input suppressHydrationWarning
+                      value={deptOpen ? deptQuery : reqDept}
+                      onFocus={() => openDeptPicker(true)}
+                      onChange={e => { setDeptQuery(e.target.value); openDeptPicker(false); }}
+                      onBlur={() => window.setTimeout(() => { setDeptOpen(false); setDeptQuery(""); }, 120)}
+                      className="w-full px-3 py-2.5 pr-9 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-none focus:border-amber-400 transition"
+                      placeholder="พิมพ์เพื่อค้นหาสาขาวิชา"
+                      maxLength={60}
+                      autoComplete="off"
+                    />
+                    <button type="button"
+                      onMouseDown={e => e.preventDefault()}
+                      onClick={() => deptOpen ? setDeptOpen(false) : openDeptPicker(true)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-lg text-slate-400 hover:bg-white hover:text-slate-600 transition"
+                      aria-label="เลือกสาขาวิชา">
+                      <i className={`fa-solid fa-chevron-${deptOpen ? "up" : "down"} text-[10px]`} />
+                    </button>
+                    {deptOpen && (
+                      <div
+                        className={`absolute ${deptDropUp ? "bottom-[calc(100%+6px)]" : "top-[calc(100%+6px)]"} left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-lg z-50 overflow-y-auto`}
+                        style={{ maxHeight: deptMenuMaxHeight }}>
+                        {filteredDepts.length === 0 ? (
+                          <div className="p-4 text-xs text-slate-400 text-center">
+                            <i className="fa-solid fa-magnifying-glass mr-1.5 opacity-50" />ไม่พบสาขาที่ตรงกัน
+                          </div>
+                        ) : filteredDepts.map(cat => (
+                          <div key={cat.label}>
+                            <div className="flex items-center gap-1.5 px-3.5 py-1.5 sticky top-0 z-10 border-b border-slate-100"
+                              style={{ background: cat.bg }}>
+                              <i className={`${cat.icon} text-[9px]`} style={{ color: cat.color, width: 13, textAlign: "center" }} />
+                              <span className="text-[10px] font-bold tracking-wide uppercase" style={{ color: cat.color }}>{cat.label}</span>
+                            </div>
+                            {cat.items.map(d => (
+                              <button key={d} type="button"
+                                onMouseDown={e => e.preventDefault()}
+                                onClick={() => { setReqDept(d); setDeptQuery(""); setDeptOpen(false); }}
+                                className="block w-full pl-8 pr-3.5 py-2.5 text-left text-xs text-slate-800 cursor-pointer hover:bg-amber-50 border-b border-slate-50 transition-colors">
+                                {highlightDept(d, deptQuery)}
+                              </button>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 

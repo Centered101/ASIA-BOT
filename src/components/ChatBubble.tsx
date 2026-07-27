@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import Markdown from "./Markdown";
+import { SITE_NAME } from "@/lib/config";
 
 type NavButton = { path: string; label: string };
 type RichCard = { type: string; payload: Record<string, unknown> };
@@ -26,6 +27,11 @@ type UserContext = {
 const STUDENT_SESSION_KEY  = "asia_lb_session";
 const STUDENT_TIME_KEY     = "asia_lb_session_time";
 const STUDENT_SESSION_TTL  = 7 * 24 * 60 * 60 * 1000;
+const CHAT_HIDDEN_PATH_PREFIXES = ["/login", "/register", "/project", "/QQ", "/Qman"];
+
+function isChatHiddenPath(pathname: string) {
+  return CHAT_HIDDEN_PATH_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
 
 const STUDENT_QUICK_REPLIES = [
   "ตารางเรียนวันนี้",
@@ -400,6 +406,9 @@ export default function ChatBubble() {
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
   useEffect(() => { if (open && loggedIn) setTimeout(() => inputRef.current?.focus(), 150); }, [open, loggedIn]);
+  useEffect(() => {
+    if (isChatHiddenPath(pathname) || loggedIn !== true) setOpen(false);
+  }, [loggedIn, pathname]);
 
   // ── Drag ───────────────────────────────────────────────────────────────────
   const onPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
@@ -499,7 +508,7 @@ export default function ChatBubble() {
 
   const clearChat = () => { abortRef.current?.abort(); setMessages([]); setStreaming(false); };
 
-  if (!ctx || loggedIn === null) return null;
+  if (!ctx || loggedIn !== true || isChatHiddenPath(pathname)) return null;
 
   // Admin chat mirrors the admin panel's dark + red theme; students keep the light/blue theme.
   const T = ctx.isAdmin
@@ -571,10 +580,10 @@ export default function ChatBubble() {
           {/* Header */}
           <div style={{ background: T.headerBg, borderBottom: T.headerBorder, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
             <div style={{ width: 32, height: 32, borderRadius: "50%", overflow: "hidden", border: ctx.isAdmin ? `2px solid ${accent}` : "none" }}>
-              <Image src={headerAvatar} alt="ASIA-BOT" width={32} height={32} style={{ width: 32, height: 32, objectFit: "cover" }} />
+              <Image src={headerAvatar} alt={SITE_NAME} width={32} height={32} style={{ width: 32, height: 32, objectFit: "cover" }} />
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ color: "#fff", fontWeight: 700, fontSize: 14, lineHeight: 1.2 }}>ASIA-BOT AI</div>
+              <div style={{ color: "#fff", fontWeight: 700, fontSize: 14, lineHeight: 1.2 }}>{SITE_NAME} AI</div>
               <div style={{ color: T.subtitleColor, fontSize: 11 }}>
                 {streaming ? "กำลังพิมพ์…" : ctx.isAdmin ? "Admin Assistant" : loggedIn ? `สวัสดี ${ctx.userName}` : "ผู้ช่วย AI"}
               </div>
@@ -596,7 +605,7 @@ export default function ChatBubble() {
               <div>
                 <div style={{ fontWeight: 700, fontSize: 16, color: T.botText, marginBottom: 6 }}>กรุณาเข้าสู่ระบบก่อน</div>
                 <div style={{ fontSize: 13, color: T.mutedText, lineHeight: 1.7 }}>
-                  ASIA-BOT AI สามารถตอบคำถามเฉพาะตัวได้<br />
+                  {SITE_NAME} AI สามารถตอบคำถามเฉพาะตัวได้<br />
                   เช่น ตารางเรียน, การจองห้อง,<br />
                   คำสั่งซื้อ และข้อมูลส่วนตัวของคุณ
                 </div>
@@ -620,7 +629,7 @@ export default function ChatBubble() {
               <div style={{ flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
                 {messages.length === 0 && (
                   <div style={{ textAlign: "center", padding: "24px 8px", display: "flex", flexDirection: "column", alignItems: "center" }}>
-                    <Image src={welcomeAvatar} alt="ASIA-BOT" width={56} height={56} style={{ display: "block", width: 56, height: 56, objectFit: "cover", borderRadius: "50%", marginBottom: 8, flexShrink: 0 }} />
+                    <Image src={welcomeAvatar} alt={SITE_NAME} width={56} height={56} style={{ display: "block", width: 56, height: 56, objectFit: "cover", borderRadius: "50%", marginBottom: 8, flexShrink: 0 }} />
                     <div style={{ color: T.mutedText, fontSize: 13, lineHeight: 1.6 }}>
                       สวัสดี{ctx.userName ? ` ${ctx.userName}` : ""}!<br />
                       ถามอะไรก็ได้เลยครับ ฉันรู้ข้อมูลของคุณ
@@ -747,7 +756,7 @@ export default function ChatBubble() {
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        title="ASIA-BOT AI Chat"
+        title={`${SITE_NAME} AI Chat`}
         style={{
           position: "fixed", right: pos.r, bottom: pos.b,
           width: BTN, height: BTN, borderRadius: "50%",
@@ -759,11 +768,12 @@ export default function ChatBubble() {
           zIndex: 10000, userSelect: "none", touchAction: "none",
           transition: dragging ? "none" : "box-shadow 0.2s, transform 0.15s",
           transform: dragging ? "scale(1.1)" : "scale(1)",
+          animation: dragging ? "none" : "chatZoomIn 0.28s cubic-bezier(0.34,1.56,0.64,1) both",
         }}
       >
         {open && !dragging
           ? <span style={{ color: accent, fontSize: 20, lineHeight: 1, fontWeight: 700, pointerEvents: "none" }}>✕</span>
-          : <Image src={btnAvatar} alt="ASIA-BOT" width={36} height={36} draggable={false} priority style={{ width: 36, height: 36, objectFit: "cover", borderRadius: "50%", pointerEvents: "none" }} />
+          : <Image src={btnAvatar} alt={SITE_NAME} width={36} height={36} draggable={false} priority style={{ width: 36, height: 36, objectFit: "cover", borderRadius: "50%", pointerEvents: "none" }} />
         }
       </button>
 
@@ -771,6 +781,10 @@ export default function ChatBubble() {
         @keyframes chatbounce {
           0%, 80%, 100% { transform: translateY(0); }
           40% { transform: translateY(-5px); }
+        }
+        @keyframes chatZoomIn {
+          0% { opacity: 0; transform: scale(0.65); }
+          100% { opacity: 1; transform: scale(1); }
         }
       `}</style>
     </>

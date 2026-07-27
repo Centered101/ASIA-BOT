@@ -7,7 +7,8 @@ const supabase = createClient<Database>(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-type OrderItem = { id: string; qty: number; name: string; price: number };
+type OrderItem = { id: string; qty: number; name: string; price: number; color?: string };
+type ColorStock = Record<string, number>;
 
 export async function POST(
   _req: NextRequest,
@@ -26,9 +27,36 @@ export async function POST(
 
   // Restore stock
   const items = (order.items_json as unknown as OrderItem[]) ?? [];
-  for (const item of items) {
-    const { data: prod } = await supabase.from("products").select("stock").eq("id", item.id).single();
-    if (prod) await supabase.from("products").update({ stock: prod.stock + item.qty }).eq("id", item.id);
+  const qtyByProduct = items.reduce<Record<string, number>>((acc, item) => {
+    acc[item.id] = (acc[item.id] ?? 0) + item.qty;
+    return acc;
+  }, {});
+  const qtyByProductColor = items.reduce<Record<string, number>>((acc, item) => {
+    if (!item.color) return acc;
+    const key = `${item.id}::${item.color}`;
+    acc[key] = (acc[key] ?? 0) + item.qty;
+    return acc;
+  }, {});
+  for (const [productId, qty] of Object.entries(qtyByProduct)) {
+    const { data: prod } = await supabase.from("products").select("stock, color_stock").eq("id", productId).single();
+    if (prod) {
+      const colorStock = (prod.color_stock && typeof prod.color_stock === "object" && !Array.isArray(prod.color_stock))
+        ? { ...(prod.color_stock as ColorStock) }
+        : null;
+      if (colorStock) {
+        for (const [key, colorQty] of Object.entries(qtyByProductColor)) {
+          const [colorProductId, color] = key.split("::");
+          if (colorProductId === productId && color in colorStock) {
+            colorStock[color] = Number(colorStock[color] ?? 0) + colorQty;
+          }
+        }
+      }
+      const nextStock = colorStock
+        ? Object.values(colorStock).reduce((sum, colorQty) => sum + Number(colorQty || 0), 0)
+        : prod.stock + qty;
+      const updatePayload = colorStock ? { stock: nextStock, color_stock: colorStock } : { stock: nextStock };
+      await supabase.from("products").update(updatePayload).eq("id", productId);
+    }
   }
 
   await supabase.from("orders").update({ status: "cancelled", updated_at: new Date().toISOString() }).eq("order_id", orderId);

@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
+import { SITE_NAME } from "@/lib/config";
 
-const title = "เบิกคุรุภัณฑ์ — ASIA-BOT";
+const title = `เบิกคุรุภัณฑ์ — ${SITE_NAME}`;
 const description =
-  "ระบบเบิกและยืมคุรุภัณฑ์ออนไลน์สำหรับนักเรียน เลือกอุปกรณ์ ตรวจสอบจำนวนคงเหลือ ส่งคำขอ และติดตามประวัติการเบิกได้ใน ASIA-BOT";
+  `ระบบเบิกและยืมคุรุภัณฑ์ออนไลน์สำหรับนักเรียน เลือกอุปกรณ์ ตรวจสอบจำนวนคงเหลือ ส่งคำขอ และติดตามประวัติการเบิกได้ใน ${SITE_NAME}`;
 
 export const metadata: Metadata = {
   title,
@@ -15,7 +16,7 @@ export const metadata: Metadata = {
     "อุปกรณ์การเรียน",
     "equipment request",
     "student equipment",
-    "ASIA-BOT",
+    SITE_NAME,
   ],
   alternates: {
     canonical: "/equipment-request",
@@ -25,14 +26,14 @@ export const metadata: Metadata = {
     description,
     url: "/equipment-request",
     type: "website",
-    siteName: "ASIA-BOT",
+    siteName: SITE_NAME,
     locale: "th_TH",
     images: [
       {
         url: "/hero.png",
         width: 1200,
         height: 630,
-        alt: "ASIA-BOT ระบบเบิกคุรุภัณฑ์",
+        alt: `${SITE_NAME} ระบบเบิกคุรุภัณฑ์`,
       },
     ],
   },

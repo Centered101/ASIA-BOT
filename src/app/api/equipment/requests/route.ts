@@ -10,11 +10,41 @@ const supabase = createClient<Database>(
 );
 
 const MAX_BORROW_QUANTITY = 6;
+const HISTORY_RETENTION_DAYS = 30;
+const HISTORY_MAX_ITEMS = 99;
+const HISTORY_CLEANUP_STATUSES = ["returned", "rejected", "cancelled"];
 
 function generateRequestCode() {
   const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
   return `EQ-${today}-${suffix}`;
+}
+
+async function cleanupStudentEquipmentHistory(studentId: string) {
+  const cutoff = new Date(Date.now() - HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+  await (supabase as any)
+    .from("equipment_requests")
+    .delete()
+    .eq("student_id", studentId)
+    .in("status", HISTORY_CLEANUP_STATUSES)
+    .lt("created_at", cutoff);
+
+  const { data: extraRows } = await (supabase as any)
+    .from("equipment_requests")
+    .select("id")
+    .eq("student_id", studentId)
+    .in("status", HISTORY_CLEANUP_STATUSES)
+    .order("created_at", { ascending: false })
+    .range(HISTORY_MAX_ITEMS, 1000);
+
+  const extraIds = (extraRows ?? []).map((row: { id: string }) => row.id);
+  if (extraIds.length > 0) {
+    await (supabase as any)
+      .from("equipment_requests")
+      .delete()
+      .in("id", extraIds);
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -143,13 +173,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ status: "error", message: "ไม่พบรหัสนักเรียน" }, { status: 400 });
   }
 
+  await cleanupStudentEquipmentHistory(studentId);
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("equipment_requests")
     .select("id, request_code, quantity, purpose, borrow_date, due_date, returned_at, delivery_mode, delivery_loc, time_slot, picked_up_at, status, admin_note, created_at, equipment_items(name, unit, category)")
     .eq("student_id", studentId)
     .order("created_at", { ascending: false })
-    .limit(50);
+    .limit(HISTORY_MAX_ITEMS);
 
   if (error) return NextResponse.json({ status: "error", message: error.message }, { status: 500 });
   return NextResponse.json({ status: "success", data: data ?? [] });

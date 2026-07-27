@@ -210,6 +210,13 @@ FullSQL.sql                         # SQL/schema reference
 | `line_broadcast` | ส่งข่าวสาร LINE จริง ทั้งข้อความ รูปภาพ Flex และ Custom JSON |
 | `settings` | System checklist และ LINE Flex test |
 
+Admin UX:
+
+- Sidebar แสดง badge แบบ dot number เฉพาะเมนูที่มีรายการต้องดู เช่น คำขอข้อมูล, จองห้อง, สินค้าใกล้หมด, คำสั่งซื้อ, ออเดอร์เบิก, feedback และใบสมัครครู
+- ปุ่มค้นหากลางใน topbar เปิดด้วย `Ctrl+K` ได้ ค้นหาได้ทั้งเมนูและรายการจริง เช่น นักเรียน, สินค้า, คำสั่งซื้อ, คุรุภัณฑ์ และออเดอร์เบิก
+- มุมมอง `Grid / List / Card` ใช้ค่าเดียวกันทั้ง admin และเก็บใน `localStorage` (`asia_admin_view_mode`)
+- ช่องค้นหาและ filter หลักในแต่ละ tab เก็บใน `localStorage` แยกตามหน้า เพื่อกลับมาแล้วใช้งานต่อได้
+
 ---
 
 ## Role Permissions
@@ -324,7 +331,7 @@ ASIA-BOT AI คือผู้ช่วย AI ส่วนกลางที่�
 
 | Channel | Entry | หมายเหตุ |
 |---|---|---|
-| เว็บ | `ChatBubble` → `/api/chat` | ปุ่มลอยทุกหน้า, ธีม student (ฟ้า) / admin (ดำ-แดง), ต้อง login ก่อน |
+| เว็บ | `ChatBubble` → `/api/chat` | ปุ่มลอยเฉพาะหน้าที่ login แล้ว, ธีม student (ฟ้า) / admin (ดำ-แดง); ซ่อนในหน้า login/register และหน้าทำฟอร์มโปรเจค |
 | LINE | webhook `/api/line/webhook` | ผูกบัญชีด้วยรหัสนักเรียน, รองรับ action + อัปโหลด PDF |
 
 ### Environment
@@ -339,6 +346,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 ```env
 # Site
+NEXT_PUBLIC_SITE_NAME=ASIA-BOT
 NEXT_PUBLIC_SITE_URL=https://asia-bot.xyz
 
 # Supabase
@@ -348,6 +356,8 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 
 # Admin fallback / auth
 ADMIN_PASSWORD=optional_env_admin_password
+ADMIN_FALLBACK_USERNAME=optional_superadmin_username
+ADMIN_FALLBACK_PASSWORD=optional_superadmin_password
 
 # LINE
 LINE_TOKEN=your_line_channel_access_token
@@ -366,6 +376,12 @@ STRIPE_WEBHOOK_SECRET=whsec_xxx
 # AI Agent (ASIA-BOT AI)
 ANTHROPIC_API_KEY=sk-ant-xxx
 ```
+
+หมายเหตุ:
+
+- `NEXT_PUBLIC_SITE_NAME` ใช้เปลี่ยนชื่อแบรนด์ที่แสดงในหน้าเว็บ, metadata, header/footer, chat bubble, admin, student card และ shop receipt
+- `ADMIN_FALLBACK_USERNAME` + `ADMIN_FALLBACK_PASSWORD` เป็นบัญชีสำรองฉุกเฉิน ใช้คู่กับ Supabase login โดยระบบจะลอง Supabase ก่อน แล้วค่อย fallback เมื่อข้อมูลไม่ตรงหรือยังไม่มีบัญชีในฐานข้อมูล
+- หลังแก้ env ของ Next.js ต้อง restart dev server หรือ redeploy ก่อนค่าจะมีผล
 
 ---
 

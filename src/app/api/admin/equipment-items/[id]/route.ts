@@ -26,7 +26,7 @@ export async function PATCH(
   if ("category"    in body) update.category     = body.category;
   if ("department"  in body) update.department   = body.department;
   if ("asset_code"  in body) update.asset_code   = body.asset_code;
-  if ("unit"        in body) update.unit         = body.unit ?? "ชิ้น";
+  if ("unit"        in body) update.unit         = body.unit?.trim() || "";
   if ("image_url"   in body) update.image_url    = body.image_url;
   if ("description" in body) update.description  = body.description;
   if ("active"      in body) update.active       = body.active;

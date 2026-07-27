@@ -6,7 +6,7 @@ import { getGoogleSupabase } from "@/lib/supabase-google";
 import { safeImageSrc } from "@/lib/image-url";
 import { supabase as realtimeSupabase } from "@/lib/supabase";
 import type { CustomField } from "@/lib/config";
-import { DEPARTMENTS } from "@/lib/config";
+import { DEPARTMENTS, SITE_NAME } from "@/lib/config";
 import { AMENITY_OPTIONS, getAmenityInfo } from "@/lib/amenities";
 import { Chart, registerables } from "chart.js";
 import { Bar, Doughnut, Line, Radar } from "react-chartjs-2";
@@ -103,7 +103,7 @@ type AttendanceLog = {
 type Product = {
   id: string; name: string; price: number; cost: number | null;
   stock: number; unit: string | null; category: string | null;
-  tag: string | null; images: string[] | null; active: boolean;
+  tag: string | null; images: string[] | null; colors: string[] | null; color_stock: Record<string, number> | null; active: boolean;
   deleted_at: string | null; created_at: string;
 };
 
@@ -117,7 +117,11 @@ type ShopOrder = {
   created_at: string; updated_at: string;
 };
 
-type OrderItem = { id: string; name: string; price: number; qty: number; unit: string; imageUrl?: string | null };
+type OrderItem = { id: string; name: string; price: number; qty: number; unit: string; color?: string; imageUrl?: string | null };
+
+function shopOrderItemName(item: OrderItem): string {
+  return item.color ? `${item.name} (สี${item.color})` : item.name;
+}
 
 type NameChangeRequest = {
   id: string; student_id: string;
@@ -218,6 +222,36 @@ function Avatar({ name, url, size = 32, rounded = "full", fixedColor }: {
 }
 
 type ViewMode = "grid" | "list" | "card";
+const ADMIN_VIEW_MODE_KEY = "asia_admin_view_mode";
+
+function useLocalStorageState<T>(key: string, initialValue: T, isValid?: (value: unknown) => value is T) {
+  const [value, setValue] = useState<T>(() => {
+    if (typeof window === "undefined") return initialValue;
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (raw == null) return initialValue;
+      const parsed = JSON.parse(raw) as unknown;
+      if (isValid && !isValid(parsed)) return initialValue;
+      return parsed as T;
+    } catch {
+      return initialValue;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      // Ignore storage errors so admin controls still work in private mode.
+    }
+  }, [key, value]);
+
+  return [value, setValue] as const;
+}
+const isViewMode = (value: unknown): value is ViewMode => value === "grid" || value === "list" || value === "card";
+const isBoolean = (value: unknown): value is boolean => typeof value === "boolean";
+const isString = (value: unknown): value is string => typeof value === "string";
+
 function ViewToggle({ mode, onChange, modes }: { mode: ViewMode; onChange: (m: ViewMode) => void; modes?: ViewMode[] }) {
   const allModes: { id: ViewMode; icon: string; label: string }[] = [
     { id: "grid", icon: "fa-grip", label: "Grid" },
@@ -274,6 +308,14 @@ function isAdminModalOpen() {
 type AdminRole = "superadmin" | "admin" | "staff";
 type NavItem = { id: string; label: string; icon: string; badge?: string; children?: NavItem[] };
 type NavSection = { title: string | null; items: NavItem[] };
+type AdminSearchResult = {
+  key: string;
+  tab: string;
+  title: string;
+  subtitle: string;
+  icon: string;
+  badge?: string;
+};
 
 const NAV_SECTIONS: NavSection[] = [
   {
@@ -393,6 +435,26 @@ function visibleNavSections(role: string): NavSection[] {
           : item),
     }))
     .filter(sec => sec.items.length > 0);
+}
+
+function navBadgeCount(stats: Stats | null, item: NavItem): number {
+  if (!stats) return 0;
+  const values = stats as unknown as Record<string, unknown>;
+  const own = item.badge && typeof values[item.badge] === "number" ? Number(values[item.badge]) : 0;
+  const childTotal = item.children?.reduce((sum, child) => sum + navBadgeCount(stats, child), 0) ?? 0;
+  return own + childTotal;
+}
+
+function NavDotBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      className="ml-auto inline-flex h-[16px] min-w-[16px] items-center justify-center rounded-full px-[4px] text-[9px] font-bold leading-none"
+      style={{ background: "#ff4d57", color: "#fff", boxShadow: "0 0 0 1px rgba(255,255,255,0.08)" }}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  );
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
@@ -515,15 +577,15 @@ function AdminLogin({ onLogin }: { onLogin: (a: AdminUser) => void }) {
 
       {/* ADMIN watermark */}
       <div className="absolute bottom-8 right-8 text-[120px] font-black select-none pointer-events-none"
-        style={{ color: "rgba(255,112,112,0.05)", letterSpacing: "-0.03em" }}>Admin ASIA-BOT</div>
+        style={{ color: "rgba(255,112,112,0.05)", letterSpacing: "-0.03em" }}>Admin {SITE_NAME}</div>
 
       <div className="relative z-10 w-full max-w-sm px-4">
         {/* Logo */}
         <div className="text-center mb-8">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/admin/favicon.ico" alt="ASIA-BOT" className="w-16 h-16 mx-auto mb-4 rounded-2xl object-contain" />
+          <img src="/admin/favicon.ico" alt={SITE_NAME} className="w-16 h-16 mx-auto mb-4 rounded-2xl object-contain" />
           <h1 className="text-2xl font-black text-white">ผู้ดูแลระบบ</h1>
-          <p className="text-[#9e9e9e] text-sm mt-1">พื้นที่สำหรับผู้ดูแล ASIA-BOT · เข้าถึงเฉพาะผู้มีสิทธิ์เท่านั้น</p>
+          <p className="text-[#9e9e9e] text-sm mt-1">พื้นที่สำหรับผู้ดูแล {SITE_NAME} · เข้าถึงเฉพาะผู้มีสิทธิ์เท่านั้น</p>
           <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full text-xs font-semibold"
             style={{ background: "rgba(255,112,112,0.15)", color: "#ff7070", border: "1px solid rgba(255,112,112,0.3)" }}>
             <i className="fa-solid fa-lock text-[10px]" /> พื้นที่ปลอดภัย · กิจกรรมทั้งหมดถูกบันทึก
@@ -624,7 +686,7 @@ function AdminLogin({ onLogin }: { onLogin: (a: AdminUser) => void }) {
           <a href="/" className="text-xs text-[#9e9e9e] hover:text-white transition-colors flex items-center gap-1">
             <i className="fa-solid fa-arrow-left" /> กลับหน้านักเรียน
           </a>
-          <span className="text-xs text-[#636363]">Centered101 · ASIA-BOT</span>
+          <span className="text-xs text-[#636363]">Centered101 · {SITE_NAME}</span>
         </div>
       </div>
     </div>
@@ -689,6 +751,11 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
   const [adminDataVersion, setAdminDataVersion] = useState(0);
   const [refreshingStats, setRefreshingStats] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [adminSearchOpen, setAdminSearchOpen] = useState(false);
+  const [adminSearch, setAdminSearch] = useState("");
+  const [adminSearchResults, setAdminSearchResults] = useState<AdminSearchResult[]>([]);
+  const [adminSearchLoading, setAdminSearchLoading] = useState(false);
+  const adminSearchInputRef = useRef<HTMLInputElement | null>(null);
   const activeTabRef = useRef(activeTab);
   const realtimeRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingRealtimeToast = useRef(false);
@@ -722,6 +789,136 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setAdminSearch("");
+        setAdminSearchOpen(true);
+      }
+      if (event.key === "Escape") setAdminSearchOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (!adminSearchOpen) return;
+    const timer = window.setTimeout(() => adminSearchInputRef.current?.focus(), 30);
+    return () => window.clearTimeout(timer);
+  }, [adminSearchOpen]);
+
+  useEffect(() => {
+    const query = adminSearch.trim();
+    if (!adminSearchOpen || query.length < 2) {
+      setAdminSearchResults([]);
+      setAdminSearchLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const lower = query.toLowerCase();
+    const matches = (...values: Array<string | number | null | undefined>) =>
+      values.filter(value => value != null).join(" ").toLowerCase().includes(lower);
+    const load = async <T,>(url: string): Promise<T[]> => {
+      const res = await adminFetch(url, admin.admin_id);
+      const json = await res.json() as { status?: string; data?: T[] };
+      return json.status === "success" ? (json.data ?? []) : [];
+    };
+
+    const timer = window.setTimeout(async () => {
+      setAdminSearchLoading(true);
+      try {
+        const [students, products, orders, equipmentItems, equipmentRequests] = await Promise.all([
+          canAccessTab(admin.role, "students")
+            ? load<Student>(`/api/admin/students?q=${encodeURIComponent(query)}`)
+            : Promise.resolve([]),
+          canAccessTab(admin.role, "products")
+            ? load<Product>("/api/admin/products")
+            : Promise.resolve([]),
+          canAccessTab(admin.role, "shoporders")
+            ? load<ShopOrder>("/api/admin/orders?status=all")
+            : Promise.resolve([]),
+          canAccessTab(admin.role, "equipment_items")
+            ? load<EquipmentItem>("/api/admin/equipment-items")
+            : Promise.resolve([]),
+          canAccessTab(admin.role, "equipment_requests")
+            ? load<EquipmentRequest>("/api/admin/equipment-requests?status=all&department=all")
+            : Promise.resolve([]),
+        ]);
+
+        const results: AdminSearchResult[] = [
+          ...students
+            .filter(s => matches(s.student_id, s.first_name, s.last_name, s.nickname, s.program, s.department))
+            .slice(0, 5)
+            .map(s => ({
+              key: `student-${s.id}`,
+              tab: "students",
+              title: `${s.first_name} ${s.last_name}`,
+              subtitle: `นักเรียน · ${s.student_id}${s.nickname ? ` · ${s.nickname}` : ""}${s.department ? ` · ${s.department}` : ""}`,
+              icon: "fa-graduation-cap",
+              badge: CARD_STATUS[s.card_status] ?? undefined,
+            })),
+          ...products
+            .filter(p => matches(p.name, p.category, p.tag, p.unit, p.stock))
+            .slice(0, 5)
+            .map(p => ({
+              key: `product-${p.id}`,
+              tab: "products",
+              title: p.name,
+              subtitle: `สินค้า · ${p.category ?? "ไม่ระบุหมวด"} · เหลือ ${p.stock} ${p.unit ?? ""}`.trim(),
+              icon: "fa-box",
+              badge: p.active ? undefined : "ปิดอยู่",
+            })),
+          ...orders
+            .filter(o => matches(o.order_id, o.student_id, o.student_name, o.total, (Array.isArray(o.items_json) ? o.items_json : []).map(item => (item as { name?: string }).name).join(" ")))
+            .slice(0, 5)
+            .map(o => ({
+              key: `order-${o.order_id}`,
+              tab: "shoporders",
+              title: `คำสั่งซื้อ ${o.order_id}`,
+              subtitle: `${o.student_name} · ${o.student_id} · ฿${Number(o.total).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+              icon: "fa-receipt",
+              badge: ORDER_STATUS[o.status] ?? o.status,
+            })),
+          ...equipmentItems
+            .filter(i => matches(i.name, i.category, i.asset_code, i.department, i.description, i.available_quantity))
+            .slice(0, 5)
+            .map(i => ({
+              key: `equipment-${i.id}`,
+              tab: "equipment_items",
+              title: i.name,
+              subtitle: `คุรุภัณฑ์ · ${i.category} · พร้อมใช้ ${i.available_quantity}/${i.total_quantity} ${i.unit}`,
+              icon: "fa-toolbox",
+              badge: i.active ? undefined : "ปิดอยู่",
+            })),
+          ...equipmentRequests
+            .filter(r => matches(r.request_code, r.requester_name, r.department, r.purpose, r.equipment_items?.name, r.equipment_items?.asset_code))
+            .slice(0, 5)
+            .map(r => ({
+              key: `equipment-request-${r.id}`,
+              tab: "equipment_requests",
+              title: r.request_code,
+              subtitle: `${r.requester_name} · ${r.equipment_items?.name ?? "คุรุภัณฑ์"} · ${r.department}`,
+              icon: "fa-basket-shopping",
+              badge: EQUIP_REQUEST_STATUS[r.status] ?? r.status,
+            })),
+        ].slice(0, 18);
+
+        if (!cancelled) setAdminSearchResults(results);
+      } catch {
+        if (!cancelled) setAdminSearchResults([]);
+      } finally {
+        if (!cancelled) setAdminSearchLoading(false);
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [adminSearch, adminSearchOpen, admin.admin_id, admin.role]);
 
   useEffect(() => {
     const fetchStats = () => {
@@ -851,11 +1048,35 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
 
   const pageSection = getPageSection();
   const breadcrumbParts = [
-    { label: "ASIA-BOT", onClick: () => router.push("/") },
+    { label: SITE_NAME, onClick: () => router.push("/") },
     { label: "ผู้ดูแล", onClick: () => setActiveTab("dashboard") },
     pageSection ? { label: pageSection.title, onClick: () => setActiveTab(pageSection.tab) } : null,
     { label: getPageTitle(), onClick: () => setActiveTab(activeTab), current: true },
   ].filter(Boolean) as { label: string; onClick: () => void; current?: boolean }[];
+  const adminSearchItems = useMemo(() => {
+    return navSections.flatMap(sec => sec.items.flatMap(item => {
+      const parent = {
+        id: item.id,
+        label: item.label,
+        section: sec.title ?? "เมนู",
+        icon: item.icon,
+        badge: navBadgeCount(stats, item),
+      };
+      const children = item.children?.map(child => ({
+        id: child.id,
+        label: child.label,
+        section: `${sec.title ?? "เมนู"} / ${item.label}`,
+        icon: child.icon,
+        badge: navBadgeCount(stats, child),
+      })) ?? [];
+      return [parent, ...children];
+    }));
+  }, [navSections, stats]);
+  const adminSearchQuery = adminSearch.trim().toLowerCase();
+  const filteredAdminSearchItems = adminSearchItems.filter(item => {
+    if (!adminSearchQuery) return true;
+    return `${item.label} ${item.section} ${item.id}`.toLowerCase().includes(adminSearchQuery);
+  });
 
   return (
     <div className="admin-shell flex h-[100dvh] overflow-hidden" style={{ background: "#0c0c0c" }}>
@@ -864,6 +1085,122 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
         className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity lg:hidden ${sidebarOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
         onClick={() => setSidebarOpen(false)}
       />
+
+      {adminSearchOpen && (
+        <div
+          className="fixed inset-0 z-[80] flex items-start justify-center bg-black/60 px-3 pt-[8vh] backdrop-blur-sm"
+          onMouseDown={() => setAdminSearchOpen(false)}
+        >
+          <div
+            className="w-full max-w-[560px] overflow-hidden rounded-lg shadow-2xl"
+            style={{ background: "#111111", border: "1px solid #2a2a2a", boxShadow: "0 24px 80px rgba(0,0,0,0.55)" }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="ค้นหาในแอดมิน"
+            onMouseDown={e => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: "1px solid #242424" }}>
+              <i className="fa-solid fa-magnifying-glass text-sm" style={{ color: "#ff7070" }} />
+              <input
+                ref={adminSearchInputRef}
+                value={adminSearch}
+                onChange={e => setAdminSearch(e.target.value)}
+                placeholder="ค้นหาเมนู เช่น นักเรียน สินค้า คำสั่งซื้อ..."
+                className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-[#636363]"
+                style={{ color: "#ededed" }}
+              />
+              <button
+                type="button"
+                onClick={() => setAdminSearchOpen(false)}
+                className="h-8 w-8 rounded-md text-sm transition-colors"
+                style={{ color: "#9e9e9e" }}
+                aria-label="ปิดค้นหา"
+              >
+                <i className="fa-solid fa-xmark" />
+              </button>
+            </div>
+            <div className="max-h-[58vh] overflow-y-auto px-2 pb-2">
+              {filteredAdminSearchItems.length > 0 && (
+                <>
+                  <div className="px-2 py-2 text-[11px] font-bold uppercase" style={{ color: "#636363" }}>
+                    ไปยังหน้า
+                  </div>
+                  {filteredAdminSearchItems.map((item, index) => {
+                    const isCurrent = item.id === activeTab || (item.id === "class_schedule" && activeTab.startsWith("class_schedule_"));
+                    return (
+                      <button
+                        key={`${item.id}-${index}`}
+                        type="button"
+                        onClick={() => {
+                          setActiveTab(item.id);
+                          setAdminSearchOpen(false);
+                        }}
+                        className="flex w-full items-center gap-3 rounded-sm px-3 py-3 text-left text-sm font-bold transition-colors"
+                        style={{
+                          background: isCurrent ? "rgba(255,112,112,0.16)" : "transparent",
+                          color: isCurrent ? "#fff" : "#ededed",
+                          boxShadow: isCurrent ? "inset 2px 0 0 #ff7070" : "none",
+                        }}
+                        onMouseEnter={e => { if (!isCurrent) e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
+                        onMouseLeave={e => { if (!isCurrent) e.currentTarget.style.background = "transparent"; }}
+                      >
+                        <i className={`fa-solid ${item.icon} w-6 text-center text-base`} style={{ color: isCurrent ? "#ff7070" : "#666" }} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate">{item.label}</span>
+                          <span className="block truncate text-[10px] font-semibold" style={{ color: isCurrent ? "#bdbdbd" : "#636363" }}>{item.section}</span>
+                        </span>
+                        <NavDotBadge count={item.badge} />
+                      </button>
+                    );
+                  })}
+                </>
+              )}
+              {adminSearchQuery.length >= 2 && (
+                <>
+                  <div className="mt-1 px-2 py-2 text-[11px] font-bold uppercase" style={{ color: "#636363", borderTop: filteredAdminSearchItems.length > 0 ? "1px solid #242424" : "none" }}>
+                    รายการที่พบ
+                  </div>
+                  {adminSearchLoading ? (
+                    <div className="px-3 py-6 text-center text-sm" style={{ color: "#636363" }}>กำลังค้นหา...</div>
+                  ) : adminSearchResults.length === 0 ? (
+                    <div className="px-3 py-6 text-center text-sm" style={{ color: "#636363" }}>ไม่พบรายการที่ค้นหา</div>
+                  ) : adminSearchResults.map(item => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => {
+                        setActiveTab(item.tab);
+                        setAdminSearchOpen(false);
+                      }}
+                      className="flex w-full items-center gap-3 rounded-sm px-3 py-3 text-left text-sm font-bold transition-colors"
+                      style={{ color: "#ededed", background: "transparent" }}
+                      onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                    >
+                      <i className={`fa-solid ${item.icon} w-6 text-center text-base`} style={{ color: "#ff7070" }} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate">{item.title}</span>
+                        <span className="block truncate text-[10px] font-semibold" style={{ color: "#636363" }}>{item.subtitle}</span>
+                      </span>
+                      {item.badge && (
+                        <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ color: "#ffb3b3", background: "rgba(255,112,112,0.12)", border: "1px solid rgba(255,112,112,0.24)" }}>
+                          {item.badge}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </>
+              )}
+              {filteredAdminSearchItems.length === 0 && adminSearchQuery.length < 2 && (
+                <div className="px-3 py-10 text-center text-sm" style={{ color: "#636363" }}>ไม่พบเมนูที่ค้นหา</div>
+              )}
+            </div>
+            <div className="px-4 py-2 text-[10px]" style={{ color: "#555", borderTop: "1px solid #242424" }}>
+              พิมพ์อย่างน้อย 2 ตัวเพื่อค้นหารายการต่าง ๆ ในระบบ
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Sidebar ── */}
       <aside className={`fixed lg:static inset-y-0 left-0 z-50 flex flex-col w-[280px] sm:w-[300px] lg:w-[240px] flex-shrink-0 h-[100dvh] overflow-hidden transition-transform duration-300 ease-out lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
@@ -875,7 +1212,7 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/admin/favicon.ico" alt="logo" className="w-6 h-6 rounded-md object-contain flex-shrink-0" />
           <div className="flex-1 min-w-0">
-            <div className="text-[13px] font-semibold text-white truncate leading-tight">ASIA-BOT</div>
+            <div className="text-[13px] font-semibold text-white truncate leading-tight">{SITE_NAME}</div>
             <div className="text-[10px] truncate leading-tight" style={{ color: "#636363" }}>แผงควบคุมผู้ดูแล</div>
           </div>
           <div className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0" style={{ color: "#636363" }}>
@@ -902,7 +1239,7 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
               )}
               {sec.items.map((item) => {
                 const isActive = activeTab === item.id || (item.id === "class_schedule" && activeTab.startsWith("class_schedule_"));
-                const badgeCount = item.badge && stats ? ((stats as unknown as Record<string, number>)[item.badge] ?? 0) : 0;
+                const badgeCount = navBadgeCount(stats, item);
                 return (
                   <div key={item.id}>
                     <button onClick={() => setActiveTab(item.id)}
@@ -920,17 +1257,13 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
                       {item.children && (
                         <i className={`fa-solid fa-chevron-${isActive ? "down" : "right"} text-[9px]`} style={{ color: "#555" }} />
                       )}
-                      {item.badge && badgeCount > 0 && (
-                        <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full"
-                          style={{ background: "#ff707022", color: "#ff7070" }}>
-                          {badgeCount > 99 ? "99+" : badgeCount}
-                        </span>
-                      )}
+                      <NavDotBadge count={badgeCount} />
                     </button>
                     {item.children && isActive && (
                       <div className="py-1 pl-7 pr-2">
                         {item.children.map(sub => {
                           const subActive = activeTab === sub.id || (item.id === "class_schedule" && activeTab === "class_schedule" && sub.id === "class_schedule_weekly");
+                          const subBadgeCount = navBadgeCount(stats, sub);
                           return (
                             <button key={sub.id} onClick={() => setActiveTab(sub.id)}
                               className="w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-left text-[12px] transition-colors"
@@ -941,7 +1274,8 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
                               onMouseEnter={e => { if (!subActive) e.currentTarget.style.background = "rgba(255,255,255,0.03)"; }}
                               onMouseLeave={e => { if (!subActive) e.currentTarget.style.background = "transparent"; }}>
                               <i className={`fa-solid ${sub.icon} w-[12px] text-center text-[10px]`} style={{ color: subActive ? "#ff7070" : "#555" }} />
-                              <span className="truncate">{sub.label}</span>
+                              <span className="flex-1 truncate">{sub.label}</span>
+                              <NavDotBadge count={subBadgeCount} />
                             </button>
                           );
                         })}
@@ -1012,6 +1346,49 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
               {now.toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "numeric" })}
               {" "}{now.toLocaleTimeString("th-TH")}
             </span>
+
+            <button
+              type="button"
+              onClick={() => {
+                setAdminSearch("");
+                setAdminSearchOpen(true);
+              }}
+              className="hidden sm:flex h-9 sm:h-8 w-[180px] lg:w-[230px] items-center gap-2 rounded-md px-3 text-left text-[12px] font-semibold transition-colors"
+              style={{ color: "#8f8f8f", background: "#1a1a1a", border: "1px solid #2a2a2a" }}
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = "#ff7070";
+                e.currentTarget.style.background = "#202020";
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = "#2a2a2a";
+                e.currentTarget.style.background = "#1a1a1a";
+              }}
+              aria-label="ค้นหาในแอดมิน"
+            >
+              <i className="fa-solid fa-magnifying-glass text-[11px]" />
+              <span className="min-w-0 flex-1 truncate">ค้นหาเมนู...</span>
+              <span className="hidden lg:inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold"
+                style={{ color: "#777", background: "#111", border: "1px solid #333" }}>
+                Ctrl+K
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setAdminSearch("");
+                setAdminSearchOpen(true);
+              }}
+              title="ค้นหาในแอดมิน"
+              aria-label="ค้นหาในแอดมิน"
+              className="sm:hidden w-9 h-9 inline-flex items-center justify-center rounded-md text-[12px] transition-colors"
+              style={{
+                color: "#9e9e9e",
+                background: "#1a1a1a",
+                border: "1px solid #2a2a2a",
+              }}>
+              <i className="fa-solid fa-magnifying-glass text-xs" />
+            </button>
 
             <button
               onClick={refreshCurrentAdminView}
@@ -1441,7 +1818,7 @@ function DashboardTab({
 }) {
   const [logs, setLogs] = useState<EntryLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useLocalStorageState<string>("asia_admin_dashboard_log_search", "", isString);
   const [date, setDate] = useState(todayISODate());
   const [selectedLog, setSelectedLog] = useState<EntryLog | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -2379,9 +2756,9 @@ function BookingsTab({ adminId, view }: { adminId: string; view: "rooms" | "book
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [bookingsError, setBookingsError] = useState("");
-  const [filter, setFilter] = useState("all");
-  const [bookingSearch, setBookingSearch] = useState("");
-  const [roomSearch, setRoomSearch] = useState("");
+  const [filter, setFilter] = useLocalStorageState<string>("asia_admin_bookings_filter", "all", isString);
+  const [bookingSearch, setBookingSearch] = useLocalStorageState<string>("asia_admin_bookings_search", "", isString);
+  const [roomSearch, setRoomSearch] = useLocalStorageState<string>("asia_admin_rooms_search", "", isString);
   const [updating, setUpdating] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [noteEdit, setNoteEdit] = useState<{ id: string; value: string } | null>(null);
@@ -3024,7 +3401,7 @@ function FeedbacksTab({ adminId }: { adminId: string }) {
   const [loading,   setLoading]   = useState(true);
   const [typeFilter,   setTypeFilter]   = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [search,       setSearch]       = useState("");
+  const [search,       setSearch]       = useLocalStorageState<string>("asia_admin_feedback_search", "", isString);
   const fbStatusChartRef = useRef<HTMLCanvasElement | null>(null);
   const fbTypeChartRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -3253,8 +3630,8 @@ function AllRequestsTab({ adminId, kind = "all" }: { adminId: string; kind?: "al
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("pending");
   const [updating, setUpdating] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [search, setSearch] = useLocalStorageState<string>("asia_admin_requests_search", "", isString);
+  const [viewMode, setViewMode] = useLocalStorageState<ViewMode>(ADMIN_VIEW_MODE_KEY, "grid", isViewMode);
   const [editedChanges, setEditedChanges] = useState<Record<string, Record<string, string>>>({});
 
   const fetch_ = useCallback(async () => {
@@ -3603,10 +3980,10 @@ function StudentsTab({ adminId, refreshKey, role }: { adminId: string; refreshKe
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [cardFilter, setCardFilter] = useState("all");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useLocalStorageState<string>("asia_admin_students_search", "", isString);
   const [updating, setUpdating] = useState<string | null>(null);
-  const [searchInput, setSearchInput] = useState("");
-  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [searchInput, setSearchInput] = useLocalStorageState<string>("asia_admin_students_search", "", isString);
+  const [viewMode, setViewMode] = useLocalStorageState<ViewMode>(ADMIN_VIEW_MODE_KEY, "grid", isViewMode);
   const [adminStudentIds, setAdminStudentIds] = useState<Set<string>>(new Set());
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -4123,7 +4500,7 @@ function fmtAttendanceDuration(value: AttendanceLog["duration"]) {
 function AttendanceLocationTab({ adminId, location }: { adminId: string; location: AttendanceLog["location"] }) {
   const [rows, setRows] = useState<AttendanceLog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useLocalStorageState<string>(`asia_admin_attendance_${location}_search`, "", isString);
   const [date, setDate] = useState(todayISODate);
   const actionChartRef = useRef<HTMLCanvasElement | null>(null);
   const hourlyChartRef = useRef<HTMLCanvasElement | null>(null);
@@ -4317,9 +4694,9 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Product | "new" | null>(null);
-  const [showInactive, setShowInactive] = useState(false);
-  const [showDeleted,  setShowDeleted]  = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [showInactive, setShowInactive] = useLocalStorageState("asia_admin_products_show_inactive", false, isBoolean);
+  const [showDeleted,  setShowDeleted]  = useLocalStorageState("asia_admin_products_show_deleted", false, isBoolean);
+  const [viewMode, setViewMode] = useLocalStorageState<ViewMode>(ADMIN_VIEW_MODE_KEY, "grid", isViewMode);
   const productStatusChartRef = useRef<HTMLCanvasElement | null>(null);
   const productCategoryChartRef = useRef<HTMLCanvasElement | null>(null);
   const canEdit = canAccessTab(role, "products");
@@ -4558,12 +4935,12 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
       {loading ? <DarkSpinner /> : displayed.length === 0 ? <DarkEmpty text="ไม่มีสินค้า" /> : (
         <div className={viewMode === "list" ? "space-y-3" : viewMode === "card" ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"}>
           {displayed.map((p) => (
-            <div key={p.id} className={`rounded-2xl overflow-hidden transition-all ${!p.active && !p.deleted_at ? "opacity-50" : ""} ${p.deleted_at ? "opacity-40" : ""}`}
+            <div key={p.id} className={`rounded-2xl overflow-hidden transition-all ${viewMode === "list" ? "flex items-stretch" : "flex flex-col"} ${!p.active && !p.deleted_at ? "opacity-50" : ""} ${p.deleted_at ? "opacity-40" : ""}`}
               style={{ background: "#1c1c1c", border: `1px solid ${p.deleted_at ? "#ff7070" : "#3e3e3e"}` }}>
-              <div className="h-64 relative overflow-hidden" style={{ background: "#2a2a2a" }}>
+              <div className={`relative overflow-hidden flex-shrink-0 ${viewMode === "list" ? "h-24 w-24 sm:h-28 sm:w-28" : "aspect-square w-full"}`} style={{ background: "#9bdcf4" }}>
                 {p.images?.[0] ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.images[0]} alt={p.name} className="w-full h-full object-cover aspect-video" />
+                  <img src={p.images[0]} alt={p.name} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center" style={{ color: "#636363" }}>
                     <i className="fa-solid fa-image text-3xl" />
@@ -4586,17 +4963,35 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
                   </div>
                 )}
               </div>
-              <div className="p-3">
+              <div className={`${viewMode === "list" ? "p-2.5 min-w-0" : "p-3"} flex flex-1 flex-col`}>
                 <div className="font-bold text-white text-sm leading-tight mb-1">{p.name}</div>
-                <div className="flex items-center gap-2 text-xs mb-3">
+                <div className={`flex items-center gap-2 text-xs ${viewMode === "list" ? "mb-1.5" : "mb-3"}`}>
                   <span className="font-black" style={{ color: "#ff7070" }}>฿{p.price.toFixed(2)}</span>
                   {p.cost != null && <span style={{ color: "#636363" }}>ต้นทุน ฿{p.cost.toFixed(2)}</span>}
+                  {!!p.colors?.length && <span style={{ color: "#84D4FA" }}>มี {p.colors.length} สี</span>}
                   <span className={`font-semibold ml-auto`} style={{ color: p.stock <= 3 ? "#ff7070" : "#3fb950" }}>
                     {p.stock} {p.unit ?? "ชิ้น"}
                   </span>
                 </div>
+                <div className={`${viewMode === "list" ? "h-[24px] mb-2" : "h-[28px] mb-3"} overflow-x-auto overflow-y-hidden`}>
+                  {!!p.colors?.length && (
+                    <div className="flex w-max gap-1">
+                      {p.colors.map(color => {
+                        const qty = p.color_stock?.[color] ?? p.stock;
+                        const out = qty <= 0;
+                        return (
+                          <span key={color} className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-lg"
+                            style={{ background: out ? "rgba(255,112,112,0.12)" : "#252525", color: out ? "#ff7070" : "#ededed", border: "1px solid #3e3e3e" }}>
+                            <span className="h-3 w-3 rounded-full border flex-shrink-0" style={{ background: productColorSwatch(color), borderColor: color.trim() === "ขาว" ? "#ededed" : "#3e3e3e" }} />
+                            {color}: {out ? "หมด" : `${qty}`}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
                 {canEdit && (
-                  <div className="flex gap-1.5">
+                  <div className="mt-auto flex gap-1.5">
                     {p.deleted_at ? (
                       <button onClick={() => restoreProduct(p)}
                         className="flex-1 text-xs font-semibold py-1.5 rounded-lg transition-all flex items-center justify-center gap-1"
@@ -4606,17 +5001,17 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
                     ) : (
                       <>
                         <button onClick={() => setEditing(p)}
-                          className="flex-1 text-xs font-semibold py-1.5 rounded-lg transition-all text-[#9e9e9e] hover:text-white"
+                          className={`flex-1 text-xs font-semibold rounded-lg transition-all text-[#9e9e9e] hover:text-white ${viewMode === "list" ? "py-1" : "py-1.5"}`}
                           style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>
                           <i className="fa-solid fa-pen mr-1" /> แก้ไข
                         </button>
                         <button onClick={() => toggleActive(p)}
-                          className="text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-all"
+                          className={`text-xs font-semibold px-2.5 rounded-lg transition-all ${viewMode === "list" ? "py-1" : "py-1.5"}`}
                           style={{ background: p.active ? "rgba(255,112,112,0.1)" : "rgba(63,185,80,0.1)", color: p.active ? "#ff7070" : "#3fb950", border: `1px solid ${p.active ? "rgba(255,112,112,0.3)" : "rgba(63,185,80,0.3)"}` }}>
                           {p.active ? "ปิด" : "เปิด"}
                         </button>
                         <button onClick={() => deleteProduct(p)}
-                          className="text-xs font-semibold px-2 py-1.5 rounded-lg transition-all"
+                          className={`text-xs font-semibold px-2 rounded-lg transition-all ${viewMode === "list" ? "py-1" : "py-1.5"}`}
                           style={{ background: "rgba(255,112,112,0.08)", color: "#ff7070", border: "1px solid rgba(255,112,112,0.2)" }}>
                           <i className="fa-solid fa-trash" />
                         </button>
@@ -4647,6 +5042,175 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
 
 // ─── Product Form Modal ───────────────────────────────────────────────────────
 
+function OptionTextInput({ value, onChange, options, placeholder, className, style }: {
+  value: string;
+  onChange: (value: string) => void;
+  options: string[];
+  placeholder?: string;
+  className: string;
+  style: React.CSSProperties;
+}) {
+  const [open, setOpen] = useState(false);
+  const query = value.trim().toLowerCase();
+  const visibleOptions = options
+    .filter(option => option.trim())
+    .filter(option => !query || option.toLowerCase().includes(query));
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={value}
+        onFocus={() => setOpen(true)}
+        onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+        onChange={e => { onChange(e.target.value); setOpen(true); }}
+        placeholder={placeholder}
+        className={`${className} pr-10`}
+        style={style}
+      />
+      <button
+        type="button"
+        onMouseDown={e => e.preventDefault()}
+        onClick={() => setOpen(current => !current)}
+        className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-lg text-[#9e9e9e] hover:bg-[#1c1c1c] hover:text-white transition"
+        aria-label="เปิดรายการตัวเลือก">
+        <i className={`fa-solid fa-chevron-${open ? "up" : "down"} text-[10px]`} />
+      </button>
+      {open && visibleOptions.length > 0 && (
+        <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-64 overflow-y-auto rounded-xl py-1 shadow-xl"
+          style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+          {visibleOptions.map(option => (
+            <button
+              key={option}
+              type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => { onChange(option); setOpen(false); }}
+              className={`block w-full px-3 py-2 text-left text-xs font-semibold transition ${value === option ? "bg-[#2a2a2a] text-white" : "text-[#ededed] hover:bg-[#252525]"}`}>
+              {option}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OptionValueInput({ value, onChange, options, placeholder, className, style }: {
+  value: string;
+  onChange: (value: string) => void;
+  options: { value: string; label: string; group?: string; groupIcon?: string; groupColor?: string; groupBg?: string }[];
+  placeholder?: string;
+  className: string;
+  style: React.CSSProperties;
+}) {
+  const selectedLabel = options.find(option => option.value === value)?.label ?? value;
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState(selectedLabel);
+  const visibleOptions = options.filter(option => {
+    const text = query.trim().toLowerCase();
+    return !text || option.label.toLowerCase().includes(text) || option.value.toLowerCase().includes(text);
+  });
+  const groupedOptions = visibleOptions.reduce<Array<{ group: string; groupIcon?: string; groupColor?: string; groupBg?: string; items: typeof visibleOptions }>>((groups, option) => {
+    const groupName = option.group ?? "";
+    const last = groups[groups.length - 1];
+    if (last && last.group === groupName) {
+      last.items.push(option);
+    } else {
+      groups.push({
+        group: groupName,
+        groupIcon: option.groupIcon,
+        groupColor: option.groupColor,
+        groupBg: option.groupBg,
+        items: [option],
+      });
+    }
+    return groups;
+  }, []);
+
+  useEffect(() => {
+    if (!open) setQuery(selectedLabel);
+  }, [open, selectedLabel]);
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={query}
+        onFocus={() => { setQuery(""); setOpen(true); }}
+        onBlur={() => window.setTimeout(() => { setOpen(false); setQuery(selectedLabel); }, 120)}
+        onChange={e => { setQuery(e.target.value); setOpen(true); }}
+        placeholder={placeholder}
+        className={`${className} pr-10`}
+        style={style}
+      />
+      <button
+        type="button"
+        onMouseDown={e => e.preventDefault()}
+        onClick={() => { setQuery(""); setOpen(current => !current); }}
+        className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-lg text-[#9e9e9e] hover:bg-[#1c1c1c] hover:text-white transition"
+        aria-label="เปิดรายการตัวเลือก">
+        <i className={`fa-solid fa-chevron-${open ? "up" : "down"} text-[10px]`} />
+      </button>
+      {open && visibleOptions.length > 0 && (
+        <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-64 overflow-y-auto rounded-xl py-1 shadow-xl"
+          style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
+          {groupedOptions.map(group => (
+            <div key={group.group || "options"}>
+              {group.group && (
+                <div className="sticky top-0 z-10 flex items-center gap-1.5 border-b px-3 py-1.5"
+                  style={{ background: group.groupBg ?? "#252525", borderColor: "#2a2a2a" }}>
+                  {group.groupIcon && <i className={`${group.groupIcon} text-[9px]`} style={{ color: group.groupColor ?? "#9e9e9e", width: 13, textAlign: "center" }} />}
+                  <span className="text-[10px] font-bold tracking-wide" style={{ color: group.groupColor ?? "#9e9e9e" }}>{group.group}</span>
+                </div>
+              )}
+              {group.items.map(option => (
+                <button
+                  key={option.value || option.label}
+                  type="button"
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => { onChange(option.value); setQuery(option.label); setOpen(false); }}
+                  className={`block w-full px-3 py-2 text-left text-xs font-semibold transition ${value === option.value ? "bg-[#2a2a2a] text-white" : "text-[#ededed] hover:bg-[#252525]"}`}>
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+type ProductColorRow = { id: string; name: string; qty: string };
+const PRODUCT_COLOR_PRESETS = [
+  { name: "ขาว", hex: "#ffffff" },
+  { name: "ดำ", hex: "#111827" },
+  { name: "เทา", hex: "#9ca3af" },
+  { name: "แดง", hex: "#ef4444" },
+  { name: "ส้ม", hex: "#f97316" },
+  { name: "เหลือง", hex: "#facc15" },
+  { name: "เขียว", hex: "#22c55e" },
+  { name: "ฟ้า", hex: "#0ea5e9" },
+  { name: "น้ำเงิน", hex: "#2563eb" },
+  { name: "ม่วง", hex: "#8b5cf6" },
+  { name: "ชมพู", hex: "#ec4899" },
+  { name: "น้ำตาล", hex: "#92400e" },
+];
+const PRODUCT_COLOR_HEX = Object.fromEntries(PRODUCT_COLOR_PRESETS.map(color => [color.name, color.hex]));
+function productColorSwatch(color: string) {
+  const trimmed = color.trim();
+  return PRODUCT_COLOR_HEX[trimmed] || (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(trimmed) ? trimmed : "#e2e8f0");
+}
+function makeProductColorRow(name = "", qty = ""): ProductColorRow {
+  return { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, name, qty };
+}
+function productToColorRows(product: Product | null): ProductColorRow[] {
+  return (product?.colors ?? []).map(color => {
+    const qty = product?.color_stock?.[color];
+    return makeProductColorRow(color, typeof qty === "number" ? String(qty) : "");
+  });
+}
+
 function ProductForm({ product, adminId, unitOptions, categoryOptions, tagOptions, onClose, onSaved }: {
   product: Product | null;
   adminId: string;
@@ -4663,6 +5227,8 @@ function ProductForm({ product, adminId, unitOptions, categoryOptions, tagOption
   const [unit,     setUnit]     = useState(product?.unit ?? "");
   const [category, setCategory] = useState(product?.category ?? "");
   const [tag,      setTag]      = useState(product?.tag ?? "");
+  const [colorRows, setColorRows] = useState<ProductColorRow[]>(() => productToColorRows(product));
+  const [customColor, setCustomColor] = useState("");
   const [active,   setActive]   = useState(product?.active ?? true);
   const [imgUrl,   setImgUrl]   = useState(product?.images?.[0] ?? "");
   const [saving,    setSaving]    = useState(false);
@@ -4672,12 +5238,35 @@ function ProductForm({ product, adminId, unitOptions, categoryOptions, tagOption
 
   const inputCls = "w-full px-3 py-2.5 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none transition-colors";
   const inputStyle = { background: "#0c0c0c", border: "1px solid #3e3e3e" };
+  const cleanColorRows = colorRows.map(row => ({ ...row, name: row.name.trim() })).filter(row => row.name);
+  const hasColorStock = cleanColorRows.some(row => row.qty.trim() !== "");
+  const colorStockTotal = cleanColorRows.reduce((sum, row) => sum + (hasColorStock ? Math.max(0, parseInt(row.qty, 10) || 0) : 0), 0);
+  const addColor = (color: string) => {
+    const name = color.trim();
+    if (!name) return;
+    setColorRows(rows => rows.some(row => row.name.trim() === name) ? rows : [...rows, makeProductColorRow(name, "")]);
+    setCustomColor("");
+  };
+  const updateColorRow = (id: string, patch: Partial<ProductColorRow>) => {
+    setColorRows(rows => rows.map(row => row.id === id ? { ...row, ...patch } : row));
+  };
+  const removeColorRow = (id: string) => setColorRows(rows => rows.filter(row => row.id !== id));
 
   async function handleSave() {
     if (!name.trim() || !price.trim()) { setError("กรุณากรอกชื่อสินค้าและราคา"); return; }
     setSaving(true);
     setError("");
-    const body = { name: name.trim(), price: parseFloat(price), cost: cost ? parseFloat(cost) : null, stock: parseInt(stock) || 0, unit: unit.trim() || null, category: category.trim() || null, tag: tag.trim() || null, images: imgUrl.trim() ? [imgUrl.trim()] : null, active };
+    const parsedColors = Array.from(new Set(cleanColorRows.map(row => row.name)));
+    const parsedColorStock = hasColorStock
+      ? Object.fromEntries(parsedColors.map(color => {
+          const row = cleanColorRows.find(item => item.name === color);
+          return [color, Math.max(0, parseInt(row?.qty ?? "", 10) || 0)];
+        }))
+      : {};
+    const nextStock = hasColorStock
+      ? Object.values(parsedColorStock).reduce((sum, qty) => sum + Number(qty || 0), 0)
+      : parseInt(stock) || 0;
+    const body = { name: name.trim(), price: parseFloat(price), cost: cost ? parseFloat(cost) : null, stock: nextStock, unit: unit.trim() || null, category: category.trim() || null, tag: tag.trim() || null, colors: parsedColors.length ? parsedColors : null, color_stock: hasColorStock ? parsedColorStock : null, images: imgUrl.trim() ? [imgUrl.trim()] : null, active };
     const url = product ? `/api/admin/products/${product.id}` : "/api/admin/products";
     try {
       const res = await adminFetch(url, adminId, { method: product ? "PATCH" : "POST", body: JSON.stringify(body) });
@@ -4759,31 +5348,80 @@ function ProductForm({ product, adminId, unitOptions, categoryOptions, tagOption
             <div>
               <label className="block text-xs font-semibold text-[#ededed] mb-1.5">สต็อก</label>
               <input type="number" min="0" value={stock} onChange={(e) => setStock(e.target.value)} className={inputCls} style={inputStyle} />
+              {hasColorStock && (
+                <p className="mt-1 text-[11px]" style={{ color: "#84D4FA" }}>จะใช้ผลรวมสี {colorStockTotal} ชิ้นแทน</p>
+              )}
             </div>
             <div>
               <label className="block text-xs font-semibold text-[#ededed] mb-1.5">หน่วย</label>
-              <input type="text" list="product-unit-list" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="พิมพ์หน่วย" className={inputCls} style={inputStyle} />
-              <datalist id="product-unit-list">
-                {unitOptions.map(v => <option key={v} value={v} />)}
-              </datalist>
+              <OptionTextInput value={unit} onChange={setUnit} options={unitOptions} placeholder="พิมพ์หน่วย" className={inputCls} style={inputStyle} />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-[#ededed] mb-1.5">หมวดหมู่</label>
-              <input type="text" list="product-category-list" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="พิมพ์หมวดหมู่" className={inputCls} style={inputStyle} />
-              <datalist id="product-category-list">
-                {categoryOptions.map(v => <option key={v} value={v} />)}
-              </datalist>
+              <OptionTextInput value={category} onChange={setCategory} options={categoryOptions} placeholder="พิมพ์หมวดหมู่" className={inputCls} style={inputStyle} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-[#ededed] mb-1.5">แท็ก</label>
-              <input type="text" list="product-tag-list" value={tag} onChange={(e) => setTag(e.target.value)} placeholder="พิมพ์แท็ก" className={inputCls} style={inputStyle} />
-              <datalist id="product-tag-list">
-                {tagOptions.map(v => <option key={v} value={v} />)}
-              </datalist>
+              <OptionTextInput value={tag} onChange={setTag} options={tagOptions} placeholder="พิมพ์แท็ก" className={inputCls} style={inputStyle} />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-[#ededed] mb-1.5">สีที่มีให้เลือก</label>
+            <div className="rounded-xl p-3 space-y-3" style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }}>
+              <div className="flex flex-wrap gap-2">
+                {PRODUCT_COLOR_PRESETS.map(color => {
+                  const selected = cleanColorRows.some(row => row.name === color.name);
+                  return (
+                    <button
+                      key={color.name}
+                      type="button"
+                      onClick={() => addColor(color.name)}
+                      className={`h-8 w-8 rounded-full border-2 transition ${selected ? "ring-2 ring-sky-300" : "hover:scale-105"}`}
+                      style={{ background: color.hex, borderColor: selected ? "#84D4FA" : color.name === "ขาว" ? "#ededed" : "#3e3e3e" }}
+                      aria-label={`เพิ่มสี${color.name}`}
+                      title={color.name}>
+                      {selected && <i className="fa-solid fa-check text-[10px] text-white drop-shadow" />}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex gap-2">
+                <input value={customColor} onChange={e => setCustomColor(e.target.value)} placeholder="เพิ่มสีเอง เช่น เงิน, ทอง, #22c55e" className={inputCls} style={inputStyle} />
+                <button type="button" onClick={() => addColor(customColor)}
+                  className="h-10 w-10 flex-shrink-0 rounded-xl text-white transition hover:brightness-110"
+                  style={{ background: "#ff7070" }}
+                  aria-label="เพิ่มสี">
+                  <i className="fa-solid fa-plus text-xs" />
+                </button>
+              </div>
+
+              {colorRows.length > 0 ? (
+                <div className="space-y-2">
+                  {colorRows.map(row => (
+                    <div key={row.id} className="grid grid-cols-[auto_1fr_90px_auto] items-center gap-2">
+                      <span className="h-7 w-7 rounded-full border" style={{ background: productColorSwatch(row.name), borderColor: row.name.trim() === "ขาว" ? "#ededed" : "#3e3e3e" }} />
+                      <input value={row.name} onChange={e => updateColorRow(row.id, { name: e.target.value })} placeholder="ชื่อสี" className={inputCls} style={inputStyle} />
+                      <input type="number" min="0" value={row.qty} onChange={e => updateColorRow(row.id, { qty: e.target.value })} placeholder="จำนวน" className={inputCls} style={inputStyle} />
+                      <button type="button" onClick={() => removeColorRow(row.id)}
+                        className="h-9 w-9 rounded-xl text-[#9e9e9e] hover:bg-[#2a2a2a] hover:text-white transition"
+                        aria-label="ลบสี">
+                        <i className="fa-solid fa-xmark text-xs" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg px-3 py-2 text-[11px]" style={{ background: "#111111", color: "#636363" }}>
+                  ไม่เลือกสี = ใช้สต็อกรวมอย่างเดียว
+                </div>
+              )}
+            </div>
+            <p className="mt-1 text-[11px]" style={{ color: "#9e9e9e" }}>ใส่จำนวนในแต่ละสีเพื่อแยกสต็อก ถ้าเว้นจำนวนทั้งหมดจะใช้สต็อกรวม</p>
           </div>
 
           <div className="flex items-center justify-between py-2">
@@ -4828,11 +5466,11 @@ function EquipmentItemsTab({ adminId, role }: { adminId: string; role: string })
   const [items, setItems] = useState<EquipmentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<EquipmentItem | "new" | null>(null);
-  const [category, setCategory] = useState("all");
-  const [deptFilter, setDeptFilter] = useState("all");
-  const [showInactive, setShowInactive] = useState(false);
-  const [showDeleted, setShowDeleted] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [category, setCategory] = useLocalStorageState("asia_admin_equipment_items_category", "all", isString);
+  const [deptFilter, setDeptFilter] = useLocalStorageState("asia_admin_equipment_items_department", "all", isString);
+  const [showInactive, setShowInactive] = useLocalStorageState("asia_admin_equipment_items_show_inactive", false, isBoolean);
+  const [showDeleted, setShowDeleted] = useLocalStorageState("asia_admin_equipment_items_show_deleted", false, isBoolean);
+  const [viewMode, setViewMode] = useLocalStorageState<ViewMode>(ADMIN_VIEW_MODE_KEY, "grid", isViewMode);
   const equipmentStatusChartRef = useRef<HTMLCanvasElement | null>(null);
   const equipmentCategoryChartRef = useRef<HTMLCanvasElement | null>(null);
   const canEdit = canAccessTab(role, "equipment_items");
@@ -5087,9 +5725,9 @@ function EquipmentItemsTab({ adminId, role }: { adminId: string; role: string })
       {loading ? <DarkSpinner /> : displayed.length === 0 ? <DarkEmpty text="ไม่มีคุรุภัณฑ์" /> : (
         <div className={viewMode === "list" ? "space-y-3" : viewMode === "card" ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"}>
           {displayed.map(i => (
-            <div key={i.id} className={`rounded-2xl overflow-hidden transition-all ${!i.active && !i.deleted_at ? "opacity-50" : ""} ${i.deleted_at ? "opacity-40" : ""}`}
+            <div key={i.id} className={`rounded-2xl overflow-hidden transition-all ${viewMode === "list" ? "flex items-stretch" : ""} ${!i.active && !i.deleted_at ? "opacity-50" : ""} ${i.deleted_at ? "opacity-40" : ""}`}
               style={{ background: "#1c1c1c", border: `1px solid ${i.deleted_at ? "#ff7070" : "#3e3e3e"}` }}>
-              <div className="h-40 relative overflow-hidden" style={{ background: "#2a2a2a" }}>
+              <div className={`relative overflow-hidden flex-shrink-0 ${viewMode === "list" ? "h-24 w-24 sm:h-28 sm:w-28" : "aspect-square w-full"}`} style={{ background: "#21a47c" }}>
                 {i.image_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={i.image_url} alt={i.name} className="w-full h-full object-cover" />
@@ -5116,10 +5754,10 @@ function EquipmentItemsTab({ adminId, role }: { adminId: string; role: string })
                   </span>
                 </div>
               </div>
-              <div className="p-3">
+              <div className={`${viewMode === "list" ? "p-2.5 min-w-0 flex-1" : "p-3"}`}>
                 <div className="font-bold text-white text-sm leading-tight mb-1">{i.name}</div>
                 {i.asset_code && <div className="text-[10px] mb-1" style={{ color: "#636363" }}>รหัส: {i.asset_code}</div>}
-                <div className="flex items-center gap-2 text-xs mb-3">
+                <div className={`flex items-center gap-2 text-xs ${viewMode === "list" ? "mb-2" : "mb-3"}`}>
                   <span className={`font-semibold`} style={{ color: i.available_quantity === 0 ? "#ff7070" : "#3fb950" }}>
                     พร้อมยืม {i.available_quantity}/{i.total_quantity} {i.unit}
                   </span>
@@ -5128,24 +5766,24 @@ function EquipmentItemsTab({ adminId, role }: { adminId: string; role: string })
                   <div className="flex gap-1.5">
                     {i.deleted_at ? (
                       <button onClick={() => restoreItem(i)}
-                        className="flex-1 text-xs font-semibold py-1.5 rounded-lg transition-all flex items-center justify-center gap-1"
+                        className={`flex-1 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1 ${viewMode === "list" ? "py-1" : "py-1.5"}`}
                         style={{ background: "rgba(63,185,80,0.12)", color: "#3fb950", border: "1px solid rgba(63,185,80,0.3)" }}>
                         <i className="fa-solid fa-rotate-left text-[10px]" /> กู้คืน
                       </button>
                     ) : (
                       <>
                         <button onClick={() => setEditing(i)}
-                          className="flex-1 text-xs font-semibold py-1.5 rounded-lg transition-all text-[#9e9e9e] hover:text-white"
+                          className={`flex-1 text-xs font-semibold rounded-lg transition-all text-[#9e9e9e] hover:text-white ${viewMode === "list" ? "py-1" : "py-1.5"}`}
                           style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>
                           <i className="fa-solid fa-pen mr-1" /> แก้ไข
                         </button>
                         <button onClick={() => toggleActive(i)}
-                          className="text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-all"
+                          className={`text-xs font-semibold px-2.5 rounded-lg transition-all ${viewMode === "list" ? "py-1" : "py-1.5"}`}
                           style={{ background: i.active ? "rgba(255,112,112,0.1)" : "rgba(63,185,80,0.1)", color: i.active ? "#ff7070" : "#3fb950", border: `1px solid ${i.active ? "rgba(255,112,112,0.3)" : "rgba(63,185,80,0.3)"}` }}>
                           {i.active ? "ปิด" : "เปิด"}
                         </button>
                         <button onClick={() => deleteItem(i)}
-                          className="text-xs font-semibold px-2 py-1.5 rounded-lg transition-all"
+                          className={`text-xs font-semibold px-2 rounded-lg transition-all ${viewMode === "list" ? "py-1" : "py-1.5"}`}
                           style={{ background: "rgba(255,112,112,0.08)", color: "#ff7070", border: "1px solid rgba(255,112,112,0.2)" }}>
                           <i className="fa-solid fa-trash" />
                         </button>
@@ -5172,7 +5810,7 @@ function EquipmentItemForm({ item, adminId, existingCategories, existingUnits, o
   const [assetCode, setAssetCode] = useState(item?.asset_code ?? "");
   const [category, setCategory] = useState(item?.category ?? "");
   const [department, setDepartment] = useState(item?.department ?? "");
-  const [unit, setUnit] = useState(item?.unit ?? "ชิ้น");
+  const [unit, setUnit] = useState(item?.unit ?? "");
   const [totalQuantity, setTotalQuantity] = useState(item?.total_quantity?.toString() ?? "1");
   const [imgUrl, setImgUrl] = useState(item?.image_url ?? "");
   const [description, setDescription] = useState(item?.description ?? "");
@@ -5181,6 +5819,22 @@ function EquipmentItemForm({ item, adminId, existingCategories, existingUnits, o
   const [imageBusy, setImageBusy] = useState(false);
   const [error, setError] = useState("");
   const originalImgUrl = item?.image_url ?? "";
+  const visibleUnits = existingUnits.filter(u => u.trim());
+  const departmentOptions = [
+    { value: "", label: "ทั่วไป (ทุกสาขาใช้ได้)", group: "ทั่วไป", groupIcon: "fa-solid fa-earth-asia", groupColor: "#84D4FA", groupBg: "rgba(132,212,250,0.08)" },
+    ...DEPARTMENTS.flatMap(group => group.items.map(dept => ({
+      value: dept,
+      label: dept,
+      group: group.label,
+      groupIcon: group.icon,
+      groupColor: group.color,
+      groupBg: "rgba(255,255,255,0.04)",
+    }))),
+  ];
+
+  useEffect(() => {
+    setUnit(item?.unit ?? "");
+  }, [item?.id, item?.unit]);
 
   const inputCls = "w-full px-3 py-2.5 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none transition-colors";
   const inputStyle = { background: "#0c0c0c", border: "1px solid #3e3e3e" };
@@ -5192,7 +5846,7 @@ function EquipmentItemForm({ item, adminId, existingCategories, existingUnits, o
     const body = {
       name: name.trim(), category: category.trim(),
       department: department.trim() || null,
-      asset_code: assetCode.trim() || null, unit: unit.trim() || "ชิ้น",
+      asset_code: assetCode.trim() || null, unit: unit.trim() || "",
       total_quantity: parseInt(totalQuantity) || 0,
       image_url: imgUrl.trim() || null,
       description: description.trim() || null,
@@ -5266,10 +5920,7 @@ function EquipmentItemForm({ item, adminId, existingCategories, existingUnits, o
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-[#ededed] mb-1.5">ประเภทเครื่อง *</label>
-              <input type="text" list="equipment-category-list" value={category} onChange={e => setCategory(e.target.value)} placeholder="พิมพ์ประเภทเครื่อง" className={inputCls} style={inputStyle} />
-              <datalist id="equipment-category-list">
-                {existingCategories.map(c => <option key={c} value={c} />)}
-              </datalist>
+              <OptionTextInput value={category} onChange={setCategory} options={existingCategories} placeholder="พิมพ์ประเภทเครื่อง" className={inputCls} style={inputStyle} />
             </div>
             <div>
               <label className="block text-xs font-semibold text-[#ededed] mb-1.5">รหัสครุภัณฑ์</label>
@@ -5277,20 +5928,13 @@ function EquipmentItemForm({ item, adminId, existingCategories, existingUnits, o
             </div>
           </div>
 
-          <div className="rounded-xl p-3.5 space-y-2" style={{ background: "#111111", border: "1px solid #2a2a2a" }}>
-            <div className="flex items-center gap-2">
-              <i className="fa-solid fa-building-columns text-xs" style={{ color: "#9e9e9e" }} />
-              <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "#9e9e9e" }}>สาขาเจ้าของเครื่อง</span>
-            </div>
-            <select value={department} onChange={e => setDepartment(e.target.value)} className={inputCls} style={inputStyle}>
-              <option value="">ทั่วไป (ทุกสาขาใช้ได้)</option>
-              {DEPARTMENTS.map(cat => (
-                <optgroup key={cat.label} label={cat.label}>
-                  {cat.items.map(d => <option key={d} value={d}>{d}</option>)}
-                </optgroup>
-              ))}
-            </select>
-            <p className="text-[11px]" style={{ color: "#636363" }}>เว้นว่างหากคุรุภัณฑ์นี้เปิดให้ทุกสาขายืมได้</p>
+          <div>
+            <label className="flex items-center gap-2 text-xs font-semibold text-[#ededed] mb-1.5">
+              <i className="fa-solid fa-building-columns text-[10px] text-[#9e9e9e]" />
+              สาขาเจ้าของเครื่อง
+            </label>
+            <OptionValueInput value={department} onChange={setDepartment} options={departmentOptions} placeholder="ค้นหาสาขา" className={inputCls} style={inputStyle} />
+            <p className="mt-1 text-[11px]" style={{ color: "#636363" }}>เว้นว่างหากคุรุภัณฑ์นี้เปิดให้ทุกสาขายืมได้</p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -5300,10 +5944,7 @@ function EquipmentItemForm({ item, adminId, existingCategories, existingUnits, o
             </div>
             <div>
               <label className="block text-xs font-semibold text-[#ededed] mb-1.5">หน่วย</label>
-              <input type="text" list="equipment-unit-list" value={unit} onChange={e => setUnit(e.target.value)} placeholder="พิมพ์หน่วย" className={inputCls} style={inputStyle} />
-              <datalist id="equipment-unit-list">
-                {existingUnits.map(u => <option key={u} value={u} />)}
-              </datalist>
+              <OptionTextInput value={unit} onChange={setUnit} options={visibleUnits} placeholder="พิมพ์หน่วย" className={inputCls} style={inputStyle} />
             </div>
           </div>
 
@@ -5371,7 +6012,7 @@ function EquipmentRequestsTab({ adminId }: { adminId: string }) {
   const [requests, setRequests] = useState<EquipmentRequest[]>([]);
   const [overviewRequests, setOverviewRequests] = useState<EquipmentRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("pending");
+  const [filter, setFilter] = useLocalStorageState<string>("asia_admin_equipment_requests_filter", "pending", isString);
   const [deptFilter, setDeptFilter] = useState("all");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [noteEdit, setNoteEdit] = useState<Record<string, string>>({});
@@ -5719,9 +6360,9 @@ const ORDER_STYLE: Record<string, { bg: string; text: string }> = {
 function ShopOrdersTab({ adminId }: { adminId: string }) {
   const [orders, setOrders] = useState<ShopOrder[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("all");
-  const [search, setSearch] = useState("");
-  const [viewMode, setViewMode] = useState<"grid" | "list" | "card">("grid");
+  const [filter, setFilter] = useLocalStorageState<string>("asia_admin_orders_filter", "all", isString);
+  const [search, setSearch] = useLocalStorageState<string>("asia_admin_orders_search", "", isString);
+  const [viewMode, setViewMode] = useLocalStorageState<ViewMode>(ADMIN_VIEW_MODE_KEY, "grid", isViewMode);
   const [confirming, setConfirming] = useState<string | null>(null);
   const orderStatusChartRef = useRef<HTMLCanvasElement | null>(null);
   const orderTopItemsChartRef = useRef<HTMLCanvasElement | null>(null);
@@ -5750,7 +6391,7 @@ function ShopOrdersTab({ adminId }: { adminId: string }) {
         o.student_name.toLowerCase().includes(q) ||
         o.student_id.includes(q) ||
         o.order_id.toLowerCase().includes(q) ||
-        (o.items_json as OrderItem[])?.some(i => i.name.toLowerCase().includes(q))
+        (o.items_json as OrderItem[])?.some(i => shopOrderItemName(i).toLowerCase().includes(q))
       )
     : orders;
 
@@ -5983,7 +6624,7 @@ function ShopOrdersTab({ adminId }: { adminId: string }) {
                             {item.imageUrl ? <img src={item.imageUrl} alt="" className="w-7 h-7 rounded-md object-cover flex-shrink-0" style={{ border: "1px solid #3e3e3e" }} />
                               : <div className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 text-[10px]" style={{ background: "#2a2a2a" }}>🛍️</div>}
                             <div className="min-w-0">
-                              <span className="text-xs text-[#ededed] truncate block">{item.name}</span>
+                              <span className="text-xs text-[#ededed] truncate block">{shopOrderItemName(item)}</span>
                               <span className="text-[10px] text-[#636363]">{item.qty} {item.unit} × ฿{item.price.toFixed(2)}</span>
                             </div>
                           </div>
@@ -6038,7 +6679,7 @@ function ShopOrdersTab({ adminId }: { adminId: string }) {
                       {items.map((item, i) => (
                         <span key={i} className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded" style={{ background: "#252525", color: "#9e9e9e" }}>
                           {item.imageUrl && <img src={item.imageUrl} alt="" className="w-3.5 h-3.5 rounded object-cover" />}
-                          {item.name} ×{item.qty}
+                          {shopOrderItemName(item)} ×{item.qty}
                         </span>
                       ))}
                     </div>
@@ -6097,7 +6738,7 @@ function ShopOrdersTab({ adminId }: { adminId: string }) {
                             ? <img src={item.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover flex-shrink-0" style={{ border: "1px solid #3e3e3e" }} />
                             : <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 text-xl" style={{ background: "#2a2a2a" }}>🛍️</div>}
                           <div className="flex-1 min-w-0">
-                            <div className="text-sm font-bold text-white truncate">{item.name}</div>
+                            <div className="text-sm font-bold text-white truncate">{shopOrderItemName(item)}</div>
                             <div className="text-[11px] text-[#9e9e9e] mt-0.5">{item.qty} {item.unit} × ฿{item.price.toFixed(2)}</div>
                           </div>
                           <div className="text-sm font-black flex-shrink-0" style={{ color: sc.text }}>฿{(item.price * item.qty).toFixed(2)}</div>
@@ -6937,7 +7578,7 @@ const TA_STATUS: Record<string, { label: string; color: string; bg: string }> = 
 function TeacherApplicationsTab({ adminId, onAddTeacher }: { adminId: string; onAddTeacher?: () => void }) {
   const [apps, setApps]             = useState<TeacherApp[]>([]);
   const [loading, setLoading]       = useState(true);
-  const [filter, setFilter]         = useState<"pending" | "approved" | "rejected" | "all">("pending");
+  const [filter, setFilter]         = useLocalStorageState<"pending" | "approved" | "rejected" | "all">("asia_admin_teacher_applications_filter", "pending", (value): value is "pending" | "approved" | "rejected" | "all" => value === "pending" || value === "approved" || value === "rejected" || value === "all");
   const [selected, setSelected]     = useState<TeacherApp | null>(null);
   const [actionLoading, setAL]        = useState(false);
   const [approvePassword, setAppPw]   = useState("");
@@ -8784,8 +9425,8 @@ function ProjectsTab({ adminId, role, onViewEvals }: { adminId: string; role: st
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<PForm>(BLANK_P);
   const [msg, setMsg] = useState("");
-  const [search, setSearch] = useState("");
-  const [view, setView] = useState<ViewMode>("grid");
+  const [search, setSearch] = useLocalStorageState<string>("asia_admin_projects_search", "", isString);
+  const [view, setView] = useLocalStorageState<ViewMode>(ADMIN_VIEW_MODE_KEY, "grid", isViewMode);
   const canManageProjects = role === "superadmin" || role === "admin";
 
   const load = useCallback(() => {
@@ -9557,7 +10198,7 @@ function EvalCard({ r }: { r: EvalRow }) {
 }
 
 function EvalList({ rows }: { rows: EvalRow[] }) {
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useLocalStorageState<string>("asia_admin_evaluations_search", "", isString);
   const vis = search
     ? rows.filter(r =>
         r.name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -9714,8 +10355,8 @@ function TeachersTab({ adminId, defaultShowForm }: { adminId: string; defaultSho
   const [editId, setEditId]     = useState<string | null>(null);
   const [form, setForm]         = useState(BLANK_TEACHER);
   const [msg, setMsg]           = useState("");
-  const [search, setSearch]     = useState("");
-  const [view, setView]         = useState<ViewMode>("grid");
+  const [search, setSearch]     = useLocalStorageState<string>("asia_admin_teachers_search", "", isString);
+  const [view, setView]         = useLocalStorageState<ViewMode>(ADMIN_VIEW_MODE_KEY, "grid", isViewMode);
   const [showForm, setShowForm] = useState(defaultShowForm ?? false);
 
   const inp = { className: "w-full px-3 py-2 rounded-lg text-sm outline-none", style: { background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" } };
@@ -9977,7 +10618,7 @@ function ClassGroupsTab({ adminId }: { adminId: string }) {
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(BLANK_GROUP);
   const [msg, setMsg] = useState("");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useLocalStorageState<string>("asia_admin_class_groups_search", "", isString);
 
   const previewName = autoGroupName(form.program, form.grade, form.section);
 
@@ -10088,8 +10729,8 @@ function ClassGroupsTab({ adminId }: { adminId: string }) {
               const prog = e.target.value;
               setForm(f => ({ ...f, program: prog, grade: prog === "ปวส" && f.grade > 2 ? 2 : f.grade }));
             }} {...inp}>
-              <option value="ปวช">ปวช</option>
-              <option value="ปวส">ปวส</option>
+              <option value="ปวช">ปวช — ประกาศนียบัตรวิชาชีพ</option>
+              <option value="ปวส">ปวส — ประกาศนียบัตรวิชาชีพชั้นสูง</option>
             </select>
           </div>
 

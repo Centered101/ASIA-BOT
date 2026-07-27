@@ -63,7 +63,7 @@ export default function Footer() {
                   <i className="fa-solid fa-school text-sm text-sky-400" />
                 </div>
                 <div>
-                  <div className="text-sm font-semibold text-slate-300">ASIA-BOT</div>
+                  <div className="text-sm font-semibold text-slate-300">{SITE_NAME}</div>
                   <div className="text-xs text-slate-500 mt-0.5">ระบบบริหารจัดการนักเรียนครบวงจร</div>
                 </div>
               </div>

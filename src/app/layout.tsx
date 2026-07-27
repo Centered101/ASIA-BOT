@@ -5,6 +5,7 @@ import NoRightClick from "@/components/NoRightClick";
 import ChatBubble from "@/components/ChatBubble";
 import { Toaster } from "sonner";
 import { Analytics } from "@vercel/analytics/next";
+import { SITE_NAME } from "@/lib/config";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-bot.xyz";
 const metaImage = "/hero.png";
@@ -17,15 +18,15 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  applicationName: "ASIA-BOT",
+  applicationName: SITE_NAME,
   title: {
-    default: "ASIA-BOT — แพลตฟอร์มบริหารจัดการระบบนักเรียน",
-    template: "%s | ASIA-BOT",
+    default: `${SITE_NAME} — แพลตฟอร์มบริหารจัดการระบบนักเรียน`,
+    template: `%s | ${SITE_NAME}`,
   },
   description:
-    "ASIA-BOT แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร สำหรับ ABAC — ติดตาม Class Track Room จองห้อง สหกรณ์ออนไลน์ และอีกมากมาย",
+    `${SITE_NAME} แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร สำหรับ ABAC — ติดตาม Class Track Room จองห้อง สหกรณ์ออนไลน์ และอีกมากมาย`,
   keywords: [
-    "ASIA-BOT", "asialb", "abac", "Assumption University",
+    SITE_NAME, "asialb", "abac", "Assumption University",
     "Class Track Room", "ติดตามห้องเรียน", "จองห้อง",
     "สหกรณ์", "สหกรณ์ออนไลน์", "ระบบนักเรียน",
     "student management", "Centered101", "asia-bot.xyz",
@@ -46,18 +47,18 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     url: siteUrl,
-    siteName: "ASIA-BOT",
+    siteName: SITE_NAME,
     locale: "th_TH",
-    title: "ASIA-BOT — แพลตฟอร์มบริหารจัดการระบบนักเรียน",
+    title: `${SITE_NAME} — แพลตฟอร์มบริหารจัดการระบบนักเรียน`,
     description:
       "แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร — ติดตามห้องเรียน จองห้อง สหกรณ์",
-    images: [{ url: metaImage, width: 1200, height: 630, alt: "ASIA-BOT Platform" }],
+    images: [{ url: metaImage, width: 1200, height: 630, alt: `${SITE_NAME} Platform` }],
   },
   twitter: {
     card: "summary_large_image",
     site: "@centered101",
     creator: "@centered101",
-    title: "ASIA-BOT — แพลตฟอร์มบริหารจัดการระบบนักเรียน",
+    title: `${SITE_NAME} — แพลตฟอร์มบริหารจัดการระบบนักเรียน`,
     description:
       "แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร — ติดตามห้องเรียน จองห้อง สหกรณ์",
     images: [metaImage],
@@ -127,7 +128,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             __html: JSON.stringify({
               "@context": "https://schema.org",
               "@type": "Organization",
-              name: "ASIA-BOT",
+              name: SITE_NAME,
               url: siteUrl,
               logo: `${siteUrl}/favicon.png`,
               description: "แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร สำหรับ ABAC",

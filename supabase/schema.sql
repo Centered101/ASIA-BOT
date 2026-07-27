@@ -1,7 +1,25 @@
--- WARNING: This schema is for context only and is not meant to be run.
--- Table order and constraints may not be valid for execution.
+-- ============================================================
+-- Database Schema - asia-bot
+-- Contains extensions, tables, constraints, indexes, realtime setup,
+-- and security-related database objects only.
+-- Seed data lives in supabase/seeds/*.sql.
+-- Storage bucket setup lives in supabase/storage.sql.
+-- ============================================================
 
-CREATE TABLE public.students (
+-- Extensions
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
+CREATE EXTENSION IF NOT EXISTS "pgcrypto" WITH SCHEMA public;
+
+-- Types
+-- No custom enum/type definitions are required yet. Existing status values
+-- are enforced with CHECK constraints to preserve current business logic.
+
+-- Domains
+-- No custom domains are required yet.
+
+-- Tables and Constraints
+
+CREATE TABLE IF NOT EXISTS public.students (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   student_id text NOT NULL UNIQUE,
   student_phone text NOT NULL,
@@ -23,7 +41,7 @@ CREATE TABLE public.students (
   google_avatar_url text,
   CONSTRAINT students_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.admins (
+CREATE TABLE IF NOT EXISTS public.admins (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   admin_id text NOT NULL UNIQUE,
   username text NOT NULL UNIQUE,
@@ -45,7 +63,7 @@ CREATE TABLE public.admins (
   google_email text UNIQUE,
   CONSTRAINT admins_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.line_notification_categories (
+CREATE TABLE IF NOT EXISTS public.line_notification_categories (
   key text NOT NULL,
   label text NOT NULL,
   description text,
@@ -54,17 +72,7 @@ CREATE TABLE public.line_notification_categories (
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT line_notification_categories_pkey PRIMARY KEY (key)
 );
-INSERT INTO public.line_notification_categories (key, label, description, sort_order) VALUES
-  ('admin', 'ผู้ดูแล', 'กลุ่มหลักสำหรับคำสั่งและแจ้งเตือนผู้ดูแล', 10),
-  ('broadcast', 'ข่าวสาร', 'กลุ่มสำหรับส่งข่าวสารและประกาศทั่วไป', 20),
-  ('booking', 'จองห้อง', 'กลุ่มรับแจ้งเตือนคำขอจองห้อง', 30),
-  ('feedback', 'Feedback', 'กลุ่มรับแจ้งเตือนความคิดเห็นและรายงานปัญหา', 40),
-  ('order', 'ออเดอร์', 'กลุ่มรับแจ้งเตือนคำสั่งซื้อและการชำระเงิน', 50),
-  ('attendance', 'เข้า-ออก', 'กลุ่มรับแจ้งเตือนการสแกนบัตรเข้าออก', 60),
-  ('data_change', 'แก้ไขข้อมูล', 'กลุ่มรับแจ้งเตือนคำขอแก้ไขข้อมูลนักเรียน', 70),
-  ('equipment', 'คุรุภัณฑ์', 'กลุ่มรับแจ้งเตือนคำขอยืมคืนคุรุภัณฑ์', 80)
-ON CONFLICT (key) DO NOTHING;
-CREATE TABLE public.line_notification_channels (
+CREATE TABLE IF NOT EXISTS public.line_notification_channels (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   group_id text NOT NULL UNIQUE,
   name text NOT NULL,
@@ -80,10 +88,7 @@ CREATE TABLE public.line_notification_channels (
   CONSTRAINT line_notification_channels_pkey PRIMARY KEY (id),
   CONSTRAINT line_notification_channels_category_key_fkey FOREIGN KEY (category_key) REFERENCES public.line_notification_categories(key) ON UPDATE CASCADE
 );
-CREATE UNIQUE INDEX line_notification_channels_one_default_per_category
-  ON public.line_notification_channels (category_key)
-  WHERE is_active = true AND is_default = true;
-CREATE TABLE public.login_logs (
+CREATE TABLE IF NOT EXISTS public.login_logs (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   log_time timestamp with time zone DEFAULT now(),
   student_id_attempt text,
@@ -100,7 +105,7 @@ CREATE TABLE public.login_logs (
   touch_device boolean,
   CONSTRAINT login_logs_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.admin_logs (
+CREATE TABLE IF NOT EXISTS public.admin_logs (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   log_time timestamp with time zone DEFAULT now(),
   admin_id_attempt text,
@@ -117,7 +122,7 @@ CREATE TABLE public.admin_logs (
   touch_device boolean,
   CONSTRAINT admin_logs_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.attendance (
+CREATE TABLE IF NOT EXISTS public.attendance (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   student_id text NOT NULL,
   location text NOT NULL DEFAULT 'school'::text CHECK (location = ANY (ARRAY['school'::text, 'library'::text, 'meeting'::text])),
@@ -130,7 +135,7 @@ CREATE TABLE public.attendance (
   CONSTRAINT attendance_pkey PRIMARY KEY (id),
   CONSTRAINT attendance_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(student_id)
 );
-CREATE TABLE public.feedback (
+CREATE TABLE IF NOT EXISTS public.feedback (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   type text NOT NULL CHECK (type = ANY (ARRAY['comment'::text, 'report'::text])),
   name text,
@@ -147,7 +152,7 @@ CREATE TABLE public.feedback (
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT feedback_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.products (
+CREATE TABLE IF NOT EXISTS public.products (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   tag text,
   stock integer NOT NULL DEFAULT 0,
@@ -156,13 +161,15 @@ CREATE TABLE public.products (
   images text[],
   unit text DEFAULT 'ชิ้น'::text,
   category text,
+  colors text[],
+  color_stock jsonb,
   cost numeric,
   active boolean NOT NULL DEFAULT true,
   created_at timestamp with time zone DEFAULT now(),
   deleted_at timestamp with time zone,
   CONSTRAINT products_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.orders (
+CREATE TABLE IF NOT EXISTS public.orders (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   order_id text NOT NULL DEFAULT ('ORD-'::text || upper(substr(md5((random())::text), 1, 8))) UNIQUE,
   student_id text NOT NULL,
@@ -178,7 +185,7 @@ CREATE TABLE public.orders (
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT orders_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.pay_logs (
+CREATE TABLE IF NOT EXISTS public.pay_logs (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   log_ts timestamp with time zone DEFAULT now(),
   order_id text,
@@ -190,7 +197,7 @@ CREATE TABLE public.pay_logs (
   note text,
   CONSTRAINT pay_logs_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.rooms (
+CREATE TABLE IF NOT EXISTS public.rooms (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   name text NOT NULL,
   description text,
@@ -202,14 +209,14 @@ CREATE TABLE public.rooms (
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT rooms_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.time_slots (
+CREATE TABLE IF NOT EXISTS public.time_slots (
   id integer GENERATED BY DEFAULT AS IDENTITY NOT NULL,
   label text NOT NULL,
   start_time time without time zone NOT NULL,
   end_time time without time zone NOT NULL,
   CONSTRAINT time_slots_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.bookings (
+CREATE TABLE IF NOT EXISTS public.bookings (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   room_id uuid NOT NULL,
   slot_id integer NOT NULL,
@@ -227,7 +234,7 @@ CREATE TABLE public.bookings (
   CONSTRAINT bookings_room_id_fkey FOREIGN KEY (room_id) REFERENCES public.rooms(id),
   CONSTRAINT bookings_slot_id_fkey FOREIGN KEY (slot_id) REFERENCES public.time_slots(id)
 );
-CREATE TABLE public.projects (
+CREATE TABLE IF NOT EXISTS public.projects (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   name text NOT NULL,
   slug text NOT NULL UNIQUE,
@@ -249,7 +256,7 @@ CREATE TABLE public.projects (
   project_date text,
   CONSTRAINT projects_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.evaluations (
+CREATE TABLE IF NOT EXISTS public.evaluations (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   project_id uuid,
   gender text,
@@ -266,7 +273,7 @@ CREATE TABLE public.evaluations (
   CONSTRAINT evaluations_pkey PRIMARY KEY (id),
   CONSTRAINT evaluations_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id)
 );
-CREATE TABLE public.entry_logs (
+CREATE TABLE IF NOT EXISTS public.entry_logs (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   student_id text,
   action text NOT NULL CHECK (action = ANY (ARRAY['in'::text, 'out'::text])),
@@ -274,7 +281,7 @@ CREATE TABLE public.entry_logs (
   CONSTRAINT entry_logs_pkey PRIMARY KEY (id),
   CONSTRAINT entry_logs_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(student_id)
 );
-CREATE TABLE public.class_groups (
+CREATE TABLE IF NOT EXISTS public.class_groups (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   name text NOT NULL,
   program text,
@@ -285,7 +292,7 @@ CREATE TABLE public.class_groups (
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT class_groups_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.class_schedules (
+CREATE TABLE IF NOT EXISTS public.class_schedules (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   class_group_id uuid NOT NULL,
   room_name text NOT NULL,
@@ -298,7 +305,7 @@ CREATE TABLE public.class_schedules (
   CONSTRAINT class_schedules_pkey PRIMARY KEY (id),
   CONSTRAINT class_schedules_class_group_id_fkey FOREIGN KEY (class_group_id) REFERENCES public.class_groups(id)
 );
-CREATE TABLE public.class_schedule_overrides (
+CREATE TABLE IF NOT EXISTS public.class_schedule_overrides (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   override_date date NOT NULL,
   class_group_id uuid NOT NULL,
@@ -312,7 +319,7 @@ CREATE TABLE public.class_schedule_overrides (
   CONSTRAINT class_schedule_overrides_pkey PRIMARY KEY (id),
   CONSTRAINT class_schedule_overrides_class_group_id_fkey FOREIGN KEY (class_group_id) REFERENCES public.class_groups(id)
 );
-CREATE TABLE public.teachers (
+CREATE TABLE IF NOT EXISTS public.teachers (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   full_name text NOT NULL,
   nickname text,
@@ -333,7 +340,7 @@ CREATE TABLE public.teachers (
   desired_password_hash text,
   CONSTRAINT teachers_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.change_requests (
+CREATE TABLE IF NOT EXISTS public.change_requests (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   student_id text NOT NULL,
   requested_changes jsonb NOT NULL,
@@ -344,7 +351,7 @@ CREATE TABLE public.change_requests (
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT change_requests_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.student_cards (
+CREATE TABLE IF NOT EXISTS public.student_cards (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   student_id text,
   uid text NOT NULL UNIQUE,
@@ -354,7 +361,7 @@ CREATE TABLE public.student_cards (
   CONSTRAINT student_cards_pkey PRIMARY KEY (id),
   CONSTRAINT student_cards_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(student_id)
 );
-CREATE TABLE public.rfid_cards (
+CREATE TABLE IF NOT EXISTS public.rfid_cards (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   student_id text NOT NULL,
   uid text NOT NULL UNIQUE,
@@ -366,7 +373,7 @@ CREATE TABLE public.rfid_cards (
   CONSTRAINT rfid_cards_pkey PRIMARY KEY (id),
   CONSTRAINT rfid_cards_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(student_id)
 );
-CREATE TABLE public.rfid_devices (
+CREATE TABLE IF NOT EXISTS public.rfid_devices (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   device_id text NOT NULL UNIQUE,
   device_key text NOT NULL,
@@ -376,7 +383,7 @@ CREATE TABLE public.rfid_devices (
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT rfid_devices_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.attendance_logs (
+CREATE TABLE IF NOT EXISTS public.attendance_logs (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   student_id text,
   uid text NOT NULL,
@@ -388,7 +395,7 @@ CREATE TABLE public.attendance_logs (
   CONSTRAINT attendance_logs_pkey PRIMARY KEY (id),
   CONSTRAINT attendance_logs_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(student_id)
 );
-CREATE TABLE public.feedbacks (
+CREATE TABLE IF NOT EXISTS public.feedbacks (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   type text NOT NULL CHECK (type = ANY (ARRAY['comment'::text, 'report'::text])),
   name text,
@@ -400,7 +407,7 @@ CREATE TABLE public.feedbacks (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT feedbacks_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.room_bookings (
+CREATE TABLE IF NOT EXISTS public.room_bookings (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   room_id uuid NOT NULL,
   booker_name text NOT NULL,
@@ -415,7 +422,7 @@ CREATE TABLE public.room_bookings (
   CONSTRAINT room_bookings_pkey PRIMARY KEY (id),
   CONSTRAINT room_bookings_room_id_fkey FOREIGN KEY (room_id) REFERENCES public.rooms(id)
 );
-CREATE TABLE public.qq_stores (
+CREATE TABLE IF NOT EXISTS public.qq_stores (
   id integer NOT NULL,
   name text NOT NULL,
   icon text NOT NULL,
@@ -424,7 +431,7 @@ CREATE TABLE public.qq_stores (
   color2 text NOT NULL,
   CONSTRAINT qq_stores_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.qq_menu_items (
+CREATE TABLE IF NOT EXISTS public.qq_menu_items (
   id integer GENERATED BY DEFAULT AS IDENTITY NOT NULL,
   store_id integer,
   name text NOT NULL,
@@ -436,7 +443,7 @@ CREATE TABLE public.qq_menu_items (
   CONSTRAINT qq_menu_items_pkey PRIMARY KEY (id),
   CONSTRAINT qq_menu_items_store_id_fkey FOREIGN KEY (store_id) REFERENCES public.qq_stores(id)
 );
-CREATE TABLE public.qq_orders (
+CREATE TABLE IF NOT EXISTS public.qq_orders (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   table_num text NOT NULL,
   customer_name text DEFAULT '-'::text,
@@ -445,7 +452,7 @@ CREATE TABLE public.qq_orders (
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT qq_orders_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.qq_order_items (
+CREATE TABLE IF NOT EXISTS public.qq_order_items (
   id integer GENERATED BY DEFAULT AS IDENTITY NOT NULL,
   order_id uuid,
   store_id integer NOT NULL,
@@ -456,7 +463,7 @@ CREATE TABLE public.qq_order_items (
   CONSTRAINT qq_order_items_pkey PRIMARY KEY (id),
   CONSTRAINT qq_order_items_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.qq_orders(id)
 );
-CREATE TABLE public.qq_store_order_status (
+CREATE TABLE IF NOT EXISTS public.qq_store_order_status (
   id integer GENERATED BY DEFAULT AS IDENTITY NOT NULL,
   order_id uuid,
   store_id integer NOT NULL,
@@ -465,7 +472,7 @@ CREATE TABLE public.qq_store_order_status (
   CONSTRAINT qq_store_order_status_pkey PRIMARY KEY (id),
   CONSTRAINT qq_store_order_status_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.qq_orders(id)
 );
-CREATE TABLE public.qman_categories (
+CREATE TABLE IF NOT EXISTS public.qman_categories (
   id integer NOT NULL,
   name text NOT NULL,
   icon text NOT NULL,
@@ -473,7 +480,7 @@ CREATE TABLE public.qman_categories (
   color_to text NOT NULL,
   CONSTRAINT qman_categories_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.qman_shops (
+CREATE TABLE IF NOT EXISTS public.qman_shops (
   id integer GENERATED BY DEFAULT AS IDENTITY NOT NULL,
   category_id integer,
   name text NOT NULL,
@@ -486,7 +493,7 @@ CREATE TABLE public.qman_shops (
   CONSTRAINT qman_shops_pkey PRIMARY KEY (id),
   CONSTRAINT qman_shops_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.qman_categories(id)
 );
-CREATE TABLE public.qman_users (
+CREATE TABLE IF NOT EXISTS public.qman_users (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   email text NOT NULL UNIQUE,
   password_hash text NOT NULL,
@@ -494,7 +501,7 @@ CREATE TABLE public.qman_users (
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT qman_users_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.qman_bookings (
+CREATE TABLE IF NOT EXISTS public.qman_bookings (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   queue_number text NOT NULL,
   user_id uuid,
@@ -515,7 +522,7 @@ CREATE TABLE public.qman_bookings (
   CONSTRAINT qman_bookings_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.qman_users(id),
   CONSTRAINT qman_bookings_shop_id_fkey FOREIGN KEY (shop_id) REFERENCES public.qman_shops(id)
 );
-CREATE TABLE public.teacher_applications (
+CREATE TABLE IF NOT EXISTS public.teacher_applications (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   full_name text NOT NULL,
   email text,
@@ -531,7 +538,7 @@ CREATE TABLE public.teacher_applications (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT teacher_applications_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.name_change_requests (
+CREATE TABLE IF NOT EXISTS public.name_change_requests (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   student_id text NOT NULL,
   old_first_name text NOT NULL,
@@ -547,7 +554,7 @@ CREATE TABLE public.name_change_requests (
   CONSTRAINT name_change_requests_pkey PRIMARY KEY (id),
   CONSTRAINT name_change_requests_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(student_id)
 );
-CREATE TABLE public.agent_conversations (
+CREATE TABLE IF NOT EXISTS public.agent_conversations (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   session_id text NOT NULL UNIQUE,
   messages jsonb NOT NULL DEFAULT '[]'::jsonb,
@@ -555,7 +562,7 @@ CREATE TABLE public.agent_conversations (
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT agent_conversations_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.agent_logs (
+CREATE TABLE IF NOT EXISTS public.agent_logs (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   session_id text,
   channel text NOT NULL,
@@ -569,7 +576,7 @@ CREATE TABLE public.agent_logs (
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT agent_logs_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.equipment_items (
+CREATE TABLE IF NOT EXISTS public.equipment_items (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   asset_code text,
   name text NOT NULL,
@@ -586,7 +593,7 @@ CREATE TABLE public.equipment_items (
   department text,
   CONSTRAINT equipment_items_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.equipment_requests (
+CREATE TABLE IF NOT EXISTS public.equipment_requests (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   request_code text NOT NULL,
   equipment_item_id uuid NOT NULL,
@@ -612,6 +619,31 @@ CREATE TABLE public.equipment_requests (
   CONSTRAINT equipment_requests_pkey PRIMARY KEY (id),
   CONSTRAINT equipment_requests_equipment_item_id_fkey FOREIGN KEY (equipment_item_id) REFERENCES public.equipment_items(id)
 );
+
+-- Functions
+-- No custom SQL functions are required yet.
+
+-- Triggers
+-- No custom SQL triggers are required yet.
+
+-- Views
+-- No views are required yet.
+
+-- Indexes
+CREATE UNIQUE INDEX IF NOT EXISTS line_notification_channels_one_default_per_category
+  ON public.line_notification_channels (category_key)
+  WHERE is_active = true AND is_default = true;
+
+-- Enable RLS
+-- RLS is intentionally not enabled in this refactor because the existing
+-- application relies on API routes and service-role operations. Enabling RLS
+-- should be handled in focused migrations with route-by-route tests.
+
+-- Policies
+-- No public table RLS policies are created in this refactor.
+
+-- Grants
+-- Default Supabase grants are preserved.
 
 -- Enable Supabase Realtime for admin pages that need immediate cross-admin updates.
 DO $$

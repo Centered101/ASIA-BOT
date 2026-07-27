@@ -10,6 +10,7 @@ import QuickLinksList from "@/components/QuickLinksList";
 import ProjectsGrid from "@/components/ProjectsGrid";
 import StudentAvatar from "@/components/StudentAvatar";
 import { getStudentSession } from "@/lib/session";
+import { SITE_NAME } from "@/lib/config";
 
 type Stats = {
   students: number;
@@ -62,7 +63,7 @@ export default function HomePage() {
                 </span>
                 <div>
                   <div className="text-base font-extrabold text-slate-900">ภาพรวมระบบ</div>
-                  <p className="mt-0.5 text-xs text-slate-500">ข้อมูลล่าสุดจากระบบ ASIA-BOT</p>
+                  <p className="mt-0.5 text-xs text-slate-500">ข้อมูลล่าสุดจากระบบ {SITE_NAME}</p>
                 </div>
               </div>
             </div>
@@ -110,7 +111,7 @@ export default function HomePage() {
 
               <div className="flex items-center gap-2 mb-2">
                 <Image src="/favicon.png" alt="logo" width={32} height={32} className="w-8 h-8" priority />
-                <h1 className="text-3xl sm:text-4xl font-extrabold leading-tight">ASIA-BOT</h1>
+                <h1 className="text-3xl sm:text-4xl font-extrabold leading-tight">{SITE_NAME}</h1>
               </div>
               <p className="text-sm sm:text-base text-slate-600 mb-5 leading-relaxed">
                 แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร — ติดตามห้องเรียน,
@@ -182,9 +183,9 @@ export default function HomePage() {
         <section id="about" className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-16">
           <div className="lg:col-span-2">
             <div data-aos="fade-right" className="bg-white/80 backdrop-blur-sm border border-slate-100 rounded-2xl shadow p-5 md:p-7">
-              <h2 className="text-2xl sm:text-3xl font-extrabold leading-tight mb-4">เกี่ยวกับ ASIA-BOT</h2>
+              <h2 className="text-2xl sm:text-3xl font-extrabold leading-tight mb-4">เกี่ยวกับ {SITE_NAME}</h2>
               <p className="text-sm sm:text-base text-slate-600 leading-relaxed mb-3">
-                <span className="font-semibold text-slate-800">ASIA-BOT</span> คือแพลตฟอร์มจัดการระบบนักเรียนครบวงจร
+                <span className="font-semibold text-slate-800">{SITE_NAME}</span> คือแพลตฟอร์มจัดการระบบนักเรียนครบวงจร
                 ช่วยรวมงานสำคัญของนักเรียนและบุคลากรไว้ในที่เดียว ใช้งานง่ายจากมือถือและคอมพิวเตอร์
               </p>
               <p className="text-sm text-slate-600 leading-relaxed mb-3">

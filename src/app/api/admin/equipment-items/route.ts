@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       category: category.trim(),
       department: department?.trim() || null,
       asset_code: asset_code?.trim() || null,
-      unit: unit?.trim() || "ชิ้น",
+      unit: unit?.trim() || "",
       total_quantity: qty,
       available_quantity: qty,
       image_url: image_url ?? null,

@@ -15,6 +15,7 @@ type EquipmentItem = {
   unit: string;
   available_quantity: number;
   image_url: string | null;
+  description: string | null;
 };
 
 const GENERAL_DEPT = "ทั่วไป";
@@ -639,19 +640,22 @@ export default function EquipmentRequestPage() {
                                   {out ? "ไม่ว่าง" : low ? `เหลือ ${it.available_quantity}` : `${it.available_quantity} ${it.unit}`}
                                 </span>
                               </div>
-                              <div className="p-3">
+                              <div className="p-3 flex min-h-[150px] flex-col">
                                 <div className="flex items-center gap-1 mb-1.5 flex-wrap">
                                   <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-500 rounded-full px-2 py-0.5 text-[10px] font-bold">
                                     <i className={`${catIcon(it.category)} text-[9px]`} /> {it.category}
                                   </span>
                                 </div>
                                 <div className="text-sm font-bold text-slate-800 leading-tight">{it.name}</div>
+                                <div className="mt-1 min-h-[32px] text-[11px] leading-snug text-slate-500 line-clamp-2">
+                                  {it.description || ""}
+                                </div>
                                 <div className="text-[10px] text-slate-400 mb-2 mt-0.5">{it.unit}</div>
                                 {out ? (
-                                  <span className="text-xs text-red-400 font-medium">ไม่ว่างให้ยืม</span>
+                                  <span className="mt-auto text-xs text-red-400 font-medium">ไม่ว่างให้ยืม</span>
                                 ) : (
                                   <button onClick={e => { e.stopPropagation(); addToCart(it); }}
-                                    className="w-full h-9 rounded-xl text-white text-xs font-bold flex items-center justify-center gap-1.5 hover:scale-[1.02] active:scale-95 transition-transform"
+                                    className="mt-auto w-full h-9 rounded-xl text-white text-xs font-bold flex items-center justify-center gap-1.5 hover:scale-[1.02] active:scale-95 transition-transform"
                                     style={{ background: "linear-gradient(135deg,var(--primary-color),var(--primary-dark))", boxShadow: "0 3px 8px rgba(14,165,233,.3)" }}>
                                     <i className="fa-solid fa-cart-plus" /> เพิ่มลงตะกร้า
                                   </button>
@@ -686,6 +690,9 @@ export default function EquipmentRequestPage() {
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
                                 <div className="font-bold text-slate-800 text-sm leading-snug line-clamp-2">{it.name}</div>
+                                {it.description && (
+                                  <div className="mt-0.5 text-[11px] leading-snug text-slate-500 line-clamp-2">{it.description}</div>
+                                )}
                                 <span className="text-[9px] font-bold text-emerald-500 uppercase mt-0.5 inline-block">{it.category}</span>
                               </div>
                             </div>
@@ -748,6 +755,9 @@ export default function EquipmentRequestPage() {
                             </td>
                             <td className="p-3 align-middle">
                               <div className="font-bold text-slate-800 leading-snug line-clamp-2">{it.name}</div>
+                              {it.description && (
+                                <div className="mt-0.5 text-[11px] leading-snug text-slate-500 line-clamp-2">{it.description}</div>
+                              )}
                             </td>
                             <td className="p-3 align-middle">
                               <span className="inline-flex max-w-full items-center gap-1 bg-emerald-50 text-emerald-500 rounded-full px-2 py-0.5 text-[10px] font-bold">

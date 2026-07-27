@@ -396,6 +396,8 @@ Admin ใช้ path เดียวคือ `/admin?tab=` ตามตาร�
 
 > **หมายเหตุ:** กลุ่ม "เช็กชื่อ" (`entrylogs`, `checkin_school`, `checkin_library`, `checkin_meeting`, `rfid`) ถูกซ่อนออกจากเมนูฝั่งซ้ายชั่วคราว แต่ tab/route ยังทำงานได้ตามปกติหากเข้าผ่าน URL ตรง
 
+Admin Panel มี global search เปิดด้วย `Ctrl+K` สำหรับค้นหาเมนูและรายการจริง เช่น นักเรียน สินค้า คำสั่งซื้อ คุรุภัณฑ์ และออเดอร์เบิก พร้อม badge แบบ dot number บนเมนูที่มีรายการต้องดู และจำค่า view/filter/search ใน `localStorage` เพื่อให้ผู้ดูแลกลับมาใช้งานต่อได้ง่าย
+
 | Tab | กลุ่ม | หน้าที่ |
 |---|---|---|
 | `dashboard` | ภาพรวม | สถิตินักเรียน Chart.js สถานะรายวัน |
@@ -481,6 +483,7 @@ Admin ใช้ path เดียวคือ `/admin?tab=` ตามตาร�
 
 ```env
 # Site
+NEXT_PUBLIC_SITE_NAME=ASIA-BOT
 NEXT_PUBLIC_SITE_URL=https://asia-bot.xyz
 
 # Supabase
@@ -490,6 +493,8 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 
 # Admin
 ADMIN_PASSWORD=optional_env_admin_password
+ADMIN_FALLBACK_USERNAME=optional_superadmin_username
+ADMIN_FALLBACK_PASSWORD=optional_superadmin_password
 
 # LINE
 LINE_TOKEN=your_line_channel_access_token

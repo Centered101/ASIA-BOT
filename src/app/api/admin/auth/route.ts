@@ -13,6 +13,14 @@ async function log(data: Record<string, unknown>) {
   try { await (supabase.from("admin_logs") as any).insert(data); } catch { /* silent */ }
 }
 
+const FALLBACK_ADMIN_ID = "__env_superadmin__";
+
+function isFallbackAdminLogin(username: string, password: string) {
+  const fallbackUsername = process.env.ADMIN_FALLBACK_USERNAME;
+  const fallbackPassword = process.env.ADMIN_FALLBACK_PASSWORD;
+  return !!fallbackUsername && !!fallbackPassword && username === fallbackUsername && password === fallbackPassword;
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const { username, password, platform, language, screen, timezone, referrer, page_url, touch_device } = body;
@@ -68,6 +76,29 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Fallback: ADMIN_PASSWORD env var (when admins table is empty / not yet seeded) ──
+  if (isFallbackAdminLogin(username, password)) {
+    void log({ ...logBase, status: "success", reason: "env_fallback" });
+    return NextResponse.json({
+      ok: true,
+      admin: {
+        admin_id: FALLBACK_ADMIN_ID,
+        username,
+        role: "superadmin",
+        first_name: "Super Admin",
+        last_name: null,
+        nickname: "ผู้ดูแลสูงสุด",
+        avatar: null,
+        email: null,
+        phone: null,
+        entry_year: null,
+        department: null,
+        created_at: null,
+        google_email: null,
+      },
+    });
+  }
+
+  // Legacy fallback: ADMIN_PASSWORD env var (when admins table is empty / not yet seeded)
   const envPassword = process.env.ADMIN_PASSWORD;
   if (envPassword && username === "admin" && password === envPassword) {
     void log({ ...logBase, status: "success", reason: "env_fallback" });

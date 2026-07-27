@@ -544,6 +544,8 @@ export type Database = {
           images: string[] | null;
           unit: string | null;
           category: string | null;
+          colors: string[] | null;
+          color_stock: Json | null;
           cost: number | null;
           active: boolean;
           created_at: string;
@@ -557,6 +559,8 @@ export type Database = {
           images?: string[] | null;
           unit?: string | null;
           category?: string | null;
+          colors?: string[] | null;
+          color_stock?: Json | null;
           cost?: number | null;
           active?: boolean;
           created_at?: string;
@@ -569,6 +573,8 @@ export type Database = {
           images?: string[] | null;
           unit?: string | null;
           category?: string | null;
+          colors?: string[] | null;
+          color_stock?: Json | null;
           cost?: number | null;
           active?: boolean;
         };

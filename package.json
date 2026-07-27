@@ -3,9 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3000",
+    "dev:test": "set NEXT_DIST_DIR=.next-test&& next dev -p 3001",
     "build": "next build",
-    "start": "next start",
+    "build:test": "set NEXT_DIST_DIR=.next-test&& next build",
+    "start": "next start -p 3000",
+    "start:test": "set NEXT_DIST_DIR=.next-test&& next start -p 3001",
     "lint": "next lint"
   },
   "dependencies": {

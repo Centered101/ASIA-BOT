@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
+import { SITE_NAME } from "@/lib/config";
 
 export const metadata: Metadata = {
-  title: "ASIA-BOT",
-  description: "แพลตฟอร์มบริหารจัดการระบบนักเรียน ASIA-BOT",
-  keywords: ["ABAC", "ASIA-BOT", "ระบบนักเรียน"],
+  title: SITE_NAME,
+  description: `แพลตฟอร์มบริหารจัดการระบบนักเรียน ${SITE_NAME}`,
+  keywords: ["ABAC", SITE_NAME, "ระบบนักเรียน"],
   openGraph: {
-    title: "ASIA-BOT",
-    description: "แพลตฟอร์มบริหารจัดการระบบนักเรียน ASIA-BOT",
+    title: SITE_NAME,
+    description: `แพลตฟอร์มบริหารจัดการระบบนักเรียน ${SITE_NAME}`,
     type: "website",
   },
 };

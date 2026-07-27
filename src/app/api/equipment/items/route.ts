@@ -10,7 +10,7 @@ const supabase = createClient<Database>(
 export async function GET() {
   const { data, error } = await supabase
     .from("equipment_items")
-    .select("id, name, category, department, unit, available_quantity, image_url")
+    .select("id, name, category, department, unit, available_quantity, image_url, description")
     .eq("active", true)
     .is("deleted_at", null)
     .order("category")

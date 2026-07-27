@@ -5,6 +5,38 @@ import type { Database } from "@/types/database";
 import { sendLineFlexMessage, buildOrderFlexMessage } from "@/lib/line";
 import { getLineNotificationTarget } from "@/lib/line-targets";
 
+const HISTORY_RETENTION_DAYS = 30;
+const HISTORY_MAX_ITEMS = 99;
+const HISTORY_CLEANUP_STATUSES: Database["public"]["Tables"]["orders"]["Row"]["status"][] = ["paid", "cancelled", "refunded"];
+
+async function cleanupStudentOrderHistory(sb: ReturnType<typeof createClient<Database>>, studentId: string) {
+  const cutoff = new Date(Date.now() - HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data: oldRows } = await sb
+    .from("orders")
+    .select("order_id")
+    .eq("student_id", studentId)
+    .in("status", HISTORY_CLEANUP_STATUSES)
+    .lt("created_at", cutoff);
+
+  const { data: extraRows } = await sb
+    .from("orders")
+    .select("order_id")
+    .eq("student_id", studentId)
+    .in("status", HISTORY_CLEANUP_STATUSES)
+    .order("created_at", { ascending: false })
+    .range(HISTORY_MAX_ITEMS, 1000);
+
+  const orderIds = Array.from(new Set([
+    ...((oldRows ?? []).map(row => row.order_id)),
+    ...((extraRows ?? []).map(row => row.order_id)),
+  ].filter(Boolean)));
+
+  if (orderIds.length === 0) return;
+
+  await sb.from("pay_logs").delete().in("order_id", orderIds);
+  await sb.from("orders").delete().in("order_id", orderIds);
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -20,15 +52,17 @@ export async function GET(req: NextRequest) {
     }
 
     const sb = createClient<Database>(supabaseUrl, serviceRole);
-    const since = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
+    const cleanStudentId = student_id.trim();
+    await cleanupStudentOrderHistory(sb, cleanStudentId);
+    const since = new Date(Date.now() - HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
     const { data, error } = await sb
       .from("orders")
       .select("order_id, student_id, student_name, items_json, total, status, created_at")
-      .eq("student_id", student_id.trim())
+      .eq("student_id", cleanStudentId)
       .gte("created_at", since)
       .order("created_at", { ascending: false })
-      .limit(100);
+      .limit(HISTORY_MAX_ITEMS);
 
     if (error) {
       console.error("[SHOP_ORDERS_GET]", error.message);
@@ -52,7 +86,8 @@ export async function GET(req: NextRequest) {
   }
 }
 
-type OrderItem = { id: string; name: string; price: number; qty: number; unit: string };
+type OrderItem = { id: string; name: string; price: number; qty: number; unit: string; color?: string };
+type ColorStock = Record<string, number>;
 
 export async function POST(req: NextRequest) {
   try {
@@ -87,18 +122,46 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ status: "error", message: "ข้อมูลไม่ครบ" });
     }
 
+    const qtyByProduct = items.reduce<Record<string, number>>((acc, item) => {
+      acc[item.id] = (acc[item.id] ?? 0) + item.qty;
+      return acc;
+    }, {});
+    const qtyByProductColor = items.reduce<Record<string, number>>((acc, item) => {
+      if (!item.color) return acc;
+      const key = `${item.id}::${item.color}`;
+      acc[key] = (acc[key] ?? 0) + item.qty;
+      return acc;
+    }, {});
+
     // ── Check stock before creating payment ───────────────────────────
-    for (const item of items) {
+    for (const [productId, qty] of Object.entries(qtyByProduct)) {
+      const itemName = items.find(item => item.id === productId)?.name ?? "รายการที่เลือก";
       const { data: prod, error } = await supabase
         .from("products")
-        .select("id, name, stock")
-        .eq("id", item.id)
+        .select("id, name, stock, color_stock")
+        .eq("id", productId)
         .single();
       if (error || !prod) {
-        return NextResponse.json({ status: "error", message: `ไม่พบสินค้า: ${item.name}` });
+        return NextResponse.json({ status: "error", message: `ไม่พบสินค้า: ${itemName}` });
       }
-      if (prod.stock < item.qty) {
-        return NextResponse.json({ status: "error", message: `สต็อก "${prod.name}" ไม่พอ (เหลือ ${prod.stock})` });
+      const colorStock = (prod.color_stock && typeof prod.color_stock === "object" && !Array.isArray(prod.color_stock))
+        ? prod.color_stock as ColorStock
+        : null;
+      const effectiveStock = colorStock
+        ? Object.values(colorStock).reduce((sum, colorQty) => sum + Number(colorQty || 0), 0)
+        : prod.stock;
+      if (effectiveStock < qty) {
+        return NextResponse.json({ status: "error", message: `สต็อก "${prod.name}" ไม่พอ (เหลือ ${effectiveStock})` });
+      }
+      if (colorStock) {
+        for (const [key, colorQty] of Object.entries(qtyByProductColor)) {
+          const [colorProductId, color] = key.split("::");
+          if (colorProductId !== productId || !(color in colorStock)) continue;
+          const available = Number(colorStock[color] ?? 0);
+          if (available < colorQty) {
+            return NextResponse.json({ status: "error", message: `สี${color}ของ "${prod.name}" ไม่พอ (เหลือ ${available})` });
+          }
+        }
       }
     }
 
@@ -167,15 +230,29 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Reserve stock after payment intent and order are ready ─────────
-    for (const item of items) {
-      const { data: prod, error: stockFetchError } = await supabase.from("products").select("stock").eq("id", item.id).single();
+    for (const [productId, qty] of Object.entries(qtyByProduct)) {
+      const { data: prod, error: stockFetchError } = await supabase.from("products").select("stock, color_stock").eq("id", productId).single();
       if (stockFetchError || !prod) {
-        console.error("[SHOP_ORDERS_POST] stock refetch failed:", item.id, stockFetchError?.message);
+        console.error("[SHOP_ORDERS_POST] stock refetch failed:", productId, stockFetchError?.message);
         continue;
       }
-      const nextStock = Math.max(0, (prod.stock ?? item.qty) - item.qty);
-      const { error: stockUpdateError } = await supabase.from("products").update({ stock: nextStock }).eq("id", item.id);
-      if (stockUpdateError) console.error("[SHOP_ORDERS_POST] stock update failed:", item.id, stockUpdateError.message);
+      const colorStock = (prod.color_stock && typeof prod.color_stock === "object" && !Array.isArray(prod.color_stock))
+        ? { ...(prod.color_stock as ColorStock) }
+        : null;
+      if (colorStock) {
+        for (const [key, colorQty] of Object.entries(qtyByProductColor)) {
+          const [colorProductId, color] = key.split("::");
+          if (colorProductId === productId && color in colorStock) {
+            colorStock[color] = Math.max(0, Number(colorStock[color] ?? 0) - colorQty);
+          }
+        }
+      }
+      const nextStock = colorStock
+        ? Object.values(colorStock).reduce((sum, colorQty) => sum + Number(colorQty || 0), 0)
+        : Math.max(0, (prod.stock ?? qty) - qty);
+      const updatePayload = colorStock ? { stock: nextStock, color_stock: colorStock } : { stock: nextStock };
+      const { error: stockUpdateError } = await supabase.from("products").update(updatePayload).eq("id", productId);
+      if (stockUpdateError) console.error("[SHOP_ORDERS_POST] stock update failed:", productId, stockUpdateError.message);
     }
 
     // ── Log ────────────────────────────────────────────────────────────

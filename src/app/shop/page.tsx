@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { toast } from "sonner";
-import { SESSION_KEY, SESSION_TIME_KEY, SESSION_TTL } from "@/lib/config";
+import { SESSION_KEY, SESSION_TIME_KEY, SESSION_TTL, SITE_NAME } from "@/lib/config";
 import { isDisplayableImageUrl, safeImageSrc } from "@/lib/image-url";
 
 let _welcomeShown = false;
@@ -25,10 +25,12 @@ type Product = {
   images: string;
   unit: string;
   cat: string;
+  colors: string[];
+  colorStock: Record<string, number>;
   emoji: string;
 };
 type CartMap = Record<string, number>;
-type OrderItem = { id: string; name: string; price: number; qty: number; unit: string };
+type OrderItem = { id: string; name: string; price: number; qty: number; unit: string; color?: string };
 type LogEntry = {
   orderId: string;
   ts: string;
@@ -104,6 +106,69 @@ function calcGrade(program: string, entryYear: number | string | null): string {
   return `${program}${diff}`;
 }
 function fmt(n: number): string { return "฿" + (+n).toLocaleString(); }
+function cartKey(productId: string, color = ""): string {
+  return color ? `${productId}::${encodeURIComponent(color)}` : productId;
+}
+function parseCartKey(key: string): { id: string; color: string } {
+  const [id, encodedColor] = key.split("::");
+  return { id, color: encodedColor ? decodeURIComponent(encodedColor) : "" };
+}
+function productCartQty(cart: CartMap, productId: string): number {
+  return Object.entries(cart).reduce((sum, [key, qty]) => sum + (parseCartKey(key).id === productId ? qty : 0), 0);
+}
+function colorCartQty(cart: CartMap, productId: string, color: string): number {
+  if (!color) return productCartQty(cart, productId);
+  return cart[cartKey(productId, color)] || 0;
+}
+function productColorSummary(cart: CartMap, p: Product): string {
+  return p.colors
+    .map(color => {
+      const qty = colorCartQty(cart, p.id, color);
+      return qty > 0 ? `${color} ${qty}` : "";
+    })
+    .filter(Boolean)
+    .join(", ");
+}
+function colorAvailable(p: Product, color: string): number {
+  if (!color) return p.stock;
+  return p.colorStock[color] ?? p.stock;
+}
+function hasColorStock(p: Product): boolean {
+  return Object.keys(p.colorStock).length > 0;
+}
+function effectiveProductStock(p: Product): number {
+  const values = Object.values(p.colorStock);
+  return values.length ? values.reduce((sum, qty) => sum + Number(qty || 0), 0) : p.stock;
+}
+const COLOR_SWATCHES: Record<string, string> = {
+  "ขาว": "#ffffff", "white": "#ffffff",
+  "ดำ": "#111827", "black": "#111827",
+  "เทา": "#9ca3af", "gray": "#9ca3af", "grey": "#9ca3af",
+  "แดง": "#ef4444", "red": "#ef4444",
+  "ส้ม": "#f97316", "orange": "#f97316",
+  "เหลือง": "#facc15", "yellow": "#facc15",
+  "เขียว": "#22c55e", "green": "#22c55e",
+  "ฟ้า": "#0ea5e9", "sky": "#0ea5e9",
+  "น้ำเงิน": "#2563eb", "blue": "#2563eb",
+  "ม่วง": "#8b5cf6", "purple": "#8b5cf6",
+  "ชมพู": "#ec4899", "pink": "#ec4899",
+  "น้ำตาล": "#92400e", "brown": "#92400e",
+};
+function colorSwatch(color: string): string {
+  const key = color.trim().toLowerCase();
+  return COLOR_SWATCHES[key] || (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(color.trim()) ? color.trim() : "#e2e8f0");
+}
+function selectedProductColor(p: Product, selected: string | undefined): string {
+  if (!p.colors.length) return "";
+  if (!hasColorStock(p)) return selected && p.colors.includes(selected) ? selected : p.colors[0];
+  if (selected && p.colors.includes(selected) && colorAvailable(p, selected) > 0) return selected;
+  return p.colors
+    .slice()
+    .sort((a, b) => colorAvailable(p, b) - colorAvailable(p, a))[0] || selected || p.colors[0];
+}
+function orderItemLabel(item: OrderItem): string {
+  return item.color ? `${item.name} (สี${item.color})` : item.name;
+}
 function effectiveStatus(l: LogEntry): LogEntry["status"] {
   if (l.status === "pending" && Date.now() - new Date(l.ts).getTime() > PAY_LIMIT) return "expired";
   return l.status;
@@ -140,6 +205,7 @@ export default function ShopPage() {
   const [searchQ, setSearchQ]         = useState("");
   const [sortIdx, setSortIdx]         = useState(0); // 0=ราคา↑  1=ราคา↓  2=ชื่อ
   const [viewMode, setViewMode]       = useState<"grid" | "table">("grid");
+  const [selectedColors, setSelectedColors] = useState<Record<string, string>>({});
 
   // ── Cart ──────────────────────────────────────────────────────────
   const [cart, setCart]               = useState<CartMap>({});
@@ -242,12 +308,23 @@ export default function ShopPage() {
     try {
       const r = await fetch("/api/shop/products").then(res => res.json()) as {
         status: string;
-        data?: { id: string; tag: string | null; stock: number; name: string; price: number; images: string[] | null; unit: string | null; category: string | null }[];
+        data?: { id: string; tag: string | null; stock: number; name: string; price: number; images: string[] | null; unit: string | null; category: string | null; colors?: string[] | null; color_stock?: Record<string, number> | null }[];
         message?: string;
       };
       if (r.status === "success" && Array.isArray(r.data) && r.data.length) {
         const mapped: Product[] = r.data.map(p => {
-          const base = { id: p.id, tag: p.tag || "", stock: p.stock, name: p.name, price: p.price, images: p.images?.[0] || "", unit: p.unit || "", cat: p.category || "อื่นๆ" };
+          const base = {
+            id: p.id,
+            tag: p.tag || "",
+            stock: p.stock,
+            name: p.name,
+            price: p.price,
+            images: p.images?.[0] || "",
+            unit: p.unit || "",
+            cat: p.category || "อื่นๆ",
+            colors: Array.isArray(p.colors) ? p.colors.filter(Boolean) : [],
+            colorStock: p.color_stock && typeof p.color_stock === "object" && !Array.isArray(p.color_stock) ? p.color_stock : {},
+          };
           return { ...base, emoji: getEmoji(base) };
         });
         setProducts(mapped);
@@ -302,7 +379,8 @@ export default function ShopPage() {
   })();
 
   // ── Cart helpers ─────────────────────────────────────────────────
-  const cartSubtotal = Object.entries(cart).reduce((s, [id, qty]) => {
+  const cartSubtotal = Object.entries(cart).reduce((s, [key, qty]) => {
+    const { id } = parseCartKey(key);
     const p = products.find(x => x.id === id);
     return s + (p ? p.price * qty : 0);
   }, 0);
@@ -312,29 +390,76 @@ export default function ShopPage() {
   const cartCount    = Object.values(cart).reduce((s, q) => s + q, 0);
   const cartEntries  = Object.entries(cart).filter(([, q]) => q > 0);
 
-  const addToCart = (id: string) => {
+  const addToCart = (id: string, forcedColor?: string) => {
     const p = products.find(x => x.id === id);
-    if (!p || p.stock <= 0) return;
-    if ((cart[id] || 0) >= p.stock) {
+    if (!p) return;
+    const totalStock = effectiveProductStock(p);
+    if (totalStock <= 0) return;
+    const color = forcedColor || selectedProductColor(p, selectedColors[id]);
+    const key = cartKey(id, color);
+    const availableForColor = colorAvailable(p, color);
+    if (color && availableForColor <= 0) {
+      toast.error(`สี${color}หมดแล้ว`);
+      return;
+    }
+    if (productCartQty(cart, id) >= totalStock) {
       toast.error("สินค้าไม่เพียงพอ");
       return;
     }
-    setCart(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
-    toast.success(`เพิ่ม ${p.name} ลงตะกร้า`);
-  };
-  const changeQty = (id: string, delta: number) => {
-    const p = products.find(x => x.id === id);
-    const cur = cart[id] || 0;
-    const next = cur + delta;
-    if (p && next > p.stock) {
-      toast.error("สินค้าไม่เพียงพอ");
+    if (color && colorCartQty(cart, id, color) >= availableForColor) {
+      toast.error(`สี${color}เหลือ ${availableForColor} ${p.unit || "ชิ้น"}`);
       return;
+    }
+    setCart(prev => ({ ...prev, [key]: (prev[key] || 0) + 1 }));
+    toast.success(`เพิ่ม ${p.name}${color ? ` สี${color}` : ""} ลงตะกร้า`);
+  };
+  const selectColorAndAdd = (p: Product, color: string) => {
+    setSelectedColors(prev => ({ ...prev, [p.id]: color }));
+    addToCart(p.id, color);
+  };
+  const changeQty = (key: string, delta: number) => {
+    const { id } = parseCartKey(key);
+    const p = products.find(x => x.id === id);
+    const cur = cart[key] || 0;
+    const next = cur + delta;
+    if (p && delta > 0) {
+      const { color } = parseCartKey(key);
+      const availableForColor = colorAvailable(p, color);
+      if (productCartQty(cart, id) >= effectiveProductStock(p)) {
+        toast.error("สินค้าไม่เพียงพอ");
+        return;
+      }
+      if (color && colorCartQty(cart, id, color) >= availableForColor) {
+        toast.error(`สี${color}เหลือ ${availableForColor} ${p.unit || "ชิ้น"}`);
+        return;
+      }
     }
     setCart(prev => {
-      const c = prev[id] || 0;
+      const c = prev[key] || 0;
       const n = c + delta;
-      if (n <= 0) { const copy = { ...prev }; delete copy[id]; return copy; }
-      return { ...prev, [id]: n };
+      if (n <= 0) { const copy = { ...prev }; delete copy[key]; return copy; }
+      return { ...prev, [key]: n };
+    });
+  };
+  const maxQtyForCartKey = (key: string): number => {
+    const { id, color } = parseCartKey(key);
+    const p = products.find(x => x.id === id);
+    if (!p) return 0;
+    const totalStock = effectiveProductStock(p);
+    if (!color) return totalStock;
+    return Math.min(totalStock, colorAvailable(p, color));
+  };
+  const setCartQty = (key: string, value: string) => {
+    const parsed = Number.parseInt(value, 10);
+    const requested = Number.isFinite(parsed) ? parsed : 0;
+    const max = maxQtyForCartKey(key);
+    const next = Math.max(0, Math.min(requested, max));
+    if (requested > max) toast.error(`สินค้าเหลือ ${max} ชิ้น`);
+    setCart(prev => {
+      const copy = { ...prev };
+      if (next <= 0) delete copy[key];
+      else copy[key] = next;
+      return copy;
     });
   };
 
@@ -556,9 +681,10 @@ export default function ShopPage() {
   async function doCheckout() {
     if (!student) return;
     if (!cartSubtotal) return;
-    const items: OrderItem[] = Object.entries(cart).map(([id, qty]) => {
+    const items: OrderItem[] = Object.entries(cart).map(([key, qty]) => {
+      const { id, color } = parseCartKey(key);
       const p = products.find(x => x.id === id)!;
-      return { id, name: p.name, price: p.price, qty, unit: p.unit || "" };
+      return { id, name: p.name, price: p.price, qty, unit: p.unit || "", ...(color ? { color } : {}) };
     });
     await startPaymentForItems({ items, deliveryMode, deliveryLoc, deliverySlot, source: "cart" });
   }
@@ -596,7 +722,7 @@ export default function ShopPage() {
     ctx.fillText("ใบเสร็จชำระเงิน", 82, 42);
     ctx.font = "12px 'Kanit','Bai Jamjuree',sans-serif";
     ctx.fillStyle = "rgba(255,255,255,.85)";
-    ctx.fillText("สหกรณ์โรงเรียน ASIA-BOT", 82, 64);
+    ctx.fillText(`สหกรณ์โรงเรียน ${SITE_NAME}`, 82, 64);
     ctx.fillStyle = "#F8FAFC"; ctx.fillRect(0, 120, W, H - 120);
     const ts = new Date(order.ts || Date.now());
     const dStr = ts.toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" });
@@ -623,7 +749,7 @@ export default function ShopPage() {
     ctx.fillText("รายการสินค้า", 24, y); ctx.textAlign = "right"; ctx.fillText("ราคา", W - 24, y); y += 16;
     order.items.forEach(item => {
       ctx.fillStyle = "#1E293B"; ctx.textAlign = "left"; ctx.font = "12px 'Kanit',sans-serif";
-      const name = `${item.name} × ${item.qty}`;
+      const name = `${orderItemLabel(item)} × ${item.qty}`;
       ctx.fillText(name.length > 34 ? `${name.slice(0, 34)}...` : name, 30, y);
       ctx.fillStyle = "#0EA5E9"; ctx.textAlign = "right"; ctx.font = "bold 12px 'Kanit',sans-serif";
       ctx.fillText(fmt(item.price * item.qty), W - 24, y); y += itemH;
@@ -650,7 +776,7 @@ export default function ShopPage() {
     infoRow("วิธีชำระ", "PromptPay");
     ctx.fillStyle = "#E2E8F0"; ctx.fillRect(24, H - 52, W - 48, 1);
     ctx.fillStyle = "#CBD5E1"; ctx.textAlign = "center"; ctx.font = "10px 'Kanit',sans-serif";
-    ctx.fillText("ขอบคุณที่ใช้บริการสหกรณ์โรงเรียน ASIA-BOT", W / 2, H - 34);
+    ctx.fillText(`ขอบคุณที่ใช้บริการสหกรณ์โรงเรียน ${SITE_NAME}`, W / 2, H - 34);
     ctx.fillText("เก็บใบเสร็จนี้เป็นหลักฐานการชำระเงิน", W / 2, H - 18);
 
     const logo = new Image();
@@ -664,7 +790,7 @@ export default function ShopPage() {
   function downloadSlip() {
     if (!slipRef.current || !lastOrder) return;
     const a = document.createElement("a");
-    a.download = `ใบเสร็จ-ASIA-BOT-${lastOrder.orderId}.png`;
+    a.download = `ใบเสร็จ-${SITE_NAME}-${lastOrder.orderId}.png`;
     a.href = slipRef.current.toDataURL("image/png"); a.click();
     toast.success("ดาวน์โหลดสลิปแล้ว");
   }
@@ -835,7 +961,7 @@ export default function ShopPage() {
               <div className="space-y-2.5">
                 {[
                   { icon: "fa-box", color: "text-sky-400", label: "สินค้าทั้งหมด", val: products.length },
-                  { icon: "fa-check-circle", color: "text-green-400", label: "มีสินค้า", val: products.filter(p => p.stock > 0).length },
+                  { icon: "fa-check-circle", color: "text-green-400", label: "มีสินค้า", val: products.filter(p => effectiveProductStock(p) > 0).length },
                   { icon: "fa-receipt", color: "text-amber-400", label: "รายการสั่งซื้อ", val: logs.length },
                 ].map(row => (
                   <div key={row.label} className="flex items-center justify-between text-sm">
@@ -882,6 +1008,12 @@ export default function ShopPage() {
                   className="flex items-center gap-1 text-xs text-slate-500 hover:text-sky-500 bg-white border border-slate-200 rounded-xl px-3 py-1.5 transition hover:border-sky-200">
                   <i className="fa-solid fa-arrow-up-wide-short text-xs" />
                   {sortLabels[sortIdx]}
+                </button>
+                <button onClick={fetchProducts} disabled={loading}
+                  className="w-8 h-8 rounded-xl border bg-white border-slate-200 text-slate-400 hover:border-sky-200 hover:text-sky-500 disabled:opacity-60 flex items-center justify-center text-xs transition"
+                  aria-label="โหลดสินค้าใหม่"
+                  title="โหลดสินค้าใหม่">
+                  <i className={`fa-solid fa-rotate-right ${loading ? "fa-spin" : ""}`} />
                 </button>
                 <button onClick={() => setViewMode("grid")}
                   className={`w-8 h-8 rounded-xl border flex items-center justify-center text-xs transition
@@ -954,15 +1086,20 @@ export default function ShopPage() {
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {filtered.map((p, i) => {
-                      const qty = cart[p.id] || 0;
-                      const out = p.stock <= 0;
-                      const low = !out && p.stock <= 10;
+                      const selectedColor = selectedProductColor(p, selectedColors[p.id]);
+                      const key = cartKey(p.id, selectedColor);
+                      const qty = cart[key] || 0;
+                      const totalSelected = productCartQty(cart, p.id);
+                      const totalStock = effectiveProductStock(p);
+                      const out = totalStock <= 0;
+                      const low = !out && totalStock <= 10;
                       const imageSrc = safeImageSrc(p.images);
                       const isImg = !!imageSrc;
+                      const selectedSummary = productColorSummary(cart, p);
                       return (
                         <div key={p.id}
                           data-aos="fade-up" data-aos-delay={`${Math.min(i * 40, 200)}`}
-                          className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200">
+                          className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200 h-full flex flex-col">
                           <div className="relative aspect-square w-full flex items-center justify-center bg-gradient-to-br from-sky-50 to-slate-50">
                             {isImg ? (
                               <>
@@ -973,7 +1110,7 @@ export default function ShopPage() {
                             ) : <span className="text-5xl">{p.emoji}</span>}
                             <span className={`absolute top-2 right-2 rounded-full px-2 py-0.5 text-[10px] font-bold
                               ${out ? "bg-red-50 text-red-500" : low ? "bg-amber-50 text-amber-600" : "bg-white/90 text-slate-500"}`}>
-                              {out ? "หมด" : low ? `เหลือ ${p.stock}` : `${p.stock} ${p.unit || ""}`}
+                              {out ? "หมด" : low ? `เหลือ ${totalStock}` : `${totalStock} ${p.unit || ""}`}
                             </span>
                             {p.tag && (
                               <span className="absolute top-2 left-2 bg-sky-100 text-sky-700 rounded-full px-2 py-0.5 text-[9px] font-bold">
@@ -981,7 +1118,7 @@ export default function ShopPage() {
                               </span>
                             )}
                           </div>
-                          <div className="p-3">
+                          <div className="p-3 flex flex-1 flex-col">
                             <div className="flex items-center gap-1 mb-1.5">
                               <span className="inline-flex items-center gap-1 bg-sky-50 text-sky-500 rounded-full px-2 py-0.5 text-[10px] font-bold">
                                 <i className={`${CAT_ICONS[p.cat] || "fa-solid fa-tag"} text-[9px]`} /> {p.cat}
@@ -989,10 +1126,50 @@ export default function ShopPage() {
                             </div>
                             <div className="text-sm font-bold text-slate-800 leading-tight">{p.name}</div>
                             <div className="text-[10px] text-slate-400 mb-2 mt-0.5">{p.unit || ""}</div>
-                            <div className="flex items-center justify-between">
+                            {p.colors.length > 0 && (
+                              <div className="mb-2">
+                                <div className="flex gap-3 overflow-x-auto pb-5 pt-1 px-0.5">
+                                  {p.colors.map(color => {
+                                    const active = selectedColor === color;
+                                    const showColorStock = hasColorStock(p);
+                                    const available = colorAvailable(p, color);
+                                    const colorOut = showColorStock && available <= 0;
+                                    return (
+                                      <button
+                                        key={color}
+                                        type="button"
+                                        aria-label={showColorStock ? `${color} เหลือ ${available}` : color}
+                                        title={showColorStock ? `${color} เหลือ ${available}` : color}
+                                        disabled={colorOut}
+                                        onClick={() => selectColorAndAdd(p, color)}
+                                        className={`relative h-7 w-7 rounded-full border-2 transition flex-shrink-0 ${
+                                          colorOut
+                                            ? "opacity-35 cursor-not-allowed"
+                                            : active ? "border-sky-500 ring-2 ring-sky-200" : "border-white shadow-sm hover:ring-2 hover:ring-sky-100"
+                                        }`}
+                                        style={{ background: colorSwatch(color) }}
+                                      >
+                                        {active && <span className="absolute inset-0 flex items-center justify-center text-[9px] text-white drop-shadow"><i className="fa-solid fa-check" /></span>}
+                                        {showColorStock && (
+                                          <span className={`absolute left-1/2 top-full mt-0.5 min-w-4 -translate-x-1/2 rounded-full px-1 py-px text-[9px] leading-none font-black flex items-center justify-center ${colorOut ? "bg-red-500 text-white" : "bg-white text-slate-700 border border-slate-200"}`}>
+                                            {colorOut ? "0" : available}
+                                          </span>
+                                        )}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                            {p.colors.length === 0 && (
+                              <div className="mb-2 text-[10px] font-semibold text-slate-400">เหลือ {totalStock} {p.unit || "ชิ้น"}</div>
+                            )}
+                            <div className="mt-auto flex items-center justify-between pt-2">
                               <span className="text-sm font-extrabold" style={{ color: "var(--primary-dark)" }}>{fmt(p.price)}</span>
                               {out
                                 ? <span className="text-xs text-red-400 font-medium">หมดแล้ว</span>
+                                : selectedColor && colorAvailable(p, selectedColor) <= 0
+                                  ? <span className="text-xs text-red-400 font-medium">สีนี้หมด</span>
                                 : qty === 0
                                   ? <button onClick={() => addToCart(p.id)}
                                       className="w-9 h-9 rounded-xl text-white text-xs flex items-center justify-center hover:scale-110 active:scale-95 transition-transform"
@@ -1000,18 +1177,29 @@ export default function ShopPage() {
                                       <i className="fa-solid fa-plus" />
                                     </button>
                                   : <div className="flex items-center gap-1">
-                                      <button onClick={() => changeQty(p.id, -1)}
+                                      <button onClick={() => changeQty(key, -1)}
                                         className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-500 hover:bg-sky-50 hover:border-sky-200 hover:text-sky-500 transition">
                                         <i className="fa-solid fa-minus text-[9px]" />
                                       </button>
-                                      <span className="text-sm font-bold text-slate-700 w-5 text-center tabular-nums">{qty}</span>
-                                      <button onClick={() => changeQty(p.id, 1)}
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        max={maxQtyForCartKey(key)}
+                                        value={qty}
+                                        onChange={e => setCartQty(key, e.target.value)}
+                                        aria-label={`จำนวน ${p.name}`}
+                                        className="w-9 h-8 rounded-lg border border-slate-200 bg-white text-center text-sm font-bold text-slate-700 tabular-nums outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+                                      />
+                                      <button onClick={() => changeQty(key, 1)}
                                         className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-500 hover:bg-sky-50 hover:border-sky-200 hover:text-sky-500 transition">
                                         <i className="fa-solid fa-plus text-[9px]" />
                                       </button>
                                     </div>
                               }
                             </div>
+                            {selectedSummary && (
+                              <div className="mt-1.5 text-[10px] font-semibold text-slate-400 truncate">เลือก: {selectedSummary}</div>
+                            )}
                           </div>
                         </div>
                       );
@@ -1056,11 +1244,16 @@ export default function ShopPage() {
               <>
               <div className="sm:hidden space-y-2">
                 {filtered.map(p => {
-                  const qty = cart[p.id] || 0;
-                  const out = p.stock <= 0;
-                  const low = !out && p.stock <= 10;
+                  const selectedColor = selectedProductColor(p, selectedColors[p.id]);
+                  const key = cartKey(p.id, selectedColor);
+                  const qty = cart[key] || 0;
+                  const totalSelected = productCartQty(cart, p.id);
+                  const totalStock = effectiveProductStock(p);
+                  const out = totalStock <= 0;
+                  const low = !out && totalStock <= 10;
                   const imageSrc = safeImageSrc(p.images);
                   const isImg = !!imageSrc;
+                  const selectedSummary = productColorSummary(cart, p);
                   return (
                     <div key={p.id} className={`rounded-2xl border border-slate-100 bg-white p-3 shadow-sm ${out ? "opacity-60" : ""}`}>
                       <div className="flex gap-3">
@@ -1089,13 +1282,49 @@ export default function ShopPage() {
                             </span>
                             {out
                               ? <span className="text-[10px] font-bold text-red-400">หมดแล้ว</span>
-                              : <span className={`text-[10px] font-bold ${low ? "text-amber-500" : "text-slate-500"}`}>เหลือ {p.stock} {p.unit || ""}</span>}
+                              : <span className={`text-[10px] font-bold ${low ? "text-amber-500" : "text-slate-500"}`}>เหลือ {totalStock} {p.unit || ""}</span>}
                           </div>
 
+                          {p.colors.length > 0 && (
+                            <div className="flex gap-3 overflow-x-auto mt-2 pb-5 pt-1 px-0.5">
+                              {p.colors.map(color => {
+                                const active = selectedColor === color;
+                                const showColorStock = hasColorStock(p);
+                                const available = colorAvailable(p, color);
+                                const colorOut = showColorStock && available <= 0;
+                                return (
+                                  <button
+                                    key={color}
+                                    type="button"
+                                    aria-label={showColorStock ? `${color} เหลือ ${available}` : color}
+                                    title={showColorStock ? `${color} เหลือ ${available}` : color}
+                                    disabled={colorOut}
+                                    onClick={() => selectColorAndAdd(p, color)}
+                                    className={`relative h-7 w-7 rounded-full border-2 transition flex-shrink-0 ${
+                                      colorOut
+                                        ? "opacity-35 cursor-not-allowed"
+                                        : active ? "border-sky-500 ring-2 ring-sky-200" : "border-white shadow-sm"
+                                    }`}
+                                    style={{ background: colorSwatch(color) }}
+                                  >
+                                    {active && <span className="absolute inset-0 flex items-center justify-center text-[9px] text-white drop-shadow"><i className="fa-solid fa-check" /></span>}
+                                    {showColorStock && (
+                                      <span className={`absolute left-1/2 top-full mt-0.5 min-w-4 -translate-x-1/2 rounded-full px-1 py-px text-[9px] leading-none font-black flex items-center justify-center ${colorOut ? "bg-red-500 text-white" : "bg-white text-slate-700 border border-slate-200"}`}>
+                                        {colorOut ? "0" : available}
+                                      </span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+
                           <div className="flex items-center justify-between mt-3">
-                            <span className="text-[10px] text-slate-400">{p.unit || "สินค้า"}</span>
+                            <span className="text-[10px] text-slate-400 truncate pr-2">{selectedSummary ? `เลือก: ${selectedSummary}` : p.unit || "สินค้า"}</span>
                             {out
                               ? <span className="text-xs text-red-300">—</span>
+                              : selectedColor && colorAvailable(p, selectedColor) <= 0
+                                ? <span className="text-xs font-bold text-red-400">สีนี้หมด</span>
                               : qty === 0
                                 ? <button onClick={() => addToCart(p.id)}
                                     className="h-9 px-3 rounded-xl text-white text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-transform"
@@ -1103,12 +1332,20 @@ export default function ShopPage() {
                                     <i className="fa-solid fa-plus" /> เพิ่ม
                                   </button>
                                 : <div className="flex items-center gap-1">
-                                    <button onClick={() => changeQty(p.id, -1)}
+                                    <button onClick={() => changeQty(key, -1)}
                                       className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-500 active:scale-95 transition">
                                       <i className="fa-solid fa-minus text-[9px]" />
                                     </button>
-                                    <span className="text-sm font-bold text-slate-700 w-6 text-center tabular-nums">{qty}</span>
-                                    <button onClick={() => changeQty(p.id, 1)}
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={maxQtyForCartKey(key)}
+                                      value={qty}
+                                      onChange={e => setCartQty(key, e.target.value)}
+                                      aria-label={`จำนวน ${p.name}`}
+                                      className="w-9 h-8 rounded-lg border border-slate-200 bg-white text-center text-sm font-bold text-slate-700 tabular-nums outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+                                    />
+                                    <button onClick={() => changeQty(key, 1)}
                                       className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-500 active:scale-95 transition">
                                       <i className="fa-solid fa-plus text-[9px]" />
                                     </button>
@@ -1143,11 +1380,16 @@ export default function ShopPage() {
                   </thead>
                   <tbody>
                     {filtered.map(p => {
-                      const qty = cart[p.id] || 0;
-                      const out = p.stock <= 0;
-                      const low = !out && p.stock <= 10;
+                      const selectedColor = selectedProductColor(p, selectedColors[p.id]);
+                      const key = cartKey(p.id, selectedColor);
+                      const qty = cart[key] || 0;
+                      const totalSelected = productCartQty(cart, p.id);
+                      const totalStock = effectiveProductStock(p);
+                      const out = totalStock <= 0;
+                      const low = !out && totalStock <= 10;
                       const imageSrc = safeImageSrc(p.images);
                       const isImg = !!imageSrc;
+                      const selectedSummary = productColorSummary(cart, p);
                       return (
                         <tr key={p.id} className={`h-[76px] border-b border-slate-50 hover:bg-sky-50/50 transition ${out ? "opacity-50" : ""}`}>
                           <td className="p-3 align-middle">
@@ -1162,6 +1404,39 @@ export default function ShopPage() {
                           <td className="p-3 align-middle">
                             <div className="font-bold text-slate-800 leading-snug line-clamp-2">{p.name}</div>
                             {p.tag && <span className="text-[9px] font-bold text-sky-500 uppercase">{p.tag}</span>}
+                            {p.colors.length > 0 && (
+                              <div className="flex flex-wrap gap-x-3 gap-y-5 mt-1 pb-4 pr-1">
+                                {p.colors.map(color => {
+                                  const active = selectedColor === color;
+                                  const showColorStock = hasColorStock(p);
+                                  const available = colorAvailable(p, color);
+                                  const colorOut = showColorStock && available <= 0;
+                                  return (
+                                    <button
+                                      key={color}
+                                      type="button"
+                                      aria-label={showColorStock ? `${color} เหลือ ${available}` : color}
+                                      title={showColorStock ? `${color} เหลือ ${available}` : color}
+                                      disabled={colorOut}
+                                      onClick={() => selectColorAndAdd(p, color)}
+                                      className={`relative h-6 w-6 rounded-full border-2 transition flex-shrink-0 ${
+                                        colorOut
+                                          ? "opacity-35 cursor-not-allowed"
+                                          : active ? "border-sky-500 ring-2 ring-sky-200" : "border-white shadow-sm hover:ring-2 hover:ring-sky-100"
+                                      }`}
+                                      style={{ background: colorSwatch(color) }}
+                                    >
+                                      {active && <span className="absolute inset-0 flex items-center justify-center text-[8px] text-white drop-shadow"><i className="fa-solid fa-check" /></span>}
+                                      {showColorStock && (
+                                        <span className={`absolute left-1/2 top-full mt-0.5 min-w-4 -translate-x-1/2 rounded-full px-1 py-px text-[9px] leading-none font-black flex items-center justify-center ${colorOut ? "bg-red-500 text-white" : "bg-white text-slate-700 border border-slate-200"}`}>
+                                          {colorOut ? "0" : available}
+                                        </span>
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </td>
                           <td className="p-3 align-middle">
                             <span className="inline-flex max-w-full items-center gap-1 bg-sky-50 text-sky-500 rounded-full px-2 py-0.5 text-[10px] font-bold">
@@ -1172,11 +1447,18 @@ export default function ShopPage() {
                           <td className="p-3 align-middle">
                             {out
                               ? <span className="text-xs font-bold text-red-400">หมดแล้ว</span>
-                              : <span className={`text-xs font-bold ${low ? "text-amber-500" : "text-slate-600"}`}>{p.stock} {p.unit || ""}</span>}
+                              : (
+                                <div>
+                                  <span className={`text-xs font-bold ${low ? "text-amber-500" : "text-slate-600"}`}>{totalStock} {p.unit || ""}</span>
+                                  {selectedSummary && <div className="text-[10px] text-slate-400 truncate">เลือก: {selectedSummary}</div>}
+                                </div>
+                              )}
                           </td>
                           <td className="p-3 align-middle">
                             {out
                               ? <span className="text-xs text-red-300">—</span>
+                              : selectedColor && colorAvailable(p, selectedColor) <= 0
+                                ? <span className="text-xs font-bold text-red-400">สีนี้หมด</span>
                               : qty === 0
                                 ? <button onClick={() => addToCart(p.id)}
                                     className="w-9 h-9 rounded-xl text-white text-xs flex items-center justify-center hover:scale-110 active:scale-95 transition-transform"
@@ -1184,12 +1466,20 @@ export default function ShopPage() {
                                     <i className="fa-solid fa-plus" />
                                   </button>
                                 : <div className="flex items-center gap-1">
-                                    <button onClick={() => changeQty(p.id, -1)}
+                                    <button onClick={() => changeQty(key, -1)}
                                       className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-500 hover:bg-sky-50 hover:text-sky-500 transition">
                                       <i className="fa-solid fa-minus text-[9px]" />
                                     </button>
-                                    <span className="text-sm font-bold text-slate-700 w-5 text-center">{qty}</span>
-                                    <button onClick={() => changeQty(p.id, 1)}
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={maxQtyForCartKey(key)}
+                                      value={qty}
+                                      onChange={e => setCartQty(key, e.target.value)}
+                                      aria-label={`จำนวน ${p.name}`}
+                                      className="w-9 h-8 rounded-lg border border-slate-200 bg-white text-center text-sm font-bold text-slate-700 tabular-nums outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+                                    />
+                                    <button onClick={() => changeQty(key, 1)}
                                       className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-500 hover:bg-sky-50 hover:text-sky-500 transition">
                                       <i className="fa-solid fa-plus text-[9px]" />
                                     </button>
@@ -1254,13 +1544,14 @@ export default function ShopPage() {
               </div>
             ) : (
               <>
-                {cartEntries.map(([id, qty]) => {
+                {cartEntries.map(([key, qty]) => {
+                  const { id, color } = parseCartKey(key);
                   const p = products.find(x => x.id === id)!;
                   if (!p) return null;
                   const imageSrc = safeImageSrc(p.images);
                   const isImg = !!imageSrc;
                   return (
-                    <div key={id} className="flex items-center gap-3 py-3 border-b border-slate-50 last:border-0">
+                    <div key={key} className="flex items-center gap-3 py-3 border-b border-slate-50 last:border-0">
                       {isImg ? (
                         <>
                           <img src={imageSrc} alt={p.name} className="w-10 h-10 aspect-square rounded-xl object-cover flex-shrink-0"
@@ -1270,15 +1561,24 @@ export default function ShopPage() {
                       ) : <span className="text-2xl flex-shrink-0">{p.emoji}</span>}
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-bold text-slate-700 truncate">{p.name}</div>
+                        {color && <div className="text-[10px] font-bold text-sky-500">{color}</div>}
                         <div className="text-xs text-slate-400">{fmt(p.price)} / {p.unit || ""}</div>
                       </div>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <button onClick={() => changeQty(p.id, -1)}
+                        <button onClick={() => changeQty(key, -1)}
                           className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-500 hover:bg-sky-50 hover:text-sky-500 transition">
                           <i className="fa-solid fa-minus text-[9px]" />
                         </button>
-                        <span className="text-sm font-bold text-slate-700 w-5 text-center">{qty}</span>
-                        <button onClick={() => changeQty(p.id, 1)}
+                        <input
+                          type="number"
+                          min={0}
+                          max={maxQtyForCartKey(key)}
+                          value={qty}
+                          onChange={e => setCartQty(key, e.target.value)}
+                          aria-label={`จำนวน ${p.name}`}
+                          className="w-9 h-8 rounded-lg border border-slate-200 bg-white text-center text-sm font-bold text-slate-700 tabular-nums outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+                        />
+                        <button onClick={() => changeQty(key, 1)}
                           className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-500 hover:bg-sky-50 hover:text-sky-500 transition">
                           <i className="fa-solid fa-plus text-[9px]" />
                         </button>
@@ -1457,11 +1757,11 @@ export default function ShopPage() {
                     <img src={qrUrl} alt="QR Code" className="w-56 h-56 aspect-square rounded-3xl object-contain" />
                     <div className="absolute left-1/2 top-1/2 w-11 h-11 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src="/favicon.png" alt="ASIA-BOT" className="w-full h-full object-contain" />
+                      <img src="/favicon.png" alt={SITE_NAME} className="w-full h-full object-contain" />
                     </div>
                   </div>
               }
-              <div className="text-xs font-bold text-slate-400 mt-3">สหกรณ์โรงเรียน ASIA-BOT</div>
+              <div className="text-xs font-bold text-slate-400 mt-3">สหกรณ์โรงเรียน {SITE_NAME}</div>
             </div>
 
             <div className="rounded-3xl p-4" style={{ background: "linear-gradient(180deg,#EAF7FF,#F8FCFF)" }}>
@@ -1499,7 +1799,7 @@ export default function ShopPage() {
                 {payItems.map((item, i) => (
                   <div key={i} className="flex items-start justify-between gap-3 text-xs">
                     <div className="min-w-0">
-                      <div className="font-bold text-slate-700 line-clamp-1">{item.name}</div>
+                      <div className="font-bold text-slate-700 line-clamp-1">{orderItemLabel(item)}</div>
                       <div className="text-[10px] text-slate-400">จำนวน {item.qty} {item.unit || ""}</div>
                     </div>
                     <span className="font-extrabold text-slate-700 whitespace-nowrap">{fmt(item.price * item.qty)}</span>
@@ -1533,11 +1833,11 @@ export default function ShopPage() {
             <div className="flex items-center gap-2">
               <div className="w-11 h-11 rounded-2xl bg-green-50 flex items-center justify-center flex-shrink-0 p-1.5">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/favicon.png" alt="ASIA-BOT" className="w-full h-full object-contain" />
+                <img src="/favicon.png" alt={SITE_NAME} className="w-full h-full object-contain" />
               </div>
               <div>
                 <div className="font-bold text-slate-800">ใบเสร็จชำระเงิน</div>
-                <div className="text-xs text-slate-400">สหกรณ์โรงเรียน ASIA-BOT</div>
+                <div className="text-xs text-slate-400">สหกรณ์โรงเรียน {SITE_NAME}</div>
               </div>
             </div>
             <button onClick={() => setSlipOpen(false)} className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition">
@@ -1570,7 +1870,7 @@ export default function ShopPage() {
             </div>
             <div>
               <div className="font-bold text-slate-800">ประวัติการสั่งซื้อ</div>
-              <div className="text-xs text-slate-400">ย้อนหลัง 15 วัน · {logs.length} รายการ</div>
+              <div className="text-xs text-slate-400">ย้อนหลัง 30 วัน · {logs.length} รายการ</div>
             </div>
             <button onClick={() => setLogsOpen(false)} className="ml-auto text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition">
               <i className="fa-solid fa-xmark" />
@@ -1624,7 +1924,7 @@ export default function ShopPage() {
               const borderCls = status === "paid" ? "border-l-4 border-l-green-400"
                 : status === "pending" ? "border-l-4 border-l-amber-400"
                 : "border-l-4 border-l-red-400";
-              const itemText = l.items.map(i => `${i.name} x${i.qty}`).join(", ");
+              const itemText = l.items.map(i => `${orderItemLabel(i)} x${i.qty}`).join(", ");
               const itemPreview = itemText.length > 92 ? `${itemText.slice(0, 92)}...` : itemText;
               return (
                 <div key={idx} className={`bg-white rounded-3xl p-3.5 shadow-sm border border-slate-100 ${borderCls}`}>

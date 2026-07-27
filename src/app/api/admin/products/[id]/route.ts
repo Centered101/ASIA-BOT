@@ -15,7 +15,7 @@ export async function PATCH(
   const body = await req.json() as {
     name?: string; price?: number; cost?: number | null; stock?: number;
     unit?: string | null; category?: string | null; tag?: string | null;
-    images?: string[] | null; active?: boolean; deleted_at?: string | null;
+    images?: string[] | null; colors?: string[] | null; color_stock?: Record<string, number> | null; active?: boolean; deleted_at?: string | null;
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -28,6 +28,8 @@ export async function PATCH(
   if ("category"   in body) update.category   = body.category;
   if ("tag"        in body) update.tag        = body.tag;
   if ("images"     in body) update.images     = body.images;
+  if ("colors"     in body) update.colors     = body.colors?.length ? body.colors : null;
+  if ("color_stock" in body) update.color_stock = body.color_stock && Object.keys(body.color_stock).length ? body.color_stock : null;
   if ("active"     in body) update.active     = body.active;
   if ("deleted_at" in body) update.deleted_at = body.deleted_at;
 

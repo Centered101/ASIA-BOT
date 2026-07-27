@@ -29,7 +29,10 @@ export default function Header({ subtitle = "หน้าแรก" }: { subtitl
 
   // Desktop: non-current page links grouped by role
   const visible = all.filter(l => !isActive(l));
-  const mainLinks = visible.filter(l => !l.role && !l.external).slice(0, 3);
+  const feedbackLink = visible.find(l => l.path === "/feedback");
+  const registerLink = visible.find(l => l.path === "/register");
+  const baseMainLinks = visible.filter(l => !l.role && !l.external && l !== feedbackLink && l !== registerLink).slice(0, 2);
+  const mainLinks = feedbackLink ? [...baseMainLinks, feedbackLink] : baseMainLinks;
   const ctaStudent = visible.find(l => l.role === "student");
   const ctaShop    = visible.find(l => l.role === "shop");
   const moreLinks  = visible.filter(l => !mainLinks.includes(l) && l !== ctaStudent && l !== ctaShop);

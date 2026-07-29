@@ -1,6 +1,7 @@
 "use client";
 
 import type { RefObject } from "react";
+import { safeImageSrc } from "@/lib/image-url";
 
 type ProfileImageCropModalProps = {
   title: string;
@@ -53,6 +54,10 @@ export default function ProfileImageCropModal({
   zoomValue = 1,
   onZoomChange,
 }: ProfileImageCropModalProps) {
+  const safeSrc = safeImageSrc(imageSrc);
+
+  if (!safeSrc) return null;
+
   return (
     <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/55 backdrop-blur-sm p-3 sm:p-4">
       <div className="bg-white rounded-[28px] shadow-2xl w-full max-w-md max-h-[95dvh] overflow-y-auto flex flex-col">
@@ -91,7 +96,7 @@ export default function ProfileImageCropModal({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               ref={imageRef}
-              src={imageSrc}
+              src={safeSrc}
               alt="crop"
               onLoad={onImageLoad}
               draggable={false}

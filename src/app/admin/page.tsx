@@ -2983,12 +2983,13 @@ function BookingsTab({ adminId, view }: { adminId: string; view: "rooms" | "book
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredRooms.map(r => {
                 const isOpen = r.status === "active" || r.status === "available";
+                const roomImageSrc = safeImageSrc(r.image_url);
                 return (
                 <div key={r.id} className="rounded-2xl overflow-hidden group" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
                   <div className="h-72 relative overflow-hidden" style={{ background: "#2a2a2a" }}>
-                    {r.image_url
+                    {roomImageSrc
                       // eslint-disable-next-line @next/next/no-img-element
-                      ? <img src={r.image_url} alt={r.name} className="w-full h-full object-cover aspect-video" />
+                      ? <img src={roomImageSrc} alt={r.name} className="w-full h-full object-cover aspect-video" />
                       : <div className="w-full h-full flex items-center justify-center" style={{ color: "#636363" }}><i className="fa-solid fa-door-open text-3xl" /></div>
                     }
                     <div className="absolute top-2 right-2">
@@ -4888,10 +4889,12 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
                   <span className="text-xs font-bold text-white">สต็อกต้องดูแล</span>
                 </div>
                 <div className="divide-y max-h-40 overflow-y-auto" style={{ borderColor: "#1e1e1e" }}>
-                  {[...outOfStock, ...lowStock].slice(0, 8).map(p => (
+                  {[...outOfStock, ...lowStock].slice(0, 8).map(p => {
+                    const imageSrc = safeImageSrc(p.images?.[0]);
+                    return (
                     <div key={p.id} className="flex items-center gap-3 px-4 py-2">
-                      {p.images?.[0]
-                        ? <img src={p.images[0]} alt="" className="w-7 h-7 rounded-md object-cover flex-shrink-0" style={{ border: "1px solid #3e3e3e" }} />
+                      {imageSrc
+                        ? <img src={imageSrc} alt="" className="w-7 h-7 rounded-md object-cover flex-shrink-0" style={{ border: "1px solid #3e3e3e" }} />
                         : <div className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: "#252525", color: "#636363", fontSize: 10 }}>🛍️</div>}
                       <div className="flex-1 min-w-0 text-xs text-white truncate">{p.name}</div>
                       <span className="text-[10px] font-black flex-shrink-0 px-2 py-0.5 rounded-lg"
@@ -4899,7 +4902,7 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
                         {p.stock === 0 ? "หมด" : `${p.stock} ${p.unit ?? "ชิ้น"}`}
                       </span>
                     </div>
-                  ))}
+                  );})}
                 </div>
               </div>
             )}
@@ -4934,13 +4937,15 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
 
       {loading ? <DarkSpinner /> : displayed.length === 0 ? <DarkEmpty text="ไม่มีสินค้า" /> : (
         <div className={viewMode === "list" ? "space-y-3" : viewMode === "card" ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"}>
-          {displayed.map((p) => (
+          {displayed.map((p) => {
+            const productImageSrc = safeImageSrc(p.images?.[0]);
+            return (
             <div key={p.id} className={`rounded-2xl overflow-hidden transition-all ${viewMode === "list" ? "flex items-stretch" : "flex flex-col"} ${!p.active && !p.deleted_at ? "opacity-50" : ""} ${p.deleted_at ? "opacity-40" : ""}`}
               style={{ background: "#1c1c1c", border: `1px solid ${p.deleted_at ? "#ff7070" : "#3e3e3e"}` }}>
               <div className={`relative overflow-hidden flex-shrink-0 ${viewMode === "list" ? "h-24 w-24 sm:h-28 sm:w-28" : "aspect-square w-full"}`} style={{ background: "#9bdcf4" }}>
-                {p.images?.[0] ? (
+                {productImageSrc ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.images[0]} alt={p.name} className="w-full h-full object-cover" />
+                  <img src={productImageSrc} alt={p.name} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center" style={{ color: "#636363" }}>
                     <i className="fa-solid fa-image text-3xl" />
@@ -5021,7 +5026,7 @@ function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
                 )}
               </div>
             </div>
-          ))}
+          );})}
         </div>
       )}
 
@@ -5657,12 +5662,14 @@ function EquipmentItemsTab({ adminId, role }: { adminId: string; role: string })
                 <div className="p-4 text-xs font-semibold" style={{ color: "#636363" }}>ไม่มีรายการสต็อกต่ำ</div>
               ) : (
                 <div className="divide-y" style={{ borderColor: "#252525" }}>
-                  {attentionItems.map(i => (
+                  {attentionItems.map(i => {
+                    const itemImageSrc = safeImageSrc(i.image_url);
+                    return (
                     <div key={i.id} className="flex items-center gap-3 px-4 py-2.5">
                       <div className="w-7 h-7 rounded-lg overflow-hidden flex items-center justify-center shrink-0" style={{ background: "#2a2a2a" }}>
-                        {i.image_url ? (
+                        {itemImageSrc ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={i.image_url} alt={i.name} className="w-full h-full object-cover" />
+                          <img src={itemImageSrc} alt={i.name} className="w-full h-full object-cover" />
                         ) : (
                           <i className="fa-solid fa-toolbox text-[10px]" style={{ color: "#84D4FA" }} />
                         )}
@@ -5676,7 +5683,7 @@ function EquipmentItemsTab({ adminId, role }: { adminId: string; role: string })
                         {i.available_quantity} {i.unit}
                       </span>
                     </div>
-                  ))}
+                  );})}
                 </div>
               )}
             </div>
@@ -5724,13 +5731,15 @@ function EquipmentItemsTab({ adminId, role }: { adminId: string; role: string })
 
       {loading ? <DarkSpinner /> : displayed.length === 0 ? <DarkEmpty text="ไม่มีคุรุภัณฑ์" /> : (
         <div className={viewMode === "list" ? "space-y-3" : viewMode === "card" ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"}>
-          {displayed.map(i => (
+          {displayed.map(i => {
+            const itemImageSrc = safeImageSrc(i.image_url);
+            return (
             <div key={i.id} className={`rounded-2xl overflow-hidden transition-all ${viewMode === "list" ? "flex items-stretch" : ""} ${!i.active && !i.deleted_at ? "opacity-50" : ""} ${i.deleted_at ? "opacity-40" : ""}`}
               style={{ background: "#1c1c1c", border: `1px solid ${i.deleted_at ? "#ff7070" : "#3e3e3e"}` }}>
               <div className={`relative overflow-hidden flex-shrink-0 ${viewMode === "list" ? "h-24 w-24 sm:h-28 sm:w-28" : "aspect-square w-full"}`} style={{ background: "#21a47c" }}>
-                {i.image_url ? (
+                {itemImageSrc ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={i.image_url} alt={i.name} className="w-full h-full object-cover" />
+                  <img src={itemImageSrc} alt={i.name} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center" style={{ color: "#636363" }}>
                     <i className="fa-solid fa-toolbox text-3xl" />
@@ -5793,7 +5802,7 @@ function EquipmentItemsTab({ adminId, role }: { adminId: string; role: string })
                 )}
               </div>
             </div>
-          ))}
+          );})}
         </div>
       )}
 
@@ -6517,11 +6526,13 @@ function ShopOrdersTab({ adminId }: { adminId: string }) {
                 <span className="text-[10px]" style={{ color: "#636363" }}>(จากออเดอร์ที่ชำระแล้ว)</span>
               </div>
               <div className="divide-y" style={{ borderColor: "#1e1e1e" }}>
-                {topItems.map((item, i) => (
+                {topItems.map((item, i) => {
+                  const imageSrc = safeImageSrc(item.imageUrl);
+                  return (
                   <div key={item.name} className="flex items-center gap-3 px-4 py-2.5">
                     <div className="text-[10px] font-bold w-4 flex-shrink-0" style={{ color: i === 0 ? "#ff7070" : "#636363" }}>#{i + 1}</div>
-                    {item.imageUrl
-                      ? <img src={item.imageUrl} alt="" className="w-8 h-8 rounded-lg object-cover flex-shrink-0" style={{ border: "1px solid #3e3e3e" }} />
+                    {imageSrc
+                      ? <img src={imageSrc} alt="" className="w-8 h-8 rounded-lg object-cover flex-shrink-0" style={{ border: "1px solid #3e3e3e" }} />
                       : <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-sm" style={{ background: "#252525" }}>🛍️</div>}
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-semibold text-white truncate">{item.name}</div>
@@ -6529,7 +6540,7 @@ function ShopOrdersTab({ adminId }: { adminId: string }) {
                     </div>
                     <div className="text-xs font-black flex-shrink-0" style={{ color: "#ff7070" }}>{item.qty} ชิ้น</div>
                   </div>
-                ))}
+                );})}
               </div>
             </div>
           )}
@@ -6581,8 +6592,9 @@ function ShopOrdersTab({ adminId }: { adminId: string }) {
         const Avatar = ({ o, size = 10 }: { o: ShopOrder; size?: number }) => {
           const px = size * 4;
           const fs = Math.max(10, Math.round(px * 0.38));
-          return o.student_photo_url
-            ? <img src={o.student_photo_url} alt={o.student_name} className="object-cover flex-shrink-0" style={{ width: px, height: px, borderRadius: 8, border: "2px solid rgba(255,112,112,0.45)" }} />
+          const photoSrc = safeImageSrc(o.student_photo_url);
+          return photoSrc
+            ? <img src={photoSrc} alt={o.student_name} className="object-cover flex-shrink-0" style={{ width: px, height: px, borderRadius: 8, border: "2px solid rgba(255,112,112,0.45)" }} />
             : <div className="flex items-center justify-center flex-shrink-0 font-black text-white" style={{ width: px, height: px, borderRadius: 8, background: ADMIN_PRIMARY, fontSize: fs }}>{avatarInitials(o.student_name || o.student_id)}</div>;
         };
 
@@ -6618,10 +6630,12 @@ function ShopOrdersTab({ adminId }: { adminId: string }) {
                   </div>
                   {items.length > 0 && (
                     <div className="px-4 py-3 space-y-2" style={{ borderTop: "1px solid #252525" }}>
-                      {items.map((item, i) => (
+                      {items.map((item, i) => {
+                        const imageSrc = safeImageSrc(item.imageUrl);
+                        return (
                         <div key={i} className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2 min-w-0">
-                            {item.imageUrl ? <img src={item.imageUrl} alt="" className="w-7 h-7 rounded-md object-cover flex-shrink-0" style={{ border: "1px solid #3e3e3e" }} />
+                            {imageSrc ? <img src={imageSrc} alt="" className="w-7 h-7 rounded-md object-cover flex-shrink-0" style={{ border: "1px solid #3e3e3e" }} />
                               : <div className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 text-[10px]" style={{ background: "#2a2a2a" }}>🛍️</div>}
                             <div className="min-w-0">
                               <span className="text-xs text-[#ededed] truncate block">{shopOrderItemName(item)}</span>
@@ -6630,7 +6644,7 @@ function ShopOrdersTab({ adminId }: { adminId: string }) {
                           </div>
                           <span className="text-xs font-semibold flex-shrink-0" style={{ color: "#9e9e9e" }}>฿{(item.price * item.qty).toFixed(2)}</span>
                         </div>
-                      ))}
+                      );})}
                     </div>
                   )}
                   <div className="px-4 py-2.5 mt-auto flex items-center justify-between gap-2" style={{ borderTop: "1px solid #252525", background: "#161616" }}>
@@ -6676,12 +6690,14 @@ function ShopOrdersTab({ adminId }: { adminId: string }) {
                       </span>
                     </div>
                     <div className="flex items-center gap-1 mt-1 flex-wrap">
-                      {items.map((item, i) => (
+                      {items.map((item, i) => {
+                        const imageSrc = safeImageSrc(item.imageUrl);
+                        return (
                         <span key={i} className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded" style={{ background: "#252525", color: "#9e9e9e" }}>
-                          {item.imageUrl && <img src={item.imageUrl} alt="" className="w-3.5 h-3.5 rounded object-cover" />}
+                          {imageSrc && <img src={imageSrc} alt="" className="w-3.5 h-3.5 rounded object-cover" />}
                           {shopOrderItemName(item)} ×{item.qty}
                         </span>
-                      ))}
+                      );})}
                     </div>
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0">
@@ -6706,8 +6722,8 @@ function ShopOrdersTab({ adminId }: { adminId: string }) {
                   {/* Top bar */}
                   <div className="px-5 py-3 flex items-center justify-between gap-4" style={{ background: "#161616" }}>
                     <div className="flex items-center gap-3">
-                      {o.student_photo_url
-                        ? <img src={o.student_photo_url} alt={o.student_name} className="object-cover flex-shrink-0"
+                      {safeImageSrc(o.student_photo_url)
+                        ? <img src={safeImageSrc(o.student_photo_url) ?? ""} alt={o.student_name} className="object-cover flex-shrink-0"
                             style={{ width: 64, height: 64, maxWidth: 64, borderRadius: 8, border: "2px solid rgba(255,112,112,0.45)" }} />
                         : <div className="flex items-center justify-center flex-shrink-0 font-black text-white"
                             style={{ width: 64, height: 64, maxWidth: 64, borderRadius: 8, background: ADMIN_PRIMARY, fontSize: 24 }}>
@@ -6732,10 +6748,12 @@ function ShopOrdersTab({ adminId }: { adminId: string }) {
                   {/* Items */}
                   {items.length > 0 && (
                     <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {items.map((item, i) => (
+                      {items.map((item, i) => {
+                        const imageSrc = safeImageSrc(item.imageUrl);
+                        return (
                         <div key={i} className="flex items-center gap-3 rounded-xl p-3" style={{ background: "#252525" }}>
-                          {item.imageUrl
-                            ? <img src={item.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover flex-shrink-0" style={{ border: "1px solid #3e3e3e" }} />
+                          {imageSrc
+                            ? <img src={imageSrc} alt="" className="w-12 h-12 rounded-lg object-cover flex-shrink-0" style={{ border: "1px solid #3e3e3e" }} />
                             : <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 text-xl" style={{ background: "#2a2a2a" }}>🛍️</div>}
                           <div className="flex-1 min-w-0">
                             <div className="text-sm font-bold text-white truncate">{shopOrderItemName(item)}</div>
@@ -6743,7 +6761,7 @@ function ShopOrdersTab({ adminId }: { adminId: string }) {
                           </div>
                           <div className="text-sm font-black flex-shrink-0" style={{ color: sc.text }}>฿{(item.price * item.qty).toFixed(2)}</div>
                         </div>
-                      ))}
+                      );})}
                     </div>
                   )}
                   {/* Footer */}
@@ -9000,15 +9018,15 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
                   <div className="text-base font-black text-black leading-tight">{linePreview.header}</div>
                   <div className="text-xs mt-2 text-black">{linePreview.subheader}</div>
                 </div>
-                {typeof linePreview.avatar === "string" && linePreview.avatar && (
+                {typeof linePreview.avatar === "string" && safeImageSrc(linePreview.avatar) && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={linePreview.avatar} alt="" className="w-14 h-14 rounded-lg object-cover flex-shrink-0" />
+                  <img src={safeImageSrc(linePreview.avatar) ?? ""} alt="" className="w-14 h-14 rounded-lg object-cover flex-shrink-0" />
                 )}
               </div>
 
-              {"image" in linePreview && typeof linePreview.image === "string" && linePreview.image && (
+              {"image" in linePreview && typeof linePreview.image === "string" && safeImageSrc(linePreview.image) && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={linePreview.image} alt="" className="w-full h-44 object-cover" />
+                <img src={safeImageSrc(linePreview.image) ?? ""} alt="" className="w-full h-44 object-cover" />
               )}
 
               <div className="p-4 space-y-4 text-[#0f172a]">
@@ -9018,10 +9036,10 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
                       {linePreview.statusLabel}
                     </div>
                   )}
-                  {"titleImage" in linePreview && typeof linePreview.titleImage === "string" && linePreview.titleImage ? (
+                  {"titleImage" in linePreview && typeof linePreview.titleImage === "string" && safeImageSrc(linePreview.titleImage) ? (
                     <div className="flex items-center gap-3">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={linePreview.titleImage} alt="" className="w-14 h-14 rounded object-cover flex-shrink-0 bg-slate-100" />
+                      <img src={safeImageSrc(linePreview.titleImage) ?? ""} alt="" className="w-14 h-14 rounded object-cover flex-shrink-0 bg-slate-100" />
                       <div className="text-xl font-black leading-tight" style={{ color: linePreview.titleColor }}>{linePreview.title}</div>
                     </div>
                   ) : (
@@ -9043,9 +9061,9 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
 
                 {"product" in linePreview && linePreview.product && (
                   <div className="flex gap-3 pt-3" style={{ borderTop: "1px solid #e5e7eb" }}>
-                    {"productImage" in linePreview && typeof linePreview.productImage === "string" ? (
+                    {"productImage" in linePreview && typeof linePreview.productImage === "string" && safeImageSrc(linePreview.productImage) ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={linePreview.productImage} alt="" className="w-16 h-16 rounded object-cover flex-shrink-0 bg-slate-100" />
+                      <img src={safeImageSrc(linePreview.productImage) ?? ""} alt="" className="w-16 h-16 rounded object-cover flex-shrink-0 bg-slate-100" />
                     ) : (
                       <div className="w-16 h-16 rounded bg-slate-100 flex items-center justify-center text-[#84D4FA] flex-shrink-0">
                         <span className="text-xl">🛍️</span>
@@ -9276,6 +9294,7 @@ function ImgUpload({ value, onChange, placeholder, adminId, endpoint = "/api/adm
   }
 
   const inp = { background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" };
+  const previewSrc = safeImageSrc(value);
 
   return (
     <div className="space-y-1.5">
@@ -9284,9 +9303,9 @@ function ImgUpload({ value, onChange, placeholder, adminId, endpoint = "/api/adm
           placeholder={placeholder ?? "https://... หรืออัปโหลดไฟล์"}
           className="flex-1 px-3 py-2 rounded-lg text-sm focus:outline-none min-w-0"
           style={inp} />
-        {value && (
+        {previewSrc && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={value} alt="" className="w-9 h-9 rounded-lg object-cover flex-shrink-0"
+          <img src={previewSrc} alt="" className="w-9 h-9 rounded-lg object-cover flex-shrink-0"
             style={{ border: "1px solid #3e3e3e" }}
             onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
         )}
@@ -9712,14 +9731,16 @@ function ProjectsTab({ adminId, role, onViewEvals }: { adminId: string; role: st
 
       {loading ? <DarkEmpty text="กำลังโหลด..." /> : projects.length === 0 ? <DarkEmpty text="ยังไม่มีโปรเจค" /> : filteredProjects.length === 0 ? <DarkEmpty text="ไม่พบโปรเจคที่ค้นหา" /> : view !== "list" ? (
         <div className={view === "card" ? "grid grid-cols-1 md:grid-cols-2 gap-3" : "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3"}>
-          {filteredProjects.map(p => (
+          {filteredProjects.map(p => {
+            const posterSrc = safeImageSrc(p.poster_url);
+            return (
             <div key={p.id} className="rounded-xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
               {/* Poster — clickable to open project */}
               <a href={`/project/${p.slug}`} target="_blank" rel="noreferrer" className="block relative group">
-                {p.poster_url
+                {posterSrc
                   ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.poster_url} alt={p.name} className="w-full h-auto block" onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+                    <img src={posterSrc} alt={p.name} className="w-full h-auto block" onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
                   ) : (
                     <div className="w-full h-28 flex items-center justify-center" style={{ background: `${ADMIN_PRIMARY}12` }}>
                       <i className="fa-solid fa-folder-open text-2xl" style={{ color: ADMIN_PRIMARY, opacity: 0.7 }} />
@@ -9758,7 +9779,7 @@ function ProjectsTab({ adminId, role, onViewEvals }: { adminId: string; role: st
                 </div>
               </div>
             </div>
-          ))}
+          );})}
         </div>
       ) : (
         <div className="rounded-xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
@@ -9772,13 +9793,15 @@ function ProjectsTab({ adminId, role, onViewEvals }: { adminId: string; role: st
               </tr>
             </thead>
             <tbody>
-              {filteredProjects.map((p, i) => (
+              {filteredProjects.map((p, i) => {
+                const posterSrc = safeImageSrc(p.poster_url);
+                return (
                 <tr key={p.id} style={{ borderTop: i > 0 ? "1px solid #2a2a2a" : undefined }}>
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-3 min-w-0">
-                      {p.poster_url ? (
+                      {posterSrc ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={p.poster_url} alt={p.name} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                        <img src={posterSrc} alt={p.name} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
                       ) : (
                         <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${ADMIN_PRIMARY}18`, color: ADMIN_PRIMARY }}>
                           <i className="fa-solid fa-folder-open" />
@@ -9808,7 +9831,7 @@ function ProjectsTab({ adminId, role, onViewEvals }: { adminId: string; role: st
                     </div>
                   </td>
                 </tr>
-              ))}
+              );})}
             </tbody>
           </table>
           </div>

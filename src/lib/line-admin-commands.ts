@@ -10,19 +10,19 @@ export async function handleAdminGroupMessage(
   text: string,
   replyToken: string
 ) {
-  const t = text.trim();
+  const t = text.trim().slice(0, 500);
 
   // ── อนุมัติ [booking_id_suffix] ──────────────────────────────────────────
-  const approveMatch = t.match(/^อนุมัติ\s+([A-Za-z0-9-]+)$/i);
-  if (approveMatch) {
-    await updateBookingFromAdmin(supabase, approveMatch[1], "approved", null, replyToken);
+  const approveArgs = parseLineCommand(t, "อนุมัติ");
+  if (approveArgs && approveArgs.note === null) {
+    await updateBookingFromAdmin(supabase, approveArgs.idHint, "approved", null, replyToken);
     return;
   }
 
   // ── ปฏิเสธ [booking_id_suffix] [note] ───────────────────────────────────
-  const rejectMatch = t.match(/^ปฏิเสธ\s+([A-Za-z0-9-]+)(?:\s+(.+))?$/i);
-  if (rejectMatch) {
-    await updateBookingFromAdmin(supabase, rejectMatch[1], "rejected", rejectMatch[2] ?? null, replyToken);
+  const rejectArgs = parseLineCommand(t, "ปฏิเสธ");
+  if (rejectArgs) {
+    await updateBookingFromAdmin(supabase, rejectArgs.idHint, "rejected", rejectArgs.note, replyToken);
     return;
   }
 
@@ -39,6 +39,17 @@ export async function handleAdminGroupMessage(
   }
 
   // "รับเรื่อง Feedback #id" is handled in the main webhook before reaching here
+}
+
+function parseLineCommand(text: string, command: "อนุมัติ" | "ปฏิเสธ") {
+  if (!text.startsWith(command)) return null;
+  const rest = text.slice(command.length).trim();
+  if (!rest) return null;
+  const firstSpace = rest.search(/\s/);
+  const idHint = firstSpace === -1 ? rest : rest.slice(0, firstSpace);
+  if (!/^[A-Za-z0-9-]{1,36}$/.test(idHint)) return null;
+  const note = firstSpace === -1 ? null : rest.slice(firstSpace).trim().slice(0, 300) || null;
+  return { idHint, note };
 }
 
 async function updateBookingFromAdmin(

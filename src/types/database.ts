@@ -12,6 +12,21 @@ export type StudentStatus =
 /** Which profile table a user_accounts row primarily maps to. */
 export type AccountSubjectType = "admin" | "teacher" | "student" | "parent" | "alumni";
 
+/** ความสัมพันธ์ของผู้ปกครองกับนักเรียน (guardians.relationship) */
+export type GuardianRelationship = "บิดา" | "มารดา" | "ผู้ปกครอง" | "ญาติ" | "อื่นๆ";
+
+/** สิ่งที่เปลี่ยนไปในไทม์ไลน์ของนักเรียน (student_status_changes.change_type) */
+export type StudentChangeType = "status" | "department" | "class_group" | "advisor" | "program";
+
+/** ประเภทผลงาน (student_achievements.kind) */
+export type AchievementKind = "competition" | "award" | "certificate" | "performance" | "publication";
+
+/** ระดับของงาน/การแข่งขัน (student_achievements.level) */
+export type AchievementLevel = "school" | "district" | "province" | "region" | "national" | "international";
+
+/** ขอบเขตของตำแหน่งที่นักเรียนดำรง (student_positions.scope) */
+export type PositionScope = "class" | "department" | "school" | "club" | "other";
+
 export type Database = {
   public: {
     Tables: {
@@ -1591,6 +1606,232 @@ export type Database = {
           role_key?: string;
           scope_type?: "class_group" | "department" | "room" | null;
           scope_id?: string | null;
+        };
+        Relationships: [];
+      };
+
+      // ─── Phase 2 Student 360 (supabase/migrations/0011-0013) ──────────────
+      guardians: {
+        Row: {
+          id: string;
+          student_id: string;
+          full_name: string;
+          relationship: GuardianRelationship;
+          phone: string | null;
+          phone_alt: string | null;
+          email: string | null;
+          line_user_id: string | null;
+          national_id: string | null;
+          occupation: string | null;
+          workplace: string | null;
+          income_range: string | null;
+          address: string | null;
+          is_primary: boolean;
+          is_emergency_contact: boolean;
+          note: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          student_id: string;
+          full_name: string;
+          relationship?: GuardianRelationship;
+          phone?: string | null;
+          phone_alt?: string | null;
+          email?: string | null;
+          line_user_id?: string | null;
+          national_id?: string | null;
+          occupation?: string | null;
+          workplace?: string | null;
+          income_range?: string | null;
+          address?: string | null;
+          is_primary?: boolean;
+          is_emergency_contact?: boolean;
+          note?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          full_name?: string;
+          relationship?: GuardianRelationship;
+          phone?: string | null;
+          phone_alt?: string | null;
+          email?: string | null;
+          line_user_id?: string | null;
+          national_id?: string | null;
+          occupation?: string | null;
+          workplace?: string | null;
+          income_range?: string | null;
+          address?: string | null;
+          is_primary?: boolean;
+          is_emergency_contact?: boolean;
+          note?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      student_education_history: {
+        Row: {
+          id: string;
+          student_id: string;
+          school_name: string;
+          level: string | null;
+          province: string | null;
+          gpa: number | null;
+          graduated_year: string | null;
+          document_url: string | null;
+          note: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          student_id: string;
+          school_name: string;
+          level?: string | null;
+          province?: string | null;
+          gpa?: number | null;
+          graduated_year?: string | null;
+          document_url?: string | null;
+          note?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          school_name?: string;
+          level?: string | null;
+          province?: string | null;
+          gpa?: number | null;
+          graduated_year?: string | null;
+          document_url?: string | null;
+          note?: string | null;
+        };
+        Relationships: [];
+      };
+      student_status_changes: {
+        Row: {
+          id: string;
+          student_id: string;
+          change_type: StudentChangeType;
+          from_value: string | null;
+          to_value: string | null;
+          effective_date: string;
+          academic_year: string | null;
+          reason: string | null;
+          document_url: string | null;
+          recorded_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          student_id: string;
+          change_type: StudentChangeType;
+          from_value?: string | null;
+          to_value?: string | null;
+          effective_date?: string;
+          academic_year?: string | null;
+          reason?: string | null;
+          document_url?: string | null;
+          recorded_by?: string | null;
+          created_at?: string;
+        };
+        // append-only โดยเจตนา แก้อดีตให้เพิ่มแถวใหม่ ไม่ใช่ UPDATE ทับ
+        Update: Record<string, never>;
+        Relationships: [];
+      };
+      student_achievements: {
+        Row: {
+          id: string;
+          student_id: string;
+          kind: AchievementKind;
+          title: string;
+          level: AchievementLevel | null;
+          rank: string | null;
+          organizer: string | null;
+          event_name: string | null;
+          event_date: string | null;
+          academic_year: string | null;
+          team_members: string | null;
+          advisor_name: string | null;
+          description: string | null;
+          image_urls: string[] | null;
+          document_url: string | null;
+          recorded_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          student_id: string;
+          kind?: AchievementKind;
+          title: string;
+          level?: AchievementLevel | null;
+          rank?: string | null;
+          organizer?: string | null;
+          event_name?: string | null;
+          event_date?: string | null;
+          academic_year?: string | null;
+          team_members?: string | null;
+          advisor_name?: string | null;
+          description?: string | null;
+          image_urls?: string[] | null;
+          document_url?: string | null;
+          recorded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          kind?: AchievementKind;
+          title?: string;
+          level?: AchievementLevel | null;
+          rank?: string | null;
+          organizer?: string | null;
+          event_name?: string | null;
+          event_date?: string | null;
+          academic_year?: string | null;
+          team_members?: string | null;
+          advisor_name?: string | null;
+          description?: string | null;
+          image_urls?: string[] | null;
+          document_url?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      student_positions: {
+        Row: {
+          id: string;
+          student_id: string;
+          position: string;
+          scope: PositionScope;
+          scope_ref: string | null;
+          academic_year: string | null;
+          started_on: string;
+          ended_on: string | null;
+          note: string | null;
+          recorded_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          student_id: string;
+          position: string;
+          scope?: PositionScope;
+          scope_ref?: string | null;
+          academic_year?: string | null;
+          started_on?: string;
+          ended_on?: string | null;
+          note?: string | null;
+          recorded_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          position?: string;
+          scope?: PositionScope;
+          scope_ref?: string | null;
+          academic_year?: string | null;
+          started_on?: string;
+          ended_on?: string | null;
+          note?: string | null;
         };
         Relationships: [];
       };

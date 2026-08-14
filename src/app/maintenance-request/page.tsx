@@ -6,12 +6,15 @@ import Link from "next/link";
 /**
  * ฟอร์มแจ้งซ่อมสำหรับทุกคน — นักเรียน ครู เจ้าหน้าที่
  *
- * หัวใจของหน้านี้คือช่อง "สิ่งที่จะซ่อม" ที่เลือกได้ 3 ทาง เพราะของในโรงเรียน
- * มีทั้งที่ลงเลขครุภัณฑ์แล้วและยังไม่ได้ลง ถ้าบังคับให้เลือกจากรายการอย่างเดียว
- * จะแจ้ง "โต๊ะตัวที่สามในห้อง 302 ขาหัก" ไม่ได้เลย
+ * หัวใจของหน้านี้คือช่อง "สิ่งที่จะซ่อม" ที่เลือกได้ 4 ทาง เพราะของในโรงเรียน
+ * มีทั้งที่ลงเลขครุภัณฑ์แล้ว ยังไม่ได้ลง และของในคลังยืม ถ้าบังคับให้เลือกจาก
+ * รายการอย่างเดียวจะแจ้ง "โต๊ะตัวที่สามในห้อง 302 ขาหัก" ไม่ได้เลย
  *
- * ค่าตั้งต้นเป็น "พิมพ์เอง" เพราะเป็นทางที่ใช้ได้เสมอ ส่วนการเลือกครุภัณฑ์
- * เป็นทางลัดสำหรับของที่มีเลขติดอยู่จริง
+ * ค่าตั้งต้นเป็น "พิมพ์เอง" เพราะเป็นทางที่ใช้ได้เสมอ
+ *
+ * ตัวเลือก "อุปกรณ์ที่ยืมมา" สำคัญกว่าที่เห็น: มันผูกงานซ่อมเข้ากับ
+ * equipment_items ทำให้ระบบกันของชิ้นนั้นไม่ให้คนอื่นยืมต่อระหว่างซ่อม
+ * ถ้าผู้ใช้พิมพ์ชื่อเอาเองแทน ของที่พังจะยังขึ้นให้ยืมอยู่
  */
 
 const C = {
@@ -36,11 +39,15 @@ type Asset = {
   id: string; name: string; asset_code: string | null;
   category: string; room_id: string | null; location_note: string | null;
 };
+type EquipmentItem = {
+  id: string; name: string; category: string; unit: string; available_quantity: number;
+};
 
 export default function MaintenanceRequestPage() {
-  const [kind, setKind] = useState<"other" | "asset" | "room">("other");
+  const [kind, setKind] = useState<"other" | "asset" | "room" | "equipment_item">("other");
   const [rooms, setRooms] = useState<Room[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [equipment, setEquipment] = useState<EquipmentItem[]>([]);
   const [assetSearch, setAssetSearch] = useState("");
 
   const [form, setForm] = useState({
@@ -49,6 +56,8 @@ export default function MaintenanceRequestPage() {
     target_label: "",
     asset_id: "",
     room_id: "",
+    equipment_item_id: "",
+    affected_quantity: "1",
     location_note: "",
     category: "อื่นๆ",
     symptom: "",
@@ -87,6 +96,7 @@ export default function MaintenanceRequestPage() {
       if (json.status === "success") {
         setRooms(json.data.rooms);
         setAssets(json.data.assets);
+        setEquipment(json.data.equipment_items ?? []);
       }
     } catch {
       setError("โหลดรายการไม่สำเร็จ ลองรีเฟรชหน้าอีกครั้ง");
@@ -129,6 +139,10 @@ export default function MaintenanceRequestPage() {
           // ส่งเฉพาะตัวชี้ที่ตรงกับ kind ที่เลือก ฝั่ง server ก็กรองอีกชั้น
           asset_id: kind === "asset" ? form.asset_id || null : null,
           room_id: kind === "room" ? form.room_id || null : null,
+          equipment_item_id: kind === "equipment_item" ? form.equipment_item_id || null : null,
+          // จำนวนที่เสียใช้เฉพาะคลังยืม ของรายชิ้นมีชิ้นเดียวอยู่แล้ว
+          affected_quantity:
+            kind === "equipment_item" ? Math.max(1, Number(form.affected_quantity) || 1) : null,
           target_label: form.target_label || null,
           location_note: form.location_note || null,
           category: form.category,
@@ -155,6 +169,7 @@ export default function MaintenanceRequestPage() {
     form.symptom.trim() &&
     (kind === "other" ? form.target_label.trim()
       : kind === "asset" ? form.asset_id
+      : kind === "equipment_item" ? form.equipment_item_id
       : form.room_id);
 
   const box: React.CSSProperties = {
@@ -252,6 +267,7 @@ export default function MaintenanceRequestPage() {
             {([
               ["other", "พิมพ์เอง", "ของที่ไม่มีเลขครุภัณฑ์"],
               ["asset", "เลือกครุภัณฑ์", "ของที่มีเลขติดอยู่"],
+              ["equipment_item", "อุปกรณ์ที่ยืมมา", "ของจากคลังเบิก"],
               ["room", "ทั้งห้อง", "ไฟ ประปา แอร์"],
             ] as const).map(([v, t, hint]) => (
               <button
@@ -301,6 +317,34 @@ export default function MaintenanceRequestPage() {
                   ยังไม่มีครุภัณฑ์ในระบบ ใช้ &quot;พิมพ์เอง&quot; แทนได้
                 </p>
               )}
+            </>
+          )}
+
+          {kind === "equipment_item" && (
+            <>
+              <select
+                style={{ ...input, marginBottom: 8 }}
+                value={form.equipment_item_id}
+                onChange={(e) => setForm({ ...form, equipment_item_id: e.target.value })}
+              >
+                <option value="">— เลือกอุปกรณ์ —</option>
+                {equipment.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.name} · คงเหลือ {e.available_quantity} {e.unit}
+                  </option>
+                ))}
+              </select>
+              <label style={label}>เสียกี่ชิ้น</label>
+              <input
+                type="number"
+                min={1}
+                style={input}
+                value={form.affected_quantity}
+                onChange={(e) => setForm({ ...form, affected_quantity: e.target.value })}
+              />
+              <p style={{ fontSize: 11.5, color: C.muted, margin: "6px 0 0", lineHeight: 1.6 }}>
+                จำนวนนี้จะถูกกันออกจากคลัง คนอื่นจะยืมไม่ได้จนกว่างานซ่อมจะปิด
+              </p>
             </>
           )}
 

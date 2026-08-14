@@ -25,6 +25,8 @@ const CreateSchema = z.object({
   equipment_item_id: z.string().uuid().nullable().optional(),
   room_id: z.string().uuid().nullable().optional(),
   target_label: z.string().trim().nullable().optional(),
+  // จำนวนที่เสีย ใช้เฉพาะคลังยืม จะถูกกันออกจากยอดที่ยืมได้จนกว่างานจะปิด
+  affected_quantity: z.number().int().positive().nullable().optional(),
   location_note: z.string().trim().nullable().optional(),
   category: z.enum(CATEGORIES).default("อื่นๆ"),
   symptom: z.string().trim().min(1, "ต้องระบุอาการเสีย"),
@@ -63,6 +65,9 @@ export const POST = withAuth(
         body.target_kind === "equipment_item" ? body.equipment_item_id ?? null : null,
       room_id: body.target_kind === "room" ? body.room_id ?? null : null,
       target_label: body.target_label ?? null,
+      // เก็บจำนวนเฉพาะเมื่อเป็นของในคลัง ของรายชิ้นมีชิ้นเดียวอยู่แล้ว
+      affected_quantity:
+        body.target_kind === "equipment_item" ? body.affected_quantity ?? 1 : null,
       location_note: body.location_note ?? null,
       category: body.category,
       symptom: body.symptom,

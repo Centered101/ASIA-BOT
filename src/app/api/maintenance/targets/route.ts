@@ -17,7 +17,7 @@ export const GET = withAuth(
     const search = new URL(req.url).searchParams.get("q")?.trim();
     const supabase = getServiceClient();
 
-    const [rooms, assets] = await Promise.all([
+    const [rooms, assets, equipment] = await Promise.all([
       supabase.from("rooms").select("id, name, location").order("name"),
       (() => {
         let q = supabase
@@ -32,12 +32,27 @@ export const GET = withAuth(
         }
         return q;
       })(),
+      // อุปกรณ์ในคลังยืม — นักเรียนที่ยืมของไปแล้วของพังต้องมีทางแจ้ง
+      // ถ้าไม่มีตัวเลือกนี้เขาจะต้องพิมพ์ชื่อเอง แล้วงานซ่อมจะไม่ผูกกับคลัง
+      // ทำให้ระบบไม่รู้ว่าต้องกันของชิ้นนั้นไม่ให้คนอื่นยืมต่อ
+      (() => {
+        let q = supabase
+          .from("equipment_items")
+          .select("id, name, category, unit, available_quantity")
+          .eq("active", true)
+          .is("deleted_at", null)
+          .order("name")
+          .limit(300);
+        if (search) q = q.ilike("name", `%${search}%`);
+        return q;
+      })(),
     ]);
 
     // ไม่กลืน error เป็นรายการว่าง ไม่งั้นฟอร์มจะดูเหมือนไม่มีครุภัณฑ์ในระบบ
     const partialErrors = [
       rooms.error ? `rooms: ${rooms.error.message}` : null,
       assets.error ? `assets: ${assets.error.message}` : null,
+      equipment.error ? `equipment_items: ${equipment.error.message}` : null,
     ].filter(Boolean);
 
     return NextResponse.json({
@@ -46,6 +61,7 @@ export const GET = withAuth(
       data: {
         rooms: rooms.data ?? [],
         assets: assets.data ?? [],
+        equipment_items: equipment.data ?? [],
       },
     });
   },

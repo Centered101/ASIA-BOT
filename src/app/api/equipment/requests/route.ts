@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { equipmentUnderRepair, effectiveAvailable } from "@/lib/server/maintenance-stock";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { buildEquipmentRequestFlexMessage, sendLineFlexMessage } from "@/lib/line";
@@ -102,10 +103,19 @@ export async function POST(req: NextRequest) {
     if (!itemRows || itemRows.length !== itemIds.length || itemRows.some(item => !item.active || item.deleted_at)) {
       return NextResponse.json({ status: "error", message: "ไม่พบคุรุภัณฑ์ที่เลือก" }, { status: 404 });
     }
+    // หักของที่ติดซ่อมออกก่อนตรวจ ไม่งั้นจะอนุมัติให้ยืมของที่กำลังซ่อมอยู่
+    // ดูเหตุผลที่ไม่ลด available_quantity ตรง ๆ ใน lib/server/maintenance-stock.ts
+    const underRepair = await equipmentUnderRepair(supabase, itemIds);
     for (const requestItem of requestItems) {
       const item = itemRows.find(row => row.id === requestItem.equipment_item_id);
-      if (!item || requestItem.quantity > item.available_quantity) {
-        return NextResponse.json({ status: "error", message: `คุรุภัณฑ์คงเหลือไม่พอ: ${item?.name ?? "รายการที่เลือก"}` }, { status: 409 });
+      if (!item) {
+        return NextResponse.json({ status: "error", message: "ไม่พบคุรุภัณฑ์ที่เลือก" }, { status: 404 });
+      }
+      const repairing = underRepair[item.id] ?? 0;
+      const usable = effectiveAvailable(item.available_quantity, repairing);
+      if (requestItem.quantity > usable) {
+        const reason = repairing > 0 ? ` (ติดซ่อมอยู่ ${repairing} ${item.unit ?? "ชิ้น"})` : "";
+        return NextResponse.json({ status: "error", message: `คุรุภัณฑ์คงเหลือไม่พอ: ${item.name} เหลือ ${usable}${reason}` }, { status: 409 });
       }
     }
 

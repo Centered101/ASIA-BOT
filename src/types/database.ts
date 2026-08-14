@@ -1989,6 +1989,7 @@ export type Database = {
           equipment_item_id: string | null;
           room_id: string | null;
           target_label: string | null;
+          affected_quantity: number | null;
           location_note: string | null;
           category: MaintenanceCategory;
           symptom: string;
@@ -2016,6 +2017,7 @@ export type Database = {
           equipment_item_id?: string | null;
           room_id?: string | null;
           target_label?: string | null;
+          affected_quantity?: number | null;
           location_note?: string | null;
           category?: MaintenanceCategory;
           symptom: string;
@@ -2036,6 +2038,7 @@ export type Database = {
           urgency?: MaintenanceUrgency;
           category?: MaintenanceCategory;
           symptom?: string;
+          affected_quantity?: number | null;
           location_note?: string | null;
           assigned_to?: string | null;
           scheduled_on?: string | null;

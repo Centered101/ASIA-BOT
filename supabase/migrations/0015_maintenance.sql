@@ -37,6 +37,16 @@ CREATE TABLE IF NOT EXISTS public.maintenance_requests (
   target_label text,            -- ชื่อที่พิมพ์เอง เมื่อไม่มีเลขครุภัณฑ์
   location_note text,           -- "ห้อง 302 มุมซ้ายติดหน้าต่าง"
 
+  -- จำนวนที่เสีย ใช้เฉพาะกับ target_kind = 'equipment_item' ซึ่งเป็นคลังที่
+  -- นับเป็นจำนวน ("หูฟัง 3 อันจาก 20 พัง") ของรายชิ้นอย่าง asset/room
+  -- ไม่ต้องใช้เพราะมีชิ้นเดียวอยู่แล้ว
+  --
+  -- ตั้งใจ **ไม่** ไปลด equipment_items.available_quantity ตรง ๆ เพราะคอลัมน์นั้น
+  -- ถูก flow อนุมัติ/ปฏิเสธคำขอเบิกเขียนอยู่แล้ว ถ้าเขียนสองทางจะแย่งกันและ
+  -- ยอดจะเพี้ยนเมื่อมีคำขอซ้อนกัน จำนวนที่ติดซ่อมจึงคำนวณจากตารางนี้แทน
+  -- ดู equipmentUnderRepair() ใน src/lib/server/maintenance-stock.ts
+  affected_quantity integer CHECK (affected_quantity IS NULL OR affected_quantity > 0),
+
   category text NOT NULL DEFAULT 'อื่นๆ'::text CHECK (category = ANY (ARRAY[
     'ไฟฟ้า'::text, 'ประปา'::text, 'แอร์'::text, 'โครงสร้าง'::text,
     'เฟอร์นิเจอร์'::text, 'อุปกรณ์'::text, 'คอมพิวเตอร์'::text, 'อื่นๆ'::text
@@ -96,6 +106,12 @@ CREATE INDEX IF NOT EXISTS maintenance_requests_queue_idx
 -- "แอร์เครื่องนี้ซ่อมมากี่รอบแล้ว" — ประวัติซ่อมของครุภัณฑ์ชิ้นหนึ่ง
 CREATE INDEX IF NOT EXISTS maintenance_requests_asset_idx
   ON public.maintenance_requests (asset_id, created_at DESC) WHERE asset_id IS NOT NULL;
+
+-- "อุปกรณ์ชิ้นนี้ติดซ่อมอยู่กี่อัน" — ถูกเรียกทุกครั้งที่แสดงคลังให้ยืม
+-- จึงเป็น partial index เฉพาะงานที่ยังไม่ปิด
+CREATE INDEX IF NOT EXISTS maintenance_requests_equipment_open_idx
+  ON public.maintenance_requests (equipment_item_id)
+  WHERE equipment_item_id IS NOT NULL AND status NOT IN ('completed', 'cancelled');
 
 -- "ฉันแจ้งอะไรไปบ้าง" ฝั่งนักเรียน
 CREATE INDEX IF NOT EXISTS maintenance_requests_reporter_idx

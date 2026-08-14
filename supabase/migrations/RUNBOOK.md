@@ -71,7 +71,7 @@ SELECT a.username FROM public.admins a
 | `0007_deprecate_dead_tables.sql` | COMMENT อย่างเดียว ไม่มี DROP |
 | `0008_realtime_trim.sql` | ต้องเห็น `admins` ยังอยู่ใน publication แต่ **ไม่มี** `password_hash` |
 | `0009_backfill_user_roles.sql` | **ห้ามข้าม** — 0003 seed แค่ตาราง role ไม่ได้ให้ role กับใคร ถ้าไม่รันไฟล์นี้ `user_roles` จะว่างและทุก admin ตกไปเป็น ACADEMIC (ดูหัวข้อ 4.2) |
-| `0010_fix_login_collision.sql` | **ต้องแก้ไฟล์ก่อนรัน** — ตั้งค่า `new_username` ที่บรรทัดที่มีเครื่องหมาย ◄ (จุดเดียว) แล้วรัน `0002` และ `0009` ซ้ำ (ดูหัวข้อ 4.3) |
+| `0010_link_dual_profile.sql` | รันได้เลยไม่ต้องแก้ — เชื่อม profile นักเรียนของคนที่เป็นทั้ง staff และนักเรียน เข้ากับ account เดิม `user_accounts` ต้อง**ยังเป็น 6 ไม่ใช่ 7** (ดูหัวข้อ 4.3) |
 
 หลัง `0008` ให้เปิดหน้า `/admin` แล้วยืนยันว่าแท็บ **ผู้ดูแลระบบ** ยังอัปเดตสดข้ามแท็บได้อยู่
 
@@ -155,34 +155,41 @@ SELECT a.admin_id, a.role, ur.role_key
 | admin | 200 | 200 |
 | superadmin | 200 | 200 |
 
-## 4.3 นักเรียน 3175 ไม่มี account (login ชนกับแอดมิน)
+## 4.3 คนเดียวมี 2 profile — นักเรียน 3175 ยังไม่มี account
 
-ยืนยันจากข้อมูลจริง: **6 user_accounts จาก 7 profiles**
+หลัง 0002 ฐานข้อมูลมี **6 user_accounts จาก 7 profiles** ตอนแรกอ่านว่าเป็น
+"username ชนกันแล้วนักเรียนถูกข้าม ต้องเปลี่ยนชื่อแอดมิน" — **อ่านผิด**
 
-แอดมิน `ADM-1783669050569` ตั้ง `username = '3175'` ซึ่งชนกับ `student_id` ของธเนศ
-`user_accounts.login` เป็น unique ข้าม subject_type ทุกชนิด และ 0002 สร้างฝั่ง admin ก่อน
-นักเรียนคนนี้จึงถูกข้าม
+ข้อมูลจริง: `ADM-1783669050569` คือ **ธเนศ สีแดง (โอม)** ซึ่งเป็นทั้ง staff และนักเรียนรหัส
+3175 และ `admins.linked_student_id = '3175'` บันทึกไว้ชัดเจนอยู่แล้ว
+การที่ login `'3175'` อยู่ทั้งสองตารางไม่ใช่คนละคนชนกัน แต่คือ **คนเดียว 2 profile**
+ซึ่งเป็นเคสที่โมเดลตัวตนของ Phase 1 ออกแบบมารองรับพอดี
 
-**ยังไม่ฉุกเฉิน** — เขายังล็อกอินได้ปกติ เพราะ auth นักเรียนใช้ `student_id` + `student_phone`
-ที่ไม่เกี่ยวกับ `user_accounts` สิ่งที่เขาไม่ได้คือ signed session cookie
-ดังนั้นต้องแก้ **ก่อนปิด `AUTH_LEGACY_HEADER`** ไม่จำเป็นต้องก่อน deploy
+```
+user_accounts (1 แถวต่อ 1 คน)
+     ↑                    ↑
+admins.account_id   students.account_id
+```
 
-เลือกเปลี่ยน username ของแอดมินแทน `student_id` เพราะรหัสนักเรียนเป็นตัวระบุจริงของสถานศึกษา
-และถูกอ้างโดย foreign key 6 ตาราง ส่วน username เป็นแค่ชื่อสำหรับล็อกอิน
+unique index อยู่ที่ระดับตาราง (`admins_account_id_key`, `students_account_id_key`)
+ดังนั้น 1 account ถูกอ้างจาก admin ได้ 1 แถว และจาก student ได้ 1 แถว — **แชร์ข้ามตารางได้**
+
+**6 accounts จาก 7 profiles จึงถูกต้อง และต้องคงเป็น 6** ถ้าเปลี่ยนชื่อแอดมินจะกลายเป็น
+คนเดียวมี 2 login และ audit log จะแยกเป็นคนละคน
+
+**ยังไม่ฉุกเฉิน** — เขาล็อกอินได้ปกติทั้งสองทาง สิ่งที่ขาดคือ `students.account_id`
+ต้องแก้ก่อนปิด `AUTH_LEGACY_HEADER` ไม่จำเป็นต้องก่อน deploy
 
 ขั้นตอน:
 
-1. เปิด `0010_fix_login_collision.sql` แล้วตั้งค่า `new_username`
-   **ที่บรรทัดเดียวที่มีเครื่องหมาย ◄** (`^[a-zA-Z0-9_]{3,20}$`)
-2. รัน `0010` — บล็อกจะตรวจก่อนเขียนเสมอ และจะ error ถ้า:
-   ยังเป็น placeholder · รูปแบบ username ผิด · ชื่อใหม่ไปตรงกับ `student_id` ของใคร ·
-   ชื่อใหม่มีแอดมินอื่นใช้อยู่ · `login` นั้นมีใน `user_accounts` แล้ว
-   ค่าที่ผิดจะไม่เขียนอะไรลงฐานข้อมูลเลย
-3. รัน `0002_backfill_accounts.sql` ซ้ำ
-4. รัน `0009_backfill_user_roles.sql` ซ้ำ
-5. เช็ก SMOKE ท้ายไฟล์ `0010` — `students` ที่ `account_id IS NULL` ต้องเป็น 0 และ `user_accounts` ต้องเป็น 7
+1. รัน `0010_link_dual_profile.sql` — **รันได้เลย ไม่ต้องแก้อะไร** เชื่อม
+   `students.account_id` ไปที่ account เดิมของแอดมิน แล้วเพิ่ม role `STUDENT` ให้ account นั้น
+2. เช็ก SMOKE ท้ายไฟล์ — `students` ที่ `account_id IS NULL` ต้องเป็น **0**
+   และ `user_accounts` ต้อง**ยังเป็น 6 ไม่ใช่ 7**
+3. ธเนศต้องได้ทั้ง `ACADEMIC` และ `STUDENT` บน account เดียว
 
-**บอกแอดมินคนนั้นด้วยว่า username เปลี่ยนแล้ว** เพราะเขาใช้ล็อกอิน
+ไม่ต้องเปลี่ยน username ไม่ต้องแจ้งใคร — เขาล็อกอินด้วย `3175` เหมือนเดิม
+ไฟล์นี้เขียนแบบ generic จึงครอบคลุมคู่ admin/student ที่ใช้ login เดียวกันทุกคู่ ไม่ใช่เฉพาะรายนี้
 
 ## 5. ถ้าต้อง rollback
 

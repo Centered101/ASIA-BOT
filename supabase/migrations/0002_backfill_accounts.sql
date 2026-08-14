@@ -149,9 +149,13 @@ UPDATE public.user_accounts ua
    );
 
 -- ------------------------------------------------------------
--- SMOKE — all three must return 0. A non-zero count means a login collided
--- with an account of a different subject_type; resolve by renaming that
--- profile's username/desired_username, then re-run this file.
+-- SMOKE — the admins and teachers counts must be 0.
+--
+-- A non-zero STUDENTS count is usually NOT a collision between two people.
+-- On this database it meant one person holding two profiles: a staff member
+-- whose admin username is also their own student_id. The fix is to share one
+-- account between both profiles, which is what 0010_link_dual_profile.sql
+-- does — do not rename anyone until you have checked admins.linked_student_id.
 --
 --   SELECT count(*) FROM public.admins   WHERE account_id IS NULL;
 --   SELECT count(*) FROM public.students WHERE account_id IS NULL;

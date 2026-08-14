@@ -71,7 +71,7 @@ SELECT a.username FROM public.admins a
 | `0007_deprecate_dead_tables.sql` | COMMENT อย่างเดียว ไม่มี DROP |
 | `0008_realtime_trim.sql` | ต้องเห็น `admins` ยังอยู่ใน publication แต่ **ไม่มี** `password_hash` |
 | `0009_backfill_user_roles.sql` | **ห้ามข้าม** — 0003 seed แค่ตาราง role ไม่ได้ให้ role กับใคร ถ้าไม่รันไฟล์นี้ `user_roles` จะว่างและทุก admin ตกไปเป็น ACADEMIC (ดูหัวข้อ 4.2) |
-| `0010_fix_login_collision.sql` | **ต้องแก้ไฟล์ก่อนรัน** — เปลี่ยน `CHANGE_ME` เป็น username ใหม่ทั้ง 2 จุด มี guard กันรันทั้งที่ยังไม่แก้ แล้วรัน `0002` และ `0009` ซ้ำ (ดูหัวข้อ 4.3) |
+| `0010_fix_login_collision.sql` | **ต้องแก้ไฟล์ก่อนรัน** — ตั้งค่า `new_username` ที่บรรทัดที่มีเครื่องหมาย ◄ (จุดเดียว) แล้วรัน `0002` และ `0009` ซ้ำ (ดูหัวข้อ 4.3) |
 
 หลัง `0008` ให้เปิดหน้า `/admin` แล้วยืนยันว่าแท็บ **ผู้ดูแลระบบ** ยังอัปเดตสดข้ามแท็บได้อยู่
 
@@ -172,9 +172,12 @@ SELECT a.admin_id, a.role, ur.role_key
 
 ขั้นตอน:
 
-1. เปิด `0010_fix_login_collision.sql` แล้ว**แก้ `CHANGE_ME` ทั้ง 2 จุด** เป็น username ใหม่
-   (`^[a-zA-Z0-9_]{3,20}$` และห้ามซ้ำกับ `student_id` ของใครอีก)
-2. รัน `0010` — มี guard ที่จะ error ถ้ายังไม่ได้แก้
+1. เปิด `0010_fix_login_collision.sql` แล้วตั้งค่า `new_username`
+   **ที่บรรทัดเดียวที่มีเครื่องหมาย ◄** (`^[a-zA-Z0-9_]{3,20}$`)
+2. รัน `0010` — บล็อกจะตรวจก่อนเขียนเสมอ และจะ error ถ้า:
+   ยังเป็น placeholder · รูปแบบ username ผิด · ชื่อใหม่ไปตรงกับ `student_id` ของใคร ·
+   ชื่อใหม่มีแอดมินอื่นใช้อยู่ · `login` นั้นมีใน `user_accounts` แล้ว
+   ค่าที่ผิดจะไม่เขียนอะไรลงฐานข้อมูลเลย
 3. รัน `0002_backfill_accounts.sql` ซ้ำ
 4. รัน `0009_backfill_user_roles.sql` ซ้ำ
 5. เช็ก SMOKE ท้ายไฟล์ `0010` — `students` ที่ `account_id IS NULL` ต้องเป็น 0 และ `user_accounts` ต้องเป็น 7

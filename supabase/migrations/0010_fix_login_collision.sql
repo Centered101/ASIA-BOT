@@ -1,7 +1,7 @@
 -- ============================================================
 -- 0010 — Fix the admin/student login collision  (DATA ONLY, no DDL)
 --
--- ⚠ THIS FILE NEEDS YOU TO EDIT ONE LINE BEFORE RUNNING IT. See STEP 2.
+-- ⚠ EDIT ONE LINE BEFORE RUNNING: new_username, marked "EDIT THIS" below.
 --
 -- user_accounts.login is unique across every subject type, so one string can
 -- only ever belong to one account. Admin ADM-1783669050569 has
@@ -19,57 +19,99 @@
 -- The admin username is renamed rather than the student_id: student_id is a
 -- real institutional identifier referenced by six foreign keys, while an admin
 -- username is just a login handle.
+--
+-- The first version of this file spread the placeholder across four literals
+-- and told you to edit two of them, so the guard kept firing even after you
+-- had done exactly what it asked. Everything now reads one variable.
 -- ============================================================
 
 -- ── STEP 1 — look before you touch anything ─────────────────
--- Expect: one row, admin_id ADM-1783669050569, username 3175.
+-- Expect one row: ADM-1783669050569 / 3175 / ธเนศ.
 SELECT a.admin_id, a.username, a.role, s.student_id, s.first_name, s.last_name
   FROM public.admins a
   JOIN public.students s ON lower(s.student_id) = lower(a.username);
 
--- Every collision, in case there is more than the one we know about:
-SELECT a.admin_id, a.username FROM public.admins a
-  JOIN public.students s ON lower(s.student_id) = lower(a.username);
 
-
--- ── STEP 2 — choose the new username, then edit both lines ──
--- Replace 'CHANGE_ME' in BOTH statements below with the same value.
+-- ── STEP 2 — set the new username on the marked line, then run ──
 -- Rules enforced by /api/admin/admins: ^[a-zA-Z0-9_]{3,20}$
--- It must not collide again, so do not use another student_id. Something like
--- the person's name is safer than another number.
+-- Do not use another student_id, or this collides again. A name reads better
+-- than a number here.
 --
 -- Tell the admin their username changed — they log in with it.
-
--- Guard: refuse to run while the placeholder is still there.
+--
+-- This block validates first and only writes if every check passes, so a bad
+-- value changes nothing.
 DO $$
+DECLARE
+  new_username text := 'CHANGE_ME';  -- ◄── EDIT THIS, and only this
+  target_admin  text := 'ADM-1783669050569';
+  old_username  text := '3175';
+  moved_admin   integer;
+  moved_account integer;
 BEGIN
-  IF 'CHANGE_ME' = 'CHANGE_ME' THEN
-    RAISE EXCEPTION 'Edit 0010: replace CHANGE_ME with the new username in both statements first.';
+  IF new_username = 'CHANGE_ME' THEN
+    RAISE EXCEPTION
+      'Set new_username on the marked line first (it is still the placeholder).';
+  END IF;
+
+  IF new_username !~ '^[a-zA-Z0-9_]{3,20}$' THEN
+    RAISE EXCEPTION
+      'Username % is invalid: must be 3-20 chars of a-z, A-Z, 0-9, or _', new_username;
+  END IF;
+
+  -- Refuse to trade one collision for another.
+  IF EXISTS (SELECT 1 FROM public.students WHERE lower(student_id) = lower(new_username)) THEN
+    RAISE EXCEPTION 'Username % is a student_id — that is the bug we are fixing', new_username;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM public.admins
+     WHERE lower(username) = lower(new_username) AND admin_id <> target_admin
+  ) THEN
+    RAISE EXCEPTION 'Username % already belongs to another admin', new_username;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM public.user_accounts ua
+     WHERE lower(ua.login) = lower(new_username)
+       AND ua.id IS DISTINCT FROM (SELECT account_id FROM public.admins WHERE admin_id = target_admin)
+  ) THEN
+    RAISE EXCEPTION 'Login % is already taken in user_accounts', new_username;
+  END IF;
+
+  -- Order does not matter here — both statements match on the old value and
+  -- the whole block is one transaction — but keeping the account and the
+  -- profile adjacent makes the pair obvious to whoever reads this next.
+  UPDATE public.user_accounts ua
+     SET login = new_username
+    FROM public.admins a
+   WHERE a.admin_id = target_admin
+     AND ua.id = a.account_id
+     AND ua.login = old_username;
+  GET DIAGNOSTICS moved_account = ROW_COUNT;
+
+  UPDATE public.admins
+     SET username = new_username,
+         username_changed_at = now()
+   WHERE admin_id = target_admin
+     AND username = old_username;
+  GET DIAGNOSTICS moved_admin = ROW_COUNT;
+
+  IF moved_admin = 0 AND moved_account = 0 THEN
+    RAISE NOTICE 'Nothing to do — the rename already happened. Safe to continue.';
+  ELSE
+    RAISE NOTICE 'Renamed % to %  (admins: % row, user_accounts: % row)',
+      old_username, new_username, moved_admin, moved_account;
   END IF;
 END $$;
 
-UPDATE public.admins
-   SET username = 'CHANGE_ME',
-       username_changed_at = now()
- WHERE admin_id = 'ADM-1783669050569'
-   AND username = '3175';
 
--- Keep the account row in step with the profile it belongs to.
-UPDATE public.user_accounts ua
-   SET login = 'CHANGE_ME'
-  FROM public.admins a
- WHERE a.admin_id = 'ADM-1783669050569'
-   AND ua.id = a.account_id
-   AND ua.login = '3175';
+-- ── STEP 3 — re-run 0002_backfill_accounts.sql ──────────────
+-- Idempotent, and only touches rows where account_id IS NULL, so it picks up
+-- just the student whose login was freed.
 
-
--- ── STEP 3 — re-run 0002 ────────────────────────────────────
--- 0002_backfill_accounts.sql is idempotent and only touches rows where
--- account_id IS NULL, so re-running it now picks up just the freed student.
-
-
--- ── STEP 4 — re-run 0009 ────────────────────────────────────
--- The new account needs its STUDENT grant. 0009 is idempotent too.
+-- ── STEP 4 — re-run 0009_backfill_user_roles.sql ────────────
+-- The new account needs its STUDENT grant. Idempotent too.
 
 
 -- ------------------------------------------------------------
@@ -88,17 +130,25 @@ UPDATE public.user_accounts ua
 --     LEFT JOIN public.user_roles ur ON ur.account_id = ua.id
 --    WHERE s.student_id = '3175';
 --
---   -- no collisions left
+--   -- no collisions left — must return no rows
 --   SELECT a.username FROM public.admins a
 --     JOIN public.students s ON lower(s.student_id) = lower(a.username);
+--
+--   -- the renamed admin still resolves to its account
+--   SELECT a.admin_id, a.username, a.role, ua.login, ur.role_key
+--     FROM public.admins a
+--     JOIN public.user_accounts ua ON ua.id = a.account_id
+--     LEFT JOIN public.user_roles ur ON ur.account_id = ua.id
+--    WHERE a.admin_id = 'ADM-1783669050569';
 -- ------------------------------------------------------------
 
--- ROLLBACK:
---   UPDATE public.admins SET username = '3175', username_changed_at = NULL
---    WHERE admin_id = 'ADM-1783669050569';
+-- ROLLBACK: (replace <new> with the username you chose)
 --   UPDATE public.user_accounts ua SET login = '3175'
 --     FROM public.admins a
---    WHERE a.admin_id = 'ADM-1783669050569' AND ua.id = a.account_id;
---   -- then remove the student account 0002 created:
+--    WHERE a.admin_id = 'ADM-1783669050569' AND ua.id = a.account_id
+--      AND ua.login = '<new>';
+--   UPDATE public.admins SET username = '3175', username_changed_at = NULL
+--    WHERE admin_id = 'ADM-1783669050569';
+--   -- and undo what step 3 created for the student:
 --   UPDATE public.students SET account_id = NULL WHERE student_id = '3175';
 --   DELETE FROM public.user_accounts WHERE login = '3175' AND subject_type = 'student';

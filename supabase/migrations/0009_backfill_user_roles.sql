@@ -1,29 +1,28 @@
 -- ============================================================
--- 0009 — Backfill user_roles from existing profiles  (DATA ONLY, no DDL)
+-- 0009 — ให้ role กับ account ที่มีอยู่  (ข้อมูลล้วน ไม่มี DDL)
 --
--- Found during Phase 1 local verification, and it is the reason this file
--- exists: 0003 seeds `roles`, `permissions`, and `role_permissions`, but
--- creates NO `user_roles` rows. Meanwhile 0002 links every admin to an
--- account. In that window `loadRolesForAccount()` finds no grant for the
--- account and falls through to the subject-type default — so EVERY admin,
--- superadmin included, resolved to ACADEMIC and lost write access. Confirmed
--- against live data: superadmin got 403 on POST /api/admin/products.
+-- เจอตอนทดสอบ Phase 1 บนเครื่อง และเป็นเหตุผลที่ไฟล์นี้มีอยู่: 0003 ใส่ข้อมูล
+-- ตั้งต้นให้ `roles`, `permissions`, `role_permissions` แต่ **ไม่ได้สร้างแถว**
+-- `user_roles` เลย ขณะที่ 0002 ผูก account ให้แอดมินทุกคนไปแล้ว ในช่วงคาบเกี่ยว
+-- นั้น `loadRolesForAccount()` หา grant ของ account ไม่เจอ จึงตกไปใช้ค่า
+-- default ตาม subject_type ผลคือ **แอดมินทุกคน** รวมถึง superadmin
+-- ถูก resolve เป็น ACADEMIC และเสียสิทธิ์เขียน ยืนยันกับข้อมูลจริงแล้ว:
+-- superadmin ได้ 403 ตอน POST /api/admin/products
 --
--- src/lib/server/session.ts now also passes the legacy admins.role mapping as
--- an explicit fallback, so the two fixes are belt and braces: the code no
--- longer depends on this backfill, and this backfill makes the grants
--- explicit in the database rather than inferred on every request.
+-- ตอนนี้ src/lib/server/session.ts ส่งค่า map จาก admins.role เดิมเป็น fallback
+-- ให้ด้วย การแก้จึงมีสองชั้นทับกัน: โค้ดไม่ต้องพึ่ง backfill นี้อีกต่อไป
+-- และ backfill นี้ทำให้ grant ชัดเจนอยู่ในฐานข้อมูล แทนที่จะต้องเดาใหม่ทุก request
 --
--- Mapping is exactly LEGACY_ADMIN_ROLE_MAP in src/lib/rbac/definitions.ts:
+-- การ map ตรงกับ LEGACY_ADMIN_ROLE_MAP ใน src/lib/rbac/definitions.ts เป๊ะ:
 --   superadmin -> SUPER_ADMIN
 --   admin      -> ADMIN
 --   staff      -> ACADEMIC
--- Nobody gains or loses access relative to before Phase 1.
+-- ไม่มีใครได้สิทธิ์เพิ่มหรือเสียสิทธิ์เทียบกับก่อน Phase 1
 --
--- Idempotent: guarded by the user_roles_unique_grant index.
+-- รันซ้ำได้: มี index user_roles_unique_grant กันไว้
 -- ============================================================
 
--- --- Admins -------------------------------------------------
+-- --- แอดมิน --------------------------------------------------
 INSERT INTO public.user_roles (account_id, role_key)
 SELECT
   a.account_id,
@@ -37,17 +36,17 @@ FROM public.admins a
 WHERE a.account_id IS NOT NULL
 ON CONFLICT DO NOTHING;
 
--- --- Students -----------------------------------------------
+-- --- นักเรียน ------------------------------------------------
 INSERT INTO public.user_roles (account_id, role_key)
 SELECT s.account_id, 'STUDENT'
 FROM public.students s
 WHERE s.account_id IS NOT NULL
 ON CONFLICT DO NOTHING;
 
--- --- Teachers -----------------------------------------------
--- TEACHER only. ADVISOR is a scoped grant (user_roles.scope_id ->
--- class_groups.id) and cannot be inferred yet — students.advisor_teacher_id
--- is still empty until rosters are assigned in Phase 2.
+-- --- ครู -----------------------------------------------------
+-- ให้แค่ TEACHER ส่วน ADVISOR เป็น grant ที่มี scope (user_roles.scope_id ->
+-- class_groups.id) ซึ่งยังเดาไม่ได้ เพราะ students.advisor_teacher_id
+-- ยังว่างจนกว่าจะจัดนักเรียนเข้าห้องใน Phase 2
 INSERT INTO public.user_roles (account_id, role_key)
 SELECT t.account_id, 'TEACHER'
 FROM public.teachers t
@@ -56,15 +55,15 @@ ON CONFLICT DO NOTHING;
 
 -- ------------------------------------------------------------
 -- SMOKE
---   -- every linked account must hold at least one role (expect 0):
+--   -- ทุก account ที่ผูกแล้วต้องมีอย่างน้อย 1 role (ควรได้ 0):
 --   SELECT count(*) FROM public.user_accounts ua
 --    WHERE NOT EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.account_id = ua.id);
 --
---   -- role distribution should mirror admins.role exactly:
+--   -- การกระจายของ role ต้องสะท้อน admins.role เป๊ะ:
 --   SELECT ur.role_key, count(*) FROM public.user_roles ur GROUP BY 1 ORDER BY 1;
 --   SELECT role, count(*) FROM public.admins WHERE account_id IS NOT NULL GROUP BY 1;
 --
---   -- the superadmin must really be SUPER_ADMIN:
+--   -- superadmin ต้องเป็น SUPER_ADMIN จริง ๆ:
 --   SELECT a.admin_id, a.role, ur.role_key
 --     FROM public.admins a
 --     JOIN public.user_roles ur ON ur.account_id = a.account_id

@@ -264,6 +264,10 @@ export const LEGACY_AGENT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "equipment.view_items",
     "equipment.view_own_requests",
     "equipment.create_request",
+    // ทั้ง admin และ staff map มาเป็น school_admin (ดู ADMIN_ROLE_MAP ใน
+    // channels/web.ts) และทั้งคู่เรียก GET /api/admin/equipment-requests
+    // ได้อยู่แล้วโดยไม่ถูกจำกัด role สิทธิ์นี้จึงตรงกับของเดิม ไม่ได้ขยายเพิ่ม
+    "equipment.view_all_requests",
     "feedback.view_all",
     "feedback.manage",
     "schedule.view",

@@ -54,6 +54,20 @@ export const equipmentTools = [
       required: [],
     },
   },
+  {
+    name: 'get_all_equipment_requests',
+    description: 'Get equipment borrow requests across all students, with a per-status summary. Staff / admin only. Use for questions like "how many pending requests are there" or "who borrowed the drill".',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        status: { type: 'string', description: 'Filter by status: pending, approved, picked_up, rejected, cancelled, returned.' },
+        student_id: { type: 'string', description: 'Filter by one student.' },
+        overdue: { type: 'boolean', description: 'If true, only requests past due_date that are not returned yet.' },
+        limit: { type: 'number', description: 'Number of results (default 20, max 100).' },
+      },
+      required: [],
+    },
+  },
 ]
 
 export async function executeEquipmentTool(
@@ -183,6 +197,52 @@ export async function executeEquipmentTool(
     const { data, error } = await q
     if (error) return { error: error.message }
     return { equipment_requests: data ?? [], count: data?.length ?? 0 }
+  }
+
+  if (name === 'get_all_equipment_requests') {
+    if (!can(ctx, 'equipment.view_all_requests')) {
+      return { error: 'Permission denied: staff or admin only.' }
+    }
+
+    const limit = Math.min((input.limit as number) || 20, 100)
+
+    let q = (supabase as any)
+      .from('equipment_requests')
+      .select('id, request_code, student_id, requester_name, department, quantity, purpose, borrow_date, due_date, returned_at, delivery_mode, delivery_loc, time_slot, status, admin_note, reviewed_by, created_at, equipment_items(name, unit, category)')
+      .order('created_at', { ascending: false })
+      .limit(limit)
+
+    if (input.status) q = q.eq('status', input.status as string)
+    if (input.student_id) q = q.eq('student_id', String(input.student_id).trim())
+
+    // เกินกำหนดคืน = เลยวันครบกำหนดแล้วแต่ยังไม่คืน สถานะที่ยังถือของอยู่จริง
+    // มีแค่ approved กับ picked_up ส่วน returned/rejected/cancelled จบไปแล้ว
+    if (input.overdue === true) {
+      const today = new Date().toISOString().slice(0, 10)
+      q = q.lt('due_date', today).is('returned_at', null).in('status', ['approved', 'picked_up'])
+    }
+
+    const { data, error } = await q
+    if (error) return { error: error.message }
+
+    const rows = data ?? []
+
+    // สรุปยอดตามสถานะ เพราะคำถามที่ถามบ่อยที่สุดคือ "ค้างอนุมัติกี่รายการ"
+    // ซึ่งตอบจากยอดรวมได้เลย ไม่ต้องให้โมเดลไปนับรายการเอง
+    const by_status: Record<string, number> = {}
+    for (const r of rows as { status?: string }[]) {
+      const key = r.status ?? 'unknown'
+      by_status[key] = (by_status[key] ?? 0) + 1
+    }
+
+    return {
+      equipment_requests: rows,
+      count: rows.length,
+      by_status,
+      // เตือนว่ายอดถูกตัดที่ limit เพื่อไม่ให้โมเดลรายงานว่า "ทั้งหมด N รายการ"
+      // ทั้งที่จริงมีมากกว่านั้น
+      truncated: rows.length === limit,
+    }
   }
 
   return { error: `Unknown tool: ${name}` }

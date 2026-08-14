@@ -1,27 +1,26 @@
 -- ============================================================
--- 0007 — Mark superseded tables (COMMENT ONLY — nothing is dropped)
+-- 0007 — ทำเครื่องหมายตารางที่ถูกแทนที่แล้ว (ใส่ COMMENT เท่านั้น ไม่ลบอะไร)
 --
--- The audit counted `.from("<table>")` references across src/ and found three
--- tables with ZERO code references, each duplicated by a table that is in
--- active use:
+-- ตอน audit นับจำนวนการอ้าง `.from("<table>")` ทั่ว src/ พบ 3 ตารางที่
+-- ไม่มีโค้ดอ้างถึงเลย และแต่ละตัวมีตารางที่ใช้งานจริงซ้ำซ้อนอยู่แล้ว:
 --
---   feedbacks           0 refs  vs  feedback            20 refs
---   room_bookings       0 refs  vs  bookings            24 refs
---   teacher_applications 0 refs vs  teachers            13 refs
---                                   (teachers.status already carries
---                                    pending/reviewing/approved/rejected plus
---                                    desired_username/desired_password_hash)
+--   feedbacks            0 ครั้ง  เทียบกับ  feedback   20 ครั้ง
+--   room_bookings        0 ครั้ง  เทียบกับ  bookings   24 ครั้ง
+--   teacher_applications 0 ครั้ง  เทียบกับ  teachers   13 ครั้ง
+--                                 (teachers.status มีค่า pending/reviewing/
+--                                  approved/rejected อยู่แล้ว พร้อมกับ
+--                                  desired_username/desired_password_hash)
 --
--- They still hold rows and might hold history nobody has migrated, so this
--- migration only labels them. Dropping is a separate, deliberate decision
--- after the data has been reviewed — not something to bundle into a
--- foundation migration running against production.
+-- ตารางเหล่านี้ยังมีแถวข้อมูลอยู่ และอาจมีประวัติที่ยังไม่มีใครย้าย
+-- migration นี้จึงแค่ติดป้ายไว้ การลบเป็นการตัดสินใจแยกต่างหากที่ต้องทำ
+-- หลังตรวจข้อมูลแล้ว ไม่ใช่สิ่งที่ควรพ่วงมากับ migration พื้นฐานที่รันกับ
+-- production
 --
--- Also labels the near-dead student_cards (1 ref) vs rfid_cards (4 refs), and
--- the three overlapping attendance tables, which all remain in active use and
--- are consolidated in Phase 3, not here.
+-- ติดป้ายให้ student_cards (1 การอ้าง) เทียบ rfid_cards (4 การอ้าง) ที่เกือบตาย
+-- และตารางเช็กชื่อ 3 ตัวที่ทับซ้อนกันด้วย ทั้งหมดยังใช้งานอยู่จริง
+-- และจะรวบให้เหลือชุดเดียวใน Phase 3 ไม่ใช่ที่นี่
 --
--- Safe to run twice. Comments are idempotent by nature.
+-- รันซ้ำได้ การใส่ comment เป็น idempotent อยู่แล้วโดยธรรมชาติ
 -- ============================================================
 
 COMMENT ON TABLE public.feedbacks IS
@@ -46,8 +45,8 @@ COMMENT ON TABLE public.entry_logs IS
   'Raw in/out scan events. Overlaps public.attendance; consolidation is Phase 3.';
 
 -- ------------------------------------------------------------
--- SMOKE — confirm the labels landed, and see how much data is parked in the
--- deprecated tables before any future decision to drop them.
+-- SMOKE — ยืนยันว่าป้ายติดแล้ว และดูว่ามีข้อมูลค้างอยู่ในตารางที่เลิกใช้
+-- มากแค่ไหน ก่อนจะตัดสินใจลบในอนาคต
 --
 --   SELECT c.relname, obj_description(c.oid) AS note
 --     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace

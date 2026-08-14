@@ -1,24 +1,24 @@
 -- ============================================================
--- 0005 — Audit log
+-- 0005 — บันทึกการตรวจสอบ (audit log)
 --
--- The only logging today is login_logs / admin_logs (authentication attempts)
--- and agent_logs (AI calls). Nothing records who changed what: editing a
--- student, approving a request, or changing a role leaves no trace.
+-- ทุกวันนี้มีแค่ login_logs / admin_logs (การพยายามล็อกอิน) และ agent_logs
+-- (การเรียก AI) ไม่มีอะไรบันทึกว่าใครแก้อะไร การแก้ข้อมูลนักเรียน อนุมัติคำขอ
+-- หรือเปลี่ยน role ไม่ทิ้งร่องรอยไว้เลย
 --
--- Roadmap §26 makes this mandatory before grades, finance, and approvals
--- exist, so it lands in Phase 1 rather than after those modules are built.
+-- roadmap ข้อ 26 บังคับให้ต้องมีก่อนจะมีระบบเกรด การเงิน และการอนุมัติ
+-- จึงทำใน Phase 1 ไม่ใช่รอให้โมดูลเหล่านั้นสร้างเสร็จก่อน
 --
--- Additive only. Safe to run twice.
+-- เพิ่มอย่างเดียว รันซ้ำได้
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS public.audit_logs (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
-  -- Nullable: break-glass env-superadmin actions have no account row, and we
-  -- would rather record the action with actor_label than drop it entirely.
+  -- ให้ NULL ได้: การใช้ทางลัด env-superadmin ไม่มีแถว account อยู่จริง
+  -- และเรายอมบันทึกด้วย actor_label ดีกว่าทิ้งบันทึกนั้นไปเลย
   actor_account_id uuid,
   actor_label text,
   actor_role text,
-  -- Dotted verb, e.g. 'product.create', 'student.update', 'role.grant'.
+  -- คำกริยาคั่นจุด เช่น 'product.create', 'student.update', 'role.grant'
   action text NOT NULL,
   entity_type text,
   entity_id text,
@@ -32,11 +32,11 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
     FOREIGN KEY (actor_account_id) REFERENCES public.user_accounts(id) ON DELETE SET NULL
 );
 
--- "show me the history of this one record"
+-- สำหรับคำถาม "ขอดูประวัติของเรคอร์ดนี้"
 CREATE INDEX IF NOT EXISTS audit_logs_entity_idx
   ON public.audit_logs (entity_type, entity_id);
 
--- "show me what happened recently" / "what did this person do"
+-- สำหรับคำถาม "ช่วงนี้มีอะไรเกิดขึ้นบ้าง" / "คนนี้ทำอะไรไปบ้าง"
 CREATE INDEX IF NOT EXISTS audit_logs_created_at_idx
   ON public.audit_logs (created_at DESC);
 CREATE INDEX IF NOT EXISTS audit_logs_actor_idx
@@ -47,8 +47,8 @@ CREATE INDEX IF NOT EXISTS audit_logs_action_idx
 COMMENT ON TABLE public.audit_logs IS
   'Who changed what, when, with before/after. Written by withAuth() in src/lib/server/with-auth.ts.';
 
--- Deliberately NOT added to the supabase_realtime publication: audit rows can
--- contain the previous values of sensitive fields.
+-- ตั้งใจ **ไม่** ใส่เข้า publication supabase_realtime เพราะแถว audit
+-- อาจมีค่าเดิมของฟิลด์ที่อ่อนไหวอยู่ข้างใน
 
 -- ------------------------------------------------------------
 -- SMOKE

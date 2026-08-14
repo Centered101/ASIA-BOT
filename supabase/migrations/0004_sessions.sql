@@ -1,21 +1,21 @@
 -- ============================================================
--- 0004 — Server-side sessions
+-- 0004 — session ฝั่งเซิร์ฟเวอร์
 --
--- Admin auth today is the `x-admin-id` request header: the header IS the
--- credential (src/lib/admin-auth.ts). Anyone who learns an admin_id has that
--- admin's access — there is no token, no signature, no expiry, and no way to
--- revoke. Student "sessions" are unsigned JSON in localStorage.
+-- ทุกวันนี้ auth ของแอดมินคือ header `x-admin-id` เฉย ๆ นั่นคือ header
+-- **เป็นตัว credential เอง** (src/lib/admin-auth.ts) ใครรู้ admin_id ก็ได้สิทธิ์
+-- ของแอดมินคนนั้น ไม่มี token ไม่มีลายเซ็น ไม่มีวันหมดอายุ และเพิกถอนไม่ได้
+-- ส่วน "session" ของนักเรียนคือ JSON ที่ไม่ได้เซ็นใน localStorage
 --
--- This table backs signed, expiring cookies. Only the SHA-256 hash of the
--- token is stored, so a database leak does not hand over live sessions.
+-- ตารางนี้รองรับ cookie ที่เซ็นและมีวันหมดอายุ เก็บเฉพาะค่า SHA-256 ของ token
+-- ไม่ได้เก็บตัว token ดังนั้นถ้าฐานข้อมูลรั่วก็ไม่ได้ยก session ที่ยังใช้ได้ให้ไป
 --
--- Additive only. Safe to run twice.
+-- เพิ่มอย่างเดียว รันซ้ำได้
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS public.auth_sessions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   account_id uuid NOT NULL,
-  -- SHA-256 of the token. Never store the token itself.
+  -- ค่า SHA-256 ของ token ห้ามเก็บตัว token เอง
   token_hash text NOT NULL,
   issued_at timestamp with time zone NOT NULL DEFAULT now(),
   expires_at timestamp with time zone NOT NULL,
@@ -31,8 +31,8 @@ CREATE TABLE IF NOT EXISTS public.auth_sessions (
 
 CREATE INDEX IF NOT EXISTS auth_sessions_account_id_idx ON public.auth_sessions (account_id);
 
--- Lookup path for "is this session still good?" — partial so the index stays
--- small as revoked rows accumulate.
+-- เส้นทางค้นสำหรับคำถาม "session นี้ยังใช้ได้ไหม" ใช้ partial index
+-- เพื่อให้ index ไม่บวมตามจำนวนแถวที่ถูกเพิกถอนไปแล้ว
 CREATE INDEX IF NOT EXISTS auth_sessions_active_idx
   ON public.auth_sessions (expires_at) WHERE revoked_at IS NULL;
 
@@ -43,7 +43,7 @@ COMMENT ON TABLE public.auth_sessions IS
 -- SMOKE
 --   SELECT count(*) FROM public.auth_sessions;   -- expect 0
 --
--- Housekeeping (run periodically, not part of this migration):
+-- งานดูแลรักษา (รันเป็นระยะ ไม่ใช่ส่วนหนึ่งของ migration นี้):
 --   DELETE FROM public.auth_sessions
 --    WHERE expires_at < now() - interval '30 days';
 -- ------------------------------------------------------------

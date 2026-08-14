@@ -1,22 +1,22 @@
 -- ============================================================
--- 0006 — Student 360 core columns
+-- 0006 — คอลัมน์แกนกลางของ Student 360
 --
--- `students` currently holds only: student_id, names, nickname, phone,
--- program, entry_year, department, uid, card_status, photo_url, and the
--- Google/LINE ids. Two gaps block the roadmap:
+-- ตอนนี้ `students` มีแค่: student_id, ชื่อ-นามสกุล, ชื่อเล่น, เบอร์โทร,
+-- program, entry_year, department, uid, card_status, photo_url และ id ของ
+-- Google/LINE มีช่องว่าง 2 อย่างที่บล็อก roadmap:
 --
---   1. There is no status for the PERSON. `card_status` is the RFID card's
---      status (active/inactive/lost) — it cannot express studying / on_leave /
---      graduated / resigned, which Registration, Alumni, and Finance all need.
---   2. Students are not linked to a class at all. `class_groups` exists and is
---      used for room scheduling, but nothing joins a student to one, so
---      "นักเรียนในห้องของฉัน" is currently unanswerable.
+--   1. ไม่มีสถานะของ **ตัวคน** เลย `card_status` คือสถานะของบัตร RFID
+--      (active/inactive/lost) ซึ่งบอกไม่ได้ว่ากำลังเรียน / พักการเรียน /
+--      จบแล้ว / ลาออก ทั้งที่ฝ่ายทะเบียน ศิษย์เก่า และการเงินต้องใช้ทั้งหมด
+--   2. นักเรียนไม่ได้ผูกกับห้องเรียนเลย `class_groups` มีอยู่และถูกใช้จัด
+--      ตารางห้อง แต่ไม่มีอะไรเชื่อมนักเรียนเข้ากับห้อง คำถามว่า
+--      "นักเรียนในห้องของฉัน" จึงตอบไม่ได้
 --
--- Every column here is nullable or defaulted, so existing rows stay valid and
--- existing SELECTs are unaffected. Guardians and education history are their
--- own tables in Phase 2.
+-- ทุกคอลัมน์ที่เพิ่มเป็น NULL ได้หรือมีค่า default แถวเดิมจึงยังถูกต้อง
+-- และ SELECT เดิมไม่ถูกกระทบ ส่วนผู้ปกครองกับประวัติการศึกษาจะแยกเป็น
+-- ตารางของตัวเองใน Phase 2
 --
--- Additive only. Safe to run twice.
+-- เพิ่มอย่างเดียว รันซ้ำได้
 -- ============================================================
 
 ALTER TABLE public.students
@@ -28,8 +28,8 @@ ALTER TABLE public.students
   ADD COLUMN IF NOT EXISTS class_group_id uuid,
   ADD COLUMN IF NOT EXISTS advisor_teacher_id uuid;
 
--- CHECK constraints added separately: ALTER TABLE ... ADD CONSTRAINT has no
--- IF NOT EXISTS, so a second run would abort the whole file without a guard.
+-- แยก CHECK constraint ออกมาเพิ่มทีหลัง เพราะ ALTER TABLE ... ADD CONSTRAINT
+-- ไม่มี IF NOT EXISTS ถ้าไม่มีการ์ด การรันรอบสองจะทำให้ทั้งไฟล์ล้ม
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'students_gender_check') THEN
@@ -38,19 +38,18 @@ BEGIN
       CHECK (gender IS NULL OR gender = ANY (ARRAY['male'::text, 'female'::text, 'other'::text]));
   END IF;
 
-  -- CAUTION: src/types/database.ts declares student_status with the values
-  -- 'active' | 'inactive' | 'suspended'. That column is NOT in schema.sql and
-  -- no code reads or writes it, so it is almost certainly a phantom type — but
-  -- "almost certainly" is not good enough when running against production. If
-  -- the column already exists with out-of-range values, ADD CONSTRAINT would
-  -- abort. Check first and report instead of failing.
+  -- ระวัง: src/types/database.ts ประกาศ student_status ไว้ด้วยค่า
+  -- 'active' | 'inactive' | 'suspended' คอลัมน์นั้น **ไม่มี** ใน schema.sql
+  -- และไม่มีโค้ดไหนอ่านหรือเขียน จึงเกือบแน่ว่าเป็น type ผี — แต่ "เกือบแน่"
+  -- ไม่พอเมื่อรันกับ production ถ้าคอลัมน์มีอยู่จริงพร้อมค่าที่อยู่นอกชุดใหม่
+  -- ADD CONSTRAINT จะล้ม จึงตรวจก่อนแล้วรายงาน แทนที่จะปล่อยให้พัง
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'students_student_status_check') THEN
     IF EXISTS (
       SELECT 1 FROM public.students
        WHERE student_status IS NOT NULL
          AND student_status <> ALL (ARRAY['studying','on_leave','transferred','graduated','resigned','expelled'])
     ) THEN
-      RAISE WARNING 'students.student_status holds values outside the new set (%). Constraint NOT added — map the old values first, then re-run this file.',
+      RAISE WARNING 'students.student_status มีค่าที่อยู่นอกชุดใหม่ (%) จึงยังไม่ได้เพิ่ม constraint ให้ map ค่าเดิมก่อน แล้วค่อยรันไฟล์นี้ซ้ำ',
         (SELECT string_agg(DISTINCT student_status, ', ') FROM public.students
           WHERE student_status <> ALL (ARRAY['studying','on_leave','transferred','graduated','resigned','expelled']));
     ELSE
@@ -80,11 +79,11 @@ BEGIN
   END IF;
 END $$;
 
--- national_id is unique when present, but most rows will not have one yet.
+-- national_id ต้องไม่ซ้ำถ้ามีค่า แต่ส่วนใหญ่ยังไม่มีข้อมูลนี้
 CREATE UNIQUE INDEX IF NOT EXISTS students_national_id_key
   ON public.students (national_id) WHERE national_id IS NOT NULL;
 
--- Roster and homeroom lookups.
+-- ใช้ค้นรายชื่อนักเรียนในห้องและงานครูที่ปรึกษา
 CREATE INDEX IF NOT EXISTS students_class_group_id_idx ON public.students (class_group_id);
 CREATE INDEX IF NOT EXISTS students_advisor_teacher_id_idx ON public.students (advisor_teacher_id);
 CREATE INDEX IF NOT EXISTS students_student_status_idx ON public.students (student_status);
@@ -93,23 +92,23 @@ COMMENT ON COLUMN public.students.student_status IS
   'สถานะของนักเรียน (คนละเรื่องกับ card_status ซึ่งเป็นสถานะของบัตร RFID)';
 
 -- ------------------------------------------------------------
--- PRE-FLIGHT — run this BEFORE the file and read the result:
+-- ตรวจก่อนรัน — รันคำสั่งนี้ก่อนไฟล์ แล้วอ่านผลให้เข้าใจ:
 --   SELECT column_name, data_type, column_default, is_nullable
 --     FROM information_schema.columns
 --    WHERE table_schema = 'public' AND table_name = 'students'
 --    ORDER BY ordinal_position;
 --
--- If student_status already exists, also run:
+-- ถ้า student_status มีอยู่แล้ว ให้รันเพิ่ม:
 --   SELECT student_status, count(*) FROM public.students GROUP BY 1;
--- and map any legacy values (active/inactive/suspended) onto the new set
--- before applying, e.g.:
+-- แล้ว map ค่าเดิม (active/inactive/suspended) ให้เข้ากับชุดค่าใหม่
+-- ก่อนจะรัน migration เช่น:
 --   UPDATE public.students SET student_status = 'studying' WHERE student_status = 'active';
 --
 -- SMOKE
 --   SELECT student_status, count(*) FROM public.students GROUP BY 1;
---     -- expect every existing row to be 'studying'
+--     -- ควรได้ 'studying' ทุกแถวที่มีอยู่
 --   SELECT count(*) FROM public.students WHERE class_group_id IS NOT NULL;
---     -- expect 0 until rosters are assigned in Phase 2
+--     -- ควรได้ 0 จนกว่าจะจัดนักเรียนเข้าห้องใน Phase 2
 -- ------------------------------------------------------------
 
 -- ROLLBACK:

@@ -1,38 +1,38 @@
 -- ============================================================
--- 0010 — Link the student profile of a dual-role person to their account
---        (DATA ONLY, no DDL — runs as-is, nothing to edit)
+-- 0010 — ผูก profile นักเรียนของคนที่มี 2 บทบาท เข้ากับ account ของเขา
+--        (ข้อมูลล้วน ไม่มี DDL — รันได้เลย ไม่ต้องแก้อะไร)
 --
--- WHAT THIS ACTUALLY IS
--- After 0002 the database held 6 user_accounts for 7 profiles, and the first
--- reading of that was "a student got skipped by a username collision, rename
--- the admin". That reading was wrong.
+-- เรื่องนี้คืออะไรกันแน่
+-- หลัง 0002 ฐานข้อมูลมี user_accounts 6 แถวสำหรับ 7 profile ซึ่งตอนแรกอ่านว่า
+-- "นักเรียนถูกข้ามเพราะ username ชนกัน ต้องเปลี่ยนชื่อแอดมิน" — อ่านผิด
 --
--- ธเนศ สีแดง (โอม) is student 3175 AND staff admin ADM-1783669050569. He is
--- one person. admins.linked_student_id = '3175' already recorded that. The
--- login '3175' appearing in both tables is not two people colliding — it is
--- one person holding two profiles, which is exactly the case the Phase 1
--- identity model was built for:
+-- ธเนศ สีแดง (โอม) เป็นทั้งนักเรียนรหัส 3175 และ staff admin
+-- ADM-1783669050569 เขาคือคนคนเดียว และ admins.linked_student_id = '3175'
+-- บันทึกเรื่องนี้ไว้อยู่แล้ว การที่ login '3175' โผล่ทั้งสองตารางไม่ใช่คนสองคน
+-- ชนกัน แต่คือคนเดียวที่ถือ 2 profile ซึ่งเป็นเคสที่โมเดลตัวตนของ Phase 1
+-- ออกแบบมารองรับพอดี:
 --
---   user_accounts (one row per human)
+--   user_accounts (1 แถวต่อ 1 คน)
 --        ↑                    ↑
 --   admins.account_id   students.account_id
 --
--- Each of those FKs is uniquely indexed per table, so one account may be
--- referenced by at most one admin row and at most one student row. Sharing
--- across tables is allowed and is the intended shape.
+-- FK ทั้งสองตัวมี unique index แยกตามตาราง ดังนั้น 1 account ถูกอ้างจากแถว
+-- admin ได้มากสุด 1 แถว และจากแถว student ได้มากสุด 1 แถว การแชร์ข้ามตาราง
+-- ทำได้ และเป็นรูปแบบที่ตั้งใจไว้
 --
--- So 6 accounts for 7 profiles is CORRECT, and stays 6. Renaming his username
--- would have given one human two logins and split his audit trail in two.
+-- ดังนั้น 6 account ต่อ 7 profile จึง **ถูกต้อง** และต้องคงเป็น 6
+-- ถ้าเปลี่ยน username ของเขาจะกลายเป็นคนเดียวมี 2 login และ audit log
+-- จะถูกแยกเป็นสองสาย
 --
--- This migration links the student profile to the account the admin already
--- has, and grants that account the STUDENT role alongside its staff role.
+-- migration นี้ผูก profile นักเรียนเข้ากับ account ที่แอดมินมีอยู่แล้ว
+-- และให้ role STUDENT กับ account นั้นเพิ่มจาก role ฝั่ง staff ที่มีอยู่
 --
--- Generic by design: it fixes every admin/student pair that shares a login,
--- not just this one, so a second dual-role person is handled the same way.
+-- เขียนแบบ generic: แก้ให้ทุกคู่ admin/student ที่ใช้ login เดียวกัน
+-- ไม่ใช่เฉพาะรายนี้ ถ้ามีคนที่มี 2 บทบาทเพิ่มอีกก็จัดการแบบเดียวกัน
 -- ============================================================
 
--- ── STEP 1 — see who this affects ───────────────────────────
--- Expect: ADM-1783669050569 / ธเนศ สีแดง / student 3175, linked_student_id 3175.
+-- ── ขั้นที่ 1 — ดูก่อนว่ากระทบใครบ้าง ────────────────────────
+-- ควรได้: ADM-1783669050569 / ธเนศ สีแดง / นักเรียน 3175, linked_student_id 3175
 SELECT
   a.admin_id,
   a.username,
@@ -47,14 +47,14 @@ JOIN public.students s ON lower(s.student_id) = lower(a.username)
 ORDER BY a.admin_id;
 
 
--- ── STEP 2 — link, then grant ───────────────────────────────
+-- ── ขั้นที่ 2 — ผูก แล้วให้ role ────────────────────────────
 DO $$
 DECLARE
   linked  integer;
   granted integer;
 BEGIN
-  -- Attach the student profile to the admin's existing account, but only when
-  -- the student has no account yet. An account already set is left alone.
+  -- ผูก profile นักเรียนเข้ากับ account ที่แอดมินมีอยู่แล้ว แต่ทำเฉพาะเมื่อ
+  -- นักเรียนยังไม่มี account ถ้ามีอยู่แล้วจะไม่แตะ
   UPDATE public.students s
      SET account_id = a.account_id
     FROM public.admins a
@@ -63,8 +63,8 @@ BEGIN
      AND lower(a.username) = lower(s.student_id);
   GET DIAGNOSTICS linked = ROW_COUNT;
 
-  -- That account now speaks for a student too, so it needs the STUDENT role in
-  -- addition to whatever its admin role already granted.
+  -- ตอนนี้ account นั้นเป็นตัวแทนของนักเรียนด้วย จึงต้องได้ role STUDENT
+  -- เพิ่มจาก role ฝั่งแอดมินที่มีอยู่แล้ว
   INSERT INTO public.user_roles (account_id, role_key)
   SELECT s.account_id, 'STUDENT'
     FROM public.students s
@@ -72,10 +72,10 @@ BEGIN
   ON CONFLICT DO NOTHING;
   GET DIAGNOSTICS granted = ROW_COUNT;
 
-  RAISE NOTICE 'Linked % student profile(s); added % STUDENT grant(s).', linked, granted;
+  RAISE NOTICE 'ผูก profile นักเรียน % รายการ และเพิ่ม role STUDENT % รายการ', linked, granted;
 
   IF linked = 0 THEN
-    RAISE NOTICE 'No student was waiting for a link — already done, or none to do.';
+    RAISE NOTICE 'ไม่มีนักเรียนรอผูก อาจทำไปแล้ว หรือไม่มีรายการต้องทำ';
   END IF;
 END $$;
 
@@ -83,13 +83,13 @@ END $$;
 -- ------------------------------------------------------------
 -- SMOKE
 --
---   -- must be 0: every student now has an account
+--   -- ต้องเป็น 0: นักเรียนทุกคนมี account แล้ว
 --   SELECT count(*) FROM public.students WHERE account_id IS NULL;
 --
---   -- must still be 6 — one human, one account. NOT 7.
+--   -- ต้องยังเป็น 6 — หนึ่งคน หนึ่ง account ไม่ใช่ 7
 --   SELECT count(*) FROM public.user_accounts;
 --
---   -- ธเนศ: one account, both profiles, both roles
+--   -- ธเนศ: 1 account, ครบทั้งสอง profile, ครบทั้งสอง role
 --   SELECT ua.login, ua.subject_type,
 --          a.admin_id, a.role AS admin_role,
 --          s.student_id,
@@ -100,25 +100,25 @@ END $$;
 --     LEFT JOIN public.user_roles ur ON ur.account_id = ua.id
 --    WHERE ua.login = '3175'
 --    GROUP BY ua.login, ua.subject_type, a.admin_id, a.role, s.student_id;
---   -- expect: 3175 | admin | ADM-1783669050569 | staff | 3175 | ACADEMIC, STUDENT
+--   -- ควรได้: 3175 | admin | ADM-1783669050569 | staff | 3175 | ACADEMIC, STUDENT
 --
---   -- every account still holds at least one role
+--   -- ทุก account ยังต้องมีอย่างน้อย 1 role
 --   SELECT count(*) FROM public.user_accounts ua
 --    WHERE NOT EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.account_id = ua.id);
 --
---   -- no account is claimed by two rows of the same table
+--   -- ต้องไม่มี account ไหนถูกอ้างโดยสองแถวในตารางเดียวกัน
 --   SELECT account_id, count(*) FROM public.students
 --    WHERE account_id IS NOT NULL GROUP BY 1 HAVING count(*) > 1;
 --   SELECT account_id, count(*) FROM public.admins
 --    WHERE account_id IS NOT NULL GROUP BY 1 HAVING count(*) > 1;
 -- ------------------------------------------------------------
 
--- NOTE ON subject_type
--- His account keeps subject_type = 'admin'. That column records which profile
--- the account was created from; it is a hint, not an authorisation input.
--- Access comes from user_roles, and resolvePrincipal() reads the profile
--- tables by account_id. Nothing branches on subject_type to decide what he may
--- do, so leaving it as 'admin' costs nothing and avoids rewriting history.
+-- หมายเหตุเรื่อง subject_type
+-- account ของเขายังเป็น subject_type = 'admin' คอลัมน์นี้บันทึกว่า account
+-- ถูกสร้างมาจาก profile ไหน เป็นแค่ข้อมูลบอกใบ้ ไม่ใช่ตัวตัดสินสิทธิ์
+-- สิทธิ์มาจาก user_roles และ resolvePrincipal() อ่านตาราง profile ด้วย
+-- account_id ไม่มีตรงไหนแตกเงื่อนไขตาม subject_type เพื่อตัดสินว่าเขาทำอะไรได้
+-- การปล่อยไว้เป็น 'admin' จึงไม่เสียอะไร และไม่ต้องไปเขียนประวัติใหม่
 
 -- ROLLBACK:
 --   DELETE FROM public.user_roles ur

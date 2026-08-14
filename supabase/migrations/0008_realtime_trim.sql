@@ -1,22 +1,22 @@
 -- ============================================================
--- 0008 — Stop broadcasting admins.password_hash over realtime
+-- 0008 — หยุดกระจาย admins.password_hash ผ่าน realtime
 --
--- schema.sql adds ~32 tables to the supabase_realtime publication so the admin
--- panel updates across sessions. `admins` is one of them — and that table
--- carries password_hash.
+-- schema.sql ใส่ตารางราว 32 ตัวเข้า publication supabase_realtime เพื่อให้
+-- หน้า admin อัปเดตข้ามเครื่องได้ และ `admins` เป็นหนึ่งในนั้น —
+-- ซึ่งตารางนั้นมี password_hash อยู่
 --
--- Realtime publishes the whole row on every change. With RLS disabled
--- (schema.sql:637-643) and the anon key shipping to the browser, that row is
--- reachable by anyone who can open a realtime subscription.
+-- Realtime ส่งทั้งแถวออกไปทุกครั้งที่มีการเปลี่ยนแปลง เมื่อ RLS ถูกปิด
+-- (schema.sql:637-643) และ anon key ถูกส่งไปฝั่ง browser แถวนั้นจึงเข้าถึงได้
+-- โดยใครก็ตามที่เปิด realtime subscription ได้
 --
--- The admin panel DOES depend on this subscription — src/app/admin/page.tsx
--- line ~702 maps `admins` to the dashboard/admins/settings tabs — so simply
--- dropping the table from the publication would break live refresh. Instead
--- we republish it with an explicit column list that omits password_hash.
--- Every column the UI reads is still included, so behaviour is unchanged.
+-- หน้า admin **พึ่ง** subscription นี้จริง — src/app/admin/page.tsx บรรทัด
+-- ประมาณ 702 map `admins` ไปที่แท็บ dashboard/admins/settings ดังนั้นถ้า
+-- เอาตารางออกจาก publication ดื้อ ๆ การอัปเดตสดจะพัง เราจึง republish ใหม่
+-- พร้อมระบุรายชื่อคอลัมน์ที่ตัด password_hash ออก คอลัมน์ทุกตัวที่ UI อ่าน
+-- ยังอยู่ครบ พฤติกรรมจึงไม่เปลี่ยน
 --
--- REQUIRES PostgreSQL 15+ (publication column lists). Supabase is on 17.
--- Safe to run twice.
+-- ต้องใช้ PostgreSQL 15 ขึ้นไป (publication column list) Supabase ใช้ 17 อยู่แล้ว
+-- รันซ้ำได้
 -- ============================================================
 
 DO $$
@@ -24,14 +24,14 @@ DECLARE
   pg_major integer := current_setting('server_version_num')::integer / 10000;
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
-    RAISE NOTICE 'supabase_realtime publication not found; nothing to do.';
+    RAISE NOTICE 'ไม่พบ publication supabase_realtime จึงไม่ต้องทำอะไร';
     RETURN;
   END IF;
 
   IF pg_major < 15 THEN
-    -- No column lists before 15: drop the table rather than keep leaking the
-    -- hash. Live refresh of the admins tab is lost until the DB is upgraded.
-    RAISE WARNING 'PostgreSQL % does not support publication column lists; dropping public.admins from supabase_realtime instead.', pg_major;
+    -- ก่อนเวอร์ชัน 15 ไม่มี column list: เลือกเอาตารางออกดีกว่าปล่อยให้
+    -- hash รั่วต่อไป แลกกับการอัปเดตสดของแท็บ admin จนกว่าจะอัปเกรด DB
+    RAISE WARNING 'PostgreSQL % ไม่รองรับ publication column list จึงเอา public.admins ออกจาก supabase_realtime แทน', pg_major;
     IF EXISTS (
       SELECT 1 FROM pg_publication_tables
        WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'admins'
@@ -41,8 +41,8 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Republish with an explicit column list. DROP first because a table's
-  -- column list cannot be altered in place.
+  -- republish ใหม่พร้อมระบุคอลัมน์ ต้อง DROP ก่อนเพราะ column list ของตาราง
+  -- แก้ตรง ๆ ไม่ได้
   IF EXISTS (
     SELECT 1 FROM pg_publication_tables
      WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'admins'
@@ -61,25 +61,24 @@ BEGIN
   $sql$;
 END $$;
 
--- The Phase 1 tables (user_accounts, auth_sessions, audit_logs, user_roles,
--- roles, permissions, role_permissions) are deliberately NOT added to the
--- publication — they hold credentials, session hashes, and before/after
--- snapshots of sensitive fields.
+-- ตารางของ Phase 1 (user_accounts, auth_sessions, audit_logs, user_roles,
+-- roles, permissions, role_permissions) ตั้งใจ **ไม่** ใส่เข้า publication
+-- เพราะเก็บ credential, hash ของ session และค่าก่อน/หลังของฟิลด์ที่อ่อนไหว
 
 -- ------------------------------------------------------------
 -- SMOKE
---   -- password_hash must NOT appear; the other 19 columns must:
+--   -- password_hash ต้อง **ไม่** โผล่ ส่วนอีก 19 คอลัมน์ต้องมี:
 --   SELECT unnest(attnames) AS col
 --     FROM pg_publication_tables
 --    WHERE pubname = 'supabase_realtime' AND tablename = 'admins'
 --    ORDER BY 1;
 --
---   -- admins must still be published, and the other tables untouched (~32):
+--   -- admins ต้องยังอยู่ใน publication และตารางอื่นไม่ถูกแตะ (ราว 32 ตัว):
 --   SELECT count(*) FROM pg_publication_tables
 --    WHERE pubname = 'supabase_realtime' AND schemaname = 'public';
 --
--- Then reload the admin panel and confirm the admins/dashboard tabs still
--- update live when another session edits an admin.
+-- จากนั้นรีโหลดหน้า admin แล้วยืนยันว่าแท็บ admins/dashboard ยังอัปเดตสด
+-- เมื่ออีกเครื่องแก้ข้อมูลแอดมิน
 -- ------------------------------------------------------------
 
 -- ROLLBACK:

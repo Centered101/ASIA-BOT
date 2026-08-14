@@ -1,17 +1,17 @@
 -- ============================================================
--- 0003 — Role-based access control
+-- 0003 — ระบบสิทธิ์ตามบทบาท (RBAC)
 --
--- Two role systems exist today and neither is enough:
---   * admins.role — only superadmin | admin | staff, and it is the one the
---     API layer actually enforces.
---   * src/lib/agent/permissions.ts — 10 roles with granular capability
---     strings, the right design, but only the AI agent ever consults it.
+-- วันนี้มีระบบ role อยู่ 2 ชุด และไม่พอทั้งคู่:
+--   * admins.role — มีแค่ superadmin | admin | staff และเป็นตัวที่ API
+--     บังคับใช้จริง
+--   * src/lib/agent/permissions.ts — 10 role พร้อม capability string ละเอียด
+--     เป็นดีไซน์ที่ถูก แต่มีแค่ AI agent เท่านั้นที่อ่านมัน
 --
--- This makes the granular model the database's model. `admins.role` is NOT
--- touched: it stays as the fallback that resolvePrincipal() reads when an
--- account has no explicit user_roles row, so nobody loses access on day one.
+-- migration นี้ทำให้โมเดลละเอียดกลายเป็นโมเดลของฐานข้อมูล โดย **ไม่แตะ**
+-- `admins.role` เลย มันยังอยู่ในฐานะ fallback ที่ resolvePrincipal() อ่าน
+-- เมื่อ account ยังไม่มีแถวใน user_roles ทำให้วันแรกไม่มีใครเสียสิทธิ์
 --
--- Additive only. Safe to run twice.
+-- เพิ่มอย่างเดียว รันซ้ำได้
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS public.roles (
@@ -46,9 +46,9 @@ CREATE TABLE IF NOT EXISTS public.user_roles (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   account_id uuid NOT NULL,
   role_key text NOT NULL,
-  -- scope_type/scope_id narrow a role to one object. ADVISOR scoped to a
-  -- class_group is what makes "ครูที่ปรึกษาเห็นเฉพาะนักเรียนในห้องตัวเอง"
-  -- possible without another schema change in Phase 6.
+  -- scope_type/scope_id จำกัด role ให้แคบลงเหลือวัตถุเดียว การให้ ADVISOR
+  -- ผูกกับ class_group คือสิ่งที่ทำให้ "ครูที่ปรึกษาเห็นเฉพาะนักเรียนในห้อง
+  -- ตัวเอง" เป็นไปได้ใน Phase 6 โดยไม่ต้องแก้ schema อีกรอบ
   scope_type text CHECK (scope_type IS NULL OR scope_type = ANY (ARRAY['class_group'::text, 'department'::text, 'room'::text])),
   scope_id text,
   granted_by uuid,
@@ -62,14 +62,14 @@ CREATE TABLE IF NOT EXISTS public.user_roles (
     FOREIGN KEY (granted_by) REFERENCES public.user_accounts(id) ON DELETE SET NULL
 );
 
--- COALESCE so that (account, role, NULL scope) can only be granted once —
--- a plain unique index treats every NULL as distinct and would allow dupes.
+-- ใช้ COALESCE เพื่อให้ (account, role, scope ที่เป็น NULL) ให้ได้ครั้งเดียว
+-- เพราะ unique index ธรรมดามอง NULL แต่ละตัวเป็นคนละค่า จึงยอมให้ซ้ำได้
 CREATE UNIQUE INDEX IF NOT EXISTS user_roles_unique_grant
   ON public.user_roles (account_id, role_key, COALESCE(scope_type, ''), COALESCE(scope_id, ''));
 
 CREATE INDEX IF NOT EXISTS user_roles_account_id_idx ON public.user_roles (account_id);
 
--- --- Seed roles ---------------------------------------------
+-- --- ใส่ข้อมูลตั้งต้นของ role -------------------------------
 INSERT INTO public.roles (key, label, description, sort_order, is_system) VALUES
   ('SUPER_ADMIN',     'ผู้ดูแลสูงสุด',        'เข้าถึงทุกระบบ รวมการจัดการบัญชีผู้ดูแล', 10, true),
   ('ADMIN',           'ผู้ดูแลระบบ',          'จัดการข้อมูลหลักของระบบ',                  20, true),
@@ -93,8 +93,8 @@ INSERT INTO public.roles (key, label, description, sort_order, is_system) VALUES
   ('GUEST',           'ผู้เยี่ยมชม',          'ข้อมูลสาธารณะ',                           200, true)
 ON CONFLICT (key) DO NOTHING;
 
--- --- Seed permissions ---------------------------------------
--- Mirrors src/lib/rbac/definitions.ts. Keep the two in sync when adding.
+-- --- ใส่ข้อมูลตั้งต้นของ permission ---------------------------
+-- ต้องตรงกับ src/lib/rbac/definitions.ts เวลาเพิ่มให้แก้ทั้งสองที่
 INSERT INTO public.permissions (key, label, module) VALUES
   ('school.info',                 'ดูข้อมูลทั่วไปของโรงเรียน',   'school'),
   ('dashboard.view',              'ดูแดชบอร์ด',                  'dashboard'),
@@ -144,8 +144,8 @@ INSERT INTO public.permissions (key, label, module) VALUES
   ('role.manage',                 'จัดการสิทธิ์ผู้ใช้',          'system')
 ON CONFLICT (key) DO NOTHING;
 
--- --- Seed role → permission ---------------------------------
--- SUPER_ADMIN is handled in code with a '*' wildcard, so it is not enumerated.
+-- --- ผูก role เข้ากับ permission ------------------------------
+-- SUPER_ADMIN จัดการในโค้ดด้วย wildcard '*' จึงไม่ต้องไล่ระบุทีละตัว
 INSERT INTO public.role_permissions (role_key, permission_key)
 SELECT r, p FROM (VALUES
   ('ADMIN','school.info'),('ADMIN','dashboard.view'),('ADMIN','student.view_all'),
@@ -176,9 +176,9 @@ SELECT r, p FROM (VALUES
   ('ACADEMIC','equipment.view_items'),('ACADEMIC','equipment.view_own_requests'),
   ('ACADEMIC','equipment.create_request'),('ACADEMIC','feedback.view_all'),
   ('ACADEMIC','project.view'),
-  -- ACADEMIC is the mapping target for the legacy `staff` role. staff can read
-  -- every admin tab today (NAV_SECTIONS applies no role gating), so these two
-  -- read permissions must be present or the products/shoporders tabs break.
+  -- ACADEMIC คือปลายทางที่ role `staff` เดิมถูก map มา ทุกวันนี้ staff เปิดดู
+  -- ได้ทุกแท็บใน admin (NAV_SECTIONS ไม่ได้กรองตาม role) สองสิทธิ์อ่านนี้
+  -- จึงต้องมี ไม่งั้นแท็บสินค้าและคำสั่งซื้อจะพัง
   ('ACADEMIC','shop.view_products'),('ACADEMIC','shop.view_all_orders'),
 
   ('STUDENT_AFFAIRS','school.info'),('STUDENT_AFFAIRS','dashboard.view'),

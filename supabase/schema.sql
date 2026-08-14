@@ -2,8 +2,24 @@
 -- Database Schema - asia-bot
 -- Contains extensions, tables, constraints, indexes, realtime setup,
 -- and security-related database objects only.
--- Seed data lives in supabase/seeds/*.sql.
 -- Storage bucket setup lives in supabase/storage.sql.
+--
+-- HOW THIS FILE IS MAINTAINED
+-- supabase/migrations/NNNN_*.sql is the source of truth. This file is a
+-- snapshot of the resulting state, kept so you can read the whole schema in
+-- one place. Do not hand-edit it to introduce a change — write a migration,
+-- then update this snapshot.
+--
+-- This revision was reconstructed from migrations 0001-0006 and 0009 (all
+-- applied to production) and verified column-by-column against the live
+-- database via PostgREST introspection. It is NOT a pg_dump. Replace it with
+-- a real dump once 0007 and 0008 have run:
+--   pg_dump "$SUPABASE_DB_URL" --schema-only --no-owner --no-privileges
+--
+-- Not yet reflected here, because those migrations are still pending:
+--   0007 - COMMENT ON the deprecated tables (feedbacks, room_bookings,
+--          teacher_applications)
+--   0008 - republish admins to supabase_realtime without password_hash
 -- ============================================================
 
 -- Extensions
@@ -39,6 +55,18 @@ CREATE TABLE IF NOT EXISTS public.students (
   google_id text,
   google_name text,
   google_avatar_url text,
+  -- Added by 0001 (central identity) and 0006 (Student 360 core fields).
+  -- student_status is the person's status; card_status above is the RFID card.
+  account_id uuid,
+  birth_date date,
+  gender text CHECK (gender IS NULL OR gender = ANY (ARRAY['male'::text, 'female'::text, 'other'::text])),
+  national_id text,
+  address text,
+  student_status text NOT NULL DEFAULT 'studying'::text CHECK (student_status = ANY (ARRAY['studying'::text, 'on_leave'::text, 'transferred'::text, 'graduated'::text, 'resigned'::text, 'expelled'::text])),
+  class_group_id uuid,
+  advisor_teacher_id uuid,
+  -- FKs for these three are declared at the end of the file, under
+  -- "Deferred foreign keys", because their targets are created later.
   CONSTRAINT students_pkey PRIMARY KEY (id)
 );
 CREATE TABLE IF NOT EXISTS public.admins (
@@ -61,6 +89,7 @@ CREATE TABLE IF NOT EXISTS public.admins (
   linked_student_id text,
   google_id text UNIQUE,
   google_email text UNIQUE,
+  account_id uuid, -- 0001 — FK declared under "Deferred foreign keys"
   CONSTRAINT admins_pkey PRIMARY KEY (id)
 );
 CREATE TABLE IF NOT EXISTS public.line_notification_categories (
@@ -338,6 +367,7 @@ CREATE TABLE IF NOT EXISTS public.teachers (
   reviewed_at timestamp with time zone,
   updated_at timestamp with time zone DEFAULT now(),
   desired_password_hash text,
+  account_id uuid, -- 0001 — this is what lets teachers log in for the first time
   CONSTRAINT teachers_pkey PRIMARY KEY (id)
 );
 CREATE TABLE IF NOT EXISTS public.change_requests (
@@ -619,6 +649,158 @@ CREATE TABLE IF NOT EXISTS public.equipment_requests (
   CONSTRAINT equipment_requests_pkey PRIMARY KEY (id),
   CONSTRAINT equipment_requests_equipment_item_id_fkey FOREIGN KEY (equipment_item_id) REFERENCES public.equipment_items(id)
 );
+
+-- ============================================================
+-- Phase 1 foundation (supabase/migrations/0001, 0003, 0004, 0005)
+-- Central identity, role-based access control, sessions, and audit trail.
+-- user_accounts is the login subject; admins/teachers/students are profiles
+-- that hang off it via a nullable account_id.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS public.user_accounts (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  -- login is the username / student_id / email used to sign in.
+  login text NOT NULL,
+  password_hash text,
+  google_id text,
+  google_email text,
+  -- Which profile table this account primarily maps to.
+  subject_type text NOT NULL CHECK (subject_type = ANY (ARRAY['admin'::text, 'teacher'::text, 'student'::text, 'parent'::text, 'alumni'::text])),
+  status text NOT NULL DEFAULT 'active'::text CHECK (status = ANY (ARRAY['active'::text, 'inactive'::text, 'suspended'::text])),
+  last_login_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT user_accounts_pkey PRIMARY KEY (id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS user_accounts_login_lower_key
+CREATE UNIQUE INDEX IF NOT EXISTS user_accounts_google_id_key
+CREATE UNIQUE INDEX IF NOT EXISTS user_accounts_google_email_key
+CREATE INDEX IF NOT EXISTS user_accounts_subject_type_idx
+CREATE UNIQUE INDEX IF NOT EXISTS admins_account_id_key
+CREATE UNIQUE INDEX IF NOT EXISTS teachers_account_id_key
+CREATE UNIQUE INDEX IF NOT EXISTS students_account_id_key
+
+CREATE TABLE IF NOT EXISTS public.roles (
+  key text NOT NULL,
+  label text NOT NULL,
+  description text,
+  sort_order integer NOT NULL DEFAULT 0,
+  is_system boolean NOT NULL DEFAULT false,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT roles_pkey PRIMARY KEY (key)
+);
+CREATE TABLE IF NOT EXISTS public.permissions (
+  key text NOT NULL,
+  label text NOT NULL,
+  module text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT permissions_pkey PRIMARY KEY (key)
+);
+CREATE TABLE IF NOT EXISTS public.role_permissions (
+  role_key text NOT NULL,
+  permission_key text NOT NULL,
+  CONSTRAINT role_permissions_pkey PRIMARY KEY (role_key, permission_key),
+  CONSTRAINT role_permissions_role_key_fkey
+    FOREIGN KEY (role_key) REFERENCES public.roles(key) ON UPDATE CASCADE ON DELETE CASCADE,
+  CONSTRAINT role_permissions_permission_key_fkey
+    FOREIGN KEY (permission_key) REFERENCES public.permissions(key) ON UPDATE CASCADE ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS public.user_roles (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  account_id uuid NOT NULL,
+  role_key text NOT NULL,
+  -- scope_type/scope_id narrow a role to one object. ADVISOR scoped to a
+  -- class_group is what makes "ครูที่ปรึกษาเห็นเฉพาะนักเรียนในห้องตัวเอง"
+  -- possible without another schema change in Phase 6.
+  scope_type text CHECK (scope_type IS NULL OR scope_type = ANY (ARRAY['class_group'::text, 'department'::text, 'room'::text])),
+  scope_id text,
+  granted_by uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT user_roles_pkey PRIMARY KEY (id),
+  CONSTRAINT user_roles_account_id_fkey
+    FOREIGN KEY (account_id) REFERENCES public.user_accounts(id) ON DELETE CASCADE,
+  CONSTRAINT user_roles_role_key_fkey
+    FOREIGN KEY (role_key) REFERENCES public.roles(key) ON UPDATE CASCADE ON DELETE CASCADE,
+  CONSTRAINT user_roles_granted_by_fkey
+    FOREIGN KEY (granted_by) REFERENCES public.user_accounts(id) ON DELETE SET NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS user_roles_unique_grant
+CREATE INDEX IF NOT EXISTS user_roles_account_id_idx ON public.user_roles (account_id);
+
+CREATE TABLE IF NOT EXISTS public.auth_sessions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  account_id uuid NOT NULL,
+  -- SHA-256 of the token. Never store the token itself.
+  token_hash text NOT NULL,
+  issued_at timestamp with time zone NOT NULL DEFAULT now(),
+  expires_at timestamp with time zone NOT NULL,
+  revoked_at timestamp with time zone,
+  last_seen_at timestamp with time zone,
+  ip_address text,
+  user_agent text,
+  CONSTRAINT auth_sessions_pkey PRIMARY KEY (id),
+  CONSTRAINT auth_sessions_token_hash_key UNIQUE (token_hash),
+  CONSTRAINT auth_sessions_account_id_fkey
+    FOREIGN KEY (account_id) REFERENCES public.user_accounts(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS auth_sessions_account_id_idx ON public.auth_sessions (account_id);
+CREATE INDEX IF NOT EXISTS auth_sessions_active_idx
+
+CREATE TABLE IF NOT EXISTS public.audit_logs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  -- Nullable: break-glass env-superadmin actions have no account row, and we
+  -- would rather record the action with actor_label than drop it entirely.
+  actor_account_id uuid,
+  actor_label text,
+  actor_role text,
+  -- Dotted verb, e.g. 'product.create', 'student.update', 'role.grant'.
+  action text NOT NULL,
+  entity_type text,
+  entity_id text,
+  before jsonb,
+  after jsonb,
+  ip_address text,
+  user_agent text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT audit_logs_pkey PRIMARY KEY (id),
+  CONSTRAINT audit_logs_actor_account_id_fkey
+    FOREIGN KEY (actor_account_id) REFERENCES public.user_accounts(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS audit_logs_entity_idx
+CREATE INDEX IF NOT EXISTS audit_logs_created_at_idx
+CREATE INDEX IF NOT EXISTS audit_logs_actor_idx
+CREATE INDEX IF NOT EXISTS audit_logs_action_idx
+
+
+-- ============================================================
+-- Deferred foreign keys
+-- Declared here rather than inline because each target table is created
+-- later in this file. Mirrors how migrations 0001 and 0006 added them.
+-- ============================================================
+ALTER TABLE public.admins
+  DROP CONSTRAINT IF EXISTS admins_account_id_fkey,
+  ADD CONSTRAINT admins_account_id_fkey
+  FOREIGN KEY (account_id) REFERENCES public.user_accounts(id) ON DELETE SET NULL;
+
+ALTER TABLE public.teachers
+  DROP CONSTRAINT IF EXISTS teachers_account_id_fkey,
+  ADD CONSTRAINT teachers_account_id_fkey
+  FOREIGN KEY (account_id) REFERENCES public.user_accounts(id) ON DELETE SET NULL;
+
+ALTER TABLE public.students
+  DROP CONSTRAINT IF EXISTS students_account_id_fkey,
+  ADD CONSTRAINT students_account_id_fkey
+  FOREIGN KEY (account_id) REFERENCES public.user_accounts(id) ON DELETE SET NULL,
+  DROP CONSTRAINT IF EXISTS students_class_group_id_fkey,
+  ADD CONSTRAINT students_class_group_id_fkey
+  FOREIGN KEY (class_group_id) REFERENCES public.class_groups(id) ON DELETE SET NULL,
+  DROP CONSTRAINT IF EXISTS students_advisor_teacher_id_fkey,
+  ADD CONSTRAINT students_advisor_teacher_id_fkey
+  FOREIGN KEY (advisor_teacher_id) REFERENCES public.teachers(id) ON DELETE SET NULL;
 
 -- Functions
 -- No custom SQL functions are required yet.

@@ -29,6 +29,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Test
+        run: npm run test
+
       - name: Build
         # ค่า env เหล่านี้เป็นค่าหลอกสำหรับ build เท่านั้น ไม่ได้เชื่อมต่อฐานข้อมูลจริง
         # Next.js ต้องการให้ตัวแปรมีค่าตอน build เพราะหลาย route อ่านค่าที่ module scope

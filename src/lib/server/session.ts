@@ -77,6 +77,19 @@ function safeEqualHex(a: string, b: string): boolean {
   return timingSafeEqual(Buffer.from(a, "hex"), Buffer.from(b, "hex"));
 }
 
+/**
+ * Check a token's signature and return the session id it carries, or null.
+ *
+ * Pure and database-free on purpose: a forged or truncated token is rejected
+ * before any query runs, and the check is unit-testable without Supabase.
+ */
+export function verifyTokenSignature(token: string): string | null {
+  const [sessionId, mac, ...rest] = token.split(".");
+  if (!sessionId || !mac || rest.length > 0) return null;
+  if (!/^[0-9a-f]+$/i.test(mac)) return null;
+  return safeEqualHex(mac, sign(sessionId)) ? sessionId : null;
+}
+
 // ─── Issuing ─────────────────────────────────────────────────────────────────
 
 export type IssueSessionInput = {
@@ -299,12 +312,9 @@ async function resolveFromCookie(): Promise<Principal | null> {
   const token = store.get(SESSION_COOKIE)?.value;
   if (!token) return null;
 
-  const [sessionId, mac] = token.split(".");
-  if (!sessionId || !mac) return null;
-
   // Verify the signature before touching the database so a forged or truncated
   // token costs nothing.
-  if (!safeEqualHex(mac, sign(sessionId))) return null;
+  if (!verifyTokenSignature(token)) return null;
 
   const supabase = getServiceClient();
   const { data: session } = await supabase

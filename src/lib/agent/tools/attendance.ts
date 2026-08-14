@@ -60,7 +60,7 @@ export async function executeAttendanceTool(
     const limit = Math.min((input.limit as number) || 5, 20)
     const date  = input.date as string | undefined
 
-    let q = (supabase as any)
+    let q = supabase
       .from('attendance')
       .select('checkin_time, checkout_time, duration, location')
       .eq('student_id', targetId)
@@ -97,7 +97,7 @@ export async function executeAttendanceTool(
     const since = new Date()
     since.setDate(since.getDate() - days)
 
-    const { data, error } = await (supabase as any)
+    const { data, error } = await supabase
       .from('attendance')
       .select('checkin_time, checkout_time, duration, location')
       .eq('student_id', targetId)
@@ -124,7 +124,7 @@ export async function executeAttendanceTool(
     const fromDate = input.from_date as string
     const toDate   = (input.to_date as string) || new Date().toISOString().slice(0, 10)
 
-    const { data, error } = await (supabase as any)
+    const { data, error } = await supabase
       .from('attendance')
       .select('checkin_time, checkout_time, duration, location')
       .eq('student_id', targetId)

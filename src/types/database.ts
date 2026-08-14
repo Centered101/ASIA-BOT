@@ -886,6 +886,550 @@ export type Database = {
         Relationships: [];
       };
 
+      // ─── ตารางเดิมที่ types เคยขาดไป (ตรงกับ supabase/schema.sql) ──────────
+      line_notification_categories: {
+        Row: {
+          key: string;
+          label: string;
+          description: string | null;
+          sort_order: number;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          key: string;
+          label: string;
+          description?: string | null;
+          sort_order?: number;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          key?: string;
+          label?: string;
+          description?: string | null;
+          sort_order?: number;
+          updated_at?: string | null;
+        };
+        Relationships: [];
+      };
+      line_notification_channels: {
+        Row: {
+          id: string;
+          group_id: string;
+          name: string;
+          category_key: string;
+          is_active: boolean;
+          is_default: boolean;
+          notes: string | null;
+          last_seen_at: string | null;
+          created_by: string | null;
+          updated_by: string | null;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          group_id: string;
+          name: string;
+          category_key?: string;
+          is_active?: boolean;
+          is_default?: boolean;
+          notes?: string | null;
+          last_seen_at?: string | null;
+          created_by?: string | null;
+          updated_by?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          group_id?: string;
+          name?: string;
+          category_key?: string;
+          is_active?: boolean;
+          is_default?: boolean;
+          notes?: string | null;
+          last_seen_at?: string | null;
+          created_by?: string | null;
+          updated_by?: string | null;
+          updated_at?: string | null;
+        };
+        Relationships: [];
+      };
+      class_groups: {
+        Row: {
+          id: string;
+          name: string;
+          program: string | null;
+          grade: number | null;
+          section: number | null;
+          department: string | null;
+          color: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          program?: string | null;
+          grade?: number | null;
+          section?: number | null;
+          department?: string | null;
+          color?: string | null;
+          created_at?: string | null;
+        };
+        Update: {
+          name?: string;
+          program?: string | null;
+          grade?: number | null;
+          section?: number | null;
+          department?: string | null;
+          color?: string | null;
+        };
+        Relationships: [];
+      };
+      class_schedules: {
+        Row: {
+          id: string;
+          class_group_id: string;
+          room_name: string;
+          subject: string | null;
+          teacher: string | null;
+          day_of_week: number;
+          start_time: string;
+          end_time: string;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          class_group_id: string;
+          room_name: string;
+          subject?: string | null;
+          teacher?: string | null;
+          day_of_week: number;
+          start_time: string;
+          end_time: string;
+          created_at?: string | null;
+        };
+        Update: {
+          class_group_id?: string;
+          room_name?: string;
+          subject?: string | null;
+          teacher?: string | null;
+          day_of_week?: number;
+          start_time?: string;
+          end_time?: string;
+        };
+        Relationships: [];
+      };
+      class_schedule_overrides: {
+        Row: {
+          id: string;
+          override_date: string;
+          class_group_id: string;
+          start_time: string;
+          end_time: string;
+          room_name: string | null;
+          subject: string | null;
+          teacher: string | null;
+          note: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          override_date: string;
+          class_group_id: string;
+          start_time: string;
+          end_time: string;
+          room_name?: string | null;
+          subject?: string | null;
+          teacher?: string | null;
+          note?: string | null;
+          created_at?: string | null;
+        };
+        Update: {
+          override_date?: string;
+          class_group_id?: string;
+          start_time?: string;
+          end_time?: string;
+          room_name?: string | null;
+          subject?: string | null;
+          teacher?: string | null;
+          note?: string | null;
+        };
+        Relationships: [];
+      };
+      change_requests: {
+        Row: {
+          id: string;
+          student_id: string;
+          requested_changes: Json;
+          status: "pending" | "approved" | "rejected";
+          admin_note: string | null;
+          reviewed_by: string | null;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          student_id: string;
+          requested_changes: Json;
+          status?: "pending" | "approved" | "rejected";
+          admin_note?: string | null;
+          reviewed_by?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          student_id?: string;
+          requested_changes?: Json;
+          status?: "pending" | "approved" | "rejected";
+          admin_note?: string | null;
+          reviewed_by?: string | null;
+          updated_at?: string | null;
+        };
+        Relationships: [];
+      };
+      student_cards: {
+        Row: {
+          id: string;
+          student_id: string | null;
+          uid: string;
+          card_status: "active" | "inactive" | "lost";
+          card_type: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          student_id?: string | null;
+          uid: string;
+          card_status?: "active" | "inactive" | "lost";
+          card_type?: string;
+          created_at?: string;
+        };
+        Update: {
+          student_id?: string | null;
+          uid?: string;
+          card_status?: "active" | "inactive" | "lost";
+          card_type?: string;
+        };
+        Relationships: [];
+      };
+      rfid_cards: {
+        Row: {
+          id: string;
+          student_id: string;
+          uid: string;
+          card_type: string;
+          status: "active" | "inactive" | "lost";
+          issued_at: string | null;
+          revoked_at: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          student_id: string;
+          uid: string;
+          card_type?: string;
+          status?: "active" | "inactive" | "lost";
+          issued_at?: string | null;
+          revoked_at?: string | null;
+          created_at?: string | null;
+        };
+        Update: {
+          student_id?: string;
+          uid?: string;
+          card_type?: string;
+          status?: "active" | "inactive" | "lost";
+          issued_at?: string | null;
+          revoked_at?: string | null;
+        };
+        Relationships: [];
+      };
+      rfid_devices: {
+        Row: {
+          id: string;
+          device_id: string;
+          device_key: string;
+          name: string | null;
+          location: string | null;
+          status: "active" | "inactive";
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          device_id: string;
+          device_key: string;
+          name?: string | null;
+          location?: string | null;
+          status?: "active" | "inactive";
+          created_at?: string | null;
+        };
+        Update: {
+          device_id?: string;
+          device_key?: string;
+          name?: string | null;
+          location?: string | null;
+          status?: "active" | "inactive";
+        };
+        Relationships: [];
+      };
+      attendance_logs: {
+        Row: {
+          id: string;
+          student_id: string | null;
+          uid: string;
+          location: string;
+          check_in: string | null;
+          check_out: string | null;
+          duration_minutes: number | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          student_id?: string | null;
+          uid: string;
+          location: string;
+          check_in?: string | null;
+          check_out?: string | null;
+          duration_minutes?: number | null;
+          created_at?: string | null;
+        };
+        Update: {
+          student_id?: string | null;
+          uid?: string;
+          location?: string;
+          check_in?: string | null;
+          check_out?: string | null;
+          duration_minutes?: number | null;
+        };
+        Relationships: [];
+      };
+      feedbacks: {
+        Row: {
+          id: string;
+          type: "comment" | "report";
+          name: string | null;
+          contact: string | null;
+          category: string;
+          page: string | null;
+          message: string;
+          image_urls: string[] | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          type: "comment" | "report";
+          name?: string | null;
+          contact?: string | null;
+          category: string;
+          page?: string | null;
+          message: string;
+          image_urls?: string[] | null;
+          created_at?: string;
+        };
+        Update: {
+          type?: "comment" | "report";
+          name?: string | null;
+          contact?: string | null;
+          category?: string;
+          page?: string | null;
+          message?: string;
+          image_urls?: string[] | null;
+        };
+        Relationships: [];
+      };
+      room_bookings: {
+        Row: {
+          id: string;
+          room_id: string;
+          booker_name: string;
+          booker_phone: string | null;
+          purpose: string;
+          date: string;
+          time_start: string;
+          time_end: string;
+          status: "pending" | "approved" | "rejected" | "cancelled";
+          note: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          room_id: string;
+          booker_name: string;
+          booker_phone?: string | null;
+          purpose: string;
+          date: string;
+          time_start: string;
+          time_end: string;
+          status?: "pending" | "approved" | "rejected" | "cancelled";
+          note?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          room_id?: string;
+          booker_name?: string;
+          booker_phone?: string | null;
+          purpose?: string;
+          date?: string;
+          time_start?: string;
+          time_end?: string;
+          status?: "pending" | "approved" | "rejected" | "cancelled";
+          note?: string | null;
+        };
+        Relationships: [];
+      };
+      teacher_applications: {
+        Row: {
+          id: string;
+          full_name: string;
+          email: string | null;
+          phone: string | null;
+          department: string | null;
+          subject: string | null;
+          reason: string;
+          desired_username: string;
+          status: "pending" | "reviewing" | "approved" | "rejected";
+          admin_note: string | null;
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          full_name: string;
+          email?: string | null;
+          phone?: string | null;
+          department?: string | null;
+          subject?: string | null;
+          reason: string;
+          desired_username: string;
+          status?: "pending" | "reviewing" | "approved" | "rejected";
+          admin_note?: string | null;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          full_name?: string;
+          email?: string | null;
+          phone?: string | null;
+          department?: string | null;
+          subject?: string | null;
+          reason?: string;
+          desired_username?: string;
+          status?: "pending" | "reviewing" | "approved" | "rejected";
+          admin_note?: string | null;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+        };
+        Relationships: [];
+      };
+      name_change_requests: {
+        Row: {
+          id: string;
+          student_id: string;
+          old_first_name: string;
+          old_last_name: string;
+          new_first_name: string;
+          new_last_name: string;
+          reason: string | null;
+          status: "pending" | "approved" | "rejected";
+          admin_note: string | null;
+          reviewed_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          student_id: string;
+          old_first_name: string;
+          old_last_name: string;
+          new_first_name: string;
+          new_last_name: string;
+          reason?: string | null;
+          status?: "pending" | "approved" | "rejected";
+          admin_note?: string | null;
+          reviewed_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          student_id?: string;
+          old_first_name?: string;
+          old_last_name?: string;
+          new_first_name?: string;
+          new_last_name?: string;
+          reason?: string | null;
+          status?: "pending" | "approved" | "rejected";
+          admin_note?: string | null;
+          reviewed_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      agent_conversations: {
+        Row: {
+          id: string;
+          session_id: string;
+          messages: Json;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          session_id: string;
+          messages?: Json;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          session_id?: string;
+          messages?: Json;
+          updated_at?: string | null;
+        };
+        Relationships: [];
+      };
+      agent_logs: {
+        Row: {
+          id: string;
+          session_id: string | null;
+          channel: string;
+          user_id: string | null;
+          user_role: string | null;
+          user_message: string;
+          tools_called: Json | null;
+          response: string | null;
+          latency_ms: number | null;
+          error: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          session_id?: string | null;
+          channel: string;
+          user_id?: string | null;
+          user_role?: string | null;
+          user_message: string;
+          tools_called?: Json | null;
+          response?: string | null;
+          latency_ms?: number | null;
+          error?: string | null;
+          created_at?: string | null;
+        };
+        Update: {
+          session_id?: string | null;
+          channel?: string;
+          user_id?: string | null;
+          user_role?: string | null;
+          user_message?: string;
+          tools_called?: Json | null;
+          response?: string | null;
+          latency_ms?: number | null;
+          error?: string | null;
+        };
+        Relationships: [];
+      };
+
       // ─── Phase 1 foundation (supabase/migrations/0001-0005) ────────────────
       user_accounts: {
         Row: {

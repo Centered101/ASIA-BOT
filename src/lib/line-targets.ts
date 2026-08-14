@@ -26,7 +26,7 @@ export async function getLineNotificationTarget(
   type: LineNotificationType = "admin",
 ) {
   try {
-    const exact = await (supabase as any)
+    const exact = await supabase
       .from("line_notification_channels")
       .select("group_id")
       .eq("category_key", type)
@@ -39,7 +39,7 @@ export async function getLineNotificationTarget(
     if (exact.data?.group_id) return exact.data.group_id as string;
 
     if (type !== "admin") {
-      const admin = await (supabase as any)
+      const admin = await supabase
         .from("line_notification_channels")
         .select("group_id")
         .eq("category_key", "admin")
@@ -68,7 +68,7 @@ export async function isLineNotificationGroup(
   if (type === "attendance" && groupId === process.env.LINE_GROUP_ATTEND) return true;
 
   try {
-    const { data } = await (supabase as any)
+    const { data } = await supabase
       .from("line_notification_channels")
       .select("id")
       .eq("group_id", groupId)
@@ -87,21 +87,21 @@ export async function recordLineGroupSeen(supabase: SupabaseClient, groupId: str
   if (!groupId) return;
 
   try {
-    const { data: existing } = await (supabase as any)
+    const { data: existing } = await supabase
       .from("line_notification_channels")
       .select("id")
       .eq("group_id", groupId)
       .maybeSingle();
 
     if (existing?.id) {
-      await (supabase as any)
+      await supabase
         .from("line_notification_channels")
         .update({ last_seen_at: new Date().toISOString(), updated_at: new Date().toISOString() })
         .eq("id", existing.id);
       return;
     }
 
-    await (supabase as any)
+    await supabase
       .from("line_notification_channels")
       .insert({
         group_id: groupId,

@@ -51,14 +51,14 @@ export async function executeScheduleTool(
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' })
 
     // Check overrides first
-    const overrideQ = (supabase as any)
+    const overrideQ = supabase
       .from('class_schedule_overrides')
       .select('start_time, end_time, room_name, subject, teacher, note, class_groups(name, color)')
       .eq('override_date', today)
 
     const { data: overrides } = await overrideQ
 
-    const q = (supabase as any)
+    const q = supabase
       .from('class_schedules')
       .select('start_time, end_time, room_name, subject, teacher, class_groups(name, color)')
       .eq('day_of_week', dow)
@@ -78,7 +78,7 @@ export async function executeScheduleTool(
   }
 
   if (name === 'get_schedule_week') {
-    let q = (supabase as any)
+    let q = supabase
       .from('class_schedules')
       .select('day_of_week, start_time, end_time, room_name, subject, teacher, class_groups(name, color)')
       .order('day_of_week')

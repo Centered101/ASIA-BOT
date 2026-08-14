@@ -63,7 +63,7 @@ SELECT a.username FROM public.admins a
 | ไฟล์ | จุดที่ต้องระวัง |
 |---|---|
 | `0001_user_accounts.sql` | สร้างตาราง + คอลัมน์ nullable ปลอดภัย |
-| `0002_backfill_accounts.sql` | รัน `0002_diagnose.sql` ก่อนเสมอ **SMOKE ต้องได้ 0 ทั้งสามข้อ** ถ้าไม่ 0 = มี login ชนกัน — ดูหัวข้อ "ถ้า 0002 error 23505" ด้านล่าง |
+| `0002_backfill_accounts.sql` | รัน `../diagnostics/collision-check.sql` ก่อนเสมอ **SMOKE ต้องได้ 0 ทั้งสามข้อ** ถ้าไม่ 0 = มี login ชนกัน — ดูหัวข้อ "ถ้า 0002 error 23505" ด้านล่าง |
 | `0003_rbac.sql` | roles 20, permissions 47 |
 | `0004_sessions.sql` | ตารางว่าง |
 | `0005_audit_log.sql` | ตารางว่าง + index 5 ตัว |
@@ -71,6 +71,7 @@ SELECT a.username FROM public.admins a
 | `0007_deprecate_dead_tables.sql` | COMMENT อย่างเดียว ไม่มี DROP |
 | `0008_realtime_trim.sql` | ต้องเห็น `admins` ยังอยู่ใน publication แต่ **ไม่มี** `password_hash` |
 | `0009_backfill_user_roles.sql` | **ห้ามข้าม** — 0003 seed แค่ตาราง role ไม่ได้ให้ role กับใคร ถ้าไม่รันไฟล์นี้ `user_roles` จะว่างและทุก admin ตกไปเป็น ACADEMIC (ดูหัวข้อ 4.2) |
+| `0010_fix_login_collision.sql` | **ต้องแก้ไฟล์ก่อนรัน** — เปลี่ยน `CHANGE_ME` เป็น username ใหม่ทั้ง 2 จุด มี guard กันรันทั้งที่ยังไม่แก้ แล้วรัน `0002` และ `0009` ซ้ำ (ดูหัวข้อ 4.3) |
 
 หลัง `0008` ให้เปิดหน้า `/admin` แล้วยืนยันว่าแท็บ **ผู้ดูแลระบบ** ยังอัปเดตสดข้ามแท็บได้อยู่
 
@@ -112,7 +113,7 @@ SELECT action, actor_label, entity_id, created_at
 
 ขั้นตอน:
 
-1. รัน `0002_diagnose.sql` — ข้อ 1 ควรได้ 0 ทั้งสามค่า (Supabase SQL Editor
+1. รัน `../diagnostics/collision-check.sql` — ข้อ 1 ควรได้ 0 ทั้งสามค่า (Supabase SQL Editor
    ครอบ transaction เดียว จึง rollback ให้แล้ว) ถ้าไม่ใช่ 0 ให้รัน ROLLBACK ของ 0002 ก่อน
 2. รัน `0002_backfill_accounts.sql` เวอร์ชันใหม่
 3. เช็ก SMOKE ต้องได้ 0 ทั้งสามข้อ
@@ -153,6 +154,32 @@ SELECT a.admin_id, a.role, ur.role_key
 | staff | 200 | **403** |
 | admin | 200 | 200 |
 | superadmin | 200 | 200 |
+
+## 4.3 นักเรียน 3175 ไม่มี account (login ชนกับแอดมิน)
+
+ยืนยันจากข้อมูลจริง: **6 user_accounts จาก 7 profiles**
+
+แอดมิน `ADM-1783669050569` ตั้ง `username = '3175'` ซึ่งชนกับ `student_id` ของธเนศ
+`user_accounts.login` เป็น unique ข้าม subject_type ทุกชนิด และ 0002 สร้างฝั่ง admin ก่อน
+นักเรียนคนนี้จึงถูกข้าม
+
+**ยังไม่ฉุกเฉิน** — เขายังล็อกอินได้ปกติ เพราะ auth นักเรียนใช้ `student_id` + `student_phone`
+ที่ไม่เกี่ยวกับ `user_accounts` สิ่งที่เขาไม่ได้คือ signed session cookie
+ดังนั้นต้องแก้ **ก่อนปิด `AUTH_LEGACY_HEADER`** ไม่จำเป็นต้องก่อน deploy
+
+เลือกเปลี่ยน username ของแอดมินแทน `student_id` เพราะรหัสนักเรียนเป็นตัวระบุจริงของสถานศึกษา
+และถูกอ้างโดย foreign key 6 ตาราง ส่วน username เป็นแค่ชื่อสำหรับล็อกอิน
+
+ขั้นตอน:
+
+1. เปิด `0010_fix_login_collision.sql` แล้ว**แก้ `CHANGE_ME` ทั้ง 2 จุด** เป็น username ใหม่
+   (`^[a-zA-Z0-9_]{3,20}$` และห้ามซ้ำกับ `student_id` ของใครอีก)
+2. รัน `0010` — มี guard ที่จะ error ถ้ายังไม่ได้แก้
+3. รัน `0002_backfill_accounts.sql` ซ้ำ
+4. รัน `0009_backfill_user_roles.sql` ซ้ำ
+5. เช็ก SMOKE ท้ายไฟล์ `0010` — `students` ที่ `account_id IS NULL` ต้องเป็น 0 และ `user_accounts` ต้องเป็น 7
+
+**บอกแอดมินคนนั้นด้วยว่า username เปลี่ยนแล้ว** เพราะเขาใช้ล็อกอิน
 
 ## 5. ถ้าต้อง rollback
 

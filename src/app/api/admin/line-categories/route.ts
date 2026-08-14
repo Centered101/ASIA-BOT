@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   const admin = await checkAdminAuth(req);
   if (!admin) return NextResponse.json({ status: "error", message: "unauthorized" }, { status: 401 });
 
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .from("line_notification_categories")
     .select("*")
     .order("sort_order", { ascending: true });
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
   if (!key) return NextResponse.json({ status: "error", message: "กรุณากรอก key หมวดหมู่" }, { status: 400 });
   if (!label) return NextResponse.json({ status: "error", message: "กรุณากรอกชื่อหมวดหมู่" }, { status: 400 });
 
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .from("line_notification_categories")
     .insert({
       key,
@@ -73,7 +73,7 @@ export async function PATCH(req: NextRequest) {
   if ("description" in body) patch.description = cleanString(body.description) || null;
   if ("sort_order" in body) patch.sort_order = Number(body.sort_order) || 0;
 
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .from("line_notification_categories")
     .update(patch)
     .eq("key", key)
@@ -92,7 +92,7 @@ export async function DELETE(req: NextRequest) {
   const key = normalizeCategoryKey(req.nextUrl.searchParams.get("key") || cleanString((await req.json().catch(() => ({}))).key));
   if (!key) return NextResponse.json({ status: "error", message: "ไม่พบ key หมวดหมู่" }, { status: 400 });
 
-  const { count } = await (supabase as any)
+  const { count } = await supabase
     .from("line_notification_channels")
     .select("id", { count: "exact", head: true })
     .eq("category_key", key);
@@ -100,7 +100,7 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ status: "error", message: "ยังมีกลุ่ม LINE อยู่ในหมวดนี้ กรุณาย้ายหรือลบกลุ่มก่อน" }, { status: 400 });
   }
 
-  const { error } = await (supabase as any).from("line_notification_categories").delete().eq("key", key);
+  const { error } = await supabase.from("line_notification_categories").delete().eq("key", key);
   if (error) return NextResponse.json({ status: "error", message: error.message }, { status: 500 });
   return NextResponse.json({ status: "success" });
 }

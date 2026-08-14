@@ -16,7 +16,7 @@ function normalizeCategoryKey(value: unknown) {
 }
 
 async function unsetDefaultForCategory(categoryKey: string, exceptId?: string) {
-  let query = (supabase as any)
+  let query = supabase
     .from("line_notification_channels")
     .update({ is_default: false, updated_at: new Date().toISOString() })
     .eq("category_key", categoryKey);
@@ -31,13 +31,13 @@ export async function GET(req: NextRequest) {
 
   const category = req.nextUrl.searchParams.get("category");
   const [channelsRes, categoriesRes] = await Promise.all([
-    (supabase as any)
+    supabase
       .from("line_notification_channels")
       .select("*")
       .order("category_key", { ascending: true })
       .order("is_default", { ascending: false })
       .order("created_at", { ascending: false }),
-    (supabase as any)
+    supabase
       .from("line_notification_categories")
       .select("*")
       .order("sort_order", { ascending: true }),
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
 
   if (is_default) await unsetDefaultForCategory(category_key);
 
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .from("line_notification_channels")
     .insert({
       group_id,
@@ -122,7 +122,7 @@ export async function PATCH(req: NextRequest) {
   const defaultCategory = (patch.category_key as string | undefined) ?? normalizeCategoryKey(body.current_category_key);
   if (patch.is_default === true) await unsetDefaultForCategory(defaultCategory, id);
 
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .from("line_notification_channels")
     .update(patch)
     .eq("id", id)
@@ -141,7 +141,7 @@ export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id") || cleanString((await req.json().catch(() => ({}))).id);
   if (!id) return NextResponse.json({ status: "error", message: "ไม่พบรายการกลุ่ม" }, { status: 400 });
 
-  const { error } = await (supabase as any).from("line_notification_channels").delete().eq("id", id);
+  const { error } = await supabase.from("line_notification_channels").delete().eq("id", id);
   if (error) return NextResponse.json({ status: "error", message: error.message }, { status: 500 });
   return NextResponse.json({ status: "success" });
 }

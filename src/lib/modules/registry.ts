@@ -62,6 +62,17 @@ function legacyTab(
 export const MODULES: ModuleDescriptor[] = [
   legacyTab("dashboard", "แดชบอร์ด", "fa-solid fa-gauge", "dashboard.view", "overview"),
   legacyTab("students", "นักเรียน", "fa-solid fa-user-graduate", "student.view_all", "student"),
+  // โมดูลแรกที่อยู่นอก admin/page.tsx — Phase 2 (supabase/migrations/0011-0013)
+  {
+    key: "student-360",
+    label: "ข้อมูลนักเรียน 360°",
+    icon: "fa-solid fa-address-card",
+    permission: "student.view_all",
+    group: "student",
+    href: "/admin/student-360",
+    legacy: false,
+    phase: 2,
+  },
   legacyTab("data_requests", "คำขอแก้ไขข้อมูล", "fa-solid fa-user-pen", "student.update", "student"),
   legacyTab("class_groups", "กลุ่มเรียน", "fa-solid fa-users-rectangle", "schedule.manage", "academic"),
   legacyTab("class_schedule_weekly", "ตารางสัปดาห์", "fa-solid fa-calendar-week", "schedule.view", "academic"),

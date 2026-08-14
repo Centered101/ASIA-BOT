@@ -87,8 +87,23 @@ export const GET = withAuth<{ id: string }>(
 
     const positionRows = positions.data ?? [];
 
+    // ถ้า query ตารางลูกตัวใดล้ม ต้องไม่ปล่อยให้กลายเป็น "ไม่มีข้อมูล" เงียบ ๆ
+    // เพราะหน้าจอจะแสดงว่ายังไม่มีผู้ปกครองทั้งที่จริงคือตารางหาย/สิทธิ์ไม่พอ
+    const partialErrors = (
+      [
+        ["guardians", guardians],
+        ["education_history", education],
+        ["status_timeline", timeline],
+        ["achievements", achievements],
+        ["positions", positions],
+      ] as const
+    )
+      .filter(([, r]) => "error" in r && r.error)
+      .map(([name, r]) => `${name}: ${(r as { error: { message: string } }).error.message}`);
+
     return NextResponse.json({
       status: "success",
+      ...(partialErrors.length ? { partial_errors: partialErrors } : {}),
       data: {
         student,
         class_group: classGroup.data ?? null,

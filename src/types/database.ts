@@ -1,5 +1,17 @@
 export type Json = string | number | boolean | null | { [key: string]: Json } | Json[];
 
+/** Status of the student as a person — distinct from card_status (the RFID card). */
+export type StudentStatus =
+  | "studying"
+  | "on_leave"
+  | "transferred"
+  | "graduated"
+  | "resigned"
+  | "expelled";
+
+/** Which profile table a user_accounts row primarily maps to. */
+export type AccountSubjectType = "admin" | "teacher" | "student" | "parent" | "alumni";
+
 export type Database = {
   public: {
     Tables: {
@@ -20,6 +32,10 @@ export type Database = {
           avatar: string | null;
           admin_status: "active" | "inactive";
           google_email: string | null;
+          google_id: string | null;
+          username_changed_at: string | null;
+          linked_student_id: string | null;
+          account_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -38,6 +54,10 @@ export type Database = {
           avatar?: string | null;
           admin_status?: "active" | "inactive";
           google_email?: string | null;
+          google_id?: string | null;
+          username_changed_at?: string | null;
+          linked_student_id?: string | null;
+          account_id?: string | null;
           created_at?: string;
         };
         Update: {
@@ -55,6 +75,10 @@ export type Database = {
           avatar?: string | null;
           admin_status?: "active" | "inactive";
           google_email?: string | null;
+          google_id?: string | null;
+          username_changed_at?: string | null;
+          linked_student_id?: string | null;
+          account_id?: string | null;
         };
         Relationships: [];
       };
@@ -464,7 +488,7 @@ export type Database = {
           items_json: Json;
           total: number;
           pi_id: string | null;
-          status: "pending" | "paid" | "cancelled" | "refunded";
+          status: "pending" | "paid" | "cancelled" | "refunded" | "delivered";
           delivery_mode: "pickup" | "delivery" | null;
           delivery_loc: string | null;
           delivery_slot: string | null;
@@ -479,7 +503,7 @@ export type Database = {
           items_json: Json;
           total: number;
           pi_id?: string | null;
-          status?: "pending" | "paid" | "cancelled" | "refunded";
+          status?: "pending" | "paid" | "cancelled" | "refunded" | "delivered";
           delivery_mode?: "pickup" | "delivery" | null;
           delivery_loc?: string | null;
           delivery_slot?: string | null;
@@ -492,7 +516,7 @@ export type Database = {
           items_json?: Json;
           total?: number;
           pi_id?: string | null;
-          status?: "pending" | "paid" | "cancelled" | "refunded";
+          status?: "pending" | "paid" | "cancelled" | "refunded" | "delivered";
           delivery_mode?: "pickup" | "delivery" | null;
           delivery_loc?: string | null;
           delivery_slot?: string | null;
@@ -548,6 +572,7 @@ export type Database = {
           color_stock: Json | null;
           cost: number | null;
           active: boolean;
+          deleted_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -563,6 +588,7 @@ export type Database = {
           color_stock?: Json | null;
           cost?: number | null;
           active?: boolean;
+          deleted_at?: string | null;
           created_at?: string;
         };
         Update: {
@@ -577,55 +603,13 @@ export type Database = {
           color_stock?: Json | null;
           cost?: number | null;
           active?: boolean;
+          deleted_at?: string | null;
         };
         Relationships: [];
       };
-      project_evaluations: {
-        Row: {
-          id: string;
-          project_num: number;
-          gender: string | null;
-          evaluator: string | null;
-          name: string | null;
-          emoji: string | null;
-          creative: number | null;
-          content: number | null;
-          presentation: number | null;
-          usability: number | null;
-          overall: number | null;
-          comments: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          project_num: number;
-          gender?: string | null;
-          evaluator?: string | null;
-          name?: string | null;
-          emoji?: string | null;
-          creative?: number | null;
-          content?: number | null;
-          presentation?: number | null;
-          usability?: number | null;
-          overall?: number | null;
-          comments?: string | null;
-          created_at?: string;
-        };
-        Update: {
-          project_num?: number;
-          gender?: string | null;
-          evaluator?: string | null;
-          name?: string | null;
-          emoji?: string | null;
-          creative?: number | null;
-          content?: number | null;
-          presentation?: number | null;
-          usability?: number | null;
-          overall?: number | null;
-          comments?: string | null;
-        };
-        Relationships: [];
-      };
+      // Phase 1: `project_evaluations` was declared here but exists neither in
+      // supabase/schema.sql nor anywhere in src/. The real table is
+      // `evaluations` (keyed by project_id, not project_num). Removed.
       projects: {
         Row: {
           id: string;
@@ -726,6 +710,10 @@ export type Database = {
         Relationships: [];
       };
       students: {
+        // Phase 1: parent_name / parent_phone / parent_line were declared here
+        // but exist neither in supabase/schema.sql nor anywhere in src/ —
+        // phantom columns, removed. Guardians get a proper table in Phase 2.
+        // student_status is real as of migration 0006 with the values below.
         Row: {
           id: string;
           student_id: string;
@@ -736,12 +724,22 @@ export type Database = {
           entry_year: string;
           nickname: string | null;
           department: string | null;
-          parent_name: string | null;
-          parent_phone: string | null;
-          parent_line: string | null;
           uid: string | null;
           card_status: "active" | "inactive" | "lost";
-          student_status: "active" | "inactive" | "suspended";
+          photo_url: string | null;
+          line_user_id: string | null;
+          google_email: string | null;
+          google_id: string | null;
+          google_name: string | null;
+          google_avatar_url: string | null;
+          account_id: string | null;
+          birth_date: string | null;
+          gender: "male" | "female" | "other" | null;
+          national_id: string | null;
+          address: string | null;
+          student_status: StudentStatus;
+          class_group_id: string | null;
+          advisor_teacher_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -755,12 +753,22 @@ export type Database = {
           entry_year: string;
           nickname?: string | null;
           department?: string | null;
-          parent_name?: string | null;
-          parent_phone?: string | null;
-          parent_line?: string | null;
           uid?: string | null;
           card_status?: "active" | "inactive" | "lost";
-          student_status?: "active" | "inactive" | "suspended";
+          photo_url?: string | null;
+          line_user_id?: string | null;
+          google_email?: string | null;
+          google_id?: string | null;
+          google_name?: string | null;
+          google_avatar_url?: string | null;
+          account_id?: string | null;
+          birth_date?: string | null;
+          gender?: "male" | "female" | "other" | null;
+          national_id?: string | null;
+          address?: string | null;
+          student_status?: StudentStatus;
+          class_group_id?: string | null;
+          advisor_teacher_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -773,12 +781,86 @@ export type Database = {
           entry_year?: string;
           nickname?: string | null;
           department?: string | null;
-          parent_name?: string | null;
-          parent_phone?: string | null;
-          parent_line?: string | null;
           uid?: string | null;
           card_status?: "active" | "inactive" | "lost";
-          student_status?: "active" | "inactive" | "suspended";
+          photo_url?: string | null;
+          line_user_id?: string | null;
+          google_email?: string | null;
+          google_id?: string | null;
+          google_name?: string | null;
+          google_avatar_url?: string | null;
+          account_id?: string | null;
+          birth_date?: string | null;
+          gender?: "male" | "female" | "other" | null;
+          national_id?: string | null;
+          address?: string | null;
+          student_status?: StudentStatus;
+          class_group_id?: string | null;
+          advisor_teacher_id?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      teachers: {
+        Row: {
+          id: string;
+          full_name: string;
+          nickname: string | null;
+          subject: string | null;
+          phone: string | null;
+          email: string | null;
+          department: string | null;
+          color: string | null;
+          status: "pending" | "reviewing" | "approved" | "rejected" | "active" | "inactive";
+          reason: string | null;
+          desired_username: string | null;
+          desired_password_hash: string | null;
+          linked_admin_id: string | null;
+          admin_note: string | null;
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          account_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          full_name: string;
+          nickname?: string | null;
+          subject?: string | null;
+          phone?: string | null;
+          email?: string | null;
+          department?: string | null;
+          color?: string | null;
+          status?: "pending" | "reviewing" | "approved" | "rejected" | "active" | "inactive";
+          reason?: string | null;
+          desired_username?: string | null;
+          desired_password_hash?: string | null;
+          linked_admin_id?: string | null;
+          admin_note?: string | null;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          account_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          full_name?: string;
+          nickname?: string | null;
+          subject?: string | null;
+          phone?: string | null;
+          email?: string | null;
+          department?: string | null;
+          color?: string | null;
+          status?: "pending" | "reviewing" | "approved" | "rejected" | "active" | "inactive";
+          reason?: string | null;
+          desired_username?: string | null;
+          desired_password_hash?: string | null;
+          linked_admin_id?: string | null;
+          admin_note?: string | null;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          account_id?: string | null;
           updated_at?: string;
         };
         Relationships: [];
@@ -800,6 +882,171 @@ export type Database = {
           label?: string;
           start_time?: string;
           end_time?: string;
+        };
+        Relationships: [];
+      };
+
+      // ─── Phase 1 foundation (supabase/migrations/0001-0005) ────────────────
+      user_accounts: {
+        Row: {
+          id: string;
+          login: string;
+          password_hash: string | null;
+          google_id: string | null;
+          google_email: string | null;
+          subject_type: AccountSubjectType;
+          status: "active" | "inactive" | "suspended";
+          last_login_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          login: string;
+          password_hash?: string | null;
+          google_id?: string | null;
+          google_email?: string | null;
+          subject_type: AccountSubjectType;
+          status?: "active" | "inactive" | "suspended";
+          last_login_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          login?: string;
+          password_hash?: string | null;
+          google_id?: string | null;
+          google_email?: string | null;
+          subject_type?: AccountSubjectType;
+          status?: "active" | "inactive" | "suspended";
+          last_login_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      auth_sessions: {
+        Row: {
+          id: string;
+          account_id: string;
+          token_hash: string;
+          issued_at: string;
+          expires_at: string;
+          revoked_at: string | null;
+          last_seen_at: string | null;
+          ip_address: string | null;
+          user_agent: string | null;
+        };
+        Insert: {
+          id?: string;
+          account_id: string;
+          token_hash: string;
+          issued_at?: string;
+          expires_at: string;
+          revoked_at?: string | null;
+          last_seen_at?: string | null;
+          ip_address?: string | null;
+          user_agent?: string | null;
+        };
+        Update: {
+          expires_at?: string;
+          revoked_at?: string | null;
+          last_seen_at?: string | null;
+        };
+        Relationships: [];
+      };
+      audit_logs: {
+        Row: {
+          id: string;
+          actor_account_id: string | null;
+          actor_label: string | null;
+          actor_role: string | null;
+          action: string;
+          entity_type: string | null;
+          entity_id: string | null;
+          before: Json | null;
+          after: Json | null;
+          ip_address: string | null;
+          user_agent: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          actor_account_id?: string | null;
+          actor_label?: string | null;
+          actor_role?: string | null;
+          action: string;
+          entity_type?: string | null;
+          entity_id?: string | null;
+          before?: Json | null;
+          after?: Json | null;
+          ip_address?: string | null;
+          user_agent?: string | null;
+          created_at?: string;
+        };
+        // Audit rows are append-only by design; no Update shape.
+        Update: Record<string, never>;
+        Relationships: [];
+      };
+      roles: {
+        Row: {
+          key: string;
+          label: string;
+          description: string | null;
+          sort_order: number;
+          is_system: boolean;
+          created_at: string;
+        };
+        Insert: {
+          key: string;
+          label: string;
+          description?: string | null;
+          sort_order?: number;
+          is_system?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          label?: string;
+          description?: string | null;
+          sort_order?: number;
+          is_system?: boolean;
+        };
+        Relationships: [];
+      };
+      permissions: {
+        Row: { key: string; label: string; module: string; created_at: string };
+        Insert: { key: string; label: string; module: string; created_at?: string };
+        Update: { label?: string; module?: string };
+        Relationships: [];
+      };
+      role_permissions: {
+        Row: { role_key: string; permission_key: string };
+        Insert: { role_key: string; permission_key: string };
+        Update: Record<string, never>;
+        Relationships: [];
+      };
+      user_roles: {
+        Row: {
+          id: string;
+          account_id: string;
+          role_key: string;
+          scope_type: "class_group" | "department" | "room" | null;
+          scope_id: string | null;
+          granted_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          account_id: string;
+          role_key: string;
+          scope_type?: "class_group" | "department" | "room" | null;
+          scope_id?: string | null;
+          granted_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          role_key?: string;
+          scope_type?: "class_group" | "department" | "room" | null;
+          scope_id?: string | null;
         };
         Relationships: [];
       };

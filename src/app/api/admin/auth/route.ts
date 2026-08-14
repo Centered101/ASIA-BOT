@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import bcrypt from "bcryptjs";
+import { attachSessionCookie } from "@/lib/server/session";
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, message: "รหัสผ่านไม่ถูกต้อง" }, { status: 401 });
     }
     await supabase.from("admin_logs").insert({ ...logBase, status: "success" });
-    return NextResponse.json({
+    const res = NextResponse.json({
       ok: true,
       admin: {
         admin_id: admin.admin_id, username: admin.username, role: admin.role,
@@ -73,6 +74,10 @@ export async function POST(req: NextRequest) {
         google_email: (admin as Record<string, unknown>).google_email ?? null,
       },
     });
+    // Phase 1: also hand out a signed httpOnly session cookie. No-ops until the
+    // migrations have run, so the existing localStorage flow is unaffected.
+    await attachSessionCookie(res, req, "admin", admin.admin_id);
+    return res;
   }
 
   // ── Fallback: ADMIN_PASSWORD env var (when admins table is empty / not yet seeded) ──

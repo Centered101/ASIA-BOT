@@ -1,49 +1,78 @@
-import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import type { Database } from "@/types/database";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { getServiceClient } from "@/lib/server/supabase-server";
+import { withAuth } from "@/lib/server/with-auth";
+import { parseBody } from "@/lib/server/validation";
 
-const supabase = createClient<Database>(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+// Phase 1: this route had NO authentication at all — anyone on the internet
+// could POST and create a product in the school shop. Now gated on
+// shop.manage_products and audited.
+
+const ProductCreateSchema = z.object({
+  name: z.string().trim().min(1, "ต้องระบุชื่อสินค้า"),
+  price: z.number().nonnegative("ราคาต้องไม่ติดลบ"),
+  cost: z.number().nonnegative().nullable().optional(),
+  stock: z.number().int().nonnegative().optional(),
+  unit: z.string().nullable().optional(),
+  category: z.string().nullable().optional(),
+  tag: z.string().nullable().optional(),
+  images: z.array(z.string()).nullable().optional(),
+  colors: z.array(z.string()).nullable().optional(),
+  color_stock: z.record(z.string(), z.number()).nullable().optional(),
+  active: z.boolean().optional(),
+});
+
+export const GET = withAuth(
+  async () => {
+    const { data, error } = await getServiceClient()
+      .from("products")
+      .select("id, tag, stock, name, price, cost, images, unit, category, colors, color_stock, active, deleted_at, created_at")
+      .order("name");
+
+    if (error) {
+      return NextResponse.json({ status: "error", message: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ status: "success", data });
+  },
+  { permission: "shop.view_products" }
 );
 
-export async function GET() {
-  const { data, error } = await supabase
-    .from("products")
-    .select("id, tag, stock, name, price, cost, images, unit, category, colors, color_stock, active, deleted_at, created_at")
-    .order("name");
-  if (error) return NextResponse.json({ status: "error", message: error.message }, { status: 500 });
-  return NextResponse.json({ status: "success", data });
-}
+export const POST = withAuth(
+  async (req) => {
+    const parsed = await parseBody(req, ProductCreateSchema);
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.data;
 
-export async function POST(req: NextRequest) {
-  const body = await req.json() as {
-    name: string; price: number; cost?: number | null; stock?: number;
-    unit?: string | null; category?: string | null; tag?: string | null;
-    images?: string[] | null; colors?: string[] | null; color_stock?: Record<string, number> | null; active?: boolean;
-  };
-  const { name, price, cost, stock, unit, category, tag, images, colors, color_stock, active } = body;
-  if (!name || price == null) {
-    return NextResponse.json({ status: "error", message: "ข้อมูลไม่ครบ" }, { status: 400 });
+    const { data, error } = await getServiceClient()
+      .from("products")
+      .insert({
+        name: body.name,
+        price: body.price,
+        cost: body.cost ?? null,
+        stock: body.stock ?? 0,
+        unit: body.unit ?? null,
+        category: body.category ?? null,
+        tag: body.tag ?? null,
+        images: body.images ?? null,
+        colors: body.colors?.length ? body.colors : null,
+        color_stock:
+          body.color_stock && Object.keys(body.color_stock).length ? body.color_stock : null,
+        active: body.active ?? true,
+      })
+      .select("id")
+      .single();
+
+    if (error) {
+      return NextResponse.json({ status: "error", message: error.message }, { status: 500 });
+    }
+
+    return {
+      response: NextResponse.json({ status: "success", id: data.id }),
+      audit: { entityId: data.id, after: { ...body } },
+    };
+  },
+  {
+    permission: "shop.manage_products",
+    audit: { action: "product.create", entityType: "product" },
   }
-
-  const { data, error } = await supabase
-    .from("products")
-    .insert({
-      name, price,
-      cost: cost ?? null,
-      stock: stock ?? 0,
-      unit: unit ?? null,
-      category: category ?? null,
-      tag: tag ?? null,
-      images: images ?? null,
-      colors: colors?.length ? colors : null,
-      color_stock: color_stock && Object.keys(color_stock).length ? color_stock : null,
-      active: active ?? true,
-    })
-    .select("id")
-    .single();
-
-  if (error) return NextResponse.json({ status: "error", message: error.message }, { status: 500 });
-  return NextResponse.json({ status: "success", id: data.id });
-}
+);

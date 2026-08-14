@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { attachSessionCookie } from "@/lib/server/session";
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -70,7 +71,11 @@ export async function POST(req: NextRequest) {
     }
 
     await logLogin(student_id, "success", "login ok", req);
-    return NextResponse.json({ status: "success", data });
+    const res = NextResponse.json({ status: "success", data });
+    // Phase 1: also hand out a signed httpOnly session cookie. No-ops until the
+    // migrations have run, so the existing localStorage flow is unaffected.
+    await attachSessionCookie(res, req, "student", data.student_id);
+    return res;
   } catch {
     return NextResponse.json({ status: "error", message: "เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์" }, { status: 500 });
   }

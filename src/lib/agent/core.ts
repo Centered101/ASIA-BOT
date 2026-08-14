@@ -18,9 +18,22 @@ function choiceCard(title: string, helper: string, inputPrefix: string, options:
   }
 }
 
+// Attendance results render as rich cards in ChatBubble's <AttendanceCard>,
+// which reads the tool result verbatim as its payload and keys off the tool
+// name. Passing the result straight through is what it expects.
+const ATTENDANCE_CARD_TOOLS = new Set([
+  'get_attendance_status',
+  'get_attendance_summary',
+  'get_attendance_by_date_range',
+])
+
 function richDataFromToolResult(toolName: string, result: unknown): AgentResponse['richData'] | undefined {
   if (!result || typeof result !== 'object' || 'error' in result) return undefined
   const data = result as Record<string, any>
+
+  if (ATTENDANCE_CARD_TOOLS.has(toolName)) {
+    return { type: toolName, payload: data }
+  }
 
   if (toolName === 'get_time_slots' && Array.isArray(data.time_slots)) {
     return choiceCard(

@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { UserContext, UserRole } from '../types'
 
 import { studentTools, executeStudentTool } from './students'
+import { attendanceTools, executeAttendanceTool } from './attendance'
 import { bookingTools, executeBookingTool } from './booking'
 import { shopTools, executeShopTool } from './shop'
 import { scheduleTools, executeScheduleTool } from './schedule'
@@ -12,6 +13,7 @@ import { equipmentTools, executeEquipmentTool } from './equipment'
 // Full tool registry — every tool the agent can call
 export const ALL_TOOLS = [
   ...studentTools,
+  ...attendanceTools,
   ...bookingTools,
   ...shopTools,
   ...scheduleTools,
@@ -25,6 +27,9 @@ const TOOL_ALLOW: Record<UserRole, string[]> = {
   guest: ['get_school_info'],
   student: [
     'get_student_profile',
+    'get_attendance_status',
+    'get_attendance_summary',
+    'get_attendance_by_date_range',
     'get_my_bookings',
     'get_available_rooms',
     'get_time_slots',
@@ -50,6 +55,9 @@ const TOOL_ALLOW: Record<UserRole, string[]> = {
   teacher: [
     'get_student_profile',
     'search_students',
+    'get_attendance_status',
+    'get_attendance_summary',
+    'get_attendance_by_date_range',
     'get_my_bookings',
     'get_available_rooms',
     'get_time_slots',
@@ -78,6 +86,9 @@ const TOOL_ALLOW: Record<UserRole, string[]> = {
   school_admin: [
     'get_student_profile',
     'search_students',
+    'get_attendance_status',
+    'get_attendance_summary',
+    'get_attendance_by_date_range',
     'get_my_bookings',
     'get_available_rooms',
     'get_time_slots',
@@ -99,6 +110,8 @@ const TOOL_ALLOW: Record<UserRole, string[]> = {
   ],
   executive: [
     'get_school_stats',
+    'get_attendance_summary',
+    'get_attendance_by_date_range',
     'get_schedule_today',
     'get_school_info',
     'get_pending_feedback',
@@ -120,6 +133,9 @@ export function getToolsForRole(role: UserRole) {
 const TOOL_MODULES: Record<string, string> = {
   get_student_profile: 'students',
   search_students: 'students',
+  get_attendance_status: 'attendance',
+  get_attendance_summary: 'attendance',
+  get_attendance_by_date_range: 'attendance',
   get_time_slots: 'booking',
   create_booking: 'booking',
   cancel_booking: 'booking',
@@ -148,10 +164,11 @@ export async function executeToolCall(
   ctx: UserContext,
   supabase: SupabaseClient
 ): Promise<unknown> {
-  const module = TOOL_MODULES[toolName]
+  const toolModule = TOOL_MODULES[toolName]
 
-  switch (module) {
+  switch (toolModule) {
     case 'students':   return executeStudentTool(toolName, input, ctx, supabase)
+    case 'attendance': return executeAttendanceTool(toolName, input, ctx, supabase)
     case 'booking':    return executeBookingTool(toolName, input, ctx, supabase)
     case 'shop':       return executeShopTool(toolName, input, ctx, supabase)
     case 'equipment':  return executeEquipmentTool(toolName, input, ctx, supabase)

@@ -38,8 +38,11 @@
 - Supabase API / database access
 - LINE webhook / notification
 - Payment / shop order flow
+- Equipment request / inventory flow
+- Teacher application review flow
 - File upload และ storage
 - AI chat ที่เข้าถึงข้อมูลผู้ใช้
+- Admin setup / recovery endpoints that require `ADMIN_SECRET`
 
 อยู่นอกขอบเขต:
 

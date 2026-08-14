@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { toast } from "sonner";
@@ -321,10 +322,10 @@ function BecomeTeacherForm() {
                   </span>
                 </div>
               )}
-              <a href="/"
+              <Link href="/"
                 className="btn-primary w-full text-sm py-2.5 rounded-xl flex items-center justify-center gap-2">
                 <i className="fa-solid fa-house" /> กลับหน้าหลัก
-              </a>
+              </Link>
             </div>
           </main>
           <Footer />

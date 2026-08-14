@@ -100,7 +100,7 @@ export async function GET(req: NextRequest) {
     if (studentError) return NextResponse.json({ status: "error", message: studentError.message }, { status: 500 });
     if (!student) return NextResponse.json({ status: "error", code: "student_not_found", message: "ไม่พบนักเรียน" }, { status: 404 });
 
-    let uid = isStudentCardUid(studentId, student.uid) ? normalizeUid(student.uid as string) : await generateUniqueStudentUid(studentId);
+    const uid = isStudentCardUid(studentId, student.uid) ? normalizeUid(student.uid as string) : await generateUniqueStudentUid(studentId);
 
     if (uid !== student.uid) {
       const { error: updateError } = await supabase

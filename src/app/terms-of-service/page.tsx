@@ -42,6 +42,14 @@ const sections = [
     ],
   },
   {
+    title: "การสมัครครูและข้อมูลบุคลากร",
+    items: [
+      "ผู้สมัครครูควรกรอกข้อมูลตามจริงและใช้ช่องทางติดต่อที่ผู้ดูแลสามารถตรวจสอบได้",
+      "ผู้ดูแลสามารถอนุมัติ ปฏิเสธ หรือขอข้อมูลเพิ่มเติมตามความเหมาะสมของโรงเรียน",
+      "ข้อมูลครูผู้สอนในระบบใช้เพื่อการจัดตารางเรียนและการติดต่อภายในงานโรงเรียน ไม่ใช่สิทธิ์ผู้ใช้แบบ Teacher",
+    ],
+  },
+  {
     title: "การใช้งาน ASIA-BOT AI",
     items: [
       "ผู้ช่วย AI ใช้เพื่อช่วยค้นข้อมูล อธิบายขั้นตอน และดำเนินงานที่ระบบรองรับตามสิทธิ์ของผู้ใช้",
@@ -81,7 +89,7 @@ export default function TermsOfServicePage() {
           <div className="relative p-5 sm:p-8 border-b border-slate-100">
             <div className="absolute inset-x-0 top-0 h-1 bg-[var(--primary-color)]" />
             <div className="flex items-start gap-4">
-              <span className="grid h-12 w-12 place-items-center rounded-2xl border border-[var(--primary-color)] bg-white text-[var(--primary-dark)] shadow-[0_8px_24px_rgba(132,212,250,0.22)]">
+              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-[var(--primary-color)] bg-white text-[var(--primary-dark)] shadow-[0_8px_24px_rgba(132,212,250,0.22)]">
                 <i className="fa-solid fa-file-signature" />
               </span>
               <div>
@@ -89,7 +97,7 @@ export default function TermsOfServicePage() {
                 <p className="mt-2 text-sm text-slate-500 leading-relaxed">
                   เงื่อนไขนี้ช่วยให้ทุกคนใช้งาน ASIA-BOT ได้อย่างปลอดภัย เป็นธรรม และเหมาะสมกับการใช้งานในสถานศึกษา
                 </p>
-                <p className="mt-3 text-xs font-semibold text-slate-400">อัปเดตล่าสุด: 13 กรกฎาคม 2569</p>
+                <p className="mt-3 text-xs font-semibold text-slate-400">อัปเดตล่าสุด: 9 สิงหาคม 2569</p>
               </div>
             </div>
           </div>

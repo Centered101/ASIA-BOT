@@ -23,20 +23,21 @@
 
 ## Overview
 
-ASIA-BOT คือระบบเว็บแอปสำหรับบริหารจัดการโรงเรียนแบบครบวงจร พัฒนาด้วย **Next.js 15 App Router**, **Supabase PostgreSQL**, **Supabase Storage**, **LINE Messaging API** และรองรับอุปกรณ์ **ESP32 RFID Controller** สำหรับเช็กชื่อเข้า-ออกแบบ Real-time
+ASIA-BOT คือระบบเว็บแอปสำหรับบริหารจัดการโรงเรียนแบบครบวงจร พัฒนาด้วย **Next.js 15 App Router**, **Supabase PostgreSQL**, **Supabase Storage**, **LINE Messaging API** และมีชุด **ESP32 RFID Controller** สำหรับเช็กชื่อเข้า-ออกแบบ Real-time ที่เก็บไว้เป็นโมดูลพร้อมเปิดใช้งานภายหลัง
 
 ระบบรวมงานหลักของโรงเรียนไว้ในที่เดียว:
 
 - บัตรนักเรียนดิจิทัลพร้อม QR Code
-- ระบบ RFID Attendance ด้วย ESP32 + MFRC522 + OLED
+- ระบบ RFID Attendance ด้วย ESP32 + MFRC522 + OLED *(ซ่อนเมนูใช้งานจริงชั่วคราว แต่ API/firmware ยังอยู่)*
 - ติดตามสถานะห้องเรียนและตารางสอนรายสัปดาห์
 - จองห้องและจัดการห้องพร้อม amenities
 - สหกรณ์โรงเรียนพร้อมระบบออเดอร์
+- ระบบเบิกคุรุภัณฑ์ พร้อม stock, หมวดหมู่, รูปภาพ และ approval flow
 - โปรเจกต์นักเรียนและผลประเมินด้วย Chart.js
 - Feedback และคำขอแก้ไขข้อมูลนักเรียน
 - Admin Panel แบบ Single-page พร้อม Role-based Access (superadmin / admin / staff)
-- LINE Flex Messages 5 ประเภทและการส่งข่าวสารจริง
-- **ASIA-BOT AI** — ผู้ช่วย AI ส่วนกลาง (Claude) ที่ตอบคำถามและ **ทำงานแทนได้** (จองห้อง/ส่ง feedback/ค้นเอกสาร) ผ่านทั้งเว็บและ LINE
+- LINE Flex Messages รวมถึง order, feedback, booking, data change และ equipment พร้อมการส่งข่าวสารจริง
+- **ASIA-BOT AI** — ผู้ช่วย AI ส่วนกลาง (Claude) ที่ตอบคำถามและ **ทำงานแทนได้** (จองห้อง/เบิกคุรุภัณฑ์/ส่ง feedback/ค้นเอกสาร) ผ่านทั้งเว็บและ LINE
 
 > รายงานโครงงานฉบับสมบูรณ์อยู่ที่ [docs/report.md](./docs/report.md)  
 > เอกสารกำกับการใช้งาน: [คู่มือผู้ใช้](./docs/user-manual.md), [นโยบายความเป็นส่วนตัว](./docs/privacy-policy.md), [เงื่อนไขการใช้งาน](./docs/terms-of-service.md)
@@ -48,13 +49,15 @@ ASIA-BOT คือระบบเว็บแอปสำหรับบริ�
 | Module | Description |
 |---|---|
 | Student Portal | โปรไฟล์นักเรียน, รูปนักเรียน, QR/ข้อมูลบัตร, แก้ไขข้อมูลส่วนตัว |
-| Student Entry Scanner | ดูประวัติสแกนรายวัน, ย้อนวันก่อนหน้า/ถัดไป, รายชื่อพร้อมรูปนักเรียน |
-| RFID Attendance | ESP32 + RFID ส่ง UID เข้า Next.js API แล้วบันทึก Supabase |
-| Admin RFID Controller | หน้าแอดมินสำหรับทดสอบ UID, location, OLED preview, speaker feedback |
+| Student Entry Scanner | ดูประวัติสแกนรายวัน, ย้อนวันก่อนหน้า/ถัดไป, รายชื่อพร้อมรูปนักเรียน *(ซ่อนจากเมนูหน้าเว็บชั่วคราว)* |
+| RFID Attendance | ESP32 + RFID ส่ง UID เข้า Next.js API แล้วบันทึก Supabase *(ซ่อนจาก navigation ชั่วคราว)* |
+| Admin RFID Controller | หน้าแอดมินสำหรับทดสอบ UID, location, OLED preview, speaker feedback *(เข้าผ่าน URL ตรงได้เมื่อมีสิทธิ์)* |
 | Class Track Room | รวมสถานะห้องเรียน, ตารางวันนี้, ห้องว่าง/ไม่ว่าง/ปิดบริการ และการจอง |
 | Room Booking | จองห้อง, ดูสมาชิกกลุ่ม, อนุมัติ/ปฏิเสธ, จัดการห้องและ amenities |
 | Shop | สหกรณ์โรงเรียน, สินค้า, ออเดอร์, ค่าธรรมเนียม, LINE Order Flex |
+| Equipment Requests | รายการคุรุภัณฑ์, stock, รูปภาพ, คำขอเบิก/ยืม, การอนุมัติ และ LINE Equipment Flex |
 | Projects | รายการโปรเจกต์, หน้าโปรเจกต์รายตัว, custom fields, evaluation analytics |
+| Teacher Applications | หน้าใบสมัครครูและ admin review queue |
 | Feedback | ความคิดเห็น/รายงานปัญหา พร้อม LINE Flex แจ้งแอดมิน |
 | Data Requests | คำขอแก้ไขข้อมูลนักเรียน รวมคำขอเปลี่ยนชื่อไว้ด้วยกัน |
 | Admin Roles | superadmin, admin, staff พร้อมการจำกัดสิทธิ์แต่ละ tab |
@@ -143,6 +146,8 @@ src/
 │   ├── admin/                      # Admin Panel
 │   ├── api/                        # Next.js Route Handlers
 │   ├── class-track-room/           # ติดตามห้องเรียน + จองห้อง
+│   ├── become-teacher/             # แบบฟอร์มสมัครครู
+│   ├── equipment-request/          # เบิก/ยืมคุรุภัณฑ์
 │   ├── feedback/                   # Feedback / report
 │   ├── login/                      # Student login
 │   ├── project/[slug]/             # หน้าโปรเจกต์รายตัว
@@ -151,7 +156,9 @@ src/
 │   ├── rfid/                       # RFID legacy/public page
 │   ├── shop/                       # สหกรณ์โรงเรียน
 │   ├── student/                    # หน้าโปรไฟล์นักเรียน
-│   └── student-entry-scanner/      # ดูประวัติการสแกน
+│   ├── student-entry-scanner/      # ดูประวัติการสแกน
+│   ├── Qman/                       # ระบบคิว/จองคิวตัวอย่าง
+│   └── QQ/                         # ระบบร้านค้า/QR ตัวอย่าง
 ├── components/
 │   ├── Header.tsx
 │   ├── Footer.tsx
@@ -178,7 +185,7 @@ arduino/
 └── RFID_ESP32/                     # ESP32 RFID controller sketch
 
 supabase/
-FullSQL.sql                         # SQL/schema reference
+schema.sql                          # SQL/schema reference
 ```
 
 ---
@@ -190,21 +197,24 @@ FullSQL.sql                         # SQL/schema reference
 | `dashboard` | ภาพรวม, สถิตินักเรียน, Chart.js, สถานะรายวัน |
 | `students` | จัดการนักเรียน, รูปนักเรียน, card/list/grid |
 | `data_requests` | คำขอแก้ไขข้อมูลนักเรียน |
-| `entrylogs` | บันทึกเข้า-ออกทั้งหมดแบบรายวัน |
-| `checkin_school` | เช็กชื่อโรงเรียน |
-| `checkin_library` | เช็กชื่อห้องสมุด |
-| `checkin_meeting` | เช็กชื่อห้องประชุม |
-| `rfid` | RFID Controller สำหรับแอดมิน |
+| `entrylogs` | บันทึกเข้า-ออกทั้งหมดแบบรายวัน *(ซ่อนจาก navigation ชั่วคราว)* |
+| `checkin_school` | เช็กชื่อโรงเรียน *(ซ่อนจาก navigation ชั่วคราว)* |
+| `checkin_library` | เช็กชื่อห้องสมุด *(ซ่อนจาก navigation ชั่วคราว)* |
+| `checkin_meeting` | เช็กชื่อห้องประชุม *(ซ่อนจาก navigation ชั่วคราว)* |
+| `rfid` | RFID Controller สำหรับแอดมิน *(ซ่อนจาก navigation ชั่วคราว)* |
 | `bookings` | รายการจองห้อง |
 | `rooms` | จัดการห้องและสิ่งอำนวยความสะดวก |
 | `products` | จัดการสินค้า |
 | `shoporders` | ออเดอร์สหกรณ์ |
+| `equipment_items` | จัดการคุรุภัณฑ์, หมวดหมู่, รูปภาพ, stock และสถานะ |
+| `equipment_requests` | อนุมัติ/ปฏิเสธ/อัปเดตคำขอเบิกคุรุภัณฑ์ |
 | `projects` | จัดการโปรเจกต์ |
 | `evaluations` | ผลประเมินและ Chart.js |
 | `class_groups` | กลุ่มเรียน |
 | `class_schedule_weekly` | ตารางสัปดาห์ |
 | `class_schedule_override` | แก้วันพิเศษ |
 | `teachers` | ข้อมูลครูผู้สอนสำหรับตารางเรียน ไม่ใช่ role ผู้ใช้ |
+| `teacher_applications` | ตรวจใบสมัครครูจากหน้า `/become-teacher` |
 | `feedbacks` | Feedback |
 | `admins` | จัดการผู้ดูแลระบบ |
 | `line_broadcast` | ส่งข่าวสาร LINE จริง ทั้งข้อความ รูปภาพ Flex และ Custom JSON |
@@ -212,6 +222,7 @@ FullSQL.sql                         # SQL/schema reference
 
 Admin UX:
 
+- กลุ่มเมนูเช็กชื่อและอุปกรณ์ RFID (`entrylogs`, `checkin_school`, `checkin_library`, `checkin_meeting`, `rfid`) ถูกซ่อนจาก sidebar/admin navigation ชั่วคราว เพื่อพักการใช้งานหน้าบ้าน แต่ route/API ยังอยู่สำหรับเปิดกลับหรือทดสอบผ่าน URL ตรงตามสิทธิ์
 - Sidebar แสดง badge แบบ dot number เฉพาะเมนูที่มีรายการต้องดู เช่น คำขอข้อมูล, จองห้อง, สินค้าใกล้หมด, คำสั่งซื้อ, ออเดอร์เบิก, feedback และใบสมัครครู
 - ปุ่มค้นหากลางใน topbar เปิดด้วย `Ctrl+K` ได้ ค้นหาได้ทั้งเมนูและรายการจริง เช่น นักเรียน, สินค้า, คำสั่งซื้อ, คุรุภัณฑ์ และออเดอร์เบิก
 - มุมมอง `Grid / List / Card` ใช้ค่าเดียวกันทั้ง admin และเก็บใน `localStorage` (`asia_admin_view_mode`)
@@ -269,7 +280,7 @@ Content-Type: application/json
 
 ## LINE Flex Messages
 
-ระบบมี LINE Flex หลัก 5 แบบ:
+ระบบมี LINE Flex หลัก 6 แบบ:
 
 | Flex | Color | Purpose |
 |---|---:|---|
@@ -278,6 +289,7 @@ Content-Type: application/json
 | RFID Attendance Flex | `#84D4FA` | แจ้งเตือนสแกนเข้า-ออก |
 | Booking Flex | `#F59E0B` | คำขอจองห้อง |
 | Student Data Change Flex | `#6366F1` | คำขอแก้ไขข้อมูลนักเรียน |
+| Equipment Flex | `#F59E0B` | คำขอเบิก/ยืมคุรุภัณฑ์ |
 
 ระบบส่งข่าวสารจริงจากผู้ดูแลรองรับ:
 
@@ -314,7 +326,7 @@ ASIA-BOT AI คือผู้ช่วย AI ส่วนกลางที่�
 | ประเภท | Tools |
 |---|---|
 | ดูข้อมูล | เข้า-ออกโรงเรียน (รายวัน/สรุป/ช่วงเวลา), ตารางเรียน, การจอง, ออเดอร์, สินค้า, โปรไฟล์ |
-| **ทำ action** | `create_booking` / `cancel_booking` (จองห้อง), `submit_feedback`, และ action อื่นตามสิทธิ์ที่เปิดใช้งานในระบบ |
+| **ทำ action** | `create_booking` / `cancel_booking` (จองห้อง), `request_equipment`, `submit_feedback`, และ action อื่นตามสิทธิ์ที่เปิดใช้งานในระบบ |
 | ค้นเอกสาร | `list_documents` / `search_documents` — ถาม-ตอบจากไฟล์ PDF ที่อัปโหลด |
 | Admin | สถิติโรงเรียน, ค้นหานักเรียน, ดู feedback/ออเดอร์/การจองทั้งหมด |
 
@@ -358,6 +370,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ADMIN_PASSWORD=optional_env_admin_password
 ADMIN_FALLBACK_USERNAME=optional_superadmin_username
 ADMIN_FALLBACK_PASSWORD=optional_superadmin_password
+ADMIN_SECRET=optional_setup_or_recovery_secret
 
 # LINE
 LINE_TOKEN=your_line_channel_access_token
@@ -375,6 +388,12 @@ STRIPE_WEBHOOK_SECRET=whsec_xxx
 
 # AI Agent (ASIA-BOT AI)
 ANTHROPIC_API_KEY=sk-ant-xxx
+
+# Firebase public config (optional overrides; defaults exist in src/lib/firebase.ts)
+NEXT_PUBLIC_FIREBASE_API_KEY=...
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
+NEXT_PUBLIC_FIREBASE_APP_ID=...
 ```
 
 หมายเหตุ:
@@ -406,11 +425,16 @@ ANTHROPIC_API_KEY=sk-ant-xxx
 - `class_schedules`
 - `class_schedule_overrides`
 - `teachers`
+- `teacher_applications`
+- `equipment_items`
+- `equipment_requests`
+- `line_notification_categories`
+- `line_notification_channels`
 
 ดู schema เพิ่มเติมได้ที่:
 
 ```txt
-FullSQL.sql
+supabase/schema.sql
 ```
 
 ---
@@ -423,6 +447,7 @@ Buckets/paths ที่เกี่ยวข้อง:
 project-images/
 student photos / avatars
 product images
+equipment images
 feedback images
 admin avatars
 ```
@@ -750,7 +775,7 @@ Admin จัดการใน /admin?tab=shoporders
 | `/login` | เข้าสู่ระบบนักเรียน |
 | `/register` | สมัครนักเรียน |
 | `/student` | โปรไฟล์นักเรียน |
-| `/student-entry-scanner` | ดูประวัติสแกนรายวัน |
+| `/student-entry-scanner` | ดูประวัติสแกนรายวัน *(ซ่อนจากเมนูหน้าแรก/โปรไฟล์ชั่วคราว)* |
 | `/class-track-room` | สถานะห้องเรียน + จองห้อง |
 | `/shop` | สหกรณ์โรงเรียน |
 | `/projects` | รวมโปรเจกต์ |
@@ -770,7 +795,6 @@ Admin ใช้ path เดียวคือ:
 ```txt
 /admin?tab=dashboard
 /admin?tab=students
-/admin?tab=rfid
 /admin?tab=bookings
 /admin?tab=settings
 ```
@@ -792,11 +816,12 @@ Admin Panel แบ่งหมวดหมู่ด้านซ้าย เช�
 |---|---|
 | ภาพรวม | `dashboard` |
 | นักเรียน | `students`, `data_requests` |
-| เช็กชื่อและอุปกรณ์ | `entrylogs`, `checkin_school`, `checkin_library`, `checkin_meeting`, `rfid` |
+| เช็กชื่อและอุปกรณ์ RFID *(ซ่อนชั่วคราว)* | `entrylogs`, `checkin_school`, `checkin_library`, `checkin_meeting`, `rfid` |
 | จองห้อง | `bookings`, `rooms` |
 | สหกรณ์โรงเรียน | `products`, `shoporders` |
+| คุรุภัณฑ์ | `equipment_items`, `equipment_requests` |
 | โปรเจกต์ | `projects`, `evaluations` |
-| การเรียนการสอน | `class_groups`, `class_schedule_weekly`, `class_schedule_override`, `teachers` |
+| การเรียนการสอน | `class_groups`, `class_schedule_weekly`, `class_schedule_override`, `teachers`, `teacher_applications` |
 | ระบบ | `feedbacks`, `admins`, `line_broadcast`, `settings` |
 
 ข้อมูลที่เป็น list เยอะ ๆ ควรมีรูปแบบเหมือนกัน:
@@ -826,12 +851,15 @@ Admin Panel แบ่งหมวดหมู่ด้านซ้าย เช�
 | rooms | ❌ | ✅ | ✅ |
 | products | ✅ | ✅ | ✅ |
 | shoporders | ✅ | ✅ | ✅ |
+| equipment_items | ✅ | ✅ | ✅ |
+| equipment_requests | ✅ | ✅ | ✅ |
 | projects | ✅ | ✅ | ✅ |
 | evaluations | ✅ | ✅ | ✅ |
 | class_groups | ❌ | ✅ | ✅ |
 | class_schedule_weekly | ❌ | ✅ | ✅ |
 | class_schedule_override | ❌ | ✅ | ✅ |
 | teachers | ❌ | ✅ | ✅ |
+| teacher_applications | ❌ | ✅ | ✅ |
 | feedbacks | ✅ | ✅ | ✅ |
 | admins | ✅ | ✅ | ✅ |
 | line_broadcast | ✅ | ✅ | ✅ |
@@ -839,6 +867,7 @@ Admin Panel แบ่งหมวดหมู่ด้านซ้าย เช�
 
 แนวคิด:
 
+- tab กลุ่มเช็กชื่อและอุปกรณ์ RFID ยังมี permission/route อยู่ แต่ถูกซ่อนจาก navigation ชั่วคราว
 - ทุก role ดูระบบและทดสอบ LINE ได้
 - Admin สามารถแก้ข้อมูลตัวเองและดูรายชื่อ admin ได้
 - Superadmin ใช้สำหรับงานที่มีผลกระทบสูง เช่น จัดการบัญชี admin ทั้งหมด
@@ -985,7 +1014,7 @@ Admin สามารถดึง avatar จากนักเรียนได
 
 ## 8. Schema Visualizer
 
-แผนภาพนี้อิงจาก `FullSQL.sql` เป็นหลัก โดยแสดงเฉพาะ table/field/foreign key ที่มีอยู่จริงใน schema ปัจจุบัน ไม่ใส่ role หรือ column ที่ระบบไม่ได้ใช้
+แผนภาพนี้อิงจาก `supabase/schema.sql` เป็นหลัก โดยแสดงเฉพาะ table/field/foreign key ที่มีอยู่จริงใน schema ปัจจุบัน ไม่ใส่ role หรือ column ที่ระบบไม่ได้ใช้
 
 มีไฟล์ Draw.io สำหรับเปิดดูและแก้ไขแผนภาพได้โดยตรง:
 
@@ -1320,6 +1349,10 @@ src/app/api/
 | `/api/line/broadcast` | ส่งข่าวสาร LINE จริง ทั้งข้อความ รูปภาพ และ Flex |
 | `/api/line/webhook` | รับ event จาก LINE สำหรับผูกบัญชี/ตอบกลับ |
 | `/api/shop/*` | สินค้าและ order |
+| `/api/equipment/*` | รายการคุรุภัณฑ์และคำขอเบิกของนักเรียน |
+| `/api/admin/equipment-*` | จัดการคุรุภัณฑ์และอนุมัติคำขอเบิก |
+| `/api/teacher-applications` | รับใบสมัครครู |
+| `/api/admin/teacher-applications/*` | ตรวจและอัปเดตสถานะใบสมัครครู |
 | `/api/rooms/*` | ห้องและ booking |
 | `/api/student/*` | ข้อมูลนักเรียน |
 | `/api/projects/*` | โปรเจกต์และ evaluation |
@@ -1335,13 +1368,14 @@ src/app/api/
 
 ## 10. LINE Flex System
 
-LINE Flex หลักของระบบมี 5 แบบ:
+LINE Flex หลักของระบบมี 6 แบบ:
 
 1. Order Flex
 2. Feedback Flex
 3. RFID Attendance Flex
 4. Booking Flex
 5. Student Data Change Flex
+6. Equipment Flex
 
 ไฟล์หลัก:
 
@@ -1364,6 +1398,8 @@ src/app/api/line/broadcast/route.ts
 ---
 
 ## 11. ESP32 RFID Controller
+
+> **สถานะปัจจุบัน:** เมนูเช็กชื่อเข้าโรงเรียนและหน้าอุปกรณ์ RFID ถูกซ่อนจาก navigation ชั่วคราว ระบบ backend, API, schema และ firmware ยังถูกเก็บไว้ครบ เพื่อเปิดกลับมาใช้งานหรือทดสอบผ่าน URL ตรงเมื่อจำเป็น
 
 ESP32 ทำหน้าที่:
 
@@ -1416,10 +1452,10 @@ ESP32 → https://asia-bot.xyz/api/rfid/...
 ใช้ในหน้า overview และ admin analytics เช่น:
 
 - dashboard
-- entrylogs
-- checkin_school
-- checkin_library
-- checkin_meeting
+- entrylogs *(tab ถูกซ่อนจาก navigation ชั่วคราว)*
+- checkin_school *(tab ถูกซ่อนจาก navigation ชั่วคราว)*
+- checkin_library *(tab ถูกซ่อนจาก navigation ชั่วคราว)*
+- checkin_meeting *(tab ถูกซ่อนจาก navigation ชั่วคราว)*
 - products
 - shoporders
 - feedbacks
@@ -1561,7 +1597,8 @@ npm run dev
 | `src/lib/session.ts` | student session |
 | `src/lib/amenities.ts` | รายการสิ่งอำนวยความสะดวก |
 | `arduino/RFID_ESP32/RFID_ESP32.ino` | ESP32 firmware |
-| `FullSQL.sql` | schema/reference SQL |
+| `supabase/schema.sql` | schema/reference SQL |
+| `supabase/storage.sql` | storage bucket/reference policy SQL |
 | `docs/asia-bot-system.drawio` | Draw.io architecture + schema visualizer |
 
 ---
@@ -1588,7 +1625,8 @@ npm run dev
 |---|---|
 | [docs/report.md](./docs/report.md) | รายงานโครงงานฉบับสมบูรณ์ (วิชาการ) |
 | [docs/asia-bot-system.drawio](./docs/asia-bot-system.drawio) | System Architecture + ER Diagram (Draw.io) |
-| [supabase/FullSQL.sql](./supabase/FullSQL.sql) | Database schema reference |
+| [supabase/schema.sql](./supabase/schema.sql) | Database schema reference |
+| [supabase/storage.sql](./supabase/storage.sql) | Supabase Storage bucket/policy reference |
 | [arduino/RFID_ESP32/RFID_ESP32.ino](./arduino/RFID_ESP32/RFID_ESP32.ino) | ESP32 firmware |
 
 ---

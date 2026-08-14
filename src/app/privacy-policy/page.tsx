@@ -7,6 +7,7 @@ const sections = [
     items: [
       "ข้อมูลนักเรียน เช่น รหัสนักเรียน ชื่อ นามสกุล ชื่อเล่น ระดับชั้น สาขา ปีที่เข้าเรียน และรูปโปรไฟล์",
       "ข้อมูลการใช้งานระบบ เช่น การจองห้อง คำขอเบิกคุรุภัณฑ์ คำสั่งซื้อสหกรณ์ การประเมินโปรเจกต์ และความคิดเห็นที่ส่งเข้ามา",
+      "ข้อมูลใบสมัครครูหรือข้อมูลบุคลากร เมื่อผู้ใช้ส่งแบบฟอร์มสมัครหรือผู้ดูแลบันทึกข้อมูลครูผู้สอน",
       "ข้อมูลบัญชีที่ใช้เข้าสู่ระบบ เช่น เบอร์โทรสำหรับยืนยันตัวตน หรืออีเมล Google เมื่อผู้ใช้เลือกเชื่อมบัญชี",
       "ข้อมูลสำหรับแจ้งเตือน เช่น LINE user id หรือข้อมูลที่จำเป็นต่อการส่งข้อความแจ้งเตือน",
       "ข้อความที่ผู้ใช้ส่งให้ ASIA-BOT AI เพื่อให้ระบบตอบคำถามหรือช่วยดำเนินงานตามคำขอ",
@@ -18,6 +19,7 @@ const sections = [
       "ยืนยันตัวตนและแสดงบัตรประจำตัวนักเรียน",
       "ดูแลและตรวจสอบการใช้งานบริการของโรงเรียน",
       "จัดการการจองห้อง คำขอเบิกคุรุภัณฑ์ คำสั่งซื้อสินค้า การประเมินโปรเจกต์ และการติดต่อกลับจากผู้ดูแล",
+      "ตรวจสอบใบสมัครครู จัดการข้อมูลครูผู้สอน และดูแลตารางเรียน",
       "ปรับปรุงความปลอดภัยของระบบ และตรวจสอบการใช้งานที่ผิดปกติ",
       "ส่งการแจ้งเตือนที่เกี่ยวข้องกับบัญชีหรือกิจกรรมของผู้ใช้",
       "ช่วยให้ ASIA-BOT AI ตอบคำถามตามข้อมูลที่ผู้ใช้มีสิทธิ์เข้าถึงเท่านั้น",
@@ -66,7 +68,7 @@ export default function PrivacyPolicyPage() {
           <div className="relative p-5 sm:p-8 border-b border-slate-100">
             <div className="absolute inset-x-0 top-0 h-1 bg-[var(--primary-color)]" />
             <div className="flex items-start gap-4">
-              <span className="grid h-12 w-12 place-items-center rounded-2xl border border-[var(--primary-color)] bg-white text-[var(--primary-dark)] shadow-[0_8px_24px_rgba(132,212,250,0.22)]">
+              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-[var(--primary-color)] bg-white text-[var(--primary-dark)] shadow-[0_8px_24px_rgba(132,212,250,0.22)]">
                 <i className="fa-solid fa-shield-halved" />
               </span>
               <div>
@@ -74,7 +76,7 @@ export default function PrivacyPolicyPage() {
                 <p className="mt-2 text-sm text-slate-500 leading-relaxed">
                   หน้านี้อธิบายว่า ASIA-BOT เก็บ ใช้ และดูแลข้อมูลของผู้ใช้อย่างไร โดยเขียนให้เข้าใจง่ายสำหรับนักเรียน ผู้ปกครอง และบุคลากร
                 </p>
-                <p className="mt-3 text-xs font-semibold text-slate-400">อัปเดตล่าสุด: 13 กรกฎาคม 2569</p>
+                <p className="mt-3 text-xs font-semibold text-slate-400">อัปเดตล่าสุด: 9 สิงหาคม 2569</p>
               </div>
             </div>
           </div>

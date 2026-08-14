@@ -1,5 +1,7 @@
 # ASIA-BOT RFID ESP32 Setup
 
+> Current app status: attendance and RFID device screens are hidden from the normal student/admin navigation. The ESP32 firmware, database tables, and `/api/rfid/*` endpoints are still kept for direct testing and future re-enable.
+
 ## 1. Hardware Wiring
 
 ### MFRC522 RFID
@@ -252,4 +254,3 @@ Check /api/rfid/cache returns active cards
 Check Supabase rfid_cards.status = active
 Check students exist for student_id
 ```
-

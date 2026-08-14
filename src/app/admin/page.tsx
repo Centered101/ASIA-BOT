@@ -2,6 +2,7 @@
 
 import { memo, useEffect, useState, useCallback, useMemo, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { getGoogleSupabase } from "@/lib/supabase-google";
 import { safeImageSrc } from "@/lib/image-url";
 import { supabase as realtimeSupabase } from "@/lib/supabase";
@@ -683,9 +684,9 @@ function AdminLogin({ onLogin }: { onLogin: (a: AdminUser) => void }) {
         </div>
 
         <div className="flex items-center justify-between mt-4 px-1">
-          <a href="/" className="text-xs text-[#9e9e9e] hover:text-white transition-colors flex items-center gap-1">
+          <Link href="/" className="text-xs text-[#9e9e9e] hover:text-white transition-colors flex items-center gap-1">
             <i className="fa-solid fa-arrow-left" /> กลับหน้านักเรียน
-          </a>
+          </Link>
           <span className="text-xs text-[#636363]">Centered101 · {SITE_NAME}</span>
         </div>
       </div>
@@ -1534,6 +1535,9 @@ function SidebarUser({ admin, onLogout, onAvatarChange }: {
   useEffect(() => {
     const raw = localStorage.getItem(STORAGE_TIME_KEY);
     if (!raw) return;
+    // Must stay `let`: tick() closes over tid and is called once before the
+    // interval is created, so a const would be in the TDZ on that first call.
+    // eslint-disable-next-line prefer-const
     let tid: ReturnType<typeof setInterval> | undefined;
     function tick() {
       const exp = new Date(raw!).getTime() + SESSION_8H;
@@ -7833,7 +7837,7 @@ function TeacherApplicationsTab({ adminId, onAddTeacher }: { adminId: string; on
                     disabled={actionLoading}
                     className="w-full py-2 rounded-lg text-sm font-medium disabled:opacity-50"
                     style={{ background: "#1e1e1e", border: "1px solid #333", color: "#a78bfa" }}>
-                    เปลี่ยนสถานะเป็น "กำลังตรวจสอบ"
+                    เปลี่ยนสถานะเป็น &quot;กำลังตรวจสอบ&quot;
                   </button>
                 )}
               </div>
@@ -9844,6 +9848,72 @@ function ProjectsTab({ adminId, role, onViewEvals }: { adminId: string; role: st
 // ─── Evaluations Tab ──────────────────────────────────────────────────────────
 
 type EvalRow = { id: string; project_id: string | null; gender: string | null; evaluator: string | null; name: string | null; emoji: number | null; creative: number | null; content: number | null; presentation: number | null; usability: number | null; overall: number | null; comments: string | null; created_at: string; projects?: { name: string; slug: string } | null; };
+type EvalCustomAnswer = { key?: string; label: string; value: string };
+
+const EVAL_CUSTOM_ANSWERS_MARKER = "[[ASIA_BOT_CUSTOM_ANSWERS_V1]]";
+const EVAL_LEGACY_CUSTOM_LABELS = new Set([
+  "IG",
+  "LINE",
+  "Facebook",
+  "email",
+  "URL",
+  "เว็บไซต์",
+  "เบอร์โทร",
+  "ระดับชั้นการศึกษา",
+  "ระดับชั้น",
+]);
+
+function parseLegacyCustomAnswers(comment: string): { comment: string; customAnswers: EvalCustomAnswer[] } | null {
+  const parts = comment
+    .split(/\s*(?:→|->)\s*/g)
+    .map(part => part.trim())
+    .filter(Boolean);
+  if (parts.length < 2) return null;
+
+  const customAnswers: EvalCustomAnswer[] = [];
+  const leftovers: string[] = [];
+  for (let i = 0; i < parts.length - 1; i += 2) {
+    const value = parts[i];
+    const label = parts[i + 1];
+    if (!value || !label) continue;
+    if (EVAL_LEGACY_CUSTOM_LABELS.has(label) || /^[A-Za-z0-9 _./@ก-๙-]{1,40}$/.test(label)) {
+      customAnswers.push({ label, value });
+    } else {
+      leftovers.push(value, label);
+    }
+  }
+
+  if (parts.length % 2 === 1) leftovers.push(parts[parts.length - 1]);
+  if (customAnswers.length === 0) return null;
+  return { comment: leftovers.join(" → ").trim(), customAnswers };
+}
+
+function parseEvalComments(comments: string | null): { comment: string; customAnswers: EvalCustomAnswer[] } {
+  if (!comments) return { comment: "", customAnswers: [] };
+  const markerIndex = comments.indexOf(EVAL_CUSTOM_ANSWERS_MARKER);
+  if (markerIndex === -1) {
+    return parseLegacyCustomAnswers(comments.trim()) ?? { comment: comments.trim(), customAnswers: [] };
+  }
+
+  const comment = comments.slice(0, markerIndex).trim();
+  const encoded = comments.slice(markerIndex + EVAL_CUSTOM_ANSWERS_MARKER.length).trim();
+  try {
+    const parsed = JSON.parse(encoded) as unknown;
+    if (!Array.isArray(parsed)) return { comment, customAnswers: [] };
+    const customAnswers = parsed.filter((item): item is EvalCustomAnswer => {
+      if (!item || typeof item !== "object") return false;
+      const row = item as Record<string, unknown>;
+      return typeof row.label === "string" && typeof row.value === "string" && row.value.trim() !== "";
+    }).map(item => ({
+      key: typeof item.key === "string" ? item.key : undefined,
+      label: item.label,
+      value: item.value,
+    }));
+    return { comment, customAnswers };
+  } catch {
+    return { comment, customAnswers: [] };
+  }
+}
 
 // ── Analytics helpers ─────────────────────────────────────────────────────────
 
@@ -10123,6 +10193,8 @@ const EVAL_SCORE_LABEL = ["สร้างสรรค์", "เนื้อห�
 
 function EvalCard({ r }: { r: EvalRow }) {
   const [open, setOpen] = useState(false);
+  const parsedComments = parseEvalComments(r.comments);
+  const customPreview = parsedComments.customAnswers[0];
   return (
     <div className="rounded-xl transition-all" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
       <div className="flex items-start gap-3 p-4 cursor-pointer select-none" onClick={() => setOpen(o => !o)}>
@@ -10172,8 +10244,13 @@ function EvalCard({ r }: { r: EvalRow }) {
           </div>
 
           {/* Comment preview */}
-          {r.comments && !open && (
-            <p className="text-[11px] mt-1.5 line-clamp-1" style={{ color: "#9e9e9e" }}>{r.comments}</p>
+          {parsedComments.comment && !open && (
+            <p className="text-[11px] mt-1.5 line-clamp-1" style={{ color: "#9e9e9e" }}>{parsedComments.comment}</p>
+          )}
+          {!parsedComments.comment && customPreview && !open && (
+            <p className="text-[11px] mt-1.5 line-clamp-1" style={{ color: "#9e9e9e" }}>
+              คำถามพิเศษ: {customPreview.label} — {customPreview.value}
+            </p>
           )}
         </div>
 
@@ -10206,12 +10283,39 @@ function EvalCard({ r }: { r: EvalRow }) {
               );
             })}
           </div>
+          {/* Custom answers */}
+          {parsedComments.customAnswers.length > 0 && (
+            <div className="mt-3 rounded-lg overflow-hidden"
+              style={{ background: "#0c0c0c", border: "1px solid #2a2a2a" }}>
+              <div className="px-3 py-2 flex items-center gap-2"
+                style={{ borderBottom: "1px solid #2a2a2a" }}>
+                <i className="fa-solid fa-wand-magic-sparkles text-[10px]" style={{ color: "#ff7070" }} />
+                <span className="text-[11px] font-bold text-white">คำถามพิเศษ</span>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                  style={{ background: "#ff70701a", color: "#ff7070" }}>
+                  {parsedComments.customAnswers.length} ข้อ
+                </span>
+              </div>
+              <div className="divide-y" style={{ borderColor: "#2a2a2a" }}>
+                {parsedComments.customAnswers.map((answer, index) => (
+                  <div key={`${answer.key ?? answer.label}-${index}`} className="px-3 py-2">
+                    <div className="text-[10px] font-bold mb-1" style={{ color: "#9e9e9e" }}>
+                      {answer.label}
+                    </div>
+                    <div className="text-[11px] leading-relaxed text-white break-words">
+                      {answer.value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {/* Full comment */}
-          {r.comments && (
+          {parsedComments.comment && (
             <div className="mt-3 px-3 py-2 rounded-lg text-[11px] leading-relaxed"
               style={{ background: "#0c0c0c", color: "#9e9e9e", border: "1px solid #2a2a2a" }}>
               <i className="fa-solid fa-quote-left text-[9px] mr-1.5" style={{ color: "#ff7070" }} />
-              {r.comments}
+              {parsedComments.comment}
             </div>
           )}
         </div>
@@ -10303,16 +10407,22 @@ function EvaluationsTab({ adminId }: { adminId: string }) {
             </p>
           </div>
           <div className="flex-1" />
-          <div className="flex flex-wrap gap-1.5">
-            {["all", ...projectNames].map(p => (
-              <button key={p} onClick={() => setProjectFilter(p)}
-                className="px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all max-w-[180px] truncate"
-                style={projectFilter === p
-                  ? { background: `${ADMIN_PRIMARY}20`, color: ADMIN_PRIMARY, border: `1px solid ${ADMIN_PRIMARY}55` }
-                  : { background: "#0c0c0c", color: "#9e9e9e", border: "1px solid #3e3e3e" }}>
-                {p === "all" ? "ทั้งหมด" : p}
-              </button>
-            ))}
+          <div className="relative min-w-[220px]">
+            <i className="fa-solid fa-folder-open absolute left-3 top-1/2 -translate-y-1/2 text-[11px] pointer-events-none"
+              style={{ color: ADMIN_PRIMARY }} />
+            <select
+              value={projectFilter}
+              onChange={e => setProjectFilter(e.target.value)}
+              className="w-full pl-8 pr-9 py-2 rounded-lg text-[11px] font-semibold outline-none appearance-none truncate"
+              style={{ background: "#0c0c0c", color: "#ededed", border: "1px solid #3e3e3e" }}
+            >
+              <option value="all">ทั้งหมด</option>
+              {projectNames.map(projectName => (
+                <option key={projectName} value={projectName}>{projectName}</option>
+              ))}
+            </select>
+            <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-[9px] pointer-events-none"
+              style={{ color: "#636363" }} />
           </div>
         </div>
       </div>
@@ -10356,9 +10466,24 @@ function EvaluationsTab({ adminId }: { adminId: string }) {
           </div>
 
           {/* ── Content ── */}
-          {view === "analytics"
-            ? <EvalAnalytics rows={filtered} />
-            : <EvalList rows={filtered} />}
+          {view === "analytics" ? (
+            <div className="space-y-5">
+              <EvalAnalytics rows={filtered} />
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <i className="fa-solid fa-table-list text-sm" style={{ color: ADMIN_PRIMARY }} />
+                  <span className="text-sm font-bold text-white">รายการผลประเมิน</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                    style={{ background: `${ADMIN_PRIMARY}20`, color: ADMIN_PRIMARY }}>
+                    {filtered.length} รายการ
+                  </span>
+                </div>
+                <EvalList rows={filtered} />
+              </div>
+            </div>
+          ) : (
+            <EvalList rows={filtered} />
+          )}
         </>
       )}
     </div>

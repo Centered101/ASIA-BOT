@@ -163,6 +163,10 @@ Vercel เป็น cloud platform ที่รองรับการ deploy N
 | `feedback` | ความคิดเห็น / รายงานปัญหา |
 | `change_requests` | คำขอแก้ไขข้อมูลนักเรียน |
 | `name_change_requests` | คำขอเปลี่ยนชื่อ |
+| `equipment_items` | รายการคุรุภัณฑ์ รูปภาพ stock หมวดหมู่ และสถานะใช้งาน |
+| `equipment_requests` | คำขอเบิก/ยืมคุรุภัณฑ์และสถานะอนุมัติ |
+| `teacher_applications` | ใบสมัครครูที่ส่งจากหน้าเว็บ |
+| `line_notification_categories` / `line_notification_channels` | หมวดหมู่และปลายทางแจ้งเตือน LINE |
 
 **กลุ่มตารางเรียน**
 
@@ -233,7 +237,8 @@ public/                         ← root ของโปรเจกต์
 │   └── RFID_ESP32/
 │       └── RFID_ESP32.ino      # ESP32 firmware
 ├── supabase/
-│   └── FullSQL.sql             # SQL schema reference
+│   ├── schema.sql              # SQL schema reference
+│   └── storage.sql             # Supabase Storage bucket/policy reference
 └── docs/
     └── asia-bot-system.drawio  # Architecture + ER Diagram
 ```
@@ -293,7 +298,7 @@ Admin ดูข้อมูลเดิมและข้อมูลใหม�
 
 ### 4.3 LINE Flex Message System
 
-ระบบมี Flex Message ทั้งสิ้น 5 แบบสำหรับแจ้งเตือนอัตโนมัติ และอีก 6 แบบสำหรับส่งข่าวสารจริงจากผู้ดูแลระบบ
+ระบบมี Flex Message ทั้งสิ้น 6 แบบสำหรับแจ้งเตือนอัตโนมัติ และอีก 6 แบบสำหรับส่งข่าวสารจริงจากผู้ดูแลระบบ
 
 **Flex แจ้งเตือนอัตโนมัติ**
 
@@ -301,6 +306,7 @@ Admin ดูข้อมูลเดิมและข้อมูลใหม�
 |---|---|---|
 | Order Flex | `#EC4899` | นักเรียนสั่งซื้อสินค้าสหกรณ์ |
 | Feedback Flex | `#84D4FA` / `#FF7070` | นักเรียนส่ง feedback หรือรายงานปัญหา |
+| Equipment Flex | `#F59E0B` | นักเรียนส่งคำขอเบิก/ยืมคุรุภัณฑ์ |
 | RFID Attendance Flex | `#84D4FA` | นักเรียนสแกนบัตรเข้า-ออก |
 | Booking Flex | `#F59E0B` | นักเรียนส่งคำขอจองห้อง |
 | Student Data Change Flex | `#6366F1` | นักเรียนยื่นคำขอแก้ไขข้อมูล |
@@ -383,18 +389,20 @@ executeToolCall ──► Supabase (ดูข้อมูล / ทำ action)
 | `/login` | เข้าสู่ระบบด้วยรหัสนักเรียน |
 | `/register` | สมัครเป็นนักเรียนใหม่ |
 | `/student` | โปรไฟล์นักเรียน บัตรดิจิทัล QR Code แก้ไขข้อมูล |
-| `/student-entry-scanner` | ดูประวัติสแกนเข้า-ออกรายวัน |
+| `/student-entry-scanner` | ดูประวัติสแกนเข้า-ออกรายวัน *(ซ่อนจากเมนูหน้าแรก/โปรไฟล์ชั่วคราว)* |
 | `/class-track-room` | สถานะห้องเรียน ตารางวันนี้ จองห้อง |
 | `/shop` | สหกรณ์โรงเรียน เลือกซื้อสินค้า |
 | `/projects` | รวมโปรเจกต์นักเรียนทั้งหมด |
 | `/project/[slug]` | รายละเอียดโปรเจกต์และผลประเมิน |
 | `/feedback` | ส่งความคิดเห็นหรือรายงานปัญหา |
+| `/equipment-request` | ส่งและติดตามคำขอเบิก/ยืมคุรุภัณฑ์ |
+| `/become-teacher` | ส่งใบสมัครครู |
 
 **หน้า Admin Panel**
 
 Admin ใช้ path เดียวคือ `/admin?tab=` ตามตาราง:
 
-> **หมายเหตุ:** กลุ่ม "เช็กชื่อ" (`entrylogs`, `checkin_school`, `checkin_library`, `checkin_meeting`, `rfid`) ถูกซ่อนออกจากเมนูฝั่งซ้ายชั่วคราว แต่ tab/route ยังทำงานได้ตามปกติหากเข้าผ่าน URL ตรง
+> **หมายเหตุ:** กลุ่ม "เช็กชื่อและอุปกรณ์ RFID" (`entrylogs`, `checkin_school`, `checkin_library`, `checkin_meeting`, `rfid`) ถูกซ่อนออกจากเมนูฝั่งซ้ายและการ์ดลัดใน Dashboard ชั่วคราว แต่ tab/route/API/schema/firmware ยังอยู่ครบ เพื่อเปิดกลับหรือทดสอบผ่าน URL ตรงเมื่อมีสิทธิ์
 
 Admin Panel มี global search เปิดด้วย `Ctrl+K` สำหรับค้นหาเมนูและรายการจริง เช่น นักเรียน สินค้า คำสั่งซื้อ คุรุภัณฑ์ และออเดอร์เบิก พร้อม badge แบบ dot number บนเมนูที่มีรายการต้องดู และจำค่า view/filter/search ใน `localStorage` เพื่อให้ผู้ดูแลกลับมาใช้งานต่อได้ง่าย
 
@@ -403,21 +411,24 @@ Admin Panel มี global search เปิดด้วย `Ctrl+K` สำหร�
 | `dashboard` | ภาพรวม | สถิตินักเรียน Chart.js สถานะรายวัน |
 | `students` | นักเรียน | จัดการนักเรียน รูป card/list/grid |
 | `data_requests` | นักเรียน | อนุมัติคำขอแก้ไขข้อมูล |
-| `entrylogs` | เช็กชื่อ | บันทึกเข้า-ออกทั้งหมดรายวัน |
-| `checkin_school` | เช็กชื่อ | เช็กชื่อโรงเรียน |
-| `checkin_library` | เช็กชื่อ | เช็กชื่อห้องสมุด |
-| `checkin_meeting` | เช็กชื่อ | เช็กชื่อห้องประชุม |
-| `rfid` | เช็กชื่อ | RFID Controller ทดสอบ UID |
+| `entrylogs` | เช็กชื่อ *(ซ่อนชั่วคราว)* | บันทึกเข้า-ออกทั้งหมดรายวัน |
+| `checkin_school` | เช็กชื่อ *(ซ่อนชั่วคราว)* | เช็กชื่อโรงเรียน |
+| `checkin_library` | เช็กชื่อ *(ซ่อนชั่วคราว)* | เช็กชื่อห้องสมุด |
+| `checkin_meeting` | เช็กชื่อ *(ซ่อนชั่วคราว)* | เช็กชื่อห้องประชุม |
+| `rfid` | อุปกรณ์ RFID *(ซ่อนชั่วคราว)* | RFID Controller ทดสอบ UID |
 | `bookings` | จองห้อง | อนุมัติ/ปฏิเสธคำขอจอง |
 | `rooms` | จองห้อง | จัดการห้องและ amenities |
 | `products` | สหกรณ์ | จัดการสินค้า |
 | `shoporders` | สหกรณ์ | จัดการออเดอร์ |
+| `equipment_items` | คุรุภัณฑ์ | จัดการรายการคุรุภัณฑ์ stock รูปภาพ และสถานะ |
+| `equipment_requests` | คุรุภัณฑ์ | อนุมัติ/ปฏิเสธ/อัปเดตคำขอเบิก |
 | `projects` | โปรเจกต์ | จัดการโปรเจกต์และ custom fields |
 | `evaluations` | โปรเจกต์ | ผลประเมินและ Chart.js |
 | `class_groups` | ตารางเรียน | กลุ่มเรียน |
 | `class_schedule_weekly` | ตารางเรียน | ตารางเรียนประจำสัปดาห์ |
 | `class_schedule_override` | ตารางเรียน | แก้ไขวันพิเศษ |
 | `teachers` | ตารางเรียน | ข้อมูลครูผู้สอน |
+| `teacher_applications` | ตารางเรียน | ตรวจใบสมัครครู |
 | `feedbacks` | ระบบ | จัดการ feedback |
 | `admins` | ระบบ | จัดการบัญชี admin |
 | `line_broadcast` | ระบบ | ส่งข่าวสาร LINE จริง |

@@ -18,7 +18,6 @@ type Stats = {
   equipment: number;
   feedbackTotal: number;
   feedbackPending: number;
-  todayEntries: number;
 };
 
 export default function HomePage() {
@@ -37,7 +36,6 @@ export default function HomePage() {
           equipment:      j.equipmentTotal ?? 0,
           feedbackTotal:  j.feedbackTotal ?? 0,
           feedbackPending: j.feedbackPending ?? 0,
-          todayEntries:   j.todayEntries ?? 0,
         });
       })
       .catch(() => { /* silent */ });
@@ -67,10 +65,9 @@ export default function HomePage() {
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-2 border-t border-slate-100 sm:grid-cols-3 lg:grid-cols-5">
+            <div className="grid grid-cols-2 border-t border-slate-100 lg:grid-cols-4">
             {[
               { icon: "fa-users",            label: "นักเรียน",       val: stats.students,      color: "var(--primary-dark)" },
-              { icon: "fa-right-to-bracket", label: "เข้าวันนี้",     val: stats.todayEntries,  color: "#0284C7" },
               { icon: "fa-calendar-check",   label: "การจองทั้งหมด", val: stats.bookings,      color: "#F59E0B" },
               { icon: "fa-toolbox",          label: "เบิกคุรุภัณฑ์",   val: stats.equipment,     color: "#059669" },
               { icon: "fa-comment-dots",     label: "ความคิดเห็น",   val: stats.feedbackTotal, color: "#14B8A6" },

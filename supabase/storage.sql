@@ -13,7 +13,12 @@ VALUES
   ('equipment-images', 'equipment-images', true, 5242880, ARRAY['image/jpeg','image/png','image/webp','image/gif']),
   ('project-images', 'project-images', true, 10485760, ARRAY['image/jpeg','image/png','image/webp','image/gif','image/svg+xml']),
   ('product-images', 'product-images', true, 5242880, ARRAY['image/jpeg','image/png','image/webp','image/gif','image/svg+xml']),
-  ('feedback', 'feedback', true, 5242880, ARRAY['image/jpeg','image/png','image/webp','image/gif'])
+  ('feedback', 'feedback', true, 5242880, ARRAY['image/jpeg','image/png','image/webp','image/gif']),
+  -- Phase 3 (supabase/migrations/0014-0015). ไม่รับ svg เหมือน project/product
+  -- เพราะสองบัคเก็ตนี้รับรูปจากผู้ใช้ทั่วไป และ svg เปิดตรงจาก public URL
+  -- จะข้าม CSP ของ next/image ไปได้
+  ('maintenance-photos', 'maintenance-photos', true, 5242880, ARRAY['image/jpeg','image/png','image/webp']),
+  ('asset-images', 'asset-images', true, 5242880, ARRAY['image/jpeg','image/png','image/webp'])
 ON CONFLICT (id) DO UPDATE
 SET
   name = EXCLUDED.name,
@@ -33,6 +38,8 @@ CREATE POLICY storage_objects_public_read_asia_bot
       'equipment-images',
       'project-images',
       'product-images',
-      'feedback'
+      'feedback',
+      'maintenance-photos',
+      'asset-images'
     )
   );

@@ -91,6 +91,38 @@ export const MODULES: ModuleDescriptor[] = [
   legacyTab("line_broadcast", "ส่งข่าวสาร LINE", "fa-solid fa-bullhorn", "notifications.send", "operations"),
   legacyTab("admins", "ผู้ดูแลระบบ", "fa-solid fa-user-shield", "system.manage", "system"),
   legacyTab("settings", "ตั้งค่า", "fa-solid fa-gear", "system.manage", "system"),
+
+  // โมดูลที่อยู่นอก admin/page.tsx แล้ว — legacy: false
+  {
+    key: "student-360",
+    label: "Student 360",
+    icon: "fa-solid fa-id-card-clip",
+    permission: "student.view_all",
+    group: "student",
+    href: "/admin/student-360",
+    legacy: false,
+    phase: 2,
+  },
+  {
+    key: "maintenance",
+    label: "งานแจ้งซ่อม",
+    icon: "fa-solid fa-screwdriver-wrench",
+    permission: "maintenance.view_all",
+    group: "resources",
+    href: "/admin/maintenance",
+    legacy: false,
+    phase: 3,
+  },
+  {
+    key: "assets",
+    label: "ทะเบียนครุภัณฑ์",
+    icon: "fa-solid fa-clipboard-check",
+    permission: "asset.view",
+    group: "resources",
+    href: "/admin/assets",
+    legacy: false,
+    phase: 3,
+  },
 ];
 
 /** Modules the caller may see, in sidebar order. */

@@ -27,6 +27,34 @@ export type AchievementLevel = "school" | "district" | "province" | "region" | "
 /** ขอบเขตของตำแหน่งที่นักเรียนดำรง (student_positions.scope) */
 export type PositionScope = "class" | "department" | "school" | "club" | "other";
 
+/** สภาพครุภัณฑ์ (assets.condition) */
+export type AssetCondition = "new" | "good" | "fair" | "poor" | "broken";
+
+/** สถานะครุภัณฑ์ (assets.status) */
+export type AssetStatus = "in_use" | "in_storage" | "under_repair" | "disposed" | "lost";
+
+/** สิ่งที่แจ้งซ่อมชี้ไปหา (maintenance_requests.target_kind) */
+export type MaintenanceTargetKind = "asset" | "equipment_item" | "room" | "other";
+
+/** หมวดงานซ่อม (maintenance_requests.category) */
+export type MaintenanceCategory =
+  | "ไฟฟ้า" | "ประปา" | "แอร์" | "โครงสร้าง"
+  | "เฟอร์นิเจอร์" | "อุปกรณ์" | "คอมพิวเตอร์" | "อื่นๆ";
+
+/** ความเร่งด่วน (maintenance_requests.urgency) */
+export type MaintenanceUrgency = "low" | "normal" | "high" | "critical";
+
+/**
+ * ขั้นตอนงานซ่อม (maintenance_requests.status)
+ * ลำดับที่อนุญาตอยู่ใน MAINTENANCE_TRANSITIONS — src/lib/server/maintenance.ts
+ */
+export type MaintenanceStatus =
+  | "reported" | "received" | "inspecting" | "assigned"
+  | "repairing" | "waiting_inspection" | "completed" | "cancelled";
+
+/** ระยะของรูปหลักฐานการซ่อม (maintenance_photos.phase) */
+export type MaintenancePhotoPhase = "before" | "during" | "after";
+
 export type Database = {
   public: {
     Tables: {
@@ -1833,6 +1861,236 @@ export type Database = {
           ended_on?: string | null;
           note?: string | null;
         };
+        Relationships: [];
+      };
+
+      // ─── Phase 3 ครุภัณฑ์และแจ้งซ่อม (supabase/migrations/0014-0015) ──────
+      assets: {
+        Row: {
+          id: string;
+          asset_code: string | null;
+          serial_number: string | null;
+          name: string;
+          category: string;
+          brand: string | null;
+          model: string | null;
+          room_id: string | null;
+          location_note: string | null;
+          responsible_person: string | null;
+          department: string | null;
+          acquired_on: string | null;
+          price: number | null;
+          funding_source: string | null;
+          condition: AssetCondition;
+          status: AssetStatus;
+          qr_token: string;
+          image_urls: string[] | null;
+          equipment_item_id: string | null;
+          note: string | null;
+          disposed_at: string | null;
+          disposed_reason: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          asset_code?: string | null;
+          serial_number?: string | null;
+          name: string;
+          category: string;
+          brand?: string | null;
+          model?: string | null;
+          room_id?: string | null;
+          location_note?: string | null;
+          responsible_person?: string | null;
+          department?: string | null;
+          acquired_on?: string | null;
+          price?: number | null;
+          funding_source?: string | null;
+          condition?: AssetCondition;
+          status?: AssetStatus;
+          qr_token?: string;
+          image_urls?: string[] | null;
+          equipment_item_id?: string | null;
+          note?: string | null;
+          disposed_at?: string | null;
+          disposed_reason?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          asset_code?: string | null;
+          serial_number?: string | null;
+          name?: string;
+          category?: string;
+          brand?: string | null;
+          model?: string | null;
+          room_id?: string | null;
+          location_note?: string | null;
+          responsible_person?: string | null;
+          department?: string | null;
+          acquired_on?: string | null;
+          price?: number | null;
+          funding_source?: string | null;
+          condition?: AssetCondition;
+          status?: AssetStatus;
+          image_urls?: string[] | null;
+          equipment_item_id?: string | null;
+          note?: string | null;
+          disposed_at?: string | null;
+          disposed_reason?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      asset_movements: {
+        Row: {
+          id: string;
+          asset_id: string;
+          from_room_id: string | null;
+          to_room_id: string | null;
+          from_location: string | null;
+          to_location: string | null;
+          from_person: string | null;
+          to_person: string | null;
+          moved_on: string;
+          reason: string | null;
+          recorded_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          asset_id: string;
+          from_room_id?: string | null;
+          to_room_id?: string | null;
+          from_location?: string | null;
+          to_location?: string | null;
+          from_person?: string | null;
+          to_person?: string | null;
+          moved_on?: string;
+          reason?: string | null;
+          recorded_by?: string | null;
+          created_at?: string;
+        };
+        // append-only ห้าม UPDATE ทับ
+        Update: Record<string, never>;
+        Relationships: [];
+      };
+      maintenance_requests: {
+        Row: {
+          id: string;
+          request_code: string;
+          reporter_name: string;
+          reporter_student_id: string | null;
+          reporter_admin_id: string | null;
+          reporter_phone: string | null;
+          target_kind: MaintenanceTargetKind;
+          asset_id: string | null;
+          equipment_item_id: string | null;
+          room_id: string | null;
+          target_label: string | null;
+          location_note: string | null;
+          category: MaintenanceCategory;
+          symptom: string;
+          urgency: MaintenanceUrgency;
+          status: MaintenanceStatus;
+          assigned_to: string | null;
+          scheduled_on: string | null;
+          cost: number | null;
+          parts_note: string | null;
+          completed_at: string | null;
+          completion_note: string | null;
+          admin_note: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          request_code: string;
+          reporter_name: string;
+          reporter_student_id?: string | null;
+          reporter_admin_id?: string | null;
+          reporter_phone?: string | null;
+          target_kind?: MaintenanceTargetKind;
+          asset_id?: string | null;
+          equipment_item_id?: string | null;
+          room_id?: string | null;
+          target_label?: string | null;
+          location_note?: string | null;
+          category?: MaintenanceCategory;
+          symptom: string;
+          urgency?: MaintenanceUrgency;
+          status?: MaintenanceStatus;
+          assigned_to?: string | null;
+          scheduled_on?: string | null;
+          cost?: number | null;
+          parts_note?: string | null;
+          completed_at?: string | null;
+          completion_note?: string | null;
+          admin_note?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          status?: MaintenanceStatus;
+          urgency?: MaintenanceUrgency;
+          category?: MaintenanceCategory;
+          symptom?: string;
+          location_note?: string | null;
+          assigned_to?: string | null;
+          scheduled_on?: string | null;
+          cost?: number | null;
+          parts_note?: string | null;
+          completed_at?: string | null;
+          completion_note?: string | null;
+          admin_note?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      maintenance_photos: {
+        Row: {
+          id: string;
+          request_id: string;
+          phase: MaintenancePhotoPhase;
+          image_url: string;
+          caption: string | null;
+          uploaded_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          request_id: string;
+          phase: MaintenancePhotoPhase;
+          image_url: string;
+          caption?: string | null;
+          uploaded_by?: string | null;
+          created_at?: string;
+        };
+        Update: { caption?: string | null };
+        Relationships: [];
+      };
+      maintenance_status_history: {
+        Row: {
+          id: string;
+          request_id: string;
+          from_status: MaintenanceStatus | null;
+          to_status: MaintenanceStatus;
+          note: string | null;
+          changed_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          request_id: string;
+          from_status?: MaintenanceStatus | null;
+          to_status: MaintenanceStatus;
+          note?: string | null;
+          changed_by?: string | null;
+          created_at?: string;
+        };
+        // append-only ห้าม UPDATE ทับ
+        Update: Record<string, never>;
         Relationships: [];
       };
     };

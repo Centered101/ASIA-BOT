@@ -64,6 +64,15 @@ export const ROLE_LABELS: Record<Role, string> = {
 /** Wildcard held only by SUPER_ADMIN. */
 export const ALL_PERMISSIONS = "*" as const;
 
+/**
+ * สิทธิ์แจ้งซ่อมขั้นพื้นฐาน ที่ทุกคนในโรงเรียนควรมี
+ *
+ * คนที่เจอของพังก่อนคือคนใช้งาน ไม่ใช่ฝ่ายอาคาร การกันไม่ให้แจ้ง
+ * ทำให้ของพังนานขึ้นเฉย ๆ ต้องตรงกับรายชื่อ role ใน
+ * supabase/migrations/0016_maintenance_permissions.sql
+ */
+const CAN_REPORT_MAINTENANCE = ["maintenance.create", "maintenance.view_own"];
+
 const STUDENT_PERMISSIONS = [
   "school.info",
   "student.view_own",
@@ -79,6 +88,7 @@ const STUDENT_PERMISSIONS = [
   "equipment.create_request",
   "feedback.create",
   "project.view",
+  ...CAN_REPORT_MAINTENANCE,
 ];
 
 export const ROLE_PERMISSIONS: Record<Role, string[]> = {
@@ -86,6 +96,10 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
 
   ADMIN: [
     "school.info", "dashboard.view",
+    "asset.view", "asset.manage", "asset.dispose",
+    ...CAN_REPORT_MAINTENANCE,
+    "maintenance.view_all", "maintenance.update",
+    "maintenance.assign", "maintenance.complete",
     "student.view_all", "student.create", "student.update", "student.export",
     "attendance.view_all", "attendance.update", "attendance.export",
     "schedule.view", "schedule.manage",
@@ -101,15 +115,19 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     "school.info", "dashboard.view",
     "student.view_all", "attendance.view_all",
     "booking.view_all", "schedule.view", "feedback.view_all",
+    ...CAN_REPORT_MAINTENANCE,
+    // ผู้บริหารดูงานซ่อมได้ ใช้ประกอบการอนุมัติงบ แต่ไม่ได้แก้ไข
+    "maintenance.view_all", "asset.view",
   ],
 
   REGISTRAR: [
     "school.info", "dashboard.view",
     "student.view_all", "student.create", "student.update", "student.export",
     "schedule.view",
+    ...CAN_REPORT_MAINTENANCE,
   ],
 
-  FINANCE: ["school.info", "dashboard.view", "student.view_all"],
+  FINANCE: ["school.info", "dashboard.view", "student.view_all", ...CAN_REPORT_MAINTENANCE],
 
   // Also the mapping target for the legacy `staff` role, so it must cover
   // everything staff can reach today. The admin panel's NAV_SECTIONS applies no
@@ -126,12 +144,14 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     "equipment.view_items", "equipment.view_own_requests", "equipment.create_request",
     "feedback.view_all", "project.view",
     "shop.view_products", "shop.view_all_orders",
+    ...CAN_REPORT_MAINTENANCE,
   ],
 
   STUDENT_AFFAIRS: [
     "school.info", "dashboard.view",
     "student.view_all", "attendance.view_all",
     "feedback.view_all", "feedback.manage",
+    ...CAN_REPORT_MAINTENANCE,
   ],
 
   TEACHER: [
@@ -140,6 +160,7 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     "booking.view_all", "booking.create",
     "equipment.view_items", "equipment.view_own_requests", "equipment.create_request",
     "project.view",
+    ...CAN_REPORT_MAINTENANCE,
   ],
 
   // Scoped: view_advisees resolves through user_roles.scope_id -> class_groups.id
@@ -147,33 +168,58 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     "school.info", "schedule.view",
     "student.view_advisees", "attendance.view_advisees",
     "booking.create", "equipment.view_items", "equipment.create_request",
+    ...CAN_REPORT_MAINTENANCE,
   ],
 
-  DUAL_EDUCATION: ["school.info", "dashboard.view", "student.view_all", "attendance.view_all"],
+  DUAL_EDUCATION: [
+    "school.info", "dashboard.view", "student.view_all", "attendance.view_all",
+    ...CAN_REPORT_MAINTENANCE,
+  ],
 
-  ACTIVITY: ["school.info", "dashboard.view", "student.view_all", "notifications.send"],
+  ACTIVITY: [
+    "school.info", "dashboard.view", "student.view_all", "notifications.send",
+    ...CAN_REPORT_MAINTENANCE,
+  ],
 
-  LIBRARY: ["school.info", "student.view_all", "library.manage"],
+  LIBRARY: ["school.info", "student.view_all", "library.manage", ...CAN_REPORT_MAINTENANCE],
 
-  NURSE: ["school.info", "student.view_all"],
+  NURSE: ["school.info", "student.view_all", ...CAN_REPORT_MAINTENANCE],
 
+  // ฝ่ายพัสดุ — คุมทะเบียนครุภัณฑ์เต็ม และดูงานซ่อมได้เพื่อรู้ว่าของชิ้นไหน
+  // กำลังซ่อมอยู่ แต่ไม่ได้สิทธิ์เลื่อนสถานะงานซ่อม นั่นเป็นงานฝ่ายอาคาร
   ASSET_MANAGER: [
     "school.info",
     "equipment.view_items", "equipment.manage_items",
     "equipment.view_all_requests", "equipment.approve",
+    "asset.view", "asset.manage", "asset.dispose",
+    ...CAN_REPORT_MAINTENANCE,
+    "maintenance.view_all",
   ],
 
-  MAINTENANCE: ["school.info", "equipment.view_items"],
+  // ฝ่ายอาคารสถานที่ — ทำงานซ่อมได้ครบวงจร แต่ดูทะเบียนครุภัณฑ์ได้อย่างเดียว
+  // การเพิ่ม/จำหน่ายครุภัณฑ์เป็นงานฝ่ายพัสดุ
+  MAINTENANCE: [
+    "school.info",
+    "equipment.view_items",
+    "asset.view",
+    ...CAN_REPORT_MAINTENANCE,
+    "maintenance.view_all", "maintenance.update",
+    "maintenance.assign", "maintenance.complete",
+  ],
 
   SHOP_MANAGER: [
     "school.info",
     "shop.view_products", "shop.manage_products",
     "shop.view_all_orders", "shop.manage_orders",
+    ...CAN_REPORT_MAINTENANCE,
   ],
 
   STUDENT: STUDENT_PERMISSIONS,
 
-  PARENT: ["school.info", "student.view_children", "attendance.view_children", "schedule.view"],
+  PARENT: [
+    "school.info", "student.view_children", "attendance.view_children", "schedule.view",
+    ...CAN_REPORT_MAINTENANCE,
+  ],
 
   ALUMNI: ["school.info", "project.view"],
 

@@ -15,11 +15,9 @@ import { useRouter } from "next/navigation";
  * เพราะตอนนี้นักเรียนทุกคนยังไม่มีห้อง
  */
 
+import { T as C } from "@/components/admin/ui";
+
 const STORAGE_KEY = "asia_admin_session";
-const C = {
-  bg: "#0c0c0c", card: "#1c1c1c", card2: "#2a2a2a", line: "#3e3e3e",
-  text: "#ededed", muted: "#9e9e9e", accent: "#ff7070",
-};
 
 type Student = {
   student_id: string; first_name: string; last_name: string; nickname: string | null;

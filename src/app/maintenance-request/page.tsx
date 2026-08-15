@@ -2,9 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
+import { MascotState } from "@/components/Mascot";
 
 /**
  * ฟอร์มแจ้งซ่อมสำหรับทุกคน — นักเรียน ครู เจ้าหน้าที่
+ *
+ * ใช้โครงเดียวกับ /equipment-request และ /feedback คือ Header + Footer
+ * กับคลาสจาก globals.css (btn-primary, form-input, field-wrap) แทนการเขียน
+ * inline style ของตัวเอง เพื่อให้เปลี่ยนธีมทีเดียวแล้วเปลี่ยนพร้อมกันทุกหน้า
  *
  * หัวใจของหน้านี้คือช่อง "สิ่งที่จะซ่อม" ที่เลือกได้ 4 ทาง เพราะของในโรงเรียน
  * มีทั้งที่ลงเลขครุภัณฑ์แล้ว ยังไม่ได้ลง และของในคลังยืม ถ้าบังคับให้เลือกจาก
@@ -17,51 +24,41 @@ import Link from "next/link";
  * ถ้าผู้ใช้พิมพ์ชื่อเอาเองแทน ของที่พังจะยังขึ้นให้ยืมอยู่
  */
 
-const C = {
-  bg: "#f6f8fa", card: "#ffffff", line: "#e2e8f0",
-  text: "#0f172a", muted: "#64748b", accent: "#0EA5E9", danger: "#dc2626",
-};
-
 const CATEGORIES = [
   "ไฟฟ้า", "ประปา", "แอร์", "โครงสร้าง",
   "เฟอร์นิเจอร์", "อุปกรณ์", "คอมพิวเตอร์", "อื่นๆ",
 ] as const;
 
-const URGENCY: { value: string; label: string; hint: string; color: string }[] = [
-  { value: "low", label: "ไม่เร่งด่วน", hint: "รอได้", color: "#64748b" },
+const URGENCY = [
+  { value: "low", label: "ไม่เร่งด่วน", hint: "รอได้", color: "#64748B" },
   { value: "normal", label: "ปกติ", hint: "ตามคิว", color: "#0EA5E9" },
-  { value: "high", label: "เร่งด่วน", hint: "กระทบการเรียน", color: "#f59e0b" },
-  { value: "critical", label: "วิกฤต", hint: "อันตราย/ใช้งานไม่ได้เลย", color: "#dc2626" },
-];
+  { value: "high", label: "เร่งด่วน", hint: "กระทบการเรียน", color: "#F59E0B" },
+  { value: "critical", label: "วิกฤต", hint: "อันตราย ใช้ไม่ได้เลย", color: "#EF4444" },
+] as const;
 
+const KINDS = [
+  { value: "other", label: "พิมพ์เอง", hint: "ของที่ไม่มีเลขครุภัณฑ์", icon: "fa-pen" },
+  { value: "asset", label: "เลือกครุภัณฑ์", hint: "ของที่มีเลขติดอยู่", icon: "fa-barcode" },
+  { value: "equipment_item", label: "อุปกรณ์ที่ยืมมา", hint: "ของจากคลังเบิก", icon: "fa-toolbox" },
+  { value: "room", label: "ทั้งห้อง", hint: "ไฟ ประปา แอร์", icon: "fa-door-open" },
+] as const;
+
+type Kind = (typeof KINDS)[number]["value"];
 type Room = { id: string; name: string; location: string | null };
-type Asset = {
-  id: string; name: string; asset_code: string | null;
-  category: string; room_id: string | null; location_note: string | null;
-};
-type EquipmentItem = {
-  id: string; name: string; category: string; unit: string; available_quantity: number;
-};
+type Asset = { id: string; name: string; asset_code: string | null; location_note: string | null };
+type EquipmentItem = { id: string; name: string; unit: string; available_quantity: number };
 
 export default function MaintenanceRequestPage() {
-  const [kind, setKind] = useState<"other" | "asset" | "room" | "equipment_item">("other");
+  const [kind, setKind] = useState<Kind>("other");
   const [rooms, setRooms] = useState<Room[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [equipment, setEquipment] = useState<EquipmentItem[]>([]);
   const [assetSearch, setAssetSearch] = useState("");
 
   const [form, setForm] = useState({
-    reporter_name: "",
-    reporter_phone: "",
-    target_label: "",
-    asset_id: "",
-    room_id: "",
-    equipment_item_id: "",
-    affected_quantity: "1",
-    location_note: "",
-    category: "อื่นๆ",
-    symptom: "",
-    urgency: "normal",
+    reporter_name: "", reporter_phone: "", target_label: "",
+    asset_id: "", room_id: "", equipment_item_id: "", affected_quantity: "1",
+    location_note: "", category: "อื่นๆ", symptom: "", urgency: "normal",
   });
 
   const [photos, setPhotos] = useState<string[]>([]);
@@ -152,11 +149,8 @@ export default function MaintenanceRequestPage() {
         }),
       });
       const json = await res.json();
-      if (json.status === "success") {
-        setResult({ code: json.request_code, warning: json.warning });
-      } else {
-        setError(json.message ?? "แจ้งซ่อมไม่สำเร็จ");
-      }
+      if (json.status === "success") setResult({ code: json.request_code, warning: json.warning });
+      else setError(json.message ?? "แจ้งซ่อมไม่สำเร็จ");
     } catch {
       setError("เชื่อมต่อไม่ได้ ลองใหม่อีกครั้ง");
     } finally {
@@ -165,129 +159,110 @@ export default function MaintenanceRequestPage() {
   }
 
   const canSubmit =
-    form.reporter_name.trim() &&
-    form.symptom.trim() &&
+    form.reporter_name.trim() && form.symptom.trim() &&
     (kind === "other" ? form.target_label.trim()
       : kind === "asset" ? form.asset_id
       : kind === "equipment_item" ? form.equipment_item_id
       : form.room_id);
 
-  const box: React.CSSProperties = {
-    background: C.card, border: `1px solid ${C.line}`, borderRadius: 14,
-    padding: 18, marginBottom: 14,
-  };
-  const input: React.CSSProperties = {
-    width: "100%", padding: "10px 12px", borderRadius: 9,
-    border: `1px solid ${C.line}`, fontSize: 14, color: C.text, background: "#fff",
-  };
-  const label: React.CSSProperties = {
-    display: "block", fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 6,
-  };
+  const cardCls = "bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-100 shadow-sm p-4 sm:p-5 mb-4";
+  const labelCls = "block text-xs font-bold text-slate-500 mb-1.5";
 
   if (needsLogin) {
     return (
-      <main style={{ background: C.bg, minHeight: "100vh", padding: 20 }}>
-        <div style={{ ...box, maxWidth: 460, margin: "60px auto", textAlign: "center" }}>
-          <div style={{ fontSize: 40, marginBottom: 10 }}>🔒</div>
-          <h1 style={{ fontSize: 18, fontWeight: 800, color: C.text, margin: "0 0 8px" }}>
-            ต้องเข้าสู่ระบบก่อนแจ้งซ่อม
-          </h1>
-          <p style={{ fontSize: 13, color: C.muted, margin: "0 0 16px", lineHeight: 1.7 }}>
-            ระบบบันทึกว่าใครเป็นผู้แจ้ง เพื่อให้ฝ่ายอาคารติดต่อกลับได้
-            และให้คุณตามสถานะงานของตัวเองได้
-          </p>
-          <Link href="/student" style={{
-            display: "inline-block", background: C.accent, color: "#fff",
-            padding: "10px 22px", borderRadius: 9, fontSize: 14, fontWeight: 700,
-            textDecoration: "none",
-          }}>เข้าสู่ระบบ</Link>
-        </div>
-      </main>
+      <>
+        <Header subtitle="แจ้งซ่อม" />
+        <main className="min-h-screen max-w-md mx-auto px-4 relative z-10">
+          <MascotState
+            mood="help"
+            title="ต้องเข้าสู่ระบบก่อนแจ้งซ่อม"
+            subtitle="ระบบบันทึกว่าใครเป็นผู้แจ้ง เพื่อให้ฝ่ายอาคารติดต่อกลับได้ และให้คุณตามสถานะงานของตัวเองได้"
+          >
+            <Link href="/student" className="btn-primary px-6 py-2.5">เข้าสู่ระบบ</Link>
+          </MascotState>
+        </main>
+        <Footer />
+      </>
     );
   }
 
   if (result) {
     return (
-      <main style={{ background: C.bg, minHeight: "100vh", padding: 20 }}>
-        <div style={{ ...box, maxWidth: 460, margin: "60px auto", textAlign: "center" }}>
-          <div style={{ fontSize: 44, marginBottom: 10 }}>✅</div>
-          <h1 style={{ fontSize: 18, fontWeight: 800, color: C.text, margin: "0 0 6px" }}>
-            แจ้งซ่อมเรียบร้อย
-          </h1>
-          <p style={{ fontSize: 13, color: C.muted, margin: "0 0 4px" }}>รหัสคำขอของคุณ</p>
-          <div style={{
-            fontFamily: "ui-monospace, monospace", fontSize: 20, fontWeight: 800,
-            color: C.accent, letterSpacing: 1, margin: "0 0 16px",
-          }}>{result.code}</div>
-          {result.warning && (
-            <p style={{
-              fontSize: 12, color: "#92400e", background: "#fffbeb",
-              border: "1px solid #fde68a", borderRadius: 8, padding: "8px 10px",
-              margin: "0 0 14px", lineHeight: 1.6,
-            }}>{result.warning}</p>
-          )}
-          <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-            <button
-              onClick={() => { setResult(null); setPhotos([]); setForm((f) => ({ ...f, symptom: "", target_label: "", location_note: "" })); }}
-              style={{ background: "#fff", color: C.text, border: `1px solid ${C.line}`, padding: "10px 18px", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: "pointer" }}
-            >แจ้งอีกรายการ</button>
-            <Link href="/" style={{ background: C.accent, color: "#fff", padding: "10px 18px", borderRadius: 9, fontSize: 13, fontWeight: 700, textDecoration: "none" }}>
-              กลับหน้าแรก
-            </Link>
-          </div>
-        </div>
-      </main>
+      <>
+        <Header subtitle="แจ้งซ่อม" />
+        <main className="min-h-screen max-w-md mx-auto px-4 relative z-10">
+          <MascotState mood="success" title="แจ้งซ่อมเรียบร้อย" subtitle="เก็บรหัสนี้ไว้ติดตามสถานะงาน">
+            <div className="text-2xl font-extrabold tracking-wide mb-4" style={{ color: "var(--primary-dark)" }}>
+              {result.code}
+            </div>
+            {result.warning && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-4 leading-relaxed">
+                {result.warning}
+              </p>
+            )}
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={() => {
+                  setResult(null); setPhotos([]);
+                  setForm((f) => ({ ...f, symptom: "", target_label: "", location_note: "" }));
+                }}
+                className="btn-secondary px-5 py-2.5"
+              >แจ้งอีกรายการ</button>
+              <Link href="/" className="btn-primary px-5 py-2.5">กลับหน้าแรก</Link>
+            </div>
+          </MascotState>
+        </main>
+        <Footer />
+      </>
     );
   }
 
   return (
-    <main style={{ background: C.bg, minHeight: "100vh", padding: "20px 16px 60px" }}>
-      <div style={{ maxWidth: 620, margin: "0 auto" }}>
-        <header style={{ marginBottom: 16 }}>
-          <Link href="/" style={{ fontSize: 12, color: C.muted, textDecoration: "none" }}>← หน้าแรก</Link>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text, margin: "8px 0 4px" }}>
-            แจ้งซ่อม
-          </h1>
-          <p style={{ fontSize: 13, color: C.muted, margin: 0, lineHeight: 1.7 }}>
+    <>
+      <Header subtitle="แจ้งซ่อม" />
+      <main className="min-h-screen max-w-3xl mx-auto px-3 sm:px-6 py-6 relative z-10">
+        <div className="mb-5">
+          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800 mb-1">แจ้งซ่อม</h1>
+          <p className="text-sm text-slate-500 leading-relaxed">
             แจ้งอาคารสถานที่ เครื่องมือ หรืออุปกรณ์ที่ชำรุด
             ของที่ไม่มีเลขครุภัณฑ์ก็แจ้งได้ พิมพ์บอกว่าเป็นอะไรตรงไหนก็พอ
           </p>
-        </header>
+        </div>
 
         {error && (
-          <div style={{
-            background: "#fef2f2", border: "1px solid #fecaca", color: C.danger,
-            borderRadius: 10, padding: "10px 12px", fontSize: 13, marginBottom: 12,
-          }}>{error}</div>
+          <div className="bg-red-50 border border-red-200 text-red-600 rounded-xl px-4 py-3 text-sm mb-4">
+            {error}
+          </div>
         )}
 
-        <section style={box}>
-          <label style={label}>สิ่งที่จะซ่อม</label>
-          <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
-            {([
-              ["other", "พิมพ์เอง", "ของที่ไม่มีเลขครุภัณฑ์"],
-              ["asset", "เลือกครุภัณฑ์", "ของที่มีเลขติดอยู่"],
-              ["equipment_item", "อุปกรณ์ที่ยืมมา", "ของจากคลังเบิก"],
-              ["room", "ทั้งห้อง", "ไฟ ประปา แอร์"],
-            ] as const).map(([v, t, hint]) => (
-              <button
-                key={v}
-                onClick={() => setKind(v)}
-                style={{
-                  flex: "1 1 150px", padding: "10px 12px", borderRadius: 10, cursor: "pointer",
-                  border: `1.5px solid ${kind === v ? C.accent : C.line}`,
-                  background: kind === v ? "#f0f9ff" : "#fff", textAlign: "left",
-                }}
-              >
-                <div style={{ fontSize: 13, fontWeight: 700, color: kind === v ? C.accent : C.text }}>{t}</div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{hint}</div>
-              </button>
-            ))}
+        <section className={cardCls}>
+          <span className={labelCls}>สิ่งที่จะซ่อม</span>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+            {KINDS.map((k) => {
+              const on = kind === k.value;
+              return (
+                <button
+                  key={k.value}
+                  onClick={() => setKind(k.value)}
+                  className="rounded-xl px-3 py-2.5 text-left border transition-colors"
+                  style={{
+                    borderColor: on ? "var(--primary-color)" : "#E2E8F0",
+                    background: on ? "var(--primary-light)" : "#fff",
+                  }}
+                >
+                  <i className={`fa-solid ${k.icon} text-xs mb-1`} style={{ color: on ? "var(--primary-dark)" : "#94A3B8" }} />
+                  <div className="text-[13px] font-bold" style={{ color: on ? "var(--primary-dark)" : "#334155" }}>
+                    {k.label}
+                  </div>
+                  <div className="text-[10.5px] text-slate-400 leading-tight">{k.hint}</div>
+                </button>
+              );
+            })}
           </div>
 
           {kind === "other" && (
             <input
-              style={input}
+              className="form-input !pl-3"
               placeholder="เช่น โต๊ะตัวที่สามจากหน้าห้อง 302 ขาหัก"
               value={form.target_label}
               onChange={(e) => setForm({ ...form, target_label: e.target.value })}
@@ -297,13 +272,17 @@ export default function MaintenanceRequestPage() {
           {kind === "asset" && (
             <>
               <input
-                style={{ ...input, marginBottom: 8 }}
-                placeholder="ค้นหาชื่อหรือเลขครุภัณฑ์…"
+                className="form-input !pl-3 mb-2"
+                placeholder="ค้นหาชื่อหรือเลขครุภัณฑ์ แล้วกด Enter"
                 value={assetSearch}
                 onChange={(e) => setAssetSearch(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") void loadTargets(assetSearch); }}
               />
-              <select style={input} value={form.asset_id} onChange={(e) => setForm({ ...form, asset_id: e.target.value })}>
+              <select
+                className="form-input !pl-3"
+                value={form.asset_id}
+                onChange={(e) => setForm({ ...form, asset_id: e.target.value })}
+              >
                 <option value="">— เลือกครุภัณฑ์ —</option>
                 {assets.map((a) => (
                   <option key={a.id} value={a.id}>
@@ -313,7 +292,7 @@ export default function MaintenanceRequestPage() {
                 ))}
               </select>
               {!loading && assets.length === 0 && (
-                <p style={{ fontSize: 12, color: C.muted, margin: "8px 0 0" }}>
+                <p className="text-xs text-slate-400 mt-2">
                   ยังไม่มีครุภัณฑ์ในระบบ ใช้ &quot;พิมพ์เอง&quot; แทนได้
                 </p>
               )}
@@ -323,7 +302,7 @@ export default function MaintenanceRequestPage() {
           {kind === "equipment_item" && (
             <>
               <select
-                style={{ ...input, marginBottom: 8 }}
+                className="form-input !pl-3 mb-3"
                 value={form.equipment_item_id}
                 onChange={(e) => setForm({ ...form, equipment_item_id: e.target.value })}
               >
@@ -334,22 +313,26 @@ export default function MaintenanceRequestPage() {
                   </option>
                 ))}
               </select>
-              <label style={label}>เสียกี่ชิ้น</label>
+              <span className={labelCls}>เสียกี่ชิ้น</span>
               <input
                 type="number"
                 min={1}
-                style={input}
+                className="form-input !pl-3"
                 value={form.affected_quantity}
                 onChange={(e) => setForm({ ...form, affected_quantity: e.target.value })}
               />
-              <p style={{ fontSize: 11.5, color: C.muted, margin: "6px 0 0", lineHeight: 1.6 }}>
+              <p className="text-[11.5px] text-slate-400 mt-1.5 leading-relaxed">
                 จำนวนนี้จะถูกกันออกจากคลัง คนอื่นจะยืมไม่ได้จนกว่างานซ่อมจะปิด
               </p>
             </>
           )}
 
           {kind === "room" && (
-            <select style={input} value={form.room_id} onChange={(e) => setForm({ ...form, room_id: e.target.value })}>
+            <select
+              className="form-input !pl-3"
+              value={form.room_id}
+              onChange={(e) => setForm({ ...form, room_id: e.target.value })}
+            >
               <option value="">— เลือกห้อง —</option>
               {rooms.map((r) => (
                 <option key={r.id} value={r.id}>{r.name}{r.location ? ` · ${r.location}` : ""}</option>
@@ -357,10 +340,10 @@ export default function MaintenanceRequestPage() {
             </select>
           )}
 
-          <div style={{ marginTop: 12 }}>
-            <label style={label}>จุดที่ตั้ง (ถ้ามี)</label>
+          <div className="mt-3">
+            <span className={labelCls}>จุดที่ตั้ง (ถ้ามี)</span>
             <input
-              style={input}
+              className="form-input !pl-3"
               placeholder="เช่น อาคาร 3 ชั้น 2 มุมซ้ายติดหน้าต่าง"
               value={form.location_note}
               onChange={(e) => setForm({ ...form, location_note: e.target.value })}
@@ -368,61 +351,57 @@ export default function MaintenanceRequestPage() {
           </div>
         </section>
 
-        <section style={box}>
-          <label style={label}>หมวด</label>
+        <section className={cardCls}>
+          <span className={labelCls}>หมวด</span>
           <select
-            style={{ ...input, marginBottom: 14 }}
+            className="form-input !pl-3 mb-4"
             value={form.category}
             onChange={(e) => setForm({ ...form, category: e.target.value })}
           >
             {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
 
-          <label style={label}>อาการเสีย</label>
+          <span className={labelCls}>อาการเสีย</span>
           <textarea
-            style={{ ...input, minHeight: 90, resize: "vertical", fontFamily: "inherit" }}
+            className="form-input !pl-3 min-h-[90px] resize-y"
             placeholder="อธิบายว่าเสียยังไง เช่น แอร์ไม่เย็น มีน้ำหยด เปิดแล้วมีเสียงดัง"
             value={form.symptom}
             onChange={(e) => setForm({ ...form, symptom: e.target.value })}
           />
 
-          <label style={{ ...label, marginTop: 14 }}>ความเร่งด่วน</label>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {URGENCY.map((u) => (
-              <button
-                key={u.value}
-                onClick={() => setForm({ ...form, urgency: u.value })}
-                style={{
-                  flex: "1 1 110px", padding: "9px 10px", borderRadius: 9, cursor: "pointer",
-                  border: `1.5px solid ${form.urgency === u.value ? u.color : C.line}`,
-                  background: form.urgency === u.value ? `${u.color}12` : "#fff",
-                }}
-              >
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: form.urgency === u.value ? u.color : C.text }}>{u.label}</div>
-                <div style={{ fontSize: 10.5, color: C.muted, marginTop: 1 }}>{u.hint}</div>
-              </button>
-            ))}
+          <span className={`${labelCls} mt-4`}>ความเร่งด่วน</span>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {URGENCY.map((u) => {
+              const on = form.urgency === u.value;
+              return (
+                <button
+                  key={u.value}
+                  onClick={() => setForm({ ...form, urgency: u.value })}
+                  className="rounded-xl px-3 py-2 border text-left"
+                  style={{ borderColor: on ? u.color : "#E2E8F0", background: on ? `${u.color}14` : "#fff" }}
+                >
+                  <div className="text-[12.5px] font-bold" style={{ color: on ? u.color : "#334155" }}>{u.label}</div>
+                  <div className="text-[10.5px] text-slate-400 leading-tight">{u.hint}</div>
+                </button>
+              );
+            })}
           </div>
         </section>
 
-        <section style={box}>
-          <label style={label}>รูปก่อนซ่อม (ไม่บังคับ)</label>
-          <p style={{ fontSize: 12, color: C.muted, margin: "0 0 10px", lineHeight: 1.6 }}>
+        <section className={cardCls}>
+          <span className={labelCls}>รูปก่อนซ่อม (ไม่บังคับ)</span>
+          <p className="text-xs text-slate-400 mb-3 leading-relaxed">
             รูปช่วยให้ช่างเตรียมของถูกและไม่ต้องมาดูหน้างานก่อนสองรอบ
           </p>
           {photos.length > 0 && (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+            <div className="flex gap-2 flex-wrap mb-3">
               {photos.map((url) => (
-                <div key={url} style={{ position: "relative" }}>
+                <div key={url} className="relative">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={url} alt="รูปแจ้งซ่อม" style={{ width: 84, height: 84, objectFit: "cover", borderRadius: 8, border: `1px solid ${C.line}` }} />
+                  <img src={url} alt="รูปแจ้งซ่อม" className="w-20 h-20 object-cover rounded-xl border border-slate-100" />
                   <button
                     onClick={() => setPhotos((p) => p.filter((u) => u !== url))}
-                    style={{
-                      position: "absolute", top: -6, right: -6, width: 22, height: 22,
-                      borderRadius: "50%", border: "none", background: C.danger, color: "#fff",
-                      fontSize: 13, cursor: "pointer", lineHeight: 1,
-                    }}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white text-xs leading-none"
                     aria-label="ลบรูป"
                   >×</button>
                 </div>
@@ -433,45 +412,43 @@ export default function MaintenanceRequestPage() {
             type="file"
             accept="image/jpeg,image/png,image/webp"
             disabled={uploading || photos.length >= 10}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void uploadPhoto(f);
-              e.target.value = "";
-            }}
-            style={{ fontSize: 13 }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadPhoto(f); e.target.value = ""; }}
+            className="text-sm"
           />
-          {uploading && <span style={{ fontSize: 12, color: C.muted, marginLeft: 8 }}>กำลังอัปโหลด…</span>}
+          {uploading && <span className="text-xs text-slate-400 ml-2">กำลังอัปโหลด…</span>}
         </section>
 
-        <section style={box}>
-          <label style={label}>ผู้แจ้ง</label>
-          <input
-            style={{ ...input, marginBottom: 10 }}
-            placeholder="ชื่อ-นามสกุล"
-            value={form.reporter_name}
-            onChange={(e) => setForm({ ...form, reporter_name: e.target.value })}
-          />
-          <input
-            style={input}
-            placeholder="เบอร์ติดต่อกลับ (ไม่บังคับ)"
-            value={form.reporter_phone}
-            onChange={(e) => setForm({ ...form, reporter_phone: e.target.value })}
-          />
+        <section className={cardCls}>
+          <span className={labelCls}>ผู้แจ้ง</span>
+          <div className="field-wrap mb-2.5">
+            <i className="fa-solid fa-user field-icon" />
+            <input
+              className="form-input"
+              placeholder="ชื่อ-นามสกุล"
+              value={form.reporter_name}
+              onChange={(e) => setForm({ ...form, reporter_name: e.target.value })}
+            />
+          </div>
+          <div className="field-wrap">
+            <i className="fa-solid fa-phone field-icon" />
+            <input
+              className="form-input"
+              placeholder="เบอร์ติดต่อกลับ (ไม่บังคับ)"
+              value={form.reporter_phone}
+              onChange={(e) => setForm({ ...form, reporter_phone: e.target.value })}
+            />
+          </div>
         </section>
 
         <button
           onClick={submit}
           disabled={!canSubmit || busy}
-          style={{
-            width: "100%", padding: "14px", borderRadius: 11, border: "none",
-            background: canSubmit && !busy ? C.accent : "#cbd5e1",
-            color: "#fff", fontSize: 15, fontWeight: 800,
-            cursor: canSubmit && !busy ? "pointer" : "not-allowed",
-          }}
+          className="btn-primary w-full py-3.5 text-[15px] disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {busy ? "กำลังส่ง…" : "ส่งคำขอแจ้งซ่อม"}
         </button>
-      </div>
-    </main>
+      </main>
+      <Footer />
+    </>
   );
 }

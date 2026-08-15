@@ -15,11 +15,9 @@ import Image from "next/image";
  * เพราะ AUTH_LEGACY_HEADER ยังเปิดอยู่ และจะเลิกใช้พร้อมกันทั้งระบบใน Phase 14
  */
 
+import { T as C } from "@/components/admin/ui";
+
 const STORAGE_KEY = "asia_admin_session";
-const C = {
-  bg: "#0c0c0c", card: "#1c1c1c", card2: "#2a2a2a", line: "#3e3e3e",
-  text: "#ededed", muted: "#9e9e9e", accent: "#ff7070",
-};
 
 type Guardian = {
   id: string; full_name: string; relationship: string;

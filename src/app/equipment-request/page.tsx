@@ -400,9 +400,9 @@ export default function EquipmentRequestPage() {
             </div>
 
             {/* History button */}
-            <div data-aos="fade-right" data-aos-delay="270" className="hidden lg:block">
+            <div data-aos="fade-right" data-aos-delay="270" className="hidden lg:block space-y-3">
               <button onClick={openCart}
-                className="relative w-full flex items-center gap-3 px-4 py-3 mb-3 bg-white/80 backdrop-blur-sm rounded-2xl border border-emerald-100 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all text-left">
+                className="relative w-full flex items-center gap-3 px-4 py-3 bg-white/80 backdrop-blur-sm rounded-2xl border border-emerald-100 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all text-left">
                 <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
                   <i className="fa-solid fa-basket-shopping text-emerald-500 text-sm" />
                 </div>

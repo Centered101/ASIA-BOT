@@ -17,11 +17,10 @@ const CATEGORIES = [
   "เฟอร์นิเจอร์", "อุปกรณ์", "คอมพิวเตอร์", "อื่นๆ",
 ] as const;
 
-// ไม่รับ reporter_name จาก body โดยตั้งใจ — ชื่อผู้แจ้งมาจาก principal เท่านั้น
-// ถ้ารับจาก body ใครก็แจ้งซ่อมในนามคนอื่นได้ แล้วฝ่ายอาคารจะโทรผิดคน
-// และ audit log จะชี้ไปผิดคนด้วย
+// ไม่รับข้อมูลผู้แจ้งจาก body เลย — ทั้งชื่อและเบอร์มาจากบัญชีที่ล็อกอิน
+// ถ้ารับจาก body ใครก็แจ้งซ่อมในนามคนอื่นได้ ฝ่ายอาคารจะติดต่อผิดคน
+// และ audit log จะชี้ไปผิดคนด้วย ถ้าเบอร์ไม่ถูกให้ไปแก้ที่โปรไฟล์
 const CreateSchema = z.object({
-  reporter_phone: z.string().trim().nullable().optional(),
   target_kind: z.enum(["asset", "equipment_item", "room", "other"]).default("other"),
   asset_id: z.string().uuid().nullable().optional(),
   equipment_item_id: z.string().uuid().nullable().optional(),
@@ -35,6 +34,30 @@ const CreateSchema = z.object({
   urgency: z.enum(["low", "normal", "high", "critical"]).default("normal"),
   photo_urls: z.array(z.string().trim().url()).max(10).optional(),
 });
+
+/** เบอร์ติดต่อกลับจาก profile — students.student_phone / admins.phone / teachers.phone */
+async function lookupPhone(
+  supabase: ReturnType<typeof getServiceClient>,
+  subjectType: string,
+  subjectId: string
+): Promise<string | null> {
+  if (subjectType === "student") {
+    const { data } = await supabase
+      .from("students").select("student_phone").eq("student_id", subjectId).maybeSingle();
+    return data?.student_phone ?? null;
+  }
+  if (subjectType === "admin") {
+    const { data } = await supabase
+      .from("admins").select("phone").eq("admin_id", subjectId).maybeSingle();
+    return data?.phone ?? null;
+  }
+  if (subjectType === "teacher") {
+    const { data } = await supabase
+      .from("teachers").select("phone").eq("id", subjectId).maybeSingle();
+    return data?.phone ?? null;
+  }
+  return null;
+}
 
 export const POST = withAuth(
   async (req, { principal }) => {
@@ -52,11 +75,15 @@ export const POST = withAuth(
     const supabase = getServiceClient();
     const requestCode = generateRequestCode();
 
+    // เบอร์ติดต่อกลับดึงจาก profile ตามชนิดของผู้ใช้ ไม่ใช่จากฟอร์ม
+    // คนละคอลัมน์กันในแต่ละตาราง จึงต้องแยกตาม subjectType
+    const reporterPhone = await lookupPhone(supabase, principal.subjectType, principal.subjectId);
+
     const payload: RequestInsert = {
       request_code: requestCode,
       // ชื่อและตัวตนผู้แจ้งมาจาก principal ทั้งคู่ ไม่ใช่จาก body
       reporter_name: principal.displayName,
-      reporter_phone: body.reporter_phone ?? null,
+      reporter_phone: reporterPhone,
       reporter_student_id: principal.subjectType === "student" ? principal.subjectId : null,
       reporter_admin_id: principal.subjectType === "admin" ? principal.subjectId : null,
       target_kind: body.target_kind,

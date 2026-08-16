@@ -62,9 +62,9 @@ export default function MaintenanceRequestPage() {
   const [assetSearch, setAssetSearch] = useState("");
   const [mine, setMine] = useState<MyRequest[]>([]);
 
-  const [me, setMe] = useState<{ name: string; studentId?: string } | null>(null);
+  const [me, setMe] = useState<{ name: string; studentId?: string; phone?: string } | null>(null);
   const [form, setForm] = useState({
-    reporter_phone: "", target_label: "",
+    target_label: "",
     asset_id: "", room_id: "", equipment_item_id: "", affected_quantity: "1",
     location_note: "", category: "อื่นๆ", symptom: "", urgency: "normal",
   });
@@ -86,8 +86,8 @@ export default function MaintenanceRequestPage() {
         setMe({
           name: [s.first_name, s.last_name].filter(Boolean).join(" "),
           studentId: s.student_id,
+          phone: s.student_phone ?? undefined,
         });
-        setForm((f) => ({ ...f, reporter_phone: s.student_phone ?? "" }));
       }
     } catch { /* ไม่มี session — ฝั่ง server จะปฏิเสธเองด้วย 401 */ }
   }, []);
@@ -143,8 +143,7 @@ export default function MaintenanceRequestPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          // ไม่ส่งชื่อผู้แจ้ง — server ใช้ชื่อจาก session ที่ยืนยันแล้วเสมอ
-          reporter_phone: form.reporter_phone || null,
+          // ไม่ส่งข้อมูลผู้แจ้งเลย — server อ่านชื่อและเบอร์จากบัญชีที่ยืนยันแล้ว
           target_kind: kind,
           // ส่งเฉพาะตัวชี้ที่ตรงกับ kind ที่เลือก ฝั่ง server ก็กรองอีกชั้น
           asset_id: kind === "asset" ? form.asset_id || null : null,
@@ -436,25 +435,26 @@ export default function MaintenanceRequestPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {/* ชื่อผู้แจ้งล็อกตามบัญชีที่ล็อกอิน แก้ไม่ได้ ฝั่ง server ก็ใช้ชื่อจาก
-                    session ไม่ใช่ค่าที่หน้าเว็บส่งไป จึงปลอมเป็นคนอื่นไม่ได้ */}
-                <div className="flex items-center gap-2.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
-                  <i className="fa-solid fa-user-check text-slate-400 text-xs flex-shrink-0" />
-                  <div className="min-w-0">
-                    <div className="text-xs sm:text-sm font-semibold text-slate-700 truncate">
-                      {me?.name || "กำลังโหลด…"}
-                    </div>
-                    <div className="text-[10px] text-slate-400">
-                      ผู้แจ้ง{me?.studentId ? ` · ${me.studentId}` : ""} — ระบุตามบัญชีที่เข้าสู่ระบบ
-                    </div>
+              {/* ข้อมูลผู้แจ้งมาจากบัญชีทั้งหมด ไม่มีช่องให้กรอก — ฝั่ง server ก็อ่าน
+                  จาก session ไม่ใช่จากค่าที่หน้าเว็บส่งไป จึงแจ้งในนามคนอื่นไม่ได้
+                  ถ้าเบอร์ไม่ถูกต้องต้องไปแก้ที่โปรไฟล์ ซึ่งทำให้ข้อมูลตรงกันทั้งระบบ */}
+              <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-3">
+                <div className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center flex-shrink-0">
+                  <i className="fa-solid fa-user-check text-slate-400 text-xs" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs sm:text-sm font-bold text-slate-700 truncate">
+                    {me?.name || "กำลังโหลด…"}
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    ผู้แจ้ง
+                    {me?.studentId ? ` · ${me.studentId}` : ""}
+                    {me?.phone ? ` · ${me.phone}` : ""}
                   </div>
                 </div>
-                <div className="field-wrap">
-                  <i className="fa-solid fa-phone field-icon" />
-                  <input className="form-input text-xs sm:text-sm" placeholder="เบอร์ติดต่อกลับ (ไม่บังคับ)"
-                    value={form.reporter_phone} onChange={(e) => setForm({ ...form, reporter_phone: e.target.value })} />
-                </div>
+                <Link href="/student" className="text-[10px] text-slate-400 hover:text-sky-500 transition-colors flex-shrink-0">
+                  แก้ที่โปรไฟล์
+                </Link>
               </div>
 
               <button onClick={submit} disabled={!canSubmit || busy}

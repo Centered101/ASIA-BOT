@@ -1016,15 +1016,18 @@ export default function StudentPage() {
                   ฿{baht.format(activityStats?.summary.totalSpent ?? 0)} จากสหกรณ์
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-2 mb-3">
+              {/* 3 ช่องแทน 2 — งานซ่อมที่ยังไม่ปิดคือสิ่งที่นักเรียนต้องติดตาม
+                  ต่างจากอีกสองช่องที่เป็นยอดสะสม จึงนับเฉพาะที่ยังค้าง */}
+              <div className="grid grid-cols-3 gap-2 mb-3">
                 {[
                   { label: "ออเดอร์สำเร็จ", value: activityStats?.summary.paidOrders ?? 0, icon: "fa-receipt", color: "#0EA5E9" },
                   { label: "จำนวนที่เบิก", value: activityStats?.summary.borrowedQuantity ?? 0, icon: "fa-boxes-stacked", color: "#EF4444" },
+                  { label: "ซ่อมค้างอยู่", value: activityStats?.summary.openRepairs ?? 0, icon: "fa-screwdriver-wrench", color: "#8B5CF6" },
                 ].map(item => (
                   <div key={item.label} className="rounded-xl bg-slate-50 border border-slate-100 px-3 py-2">
-                    <div className="flex items-center gap-2 text-[11px] text-slate-400 font-bold">
+                    <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold">
                       <i className={`fa-solid ${item.icon}`} style={{ color: item.color }} />
-                      {item.label}
+                      <span className="truncate">{item.label}</span>
                     </div>
                     <div className="mt-1 text-lg font-black text-slate-800">{item.value}</div>
                   </div>

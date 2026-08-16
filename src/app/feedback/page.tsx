@@ -38,11 +38,13 @@ function FeedbackContent() {
   const [fbStats,      setFbStats]      = useState<FeedbackStats | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Auto-fill name when switching to identified mode
+  // โหมดระบุตัวตนดึงข้อมูลติดต่อจากบัญชีให้ทั้งหมด ไม่ต้องพิมพ์เอง
+  // ยังแก้ได้อยู่ เผื่อบางคนอยากให้ติดต่อทางอื่นที่ไม่ใช่เบอร์ในระบบ
   useEffect(() => {
     if (identityMode === "identified" && session) {
       setName(`${session.first_name} ${session.last_name}`);
-      setEmail(""); setContact("");
+      setContact(session.student_phone ?? "");
+      setEmail(session.google_email ?? "");
     } else if (identityMode === "anonymous") {
       setName(""); setEmail(""); setContact("");
     }
@@ -286,7 +288,7 @@ function FeedbackContent() {
                   {identityMode === "identified" && (
                     <div className="space-y-2">
                       <label className="block text-xs font-semibold text-slate-500">
-                        ข้อมูลติดต่อ <span className="text-slate-300 font-normal">(ไม่บังคับ)</span>
+                        ข้อมูลติดต่อ <span className="text-slate-300 font-normal">(ดึงจากบัญชี แก้ไขได้)</span>
                       </label>
                       <div className="grid grid-cols-2 gap-2">
                         <div className="field-wrap">

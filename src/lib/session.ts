@@ -10,6 +10,8 @@ export type StudentSession = {
   department: string;
   student_phone?: string | null;
   photo_url?: string | null;
+  // login เก็บทั้งแถวจากตาราง students ลง localStorage อีเมลจึงติดมาด้วยอยู่แล้ว
+  google_email?: string | null;
 };
 
 export function getStudentSession(): StudentSession | null {

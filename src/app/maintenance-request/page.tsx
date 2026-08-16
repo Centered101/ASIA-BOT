@@ -5,7 +5,10 @@ import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { MascotState } from "@/components/Mascot";
-import { MAINTENANCE_URGENCY_TH } from "@/lib/server/maintenance";
+import {
+  MAINTENANCE_FLOW, MAINTENANCE_STATUS_TH, MAINTENANCE_URGENCY_TH, OPEN_STATUSES,
+} from "@/lib/server/maintenance";
+import type { MaintenanceStatus, MaintenanceUrgency } from "@/types/database";
 import StudentAvatar from "@/components/StudentAvatar";
 import { getStudentSession } from "@/lib/session";
 
@@ -52,9 +55,27 @@ type Kind = (typeof KINDS)[number]["value"];
 type Room = { id: string; name: string; location: string | null };
 type Asset = { id: string; name: string; asset_code: string | null; location_note: string | null };
 type EquipmentItem = { id: string; name: string; unit: string; available_quantity: number };
-type MyRequest = { id: string; request_code: string; status: string; symptom: string; created_at: string };
+type MyRequest = {
+  id: string; request_code: string; status: MaintenanceStatus; symptom: string; created_at: string;
+  category: string; urgency: MaintenanceUrgency; target_label: string | null; location_note: string | null;
+  assigned_to: string | null; scheduled_on: string | null; completed_at: string | null;
+  assets: { name: string; asset_code: string | null } | null;
+  rooms: { name: string } | null;
+  equipment_items: { name: string } | null;
+};
 
-const OPEN = ["reported", "received", "inspecting", "assigned", "repairing", "waiting_inspection"];
+/** ชื่อสิ่งที่ซ่อม — FK สามตัวถูกแปลงเป็นชื่อ ไม่งั้นผู้ใช้เห็นแต่ id */
+function targetOf(m: MyRequest): string {
+  if (m.assets) return `${m.assets.asset_code ? `[${m.assets.asset_code}] ` : ""}${m.assets.name}`;
+  if (m.rooms) return `ห้อง ${m.rooms.name}`;
+  if (m.equipment_items) return m.equipment_items.name;
+  return m.target_label ?? "ไม่ระบุ";
+}
+
+// ใช้ชุดเดียวกับที่ API ใช้ตรวจ ไม่พิมพ์ซ้ำ ไม่งั้นวันหนึ่งจะเพี้ยนกันเงียบ ๆ
+// (maintenance.ts ตั้งใจไม่ใส่ server-only เพื่อให้ฝั่ง client ใช้ได้)
+const OPEN = OPEN_STATUSES;
+const FLOW = MAINTENANCE_FLOW;
 
 type SystemStats = { total: number; pending: number; repairing: number; done: number };
 
@@ -99,6 +120,13 @@ export default function MaintenanceRequestPage() {
   const [result, setResult] = useState<{ code: string; warning?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [needsLogin, setNeedsLogin] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  // ล็อกการเลื่อนหน้าหลังตอนเปิด drawer แบบเดียวกับหน้าเบิกครุภัณฑ์
+  useEffect(() => {
+    document.body.style.overflow = historyOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [historyOpen]);
 
   const loadTargets = useCallback(async (q?: string) => {
     try {
@@ -283,6 +311,17 @@ export default function MaintenanceRequestPage() {
           {/* ── ฟอร์ม ── */}
           <div className="lg:col-span-2">
             <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4 sm:p-6 space-y-5">
+
+              {/* หัวการ์ดทรงเดียวกับ /feedback — ไอคอน หัวข้อ คำอธิบาย */}
+              <div className="text-center">
+                <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-3 bg-amber-100">
+                  <i className="fa-solid fa-screwdriver-wrench text-amber-500 text-2xl" />
+                </div>
+                <h2 className="text-lg sm:text-xl font-bold text-slate-800">ของอะไรเสีย บอกเราได้เลย</h2>
+                <p className="text-xs sm:text-sm text-slate-400 mt-1">
+                  แจ้งไว้ตรงนี้ ช่างจะได้ตามไปดูให้เร็วที่สุด
+                </p>
+              </div>
 
               {error && (
                 <div className="text-xs text-red-500 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">
@@ -479,15 +518,19 @@ export default function MaintenanceRequestPage() {
               )}
 
               {mine.length > 0 && (
-                <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">งานที่ฉันแจ้ง</h3>
+                <button onClick={() => setHistoryOpen(true)}
+                  className="w-full text-left bg-white border border-slate-100 rounded-2xl shadow-sm p-4 hover:shadow-md hover:border-violet-200 transition-all">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">งานที่ฉันแจ้ง</h3>
+                    <span className="text-[10px] font-bold text-violet-500">ดูทั้งหมด →</span>
+                  </div>
                   <div className="space-y-2">
-                    {mine.slice(0, 4).map((m) => (
+                    {mine.slice(0, 3).map((m) => (
                       <div key={m.id} className="flex items-start gap-2">
                         <span className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${OPEN.includes(m.status) ? "bg-amber-400" : "bg-emerald-400"}`} />
                         <div className="min-w-0">
-                          <div className="text-[11px] font-mono font-bold text-slate-600">{m.request_code}</div>
-                          <div className="text-[11px] text-slate-400 truncate">{m.symptom}</div>
+                          <div className="text-[11px] font-bold text-slate-600 truncate">{targetOf(m)}</div>
+                          <div className="text-[10px] text-slate-400">{MAINTENANCE_STATUS_TH[m.status]}</div>
                         </div>
                       </div>
                     ))}
@@ -497,7 +540,7 @@ export default function MaintenanceRequestPage() {
                     <i className="fa-solid fa-clipboard-list text-violet-400" />
                     แจ้งไป {stats.total} · ยังไม่เสร็จ {stats.open} · เสร็จแล้ว {stats.done}
                   </div>
-                </div>
+                </button>
               )}
 
               <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
@@ -534,6 +577,84 @@ export default function MaintenanceRequestPage() {
           </aside>
         </div>
       </main>
+
+      {/* ประวัติเต็ม — drawer แบบเดียวกับหน้าเบิกครุภัณฑ์ ให้เห็นทุกรายการพร้อม
+          ขั้นตอนที่งานเดินไปถึง ไม่ใช่แค่สถานะปัจจุบันเป็นคำเดียว */}
+      {historyOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            onClick={() => setHistoryOpen(false)} />
+          <div className="relative w-full sm:max-w-2xl max-h-[85vh] bg-white rounded-t-3xl sm:rounded-3xl shadow-xl flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0">
+              <div>
+                <div className="font-bold text-slate-800">ประวัติการแจ้งซ่อม</div>
+                <div className="text-[11px] text-slate-400">
+                  ทั้งหมด {stats.total} · ยังไม่เสร็จ {stats.open} · เสร็จแล้ว {stats.done}
+                </div>
+              </div>
+              <button onClick={() => setHistoryOpen(false)}
+                className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors">
+                <i className="fa-solid fa-xmark text-sm" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto px-5 py-4 space-y-3">
+              {mine.length === 0 ? (
+                <div className="text-center py-10 text-sm text-slate-400">ยังไม่มีประวัติการแจ้งซ่อม</div>
+              ) : mine.map((m) => {
+                const done = !OPEN.includes(m.status);
+                const cancelled = m.status === "cancelled";
+                const stepIdx = FLOW.indexOf(m.status);
+                return (
+                  <div key={m.id} className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div className="min-w-0">
+                        <div className="text-sm font-bold text-slate-800 truncate">{targetOf(m)}</div>
+                        <div className="text-[11px] text-slate-400 font-mono">{m.request_code}</div>
+                      </div>
+                      <span className={`text-[10px] font-bold rounded-full px-2.5 py-1 flex-shrink-0 ${
+                        cancelled ? "bg-slate-100 text-slate-500"
+                        : done ? "bg-emerald-50 text-emerald-600"
+                        : "bg-amber-50 text-amber-600"
+                      }`}>
+                        {MAINTENANCE_STATUS_TH[m.status]}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-slate-500 mb-3 leading-relaxed">{m.symptom}</p>
+
+                    {/* แถบขั้นตอน — บอกว่าเดินไปถึงไหนแล้วและเหลืออีกกี่ขั้น
+                        งานที่ถูกยกเลิกไม่แสดงแถบ เพราะมันไม่ได้เดินตามลำดับ */}
+                    {!cancelled && (
+                      <div className="flex gap-1 mb-3">
+                        {FLOW.map((step, i) => (
+                          <div key={step} title={MAINTENANCE_STATUS_TH[step]}
+                            className={`h-1.5 flex-1 rounded-full ${
+                              i <= stepIdx ? (done ? "bg-emerald-400" : "bg-amber-400") : "bg-slate-200"
+                            }`} />
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-400">
+                      <span>{m.category}</span>
+                      <span>{MAINTENANCE_URGENCY_TH[m.urgency]}</span>
+                      {m.location_note && <span>📍 {m.location_note}</span>}
+                      {m.assigned_to && <span>ช่าง {m.assigned_to}</span>}
+                      <span className="ml-auto">
+                        {new Date(m.created_at).toLocaleDateString("th-TH", {
+                          day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Bangkok",
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       <Footer />
     </>
   );

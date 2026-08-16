@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
+import { AdminSidebar } from "./Sidebar";
 
 /**
  * ชุด UI กลางของหน้า admin
@@ -51,17 +52,29 @@ export type Tone = keyof typeof TONE;
 
 /* ── โครงหน้า ─────────────────────────────────────────────── */
 
+/**
+ * โครงหน้า admin ที่อยู่นอก admin/page.tsx
+ *
+ * มี sidebar เดียวกับหลังบ้านอยู่ในตัว ผู้ใช้จึงสลับไปโมดูลอื่นได้จากหน้านี้เลย
+ * ไม่ต้องกดย้อนกลับไปหน้า /admin ก่อนทุกครั้ง
+ *
+ * `navId` คือ id ของรายการใน NAV_SECTIONS ที่จะไฮไลต์ ถ้าไม่ส่งมาก็ไม่ไฮไลต์
+ * ตัวไหน เช่นหน้าลูกอย่าง /admin/maintenance/[id]
+ */
 export function AdminPage({
   title,
   subtitle,
-  backHref = "/admin",
-  backLabel = "หลังบ้าน",
+  navId,
+  backHref,
+  backLabel,
   actions,
   width = 1100,
   children,
 }: {
   title: string;
   subtitle?: ReactNode;
+  navId?: string;
+  /** ลิงก์ย้อนกลับ ใส่เมื่อเป็นหน้าลูกที่ควรกลับไปหน้าแม่ */
   backHref?: string;
   backLabel?: string;
   actions?: ReactNode;
@@ -69,31 +82,35 @@ export function AdminPage({
   children: ReactNode;
 }) {
   return (
-    <main
-      className="admin-shell"
-      style={{ background: T.bg, minHeight: "100vh", padding: "20px 16px 60px", color: T.text }}
-    >
-      <div style={{ maxWidth: width, margin: "0 auto" }}>
-        <Link href={backHref} style={{ fontSize: 12, color: T.muted, textDecoration: "none" }}>
-          ← {backLabel}
-        </Link>
-        <div
-          style={{
-            display: "flex", alignItems: "flex-start", gap: 12,
-            flexWrap: "wrap", margin: "8px 0 16px",
-          }}
-        >
-          <div style={{ flex: "1 1 260px", minWidth: 0 }}>
-            <h1 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 4px" }}>{title}</h1>
-            {subtitle && (
-              <div style={{ fontSize: 13, color: T.muted, lineHeight: 1.6 }}>{subtitle}</div>
+    <div className="admin-shell" style={{ background: T.bg, minHeight: "100vh", color: T.text }}>
+      <div style={{ display: "flex", alignItems: "flex-start" }}>
+        <AdminSidebar activeId={navId} />
+        <main style={{ flex: 1, minWidth: 0, padding: "20px 16px 60px" }}>
+          <div style={{ maxWidth: width, margin: "0 auto" }}>
+            {backHref && (
+              <Link href={backHref} style={{ fontSize: 12, color: T.muted, textDecoration: "none" }}>
+                ← {backLabel ?? "ย้อนกลับ"}
+              </Link>
             )}
+            <div
+              style={{
+                display: "flex", alignItems: "flex-start", gap: 12,
+                flexWrap: "wrap", margin: backHref ? "8px 0 16px" : "0 0 16px",
+              }}
+            >
+              <div style={{ flex: "1 1 260px", minWidth: 0 }}>
+                <h1 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 4px" }}>{title}</h1>
+                {subtitle && (
+                  <div style={{ fontSize: 13, color: T.muted, lineHeight: 1.6 }}>{subtitle}</div>
+                )}
+              </div>
+              {actions && <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{actions}</div>}
+            </div>
+            {children}
           </div>
-          {actions && <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{actions}</div>}
-        </div>
-        {children}
+        </main>
       </div>
-    </main>
+    </div>
   );
 }
 

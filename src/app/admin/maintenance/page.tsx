@@ -127,10 +127,19 @@ export default function MaintenanceQueuePage() {
     [byStatus]
   );
 
-  if (!adminId) return null;
+  // ระหว่างอ่าน session จาก localStorage ยังขึ้นโครงหน้ากับ sidebar ไว้ก่อน
+  // ถ้า return null จะเห็นหน้าว่างวาบหนึ่งก่อนทุกครั้ง เพราะ SSR ไม่มี localStorage
+  if (!adminId) {
+    return (
+      <AdminPage navId="maintenance" title="งานแจ้งซ่อม">
+        <Loading />
+      </AdminPage>
+    );
+  }
 
   return (
     <AdminPage
+      navId="maintenance"
       title="งานแจ้งซ่อม"
       subtitle={<>ค้างอยู่ <strong style={{ color: T.accent }}>{openTotal}</strong> รายการ</>}
     >

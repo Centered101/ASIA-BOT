@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { toast } from "sonner";
@@ -430,6 +431,21 @@ export default function EquipmentRequestPage() {
                   </span>
                 )}
               </button>
+
+              {/* ทางไปแจ้งซ่อม — คนที่ยืมของไปแล้วเจอของพังมักกลับมาที่หน้านี้ก่อน
+                  เพราะเป็นที่ที่เขาเบิกไป การมีทางออกตรงนี้ทำให้ไม่ต้องไปหาเมนูเอง
+                  และงานซ่อมจะได้ผูกกับคลังจริง แทนที่เขาจะพิมพ์ชื่อของเอาเอง */}
+              <Link href="/maintenance-request"
+                className="w-full flex items-center gap-3 px-4 py-3 bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-amber-200 transition-all text-left">
+                <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0">
+                  <i className="fa-solid fa-screwdriver-wrench text-amber-500 text-sm" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-bold text-slate-700">ของชำรุด แจ้งซ่อม</div>
+                  <div className="text-xs text-slate-400">ของที่ยืมไปหรือของในโรงเรียนเสีย</div>
+                </div>
+                <i className="fa-solid fa-chevron-right text-slate-300 text-xs flex-shrink-0" />
+              </Link>
             </div>
 
             {/* Category list (desktop) */}

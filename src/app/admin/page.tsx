@@ -8,6 +8,7 @@ import { safeImageSrc } from "@/lib/image-url";
 import { supabase as realtimeSupabase } from "@/lib/supabase";
 import type { CustomField } from "@/lib/config";
 import { DEPARTMENTS, SITE_NAME } from "@/lib/config";
+import { NAV_SECTIONS, type AdminRole, type NavItem, type NavSection } from "@/lib/modules/nav";
 import { AMENITY_OPTIONS, getAmenityInfo } from "@/lib/amenities";
 import { Chart, registerables } from "chart.js";
 import { Bar, Doughnut, Line, Radar } from "react-chartjs-2";
@@ -306,9 +307,6 @@ function isAdminModalOpen() {
 
 // ─── Navigation Config ────────────────────────────────────────────────────────
 
-type AdminRole = "superadmin" | "admin" | "staff";
-type NavItem = { id: string; label: string; icon: string; badge?: string; children?: NavItem[] };
-type NavSection = { title: string | null; items: NavItem[] };
 type AdminSearchResult = {
   key: string;
   tab: string;
@@ -318,82 +316,15 @@ type AdminSearchResult = {
   badge?: string;
 };
 
-const NAV_SECTIONS: NavSection[] = [
-  {
-    title: "ภาพรวม",
-    items: [{ id: "dashboard", label: "ภาพรวมระบบ", icon: "fa-gauge-high" }],
-  },
-  {
-    title: "นักเรียน",
-    items: [
-      { id: "students",        label: "นักเรียน",            icon: "fa-graduation-cap" },
-      { id: "data_requests",   label: "คำขอข้อมูลนักเรียน",  icon: "fa-id-card", badge: "pendingDataRequests" },
-    ],
-  },
-  {
-    title: "จองห้อง",
-    items: [
-      { id: "bookings", label: "รายการจองห้อง", icon: "fa-calendar-check", badge: "pendingBookings" },
-      { id: "rooms",    label: "จัดการห้อง",     icon: "fa-door-open" },
-    ],
-  },
-  {
-    title: "สหกรณ์ โรงเรียน",
-    items: [
-      { id: "products",   label: "สินค้า",  icon: "fa-box", badge: "lowStockProducts" },
-      { id: "shoporders", label: "คำสั่งซื้อ", icon: "fa-receipt", badge: "orderUpdates" },
-    ],
-  },
-  {
-    title: "เบิกคุรุภัณฑ์",
-    items: [
-      { id: "equipment_items",    label: "คุรุภัณฑ์ทั้งหมด", icon: "fa-toolbox" },
-      { id: "equipment_requests", label: "ออเดอร์เบิก",     icon: "fa-basket-shopping", badge: "pendingEquipmentRequests" },
-    ],
-  },
-  {
-    title: "โปรเจค",
-    items: [
-      { id: "projects",    label: "จัดการโปรเจค", icon: "fa-folder-open" },
-      { id: "evaluations", label: "ผลการประเมิน", icon: "fa-chart-bar"   },
-    ],
-  },
-  {
-    title: "การเรียนการสอน",
-    items: [
-      { id: "class_groups",   label: "กลุ่มเรียน",  icon: "fa-users-rectangle" },
-      {
-        id: "class_schedule",
-        label: "ตารางเรียน",
-        icon: "fa-calendar-days",
-        children: [
-          { id: "class_schedule_weekly", label: "ตารางสัปดาห์", icon: "fa-calendar-week" },
-          { id: "class_schedule_override", label: "แก้วันพิเศษ", icon: "fa-calendar-xmark" },
-        ],
-      },
-      { id: "teachers",       label: "ครูผู้สอน",   icon: "fa-chalkboard-user" },
-    ],
-  },
-  {
-    title: "ระบบ",
-    items: [
-      { id: "feedbacks", label: "ความคิดเห็น", icon: "fa-comment-dots", badge: "feedbackPending" },
-      { id: "line_broadcast", label: "ส่งข่าวสาร", icon: "fa-bullhorn" },
-    ],
-  },
-  {
-    title: "ระบบ",
-    items: [
-      { id: "teacher_applications", label: "ใบสมัครครู", icon: "fa-chalkboard-user", badge: "pendingTeacherApps" },
-      { id: "admins",    label: "ผู้ดูแลระบบ", icon: "fa-user-shield" },
-      { id: "settings",  label: "ตั้งค่า",  icon: "fa-gear" },
-    ],
-  },
-];
 
 const TAB_ACCESS: Record<string, AdminRole[]> = {
   dashboard: ["superadmin", "admin", "staff"],
   students: ["superadmin", "admin", "staff"],
+  // หน้าที่ย้ายออกไปอยู่นอกไฟล์นี้แล้ว — ตัวหน้าเองตรวจสิทธิ์ด้วย RBAC
+  // ฝั่ง server อีกชั้น ตรงนี้คุมแค่ว่าจะโชว์ในเมนูให้ role ไหน
+  student_360: ["superadmin", "admin", "staff"],
+  maintenance: ["superadmin", "admin", "staff"],
+  assets: ["superadmin", "admin"],
   data_requests: ["superadmin", "admin"],
   bookings: ["superadmin", "admin", "staff"],
   rooms: ["superadmin", "admin"],
@@ -1243,7 +1174,12 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
                 const badgeCount = navBadgeCount(stats, item);
                 return (
                   <div key={item.id}>
-                    <button onClick={() => setActiveTab(item.id)}
+                    <button onClick={() => {
+                      // รายการที่มี href คือหน้าที่อยู่นอกไฟล์นี้ ต้องเปลี่ยน URL
+                      // ไม่ใช่ตั้ง activeTab เป็น id ที่ไม่มีอยู่ในหน้านี้
+                      if (item.href) { router.push(item.href); return; }
+                      setActiveTab(item.id);
+                    }}
                       className="w-full flex items-center gap-2.5 px-4 py-[7px] text-left text-[13px] transition-colors relative"
                       style={{
                         color: isActive ? "#ededed" : "#888",

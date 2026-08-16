@@ -323,6 +323,7 @@ const TAB_ACCESS: Record<string, AdminRole[]> = {
   // หน้าที่ย้ายออกไปอยู่นอกไฟล์นี้แล้ว — ตัวหน้าเองตรวจสิทธิ์ด้วย RBAC
   // ฝั่ง server อีกชั้น ตรงนี้คุมแค่ว่าจะโชว์ในเมนูให้ role ไหน
   student_360: ["superadmin", "admin", "staff"],
+  class_attendance: ["superadmin", "admin", "staff"],
   maintenance: ["superadmin", "admin", "staff"],
   assets: ["superadmin", "admin"],
   data_requests: ["superadmin", "admin"],
@@ -352,7 +353,15 @@ function normalizeAdminRole(role: string): AdminRole {
 
 function canAccessTab(role: string, tab: string) {
   const allowed = TAB_ACCESS[tab];
-  if (!allowed) return false;
+  if (!allowed) {
+    // เมนูที่ไม่มีใน TAB_ACCESS เคยหายไปเงียบ ๆ — เพิ่มรายการใน nav.ts แล้ว
+    // ลืมมาเพิ่มที่นี่ ผลคือเมนูไม่ขึ้นโดยไม่มีอะไรบอกว่าทำไม กว่าจะรู้ก็เสียเวลาไล่หา
+    // ยังคืน false เหมือนเดิมเพราะปลอดภัยกว่าเปิดให้ทุก role โดยไม่ตั้งใจ
+    if (process.env.NODE_ENV !== "production") {
+      console.warn(`[nav] "${tab}" ไม่มีใน TAB_ACCESS จึงถูกซ่อนจากเมนู — เพิ่มเข้าไปที่ TAB_ACCESS ด้วย`);
+    }
+    return false;
+  }
   return allowed.includes(normalizeAdminRole(role));
 }
 

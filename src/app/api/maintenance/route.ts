@@ -17,8 +17,10 @@ const CATEGORIES = [
   "เฟอร์นิเจอร์", "อุปกรณ์", "คอมพิวเตอร์", "อื่นๆ",
 ] as const;
 
+// ไม่รับ reporter_name จาก body โดยตั้งใจ — ชื่อผู้แจ้งมาจาก principal เท่านั้น
+// ถ้ารับจาก body ใครก็แจ้งซ่อมในนามคนอื่นได้ แล้วฝ่ายอาคารจะโทรผิดคน
+// และ audit log จะชี้ไปผิดคนด้วย
 const CreateSchema = z.object({
-  reporter_name: z.string().trim().min(1, "ต้องระบุชื่อผู้แจ้ง"),
   reporter_phone: z.string().trim().nullable().optional(),
   target_kind: z.enum(["asset", "equipment_item", "room", "other"]).default("other"),
   asset_id: z.string().uuid().nullable().optional(),
@@ -52,9 +54,9 @@ export const POST = withAuth(
 
     const payload: RequestInsert = {
       request_code: requestCode,
-      reporter_name: body.reporter_name,
+      // ชื่อและตัวตนผู้แจ้งมาจาก principal ทั้งคู่ ไม่ใช่จาก body
+      reporter_name: principal.displayName,
       reporter_phone: body.reporter_phone ?? null,
-      // บันทึกว่าใครแจ้งจาก principal ไม่ใช่จาก body เพื่อให้ปลอมชื่อคนแจ้งไม่ได้
       reporter_student_id: principal.subjectType === "student" ? principal.subjectId : null,
       reporter_admin_id: principal.subjectType === "admin" ? principal.subjectId : null,
       target_kind: body.target_kind,

@@ -62,8 +62,9 @@ export default function MaintenanceRequestPage() {
   const [assetSearch, setAssetSearch] = useState("");
   const [mine, setMine] = useState<MyRequest[]>([]);
 
+  const [me, setMe] = useState<{ name: string; studentId?: string } | null>(null);
   const [form, setForm] = useState({
-    reporter_name: "", reporter_phone: "", target_label: "",
+    reporter_phone: "", target_label: "",
     asset_id: "", room_id: "", equipment_item_id: "", affected_quantity: "1",
     location_note: "", category: "อื่นๆ", symptom: "", urgency: "normal",
   });
@@ -79,14 +80,16 @@ export default function MaintenanceRequestPage() {
     try {
       const raw = localStorage.getItem("asia_lb_session");
       if (raw) {
-        const s = JSON.parse(raw) as { first_name?: string; last_name?: string; student_phone?: string };
-        setForm((f) => ({
-          ...f,
-          reporter_name: [s.first_name, s.last_name].filter(Boolean).join(" "),
-          reporter_phone: s.student_phone ?? "",
-        }));
+        const s = JSON.parse(raw) as {
+          first_name?: string; last_name?: string; student_phone?: string; student_id?: string;
+        };
+        setMe({
+          name: [s.first_name, s.last_name].filter(Boolean).join(" "),
+          studentId: s.student_id,
+        });
+        setForm((f) => ({ ...f, reporter_phone: s.student_phone ?? "" }));
       }
-    } catch { /* ไม่มี session ก็กรอกเองได้ */ }
+    } catch { /* ไม่มี session — ฝั่ง server จะปฏิเสธเองด้วย 401 */ }
   }, []);
 
   const loadTargets = useCallback(async (q?: string) => {
@@ -140,7 +143,7 @@ export default function MaintenanceRequestPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          reporter_name: form.reporter_name,
+          // ไม่ส่งชื่อผู้แจ้ง — server ใช้ชื่อจาก session ที่ยืนยันแล้วเสมอ
           reporter_phone: form.reporter_phone || null,
           target_kind: kind,
           // ส่งเฉพาะตัวชี้ที่ตรงกับ kind ที่เลือก ฝั่ง server ก็กรองอีกชั้น
@@ -168,7 +171,7 @@ export default function MaintenanceRequestPage() {
   }
 
   const canSubmit =
-    form.reporter_name.trim() && form.symptom.trim() &&
+    form.symptom.trim() &&
     (kind === "other" ? form.target_label.trim()
       : kind === "asset" ? form.asset_id
       : kind === "equipment_item" ? form.equipment_item_id
@@ -434,10 +437,18 @@ export default function MaintenanceRequestPage() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div className="field-wrap">
-                  <i className="fa-solid fa-user field-icon" />
-                  <input className="form-input text-xs sm:text-sm" placeholder="ชื่อ-นามสกุล"
-                    value={form.reporter_name} onChange={(e) => setForm({ ...form, reporter_name: e.target.value })} />
+                {/* ชื่อผู้แจ้งล็อกตามบัญชีที่ล็อกอิน แก้ไม่ได้ ฝั่ง server ก็ใช้ชื่อจาก
+                    session ไม่ใช่ค่าที่หน้าเว็บส่งไป จึงปลอมเป็นคนอื่นไม่ได้ */}
+                <div className="flex items-center gap-2.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+                  <i className="fa-solid fa-user-check text-slate-400 text-xs flex-shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-xs sm:text-sm font-semibold text-slate-700 truncate">
+                      {me?.name || "กำลังโหลด…"}
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      ผู้แจ้ง{me?.studentId ? ` · ${me.studentId}` : ""} — ระบุตามบัญชีที่เข้าสู่ระบบ
+                    </div>
+                  </div>
                 </div>
                 <div className="field-wrap">
                   <i className="fa-solid fa-phone field-icon" />

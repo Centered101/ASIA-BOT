@@ -1073,3 +1073,130 @@ export function buildScheduleTodayFlex(params: {
     },
   };
 }
+
+/**
+ * Flex แจ้งเตือนงานซ่อมใหม่
+ *
+ * ใช้โครงเดียวกับ buildEquipmentRequestFlexMessage แต่แยกฟังก์ชันเพราะสองงานนี้
+ * มีฟิลด์คนละชุดจริง ๆ งานซ่อมไม่มีวันยืม/วันคืน แต่มีความเร่งด่วนกับอาการเสีย
+ * ซึ่งเป็นสิ่งที่ฝ่ายอาคารต้องเห็นก่อนอย่างอื่นเพื่อจัดคิว
+ *
+ * สีหัวการ์ดเปลี่ยนตามความเร่งด่วน ไม่ใช่ตามสถานะ เพราะการ์ดนี้ส่งตอนแจ้งเข้ามา
+ * เท่านั้น สถานะยังเป็น reported เสมอ สิ่งที่ต่างกันจริงคือความด่วน
+ */
+export function buildMaintenanceRequestFlexMessage(params: {
+  requestCode: string;
+  targetName: string;
+  category: string;
+  symptom: string;
+  urgency: "low" | "normal" | "high" | "critical";
+  reporterName: string;
+  reporterPhotoUrl?: string | null;
+  reporterPhone?: string | null;
+  locationNote?: string | null;
+  affectedQuantity?: number | null;
+  photoUrl?: string | null;
+}) {
+  const {
+    requestCode, targetName, category, symptom, urgency,
+    reporterName, reporterPhotoUrl, reporterPhone, locationNote,
+    affectedQuantity, photoUrl,
+  } = params;
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://asia-bot.xyz";
+
+  const cfg = {
+    low:      { color: "#64748B", label: "ไม่เร่งด่วน", icon: "🔧" },
+    normal:   { color: "#0EA5E9", label: "ปกติ",        icon: "🔧" },
+    high:     { color: "#F59E0B", label: "เร่งด่วน",    icon: "⚠️" },
+    critical: { color: "#EF4444", label: "วิกฤต",       icon: "🚨" },
+  }[urgency];
+
+  const row = (label: string, value?: string | number | null) => value ? ({
+    type: "box" as const,
+    layout: "horizontal" as const,
+    contents: [
+      { type: "text" as const, text: label, size: "sm" as const, color: "#64748B", flex: 2 },
+      { type: "text" as const, text: String(value), size: "sm" as const, color: "#0F172A", weight: "bold" as const, align: "end" as const, flex: 3, wrap: true },
+    ],
+  }) : null;
+
+  const rows = [
+    row("ผู้แจ้ง", reporterName),
+    row("สิ่งที่ซ่อม", targetName),
+    row("หมวด", category),
+    row("ความเร่งด่วน", cfg.label),
+    row("จำนวนที่เสีย", affectedQuantity ? `${affectedQuantity} ชิ้น` : null),
+    row("จุดที่ตั้ง", locationNote),
+    row("เบอร์", reporterPhone),
+    row("รหัสคำขอ", requestCode),
+  ].filter(Boolean) as object[];
+
+  const safePhotoUrl = lineImageUrl(photoUrl);
+
+  return {
+    type: "bubble",
+    size: "giga",
+    header: buildLineFlexHeader({
+      title: "ASIA-BOT แจ้งซ่อม",
+      subtitle: "งานแจ้งซ่อมเข้าใหม่",
+      backgroundColor: cfg.color,
+      photoUrl: reporterPhotoUrl,
+    }),
+    body: {
+      type: "box",
+      layout: "vertical",
+      spacing: "md",
+      contents: [
+        {
+          type: "box",
+          layout: "horizontal",
+          spacing: "md",
+          contents: [
+            ...(safePhotoUrl ? [{
+              type: "image" as const,
+              url: safePhotoUrl,
+              size: "xs" as const,
+              aspectMode: "cover" as const,
+              aspectRatio: "1:1" as const,
+              flex: 1,
+            }] : []),
+            {
+              type: "box" as const,
+              layout: "vertical" as const,
+              flex: 3,
+              justifyContent: "center" as const,
+              contents: [{
+                type: "text" as const,
+                text: `${cfg.icon} ${targetName}`,
+                weight: "bold" as const,
+                size: "xl" as const,
+                color: cfg.color,
+                wrap: true,
+              }],
+            },
+          ],
+        },
+        { type: "separator", margin: "sm" },
+        { type: "box", layout: "vertical", spacing: "sm", contents: rows },
+        {
+          type: "box",
+          layout: "vertical",
+          backgroundColor: "#F8FAFC",
+          cornerRadius: "12px",
+          paddingAll: "12px",
+          contents: [{ type: "text" as const, text: symptom, size: "sm" as const, color: "#475569", wrap: true }],
+        },
+      ],
+    },
+    footer: {
+      type: "box",
+      layout: "vertical",
+      contents: [{
+        type: "button",
+        style: "primary",
+        color: cfg.color,
+        action: { type: "uri", label: "เปิดคิวงานซ่อม", uri: `${siteUrl}/admin/maintenance` },
+      }],
+    },
+  };
+}

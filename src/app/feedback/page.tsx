@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, Suspense } from "react";
+import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import StudentAvatar from "@/components/StudentAvatar";
@@ -435,6 +436,19 @@ function FeedbackContent() {
                     </li>
                   ))}
                 </ul>
+              </div>
+
+              {/* ของพังไม่ใช่ความคิดเห็น แต่คนมักมาลงที่หน้านี้ก่อนเพราะเป็นช่องทางร้องเรียนที่คุ้นที่สุด
+                  มีทางลัดตรงนี้จะได้ไปลงในระบบแจ้งซ่อมที่ผูกกับคลังจริง แทนที่จะจมอยู่ในกล่องความคิดเห็น */}
+              <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">ทางลัด</h3>
+                <Link href="/maintenance-request"
+                  className="flex items-center gap-2.5 text-[11px] text-slate-500 hover:text-amber-600 transition-colors">
+                  <span className="w-5 h-5 rounded-lg bg-amber-50 flex items-center justify-center flex-shrink-0">
+                    <i className="fa-solid fa-screwdriver-wrench text-[9px] text-amber-500" />
+                  </span>
+                  ของชำรุด แจ้งซ่อม
+                </Link>
               </div>
 
               {/* Privacy card */}

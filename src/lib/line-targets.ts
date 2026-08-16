@@ -8,7 +8,8 @@ export type LineNotificationType =
   | "order"
   | "attendance"
   | "data_change"
-  | "equipment";
+  | "equipment"
+  | "maintenance";
 
 const FALLBACK_ENV: Record<LineNotificationType, string | undefined> = {
   admin: process.env.LINE_GROUP_ADMIN,
@@ -19,6 +20,9 @@ const FALLBACK_ENV: Record<LineNotificationType, string | undefined> = {
   attendance: process.env.LINE_GROUP_ATTEND || process.env.LINE_GROUP_ADMIN,
   data_change: process.env.LINE_GROUP_ADMIN,
   equipment: process.env.LINE_GROUP_ADMIN,
+  // งานซ่อมมีกลุ่มของตัวเองได้ถ้าตั้งค่าไว้ ฝ่ายอาคารจะได้ไม่ต้องกรองจาก
+  // กลุ่มแอดมินรวม แต่ถ้ายังไม่ตั้งก็ตกไปที่กลุ่มแอดมินเหมือนหมวดอื่น
+  maintenance: process.env.LINE_GROUP_MAINTENANCE || process.env.LINE_GROUP_ADMIN,
 };
 
 export async function getLineNotificationTarget(

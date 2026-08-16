@@ -7,6 +7,7 @@ import {
   MAINTENANCE_FLOW,
   MAINTENANCE_STATUS_TH,
   MAINTENANCE_TRANSITIONS,
+  MAINTENANCE_URGENCY_TH as URGENCY_TH,
 } from "@/lib/server/maintenance";
 import type { MaintenanceStatus, MaintenanceUrgency } from "@/types/database";
 import {
@@ -29,9 +30,7 @@ const STORAGE_KEY = "asia_admin_session";
 const URGENCY_TONE: Record<MaintenanceUrgency, Tone> = {
   low: "neutral", normal: "info", high: "warn", critical: "danger",
 };
-const URGENCY_TH: Record<MaintenanceUrgency, string> = {
-  low: "ไม่เร่งด่วน", normal: "ปกติ", high: "เร่งด่วน", critical: "วิกฤต",
-};
+
 const URGENCY_COLOR: Record<MaintenanceUrgency, string> = {
   low: T.muted, normal: "#0EA5E9", high: T.warn, critical: T.err,
 };

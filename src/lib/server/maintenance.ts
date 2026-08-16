@@ -116,3 +116,11 @@ export function generateRequestCode(): string {
   const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
   return `MT-${today}-${suffix}`;
 }
+
+/** คำแปลความเร่งด่วน ใช้ทั้งใน UI และข้อความแจ้งเตือน LINE */
+export const MAINTENANCE_URGENCY_TH: Record<"low" | "normal" | "high" | "critical", string> = {
+  low: "ไม่เร่งด่วน",
+  normal: "ปกติ",
+  high: "เร่งด่วน",
+  critical: "วิกฤต",
+};

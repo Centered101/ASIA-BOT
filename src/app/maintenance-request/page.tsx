@@ -5,6 +5,8 @@ import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { MascotState } from "@/components/Mascot";
+import { MAINTENANCE_URGENCY_TH } from "@/lib/server/maintenance";
+import StudentAvatar from "@/components/StudentAvatar";
 
 /**
  * ฟอร์มแจ้งซ่อมสำหรับทุกคน — นักเรียน ครู เจ้าหน้าที่
@@ -28,11 +30,12 @@ const CATEGORIES = [
   "เฟอร์นิเจอร์", "อุปกรณ์", "คอมพิวเตอร์", "อื่นๆ",
 ] as const;
 
+// label มาจากชุดกลางเพื่อให้ตรงกับข้อความที่ส่งเข้า LINE เสมอ
 const URGENCY = [
-  { value: "low", label: "ไม่เร่งด่วน", hint: "รอได้", color: "#64748B" },
-  { value: "normal", label: "ปกติ", hint: "ตามคิว", color: "#0EA5E9" },
-  { value: "high", label: "เร่งด่วน", hint: "กระทบการเรียน", color: "#F59E0B" },
-  { value: "critical", label: "วิกฤต", hint: "อันตราย ใช้ไม่ได้เลย", color: "#EF4444" },
+  { value: "low", label: MAINTENANCE_URGENCY_TH.low, hint: "รอได้", color: "#64748B" },
+  { value: "normal", label: MAINTENANCE_URGENCY_TH.normal, hint: "ตามคิว", color: "#0EA5E9" },
+  { value: "high", label: MAINTENANCE_URGENCY_TH.high, hint: "กระทบการเรียน", color: "#F59E0B" },
+  { value: "critical", label: MAINTENANCE_URGENCY_TH.critical, hint: "อันตราย ใช้ไม่ได้เลย", color: "#EF4444" },
 ] as const;
 
 const KINDS = [
@@ -62,7 +65,9 @@ export default function MaintenanceRequestPage() {
   const [assetSearch, setAssetSearch] = useState("");
   const [mine, setMine] = useState<MyRequest[]>([]);
 
-  const [me, setMe] = useState<{ name: string; studentId?: string; phone?: string } | null>(null);
+  const [me, setMe] = useState<{
+    name: string; studentId?: string; phone?: string; photoUrl?: string;
+  } | null>(null);
   const [form, setForm] = useState({
     target_label: "",
     asset_id: "", room_id: "", equipment_item_id: "", affected_quantity: "1",
@@ -82,15 +87,33 @@ export default function MaintenanceRequestPage() {
       if (raw) {
         const s = JSON.parse(raw) as {
           first_name?: string; last_name?: string; student_phone?: string; student_id?: string;
+          photo_url?: string | null;
         };
         setMe({
           name: [s.first_name, s.last_name].filter(Boolean).join(" "),
           studentId: s.student_id,
           phone: s.student_phone ?? undefined,
+          photoUrl: s.photo_url ?? undefined,
         });
       }
     } catch { /* ไม่มี session — ฝั่ง server จะปฏิเสธเองด้วย 401 */ }
   }, []);
+
+  // session ถูกเขียนตอน login ถ้านักเรียนอัปโหลดรูปทีหลัง ค่าใน localStorage จะยังไม่มีรูป
+  // จึงไปถามฐานข้อมูลเฉพาะตอนที่ session ไม่มีรูป เพื่อไม่ให้ยิง request ทุกครั้งที่เปิดหน้า
+  useEffect(() => {
+    if (!me?.studentId || me.photoUrl) return;
+    let alive = true;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/auth/me?student_id=${encodeURIComponent(me.studentId!)}`);
+        const json = await res.json();
+        const url = json?.data?.photo_url as string | null | undefined;
+        if (alive && url) setMe((prev) => (prev ? { ...prev, photoUrl: url } : prev));
+      } catch { /* ไม่มีรูปก็แสดงตัวย่อชื่อแทน ไม่ต้องรบกวนผู้ใช้ */ }
+    })();
+    return () => { alive = false; };
+  }, [me?.studentId, me?.photoUrl]);
 
   const loadTargets = useCallback(async (q?: string) => {
     try {
@@ -439,9 +462,8 @@ export default function MaintenanceRequestPage() {
                   จาก session ไม่ใช่จากค่าที่หน้าเว็บส่งไป จึงแจ้งในนามคนอื่นไม่ได้
                   ถ้าเบอร์ไม่ถูกต้องต้องไปแก้ที่โปรไฟล์ ซึ่งทำให้ข้อมูลตรงกันทั้งระบบ */}
               <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-3">
-                <div className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center flex-shrink-0">
-                  <i className="fa-solid fa-user-check text-slate-400 text-xs" />
-                </div>
+                <StudentAvatar src={me?.photoUrl} name={me?.name} size={36} rounded="xl"
+                  className="flex-shrink-0" />
                 <div className="min-w-0 flex-1">
                   <div className="text-xs sm:text-sm font-bold text-slate-700 truncate">
                     {me?.name || "กำลังโหลด…"}
@@ -452,9 +474,6 @@ export default function MaintenanceRequestPage() {
                     {me?.phone ? ` · ${me.phone}` : ""}
                   </div>
                 </div>
-                <Link href="/student" className="text-[10px] text-slate-400 hover:text-sky-500 transition-colors flex-shrink-0">
-                  แก้ที่โปรไฟล์
-                </Link>
               </div>
 
               <button onClick={submit} disabled={!canSubmit || busy}

@@ -5,6 +5,9 @@ import { withAuth } from "@/lib/server/with-auth";
 import { parseBody } from "@/lib/server/validation";
 import { ALL_STATUSES, generateRequestCode, targetError } from "@/lib/server/maintenance";
 import { hasPermission } from "@/lib/rbac/definitions";
+import { buildMaintenanceRequestFlexMessage, sendLineFlexMessage } from "@/lib/line";
+import { getLineNotificationTarget } from "@/lib/line-targets";
+import { MAINTENANCE_URGENCY_TH } from "@/lib/server/maintenance";
 import type { Database, MaintenanceStatus } from "@/types/database";
 
 type RequestInsert = Database["public"]["Tables"]["maintenance_requests"]["Insert"];
@@ -34,6 +37,33 @@ const CreateSchema = z.object({
   urgency: z.enum(["low", "normal", "high", "critical"]).default("normal"),
   photo_urls: z.array(z.string().trim().url()).max(10).optional(),
 });
+
+/**
+ * ชื่อสิ่งที่จะซ่อมสำหรับใส่ในข้อความแจ้งเตือน
+ *
+ * ฝั่ง DB เก็บเป็น FK สามตัวกับ target_label ผู้รับแจ้งต้องอ่านเป็นชื่อ
+ * ไม่ใช่ UUID จึงต้องไปดึงชื่อจริงมาก่อนส่ง
+ */
+async function describeTarget(
+  supabase: ReturnType<typeof getServiceClient>,
+  body: { target_kind: string; asset_id?: string | null; room_id?: string | null; equipment_item_id?: string | null; target_label?: string | null }
+): Promise<string> {
+  if (body.target_kind === "asset" && body.asset_id) {
+    const { data } = await supabase
+      .from("assets").select("name, asset_code").eq("id", body.asset_id).maybeSingle();
+    if (data) return `${data.asset_code ? `[${data.asset_code}] ` : ""}${data.name}`;
+  }
+  if (body.target_kind === "room" && body.room_id) {
+    const { data } = await supabase.from("rooms").select("name").eq("id", body.room_id).maybeSingle();
+    if (data) return `ห้อง ${data.name}`;
+  }
+  if (body.target_kind === "equipment_item" && body.equipment_item_id) {
+    const { data } = await supabase
+      .from("equipment_items").select("name").eq("id", body.equipment_item_id).maybeSingle();
+    if (data) return data.name;
+  }
+  return body.target_label?.trim() || "ไม่ระบุ";
+}
 
 /** เบอร์ติดต่อกลับจาก profile — students.student_phone / admins.phone / teachers.phone */
 async function lookupPhone(
@@ -134,6 +164,31 @@ export const POST = withAuth(
           warning: `แจ้งซ่อมสำเร็จแต่แนบรูปไม่ได้: ${photoError.message}`,
         });
       }
+    }
+
+    // แจ้งฝ่ายอาคารผ่าน LINE — งานซ่อมที่ไม่มีใครเห็นก็เท่ากับไม่ได้แจ้ง
+    // ห่อ try/catch เพราะคำขอถูกบันทึกไปแล้ว LINE ล่มไม่ควรทำให้ผู้ใช้
+    // เข้าใจว่าแจ้งไม่สำเร็จแล้วกดซ้ำจนได้งานซ้ำ
+    try {
+      const targetName = await describeTarget(supabase, body);
+      await sendLineFlexMessage(
+        await getLineNotificationTarget(supabase, "maintenance"),
+        `${body.urgency === "critical" ? "🚨" : "🔧"} แจ้งซ่อมใหม่: ${targetName} — ${MAINTENANCE_URGENCY_TH[body.urgency]}`,
+        buildMaintenanceRequestFlexMessage({
+          requestCode,
+          targetName,
+          category: body.category,
+          symptom: body.symptom,
+          urgency: body.urgency,
+          reporterName: principal.displayName,
+          reporterPhone: reporterPhone,
+          locationNote: body.location_note ?? null,
+          affectedQuantity: payload.affected_quantity ?? null,
+          photoUrl: body.photo_urls?.[0] ?? null,
+        })
+      );
+    } catch (e) {
+      console.error("[LINE] maintenance notify failed:", e);
     }
 
     // ไทม์ไลน์เริ่มต้นที่การแจ้ง เพื่อให้ประวัติครบตั้งแต่ก้าวแรก

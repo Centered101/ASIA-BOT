@@ -30,45 +30,19 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [{ id: "dashboard", label: "ภาพรวมระบบ", icon: "fa-gauge-high" }],
   },
   {
-    title: "นักเรียน",
+    // ฝ่ายทะเบียน — ข้อมูลตัวตนของนักเรียนตั้งแต่เข้าจนจบ
+    title: "ฝ่ายทะเบียน",
     items: [
-      { id: "students",        label: "นักเรียน",            icon: "fa-graduation-cap" },
-      { id: "student_360",     label: "Student 360",         icon: "fa-id-card-clip", href: "/admin/student-360" },
-      { id: "data_requests",   label: "คำขอข้อมูลนักเรียน",  icon: "fa-id-card", badge: "pendingDataRequests" },
+      { id: "students",      label: "ข้อมูลนักเรียน",     icon: "fa-graduation-cap" },
+      { id: "student_360",   label: "Student 360",        icon: "fa-id-card-clip", href: "/admin/student-360" },
+      { id: "data_requests", label: "คำขอแก้ไขข้อมูล",   icon: "fa-id-card", badge: "pendingDataRequests" },
     ],
   },
   {
-    title: "จองห้อง",
+    // ฝ่ายวิชาการ — ห้องเรียน ตารางสอน ครู และการเรียนการสอน
+    title: "ฝ่ายวิชาการ",
     items: [
-      { id: "bookings", label: "รายการจองห้อง", icon: "fa-calendar-check", badge: "pendingBookings" },
-      { id: "rooms",    label: "จัดการห้อง",     icon: "fa-door-open" },
-    ],
-  },
-  {
-    title: "สหกรณ์ โรงเรียน",
-    items: [
-      { id: "products",   label: "สินค้า",  icon: "fa-box", badge: "lowStockProducts" },
-      { id: "shoporders", label: "คำสั่งซื้อ", icon: "fa-receipt", badge: "orderUpdates" },
-    ],
-  },
-  {
-    title: "เบิกคุรุภัณฑ์",
-    items: [
-      { id: "equipment_items",    label: "คุรุภัณฑ์ทั้งหมด", icon: "fa-toolbox" },
-      { id: "equipment_requests", label: "ออเดอร์เบิก",     icon: "fa-basket-shopping", badge: "pendingEquipmentRequests" },
-    ],
-  },
-  {
-    title: "โปรเจค",
-    items: [
-      { id: "projects",    label: "จัดการโปรเจค", icon: "fa-folder-open" },
-      { id: "evaluations", label: "ผลการประเมิน", icon: "fa-chart-bar"   },
-    ],
-  },
-  {
-    title: "การเรียนการสอน",
-    items: [
-      { id: "class_groups",   label: "กลุ่มเรียน",  icon: "fa-users-rectangle" },
+      { id: "class_groups", label: "กลุ่มเรียน", icon: "fa-users-rectangle" },
       {
         id: "class_schedule",
         label: "ตารางเรียน",
@@ -78,29 +52,57 @@ export const NAV_SECTIONS: NavSection[] = [
           { id: "class_schedule_override", label: "แก้วันพิเศษ", icon: "fa-calendar-xmark" },
         ],
       },
-      { id: "teachers",       label: "ครูผู้สอน",   icon: "fa-chalkboard-user" },
+      { id: "teachers",             label: "ครูผู้สอน",   icon: "fa-chalkboard-user" },
+      { id: "teacher_applications", label: "ใบสมัครครู", icon: "fa-user-plus", badge: "pendingTeacherApps" },
+    ],
+  },
+  {
+    // ฝ่ายกิจการนักเรียน — งานที่มองนักเรียนเป็นรายบุคคลนอกห้องเรียน
+    title: "ฝ่ายกิจการนักเรียน",
+    items: [
+      { id: "projects",    label: "โปรเจคนักเรียน", icon: "fa-folder-open" },
+      { id: "evaluations", label: "ผลการประเมิน",   icon: "fa-chart-bar" },
+      { id: "feedbacks",   label: "ความคิดเห็น",     icon: "fa-comment-dots", badge: "feedbackPending" },
+    ],
+  },
+  {
+    // ฝ่ายอาคารสถานที่ — ห้อง อาคาร และงานซ่อม
+    title: "ฝ่ายอาคารสถานที่",
+    items: [
+      { id: "maintenance", label: "งานแจ้งซ่อม",  icon: "fa-screwdriver-wrench", href: "/admin/maintenance" },
+      { id: "bookings",    label: "รายการจองห้อง", icon: "fa-calendar-check", badge: "pendingBookings" },
+      { id: "rooms",       label: "จัดการห้อง",    icon: "fa-door-open" },
+    ],
+  },
+  {
+    // ฝ่ายพัสดุ — ของที่โรงเรียนเป็นเจ้าของ ทั้งรายชิ้นและคลังยืม
+    title: "ฝ่ายพัสดุ",
+    items: [
+      { id: "assets",             label: "ทะเบียนครุภัณฑ์", icon: "fa-clipboard-check", href: "/admin/assets" },
+      { id: "equipment_items",    label: "คลังของยืม",      icon: "fa-toolbox" },
+      { id: "equipment_requests", label: "คำขอเบิก",        icon: "fa-basket-shopping", badge: "pendingEquipmentRequests" },
+    ],
+  },
+  {
+    // สหกรณ์ — แยกจากพัสดุเพราะเป็นการซื้อขาย ไม่ใช่การยืมคืน
+    title: "สหกรณ์โรงเรียน",
+    items: [
+      { id: "products",   label: "สินค้า",     icon: "fa-box", badge: "lowStockProducts" },
+      { id: "shoporders", label: "คำสั่งซื้อ", icon: "fa-receipt", badge: "orderUpdates" },
+    ],
+  },
+  {
+    // งานส่วนกลาง ไม่ได้สังกัดฝ่ายใดฝ่ายหนึ่ง
+    title: "ส่วนกลาง",
+    items: [
+      { id: "line_broadcast", label: "ส่งข่าวสาร LINE", icon: "fa-bullhorn" },
     ],
   },
   {
     title: "ระบบ",
     items: [
-      { id: "feedbacks", label: "ความคิดเห็น", icon: "fa-comment-dots", badge: "feedbackPending" },
-      { id: "line_broadcast", label: "ส่งข่าวสาร", icon: "fa-bullhorn" },
-    ],
-  },
-  {
-    title: "ระบบ",
-    items: [
-      { id: "teacher_applications", label: "ใบสมัครครู", icon: "fa-chalkboard-user", badge: "pendingTeacherApps" },
-      { id: "admins",    label: "ผู้ดูแลระบบ", icon: "fa-user-shield" },
-      { id: "settings",  label: "ตั้งค่า",  icon: "fa-gear" },
-    ],
-  },
-  {
-    title: "อาคารและครุภัณฑ์",
-    items: [
-      { id: "maintenance", label: "งานแจ้งซ่อม",     icon: "fa-screwdriver-wrench", href: "/admin/maintenance" },
-      { id: "assets",      label: "ทะเบียนครุภัณฑ์", icon: "fa-clipboard-check",    href: "/admin/assets" },
+      { id: "admins",   label: "ผู้ดูแลระบบ", icon: "fa-user-shield" },
+      { id: "settings", label: "ตั้งค่า",     icon: "fa-gear" },
     ],
   },
 ];

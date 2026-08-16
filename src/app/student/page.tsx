@@ -7,6 +7,7 @@ import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ProfileImageCropModal from "@/components/ProfileImageCropModal";
+import { refreshAOS } from "@/components/AOSProvider";
 import { toast } from "sonner";
 import { SESSION_KEY, SESSION_TIME_KEY, SESSION_TTL, DEPARTMENTS, SITE_NAME } from "@/lib/config";
 import type { Database } from "@/types/database";
@@ -378,6 +379,9 @@ export default function StudentPage() {
       })
       .finally(() => {
         if (!cancelled) setActivityLoading(false);
+        // การ์ดกราฟและรายการประวัติเพิ่งได้ความสูงจริงตอนนี้ ต้องให้ AOS
+        // วัดตำแหน่งใหม่ ไม่งั้น element ที่อยู่ถัดลงไปจะค้างในสถานะก่อน animate
+        if (!cancelled) refreshAOS();
       });
     return () => { cancelled = true; };
   }, [student?.student_id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -566,6 +570,20 @@ export default function StudentPage() {
   const activityTotal = activityItems.reduce((sum, item) => sum + item.value, 0);
   const maxActivityValue = Math.max(3, ...activityItems.map(item => item.value));
   const baht = new Intl.NumberFormat("th-TH", { maximumFractionDigits: 0 });
+  /**
+   * สีของกราฟแท่งผูกกับชื่อหมวด ไม่ใช่ลำดับ
+   *
+   * เดิมเป็น array 4 สีเรียงตามตำแหน่ง พอเพิ่มหมวด "แจ้งซ่อม" เป็นแท่งที่ 5
+   * Chart.js วนกลับไปใช้สีแรกและแท่งที่ค่าเป็น 0 กลายเป็นกล่องเทาลอย
+   * การผูกกับชื่อทำให้เพิ่มหมวดครั้งหน้าแล้วสีของหมวดเดิมไม่เลื่อนตาม
+   */
+  const ACTIVITY_COLOR: Record<string, string> = {
+    "ซื้อสหกรณ์": "#0EA5E9",
+    "จองห้อง": "#F59E0B",
+    "เบิกคุรุภัณฑ์": "#EF4444",
+    "ส่งเรื่อง": "#14B8A6",
+    "แจ้งซ่อม": "#8B5CF6",
+  };
   const activityTypeIcon: Record<StudentActivityStats["recent"][number]["type"], string> = {
     shop: "fa-store",
     booking: "fa-calendar-check",
@@ -939,7 +957,9 @@ export default function StudentPage() {
                       datasets: [{
                         label: "จำนวนครั้ง",
                         data: activityItems.map(item => item.value),
-                        backgroundColor: ["#0EA5E9", "#F59E0B", "#EF4444", "#14B8A6"],
+                        // fallback สีเทาไว้กันหมวดใหม่ที่ยังไม่ได้กำหนดสี
+                        // ให้เห็นเป็นแท่งจริง ไม่ใช่หายไปเงียบ ๆ
+                        backgroundColor: activityItems.map(item => ACTIVITY_COLOR[item.label] ?? "#94A3B8"),
                         borderRadius: 8,
                         borderSkipped: false,
                       }],

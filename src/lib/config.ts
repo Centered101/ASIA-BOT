@@ -16,6 +16,7 @@ export const QUICK_LINKS: QuickLink[] = [
   { name: "หน้าแรก",                    path: "/",                    icon: "fa-solid fa-house",            desc: "ภาพรวมระบบ",          color: "#0EA5E9" },
   { name: "เบิกคุรุภัณฑ์",             path: "/equipment-request",     icon: "fa-solid fa-toolbox",         desc: "ยื่นคำขอยืมอุปกรณ์",  color: "#059669" },
   { name: "แจ้งซ่อม",                  path: "/maintenance-request",   icon: "fa-solid fa-screwdriver-wrench", desc: "แจ้งของชำรุด",     color: "#F59E0B" },
+  { name: "การเข้าเรียน",              path: "/my-attendance", role: "student", icon: "fa-solid fa-user-check", desc: "ขาด สาย และงานที่ค้าง", color: "#8B5CF6" },
   { name: "สถานะห้องเรียน",           path: "/class-track-room",    icon: "fa-solid fa-chalkboard-user",  desc: "ดูห้องว่างและจองห้อง", color: "#7C3AED" },
   { name: "สหกรณ์โรงเรียน",          path: "/shop",    role: "shop", icon: "fa-solid fa-store",           desc: "ซื้อสินค้าสหกรณ์",   color: "#EC4899" },
   { name: "โปรเจคนักเรียน",           path: "/projects",            icon: "fa-solid fa-folder-open",      desc: "ผลงานนักเรียน",       color: "#6366F1" },

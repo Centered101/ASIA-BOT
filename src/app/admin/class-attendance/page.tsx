@@ -36,6 +36,11 @@ type Schedule = {
   id: string; class_group_id: string; subject: string | null; teacher: string | null;
   room_name: string; day_of_week: number; start_time: string; end_time: string;
 };
+type Assignment = {
+  id: string; title: string; description: string | null;
+  due_date: string | null; assigned_date: string;
+};
+
 type Row = {
   student_id: string; first_name: string; last_name: string; nickname: string | null;
   photo_url: string | null; status: ClassAttendanceStatus; note: string | null;
@@ -58,6 +63,10 @@ export default function ClassAttendancePage() {
   const [groupName, setGroupName] = useState<string | null>(null);
   const [needsRoster, setNeedsRoster] = useState(false);
   const [alreadyRecorded, setAlreadyRecorded] = useState(false);
+
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [newTask, setNewTask] = useState({ title: "", description: "", due_date: "" });
+  const [addingTask, setAddingTask] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -97,6 +106,13 @@ export default function ClassAttendancePage() {
       } else {
         setMessage({ tone: "err", text: json.message ?? "โหลดรายชื่อไม่สำเร็จ" });
       }
+
+      const aRes = await fetch(
+        `/api/admin/class-assignments?class_schedule_id=${scheduleId}&assigned_date=${date}`,
+        { headers: { "x-admin-id": adminId } }
+      );
+      const aJson = await aRes.json();
+      if (aJson.status === "success") setAssignments(aJson.data ?? []);
     } catch {
       setMessage({ tone: "err", text: "เชื่อมต่อไม่ได้" });
     } finally {
@@ -113,6 +129,50 @@ export default function ClassAttendancePage() {
   /** ทำเครื่องหมายทั้งห้องรวดเดียว ใช้ตอนทั้งห้องไปกิจกรรมหรือหยุดพิเศษ */
   function setAll(status: ClassAttendanceStatus) {
     setRows((rs) => rs.map((r) => ({ ...r, status })));
+  }
+
+  async function addTask() {
+    if (!newTask.title.trim()) return;
+    setAddingTask(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/admin/class-assignments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-admin-id": adminId! },
+        body: JSON.stringify({
+          class_schedule_id: scheduleId,
+          assigned_date: date,
+          title: newTask.title,
+          description: newTask.description || null,
+          due_date: newTask.due_date || null,
+        }),
+      });
+      const json = await res.json();
+      if (json.status === "success") {
+        setNewTask({ title: "", description: "", due_date: "" });
+        setMessage({ tone: "ok", text: "สั่งงานแล้ว นักเรียนที่ขาดคาบนี้จะเห็นในหน้าของตัวเอง" });
+        await load();
+      } else {
+        setMessage({ tone: "err", text: json.message ?? "สั่งงานไม่สำเร็จ" });
+      }
+    } catch {
+      setMessage({ tone: "err", text: "เชื่อมต่อไม่ได้" });
+    } finally {
+      setAddingTask(false);
+    }
+  }
+
+  async function removeTask(id: string) {
+    try {
+      const res = await fetch(`/api/admin/class-assignments?id=${id}`, {
+        method: "DELETE", headers: { "x-admin-id": adminId! },
+      });
+      const json = await res.json();
+      if (json.status === "success") await load();
+      else setMessage({ tone: "err", text: json.message ?? "ลบไม่สำเร็จ" });
+    } catch {
+      setMessage({ tone: "err", text: "เชื่อมต่อไม่ได้" });
+    }
   }
 
   async function save() {
@@ -267,6 +327,55 @@ export default function ClassAttendancePage() {
               </Card>
             ))}
           </div>
+
+          {/* สั่งงานอยู่หน้าเดียวกับเช็กชื่อ เพราะครูทำสองอย่างนี้ในคาบเดียวกัน
+              และงานจะไปโผล่ให้เฉพาะนักเรียนที่ขาดคาบนี้วันนี้เห็น */}
+          <Card>
+            <h2 style={{ fontSize: 13, fontWeight: 700, margin: "0 0 4px" }}>งานที่สั่งในคาบนี้</h2>
+            <p style={{ fontSize: 12, color: T.muted, margin: "0 0 12px", lineHeight: 1.7 }}>
+              นักเรียนที่ขาดหรือมาสายคาบนี้จะเห็นงานนี้ในหน้า &quot;การเข้าเรียนของฉัน&quot;
+            </p>
+
+            {assignments.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+                {assignments.map((a) => (
+                  <div key={a.id} style={{
+                    display: "flex", gap: 10, alignItems: "flex-start",
+                    background: T.card2, borderRadius: 10, padding: "10px 12px",
+                  }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700 }}>{a.title}</div>
+                      {a.description && (
+                        <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>{a.description}</div>
+                      )}
+                      {a.due_date && (
+                        <div style={{ fontSize: 11, color: T.warn, marginTop: 3 }}>
+                          กำหนดส่ง {new Date(`${a.due_date}T12:00:00`).toLocaleDateString("th-TH", {
+                            day: "numeric", month: "short", timeZone: "Asia/Bangkok",
+                          })}
+                        </div>
+                      )}
+                    </div>
+                    <Button tone="danger" size="sm" onClick={() => removeTask(a.id)}>ลบ</Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
+              <input style={inputStyle} placeholder="ชื่องาน เช่น แบบฝึกหัดบทที่ 3"
+                value={newTask.title} onChange={(e) => setNewTask({ ...newTask, title: e.target.value })} />
+              <input style={inputStyle} placeholder="รายละเอียด (ไม่บังคับ)"
+                value={newTask.description} onChange={(e) => setNewTask({ ...newTask, description: e.target.value })} />
+              <input type="date" style={inputStyle} value={newTask.due_date}
+                onChange={(e) => setNewTask({ ...newTask, due_date: e.target.value })} />
+            </div>
+            <div style={{ marginTop: 10 }}>
+              <Button tone="accent" disabled={!newTask.title.trim() || addingTask} onClick={addTask}>
+                {addingTask ? "กำลังบันทึก…" : "+ สั่งงาน"}
+              </Button>
+            </div>
+          </Card>
 
           <div style={{ marginTop: 16, display: "flex", gap: 10, flexWrap: "wrap" }}>
             {STATUS.map((s) => (

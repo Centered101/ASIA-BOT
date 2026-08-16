@@ -55,6 +55,12 @@ export type MaintenanceStatus =
 /** ระยะของรูปหลักฐานการซ่อม (maintenance_photos.phase) */
 export type MaintenancePhotoPhase = "before" | "during" | "after";
 
+/**
+ * ผลการเช็กชื่อรายคาบ (class_attendance.status)
+ * activity แยกจาก absent เพราะไปแข่ง/ไปกิจกรรมไม่ควรถูกนับเป็นขาดเรียน
+ */
+export type ClassAttendanceStatus = "present" | "late" | "absent" | "leave" | "activity";
+
 export type Database = {
   public: {
     Tables: {
@@ -1040,6 +1046,7 @@ export type Database = {
           day_of_week: number;
           start_time: string;
           end_time: string;
+          teacher_id: string | null;
           created_at: string | null;
         };
         Insert: {
@@ -2071,6 +2078,74 @@ export type Database = {
           created_at?: string;
         };
         Update: { caption?: string | null };
+        Relationships: [];
+      };
+      class_attendance: {
+        Row: {
+          id: string;
+          class_schedule_id: string;
+          student_id: string;
+          attend_date: string;
+          status: ClassAttendanceStatus;
+          note: string | null;
+          recorded_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          class_schedule_id: string;
+          student_id: string;
+          attend_date?: string;
+          status?: ClassAttendanceStatus;
+          note?: string | null;
+          recorded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          status?: ClassAttendanceStatus;
+          note?: string | null;
+          recorded_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      class_assignments: {
+        Row: {
+          id: string;
+          class_schedule_id: string;
+          assigned_date: string;
+          title: string;
+          description: string | null;
+          due_date: string | null;
+          max_score: number | null;
+          attachment_url: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          class_schedule_id: string;
+          assigned_date?: string;
+          title: string;
+          description?: string | null;
+          due_date?: string | null;
+          max_score?: number | null;
+          attachment_url?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          title?: string;
+          description?: string | null;
+          due_date?: string | null;
+          max_score?: number | null;
+          attachment_url?: string | null;
+          updated_at?: string;
+        };
         Relationships: [];
       };
       maintenance_status_history: {

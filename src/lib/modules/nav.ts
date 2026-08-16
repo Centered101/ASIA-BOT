@@ -52,6 +52,7 @@ export const NAV_SECTIONS: NavSection[] = [
           { id: "class_schedule_override", label: "แก้วันพิเศษ", icon: "fa-calendar-xmark" },
         ],
       },
+      { id: "class_attendance",     label: "เช็กชื่อรายวิชา", icon: "fa-user-check", href: "/admin/class-attendance" },
       { id: "teachers",             label: "ครูผู้สอน",   icon: "fa-chalkboard-user" },
       { id: "teacher_applications", label: "ใบสมัครครู", icon: "fa-user-plus", badge: "pendingTeacherApps" },
     ],

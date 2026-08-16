@@ -25,9 +25,9 @@ function FeedbackContent() {
 
   const [tab,          setTab]          = useState<Tab>("comment");
   const [identityMode, setIdentityMode] = useState<"anonymous" | "identified">("anonymous");
-  const [name,         setName]         = useState("");
-  const [email,        setEmail]        = useState("");
-  const [contact,      setContact]      = useState("");
+  const [anonName,     setAnonName]     = useState("");
+  const [anonContact,  setAnonContact]  = useState("");
+  const [anonEmail,    setAnonEmail]    = useState("");
   const [category,     setCategory]     = useState("");
   const [message,      setMessage]      = useState("");
   const [images,       setImages]       = useState<ImagePreview[]>([]);
@@ -38,17 +38,17 @@ function FeedbackContent() {
   const [fbStats,      setFbStats]      = useState<FeedbackStats | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // โหมดระบุตัวตนดึงข้อมูลติดต่อจากบัญชีให้ทั้งหมด ไม่ต้องพิมพ์เอง
-  // ยังแก้ได้อยู่ เผื่อบางคนอยากให้ติดต่อทางอื่นที่ไม่ใช่เบอร์ในระบบ
-  useEffect(() => {
-    if (identityMode === "identified" && session) {
-      setName(`${session.first_name} ${session.last_name}`);
-      setContact(session.student_phone ?? "");
-      setEmail(session.google_email ?? "");
-    } else if (identityMode === "anonymous") {
-      setName(""); setEmail(""); setContact("");
-    }
-  }, [identityMode, session]);
+  // โหมดระบุตัวตนดึงจากบัญชีล้วน ไม่มีช่องให้พิมพ์ เพราะพิมพ์เองแล้วเช็กไม่ได้ว่าจริงไหม
+  // ส่วนโหมดไม่ระบุตัวตนไม่มีบัญชีให้ดึง จึงต้องมีช่องให้พิมพ์เอง เผื่อคนที่อยาก
+  // ให้ติดต่อกลับแต่ไม่อยากให้รู้ว่าเป็นใคร — student_id ยังว่างอยู่ดี แอดมินจึงแยกสองกลุ่มออก
+  const identity = identityMode === "identified" && session
+    ? {
+        name:       `${session.first_name} ${session.last_name}`,
+        student_id: session.student_id,
+        email:      session.google_email ?? "",
+        contact:    session.student_phone ?? "",
+      }
+    : { name: anonName.trim(), student_id: "", email: anonEmail.trim(), contact: anonContact.trim() };
 
   // Load feedback stats
   useEffect(() => {
@@ -131,10 +131,7 @@ function FeedbackContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: tab,
-          name:       identityMode === "identified" ? name    : "",
-          student_id: identityMode === "identified" ? (session?.student_id ?? "") : "",
-          email:      identityMode === "identified" ? email   : "",
-          contact:    identityMode === "identified" ? contact : "",
+          ...identity,
           category, message, image_urls,
         }),
       });
@@ -154,8 +151,8 @@ function FeedbackContent() {
   }
 
   function resetForm() {
-    setName(identityMode === "identified" && session ? `${session.first_name} ${session.last_name}` : "");
-    setEmail(""); setContact(""); setCategory(""); setMessage("");
+    setAnonName(""); setAnonContact(""); setAnonEmail("");
+    setCategory(""); setMessage("");
     images.forEach(i => URL.revokeObjectURL(i.url));
     setImages([]); setSuccess(false); setCatErr(false); setMsgErr(false);
   }
@@ -255,7 +252,7 @@ function FeedbackContent() {
               {identityMode === "anonymous" ? (
                 <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 mb-4 text-xs text-slate-500">
                   <i className="fa-solid fa-user-secret text-slate-400 flex-shrink-0" />
-                  <span>ส่งในนาม <strong>ไม่ระบุตัวตน</strong> — ชื่อและข้อมูลติดต่อจะไม่ถูกบันทึก</span>
+                  <span>ส่งในนาม <strong>ไม่ระบุตัวตน</strong> — ไม่บันทึกว่าเป็นใคร จะทิ้งช่องทางติดต่อไว้หรือไม่ก็ได้</span>
                 </div>
               ) : session ? (
                 <div className="flex items-center gap-3 bg-[rgba(132,212,250,0.12)] border border-[rgba(132,212,250,0.45)] rounded-xl px-3 py-2.5 mb-4">
@@ -263,6 +260,12 @@ function FeedbackContent() {
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-bold text-[var(--primary-dark)]">{session.first_name} {session.last_name}</div>
                     <div className="text-[10px] text-slate-500">{session.student_id} · {session.program}</div>
+                    {/* บอกให้เห็นว่าอะไรจะถูกส่งไปด้วย เพราะไม่มีช่องกรอกให้ดูแล้ว */}
+                    {(identity.contact || identity.email) && (
+                      <div className="text-[10px] text-slate-400 truncate">
+                        ติดต่อกลับที่ {[identity.contact, identity.email].filter(Boolean).join(" · ")}
+                      </div>
+                    )}
                   </div>
                   <i className="fa-solid fa-circle-check text-[var(--primary-dark)] text-sm" />
                 </div>
@@ -284,27 +287,27 @@ function FeedbackContent() {
               ) : (
                 <div className="space-y-4">
 
-                  {/* Name / email / contact (identified only) */}
-                  {identityMode === "identified" && (
+                  {/* โหมดไม่ระบุตัวตนไม่มีบัญชีให้ดึง จึงเปิดช่องให้พิมพ์เองแบบไม่บังคับ */}
+                  {identityMode === "anonymous" && (
                     <div className="space-y-2">
                       <label className="block text-xs font-semibold text-slate-500">
-                        ข้อมูลติดต่อ <span className="text-slate-300 font-normal">(ดึงจากบัญชี แก้ไขได้)</span>
+                        ข้อมูลติดต่อ <span className="text-slate-300 font-normal">(ไม่บังคับ)</span>
                       </label>
                       <div className="grid grid-cols-2 gap-2">
                         <div className="field-wrap">
                           <i className="fa-solid fa-user field-icon" />
-                          <input value={name} onChange={e => setName(e.target.value)}
-                            className="form-input text-xs sm:text-sm" placeholder="ชื่อ-นามสกุล" maxLength={40} />
+                          <input value={anonName} onChange={e => setAnonName(e.target.value)}
+                            className="form-input text-xs sm:text-sm" placeholder="ชื่อที่อยากให้เรียก" maxLength={40} />
                         </div>
                         <div className="field-wrap">
                           <i className="fa-solid fa-at field-icon" />
-                          <input value={contact} onChange={e => setContact(e.target.value)}
+                          <input value={anonContact} onChange={e => setAnonContact(e.target.value)}
                             className="form-input text-xs sm:text-sm" placeholder="ไลน์ / เบอร์โทร" maxLength={60} />
                         </div>
                       </div>
                       <div className="field-wrap">
                         <i className="fa-solid fa-envelope field-icon" />
-                        <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                        <input type="email" value={anonEmail} onChange={e => setAnonEmail(e.target.value)}
                           className="form-input text-xs sm:text-sm" placeholder="อีเมล (ไม่บังคับ)" maxLength={100} />
                       </div>
                     </div>

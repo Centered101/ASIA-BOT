@@ -3342,6 +3342,7 @@ function FeedbacksTab({ adminId }: { adminId: string }) {
   const [loading,   setLoading]   = useState(true);
   const [typeFilter,   setTypeFilter]   = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [identityFilter, setIdentityFilter] = useState("all");
   const [search,       setSearch]       = useLocalStorageState<string>("asia_admin_feedback_search", "", isString);
   const fbStatusChartRef = useRef<HTMLCanvasElement | null>(null);
   const fbTypeChartRef = useRef<HTMLCanvasElement | null>(null);
@@ -3364,6 +3365,11 @@ function FeedbacksTab({ adminId }: { adminId: string }) {
   const resolvedCount    = byStatus("resolved");
   const reportsCount     = feedbacks.filter(f => f.type === "report").length;
   const commentsCount    = feedbacks.filter(f => f.type === "comment").length;
+  // หน้าเว็บไม่มีช่องให้พิมพ์ชื่อแล้ว ระบุตัวตน = มี student_id จากบัญชีที่ล็อกอิน
+  // จึงเชื่อได้ว่าเป็นคนนั้นจริง ไม่ใช่ชื่อที่ใครก็พิมพ์ได้
+  const isIdentified     = (f: Feedback) => !!f.student_id;
+  const identifiedCount  = feedbacks.filter(isIdentified).length;
+  const anonymousCount   = total - identifiedCount;
 
   useChart(fbStatusChartRef, () => ({
     type: "doughnut",
@@ -3413,6 +3419,8 @@ function FeedbacksTab({ adminId }: { adminId: string }) {
   const filtered = feedbacks.filter(f => {
     if (typeFilter   !== "all" && f.type   !== typeFilter)   return false;
     if (statusFilter !== "all" && f.status !== statusFilter) return false;
+    if (identityFilter === "identified" && !isIdentified(f)) return false;
+    if (identityFilter === "anonymous"  &&  isIdentified(f)) return false;
     if (q && !(
       f.message.toLowerCase().includes(q) ||
       (f.name    ?? "").toLowerCase().includes(q) ||
@@ -3489,6 +3497,21 @@ function FeedbacksTab({ adminId }: { adminId: string }) {
                   border:     `1px solid ${statusFilter === v ? (v === "all" ? "#ff7070" : (FB_STATUS[v]?.text ?? "#3e3e3e")) : "#3e3e3e"}`,
                 }}>
                 {l}
+              </button>
+            ))}
+          </div>
+          <div className="w-px h-5 flex-shrink-0" style={{ background: "#3e3e3e" }} />
+          {/* Identity filter */}
+          <div className="flex gap-1.5">
+            {([
+              ["all", "ทั้งหมด", null],
+              ["identified", "ระบุตัวตน", identifiedCount],
+              ["anonymous", "ไม่ระบุตัวตน", anonymousCount],
+            ] as const).map(([v, l, cnt]) => (
+              <button key={v} onClick={() => setIdentityFilter(v)}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                style={{ background: identityFilter === v ? "#ff7070" : "#2a2a2a", color: identityFilter === v ? "white" : "#9e9e9e", border: `1px solid ${identityFilter === v ? "#ff7070" : "#3e3e3e"}` }}>
+                {l}{cnt !== null && cnt > 0 && <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: "rgba(255,255,255,0.15)" }}>{cnt}</span>}
               </button>
             ))}
           </div>

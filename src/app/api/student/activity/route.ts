@@ -8,7 +8,7 @@ const supabase = createClient<Database>(
 );
 
 type ActivityRow = {
-  type: "shop" | "booking" | "equipment" | "feedback";
+  type: "shop" | "booking" | "equipment" | "feedback" | "maintenance";
   title: string;
   status: string;
   created_at: string;
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const [ordersRes, bookingsRes, equipmentRes, feedbackRes] = await Promise.all([
+    const [ordersRes, bookingsRes, equipmentRes, feedbackRes, maintenanceRes] = await Promise.all([
       supabase
         .from("orders")
         .select("order_id, total, status, created_at")
@@ -53,9 +53,17 @@ export async function GET(req: NextRequest) {
         .eq("student_id", studentId)
         .order("created_at", { ascending: false })
         .limit(200),
+      // งานแจ้งซ่อมที่นักเรียนคนนี้เป็นผู้แจ้ง — คนละคอลัมน์กับตารางอื่น
+      // เพราะ maintenance_requests แยกผู้แจ้งเป็นนักเรียน/แอดมิน
+      supabase
+        .from("maintenance_requests")
+        .select("id, request_code, target_label, symptom, status, created_at, assets(name), rooms(name), equipment_items(name)")
+        .eq("reporter_student_id", studentId)
+        .order("created_at", { ascending: false })
+        .limit(200),
     ]);
 
-    const errors = [ordersRes.error, bookingsRes.error, equipmentRes.error, feedbackRes.error].filter(Boolean);
+    const errors = [ordersRes.error, bookingsRes.error, equipmentRes.error, feedbackRes.error, maintenanceRes.error].filter(Boolean);
     if (errors.length) {
       console.error("[api/student/activity]", errors.map(error => error?.message).join("; "));
       return NextResponse.json({ status: "success", data: emptyActivity() });
@@ -72,6 +80,21 @@ export async function GET(req: NextRequest) {
       equipment_items?: { name?: string | null } | { name?: string | null }[] | null;
     }[];
     const feedback = feedbackRes.data ?? [];
+    const maintenance = (maintenanceRes.data ?? []) as {
+      id: string; request_code: string; target_label: string | null; symptom: string;
+      status: string; created_at: string;
+      assets: { name: string } | { name: string }[] | null;
+      rooms: { name: string } | { name: string }[] | null;
+      equipment_items: { name: string } | { name: string }[] | null;
+    }[];
+
+    /** ชื่อสิ่งที่ซ่อม — FK สามตัว ผู้ใช้ต้องอ่านเป็นชื่อ ไม่ใช่ id */
+    const repairTarget = (row: (typeof maintenance)[number]) => {
+      const pick = (v: { name: string } | { name: string }[] | null) =>
+        Array.isArray(v) ? v[0]?.name : v?.name;
+      return pick(row.assets) || pick(row.rooms) || pick(row.equipment_items)
+        || row.target_label || row.symptom.slice(0, 30);
+    };
 
     const recent: ActivityRow[] = [
       ...orders.map(row => ({
@@ -101,6 +124,12 @@ export async function GET(req: NextRequest) {
         status: row.status,
         created_at: row.created_at,
       })),
+      ...maintenance.map(row => ({
+        type: "maintenance" as const,
+        title: `แจ้งซ่อม ${repairTarget(row)}`,
+        status: row.status,
+        created_at: row.created_at,
+      })),
     ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 5);
 
     const statusRows = [
@@ -125,6 +154,14 @@ export async function GET(req: NextRequest) {
         "กำลังดำเนินการ": ["in_progress"],
         "เสร็จแล้ว": ["resolved"],
       }),
+      // จับ 8 สถานะของงานซ่อมยุบเป็น 3 กลุ่มให้ตรงกับป้ายที่โดนัทใช้อยู่แล้ว
+      // ถ้าใส่ครบ 8 ป้าย โดนัทจะอ่านไม่ออกและซ้ำความหมายกับกลุ่มเดิม
+      ...countByStatus(maintenance, {
+        "รับเรื่อง": ["reported", "received"],
+        "กำลังดำเนินการ": ["inspecting", "assigned", "repairing", "waiting_inspection"],
+        "เสร็จแล้ว": ["completed"],
+        "ยกเลิก": ["cancelled"],
+      }),
     ];
 
     const statusMap = new Map<string, number>();
@@ -144,6 +181,7 @@ export async function GET(req: NextRequest) {
           { label: "จองห้อง", value: bookings.length },
           { label: "เบิกคุรุภัณฑ์", value: equipment.length },
           { label: "ส่งเรื่อง", value: feedback.length },
+          { label: "แจ้งซ่อม", value: maintenance.length },
         ],
         statusBreakdown: Array.from(statusMap, ([label, value]) => ({ label, value })).filter(item => item.value > 0),
         summary: {
@@ -151,6 +189,7 @@ export async function GET(req: NextRequest) {
           paidOrders: paidOrders.length,
           borrowedQuantity,
           activeRequests: equipment.filter(row => ["pending", "approved", "picked_up"].includes(row.status)).length,
+          openRepairs: maintenance.filter(row => !["completed", "cancelled"].includes(row.status)).length,
         },
         recent,
       },
@@ -168,9 +207,10 @@ function emptyActivity() {
       { label: "จองห้อง", value: 0 },
       { label: "เบิกคุรุภัณฑ์", value: 0 },
       { label: "ส่งเรื่อง", value: 0 },
+      { label: "แจ้งซ่อม", value: 0 },
     ],
     statusBreakdown: [],
-    summary: { totalSpent: 0, paidOrders: 0, borrowedQuantity: 0, activeRequests: 0 },
+    summary: { totalSpent: 0, paidOrders: 0, borrowedQuantity: 0, activeRequests: 0, openRepairs: 0 },
     recent: [],
   };
 }

@@ -12,7 +12,13 @@ export async function GET() {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  const [students, totalBookings, equipmentTotal, feedbackTotal, feedbackPending, feedbackResolved, feedbackInProgress, todayEntries] =
+  // แจ้งซ่อมมี 8 สถานะ จับกลุ่มให้เหลือ 4 ช่องเท่ากับของ feedback
+  // ยกเลิกไม่เข้ากลุ่มไหนเลย แต่ยังนับรวมใน total เหมือนที่ feedback ทำ
+  const MT_PENDING   = ["reported", "received", "inspecting", "assigned"] as const;
+  const MT_REPAIRING = ["repairing", "waiting_inspection"] as const;
+
+  const [students, totalBookings, equipmentTotal, feedbackTotal, feedbackPending, feedbackResolved, feedbackInProgress, todayEntries,
+    maintenanceTotal, maintenancePending, maintenanceRepairing, maintenanceDone] =
     await Promise.all([
       supabase.from("students").select("id", { count: "exact", head: true }),
       supabase.from("bookings").select("id", { count: "exact", head: true }),
@@ -22,6 +28,10 @@ export async function GET() {
       supabase.from("feedback").select("id", { count: "exact", head: true }).eq("status", "resolved"),
       supabase.from("feedback").select("id", { count: "exact", head: true }).eq("status", "in_progress"),
       supabase.from("entry_logs").select("id", { count: "exact", head: true }).gte("scanned_at", todayStart.toISOString()),
+      supabase.from("maintenance_requests").select("id", { count: "exact", head: true }),
+      supabase.from("maintenance_requests").select("id", { count: "exact", head: true }).in("status", MT_PENDING),
+      supabase.from("maintenance_requests").select("id", { count: "exact", head: true }).in("status", MT_REPAIRING),
+      supabase.from("maintenance_requests").select("id", { count: "exact", head: true }).eq("status", "completed"),
     ]);
 
   return NextResponse.json({
@@ -34,5 +44,9 @@ export async function GET() {
     feedbackResolved: feedbackResolved.count ?? 0,
     feedbackInProgress: feedbackInProgress.count ?? 0,
     todayEntries:    todayEntries.count    ?? 0,
+    maintenanceTotal:     maintenanceTotal.count     ?? 0,
+    maintenancePending:   maintenancePending.count   ?? 0,
+    maintenanceRepairing: maintenanceRepairing.count ?? 0,
+    maintenanceDone:      maintenanceDone.count      ?? 0,
   });
 }

@@ -7,6 +7,7 @@ import Footer from "@/components/Footer";
 import { MascotState } from "@/components/Mascot";
 import { MAINTENANCE_URGENCY_TH } from "@/lib/server/maintenance";
 import StudentAvatar from "@/components/StudentAvatar";
+import { getStudentSession } from "@/lib/session";
 
 /**
  * ฟอร์มแจ้งซ่อมสำหรับทุกคน — นักเรียน ครู เจ้าหน้าที่
@@ -55,6 +56,8 @@ type MyRequest = { id: string; request_code: string; status: string; symptom: st
 
 const OPEN = ["reported", "received", "inspecting", "assigned", "repairing", "waiting_inspection"];
 
+type SystemStats = { total: number; pending: number; repairing: number; done: number };
+
 export default function MaintenanceRequestPage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -65,9 +68,25 @@ export default function MaintenanceRequestPage() {
   const [assetSearch, setAssetSearch] = useState("");
   const [mine, setMine] = useState<MyRequest[]>([]);
 
-  const [me, setMe] = useState<{
-    name: string; studentId?: string; phone?: string; photoUrl?: string;
-  } | null>(null);
+  // อ่านผ่าน getStudentSession ตัวเดียวกับ /feedback แทนที่จะ parse localStorage เอง
+  // ตอน parse เองเคยหลุด program/department จนการ์ดโชว์แต่รหัส
+  const [session, setSession] = useState<ReturnType<typeof getStudentSession>>(null);
+  useEffect(() => { setSession(getStudentSession()); }, []);
+
+  // ภาพรวมทั้งระบบ ไม่ใช่ของคนเดียว — คนที่ยังไม่เคยแจ้งจะได้เห็นว่าระบบมีคนใช้จริง
+  // และรู้ว่างานที่ค้างอยู่เยอะแค่ไหน ส่วนตัวเลขของตัวเองอยู่ในการ์ด "งานที่ฉันแจ้ง"
+  const [sysStats, setSysStats] = useState<SystemStats | null>(null);
+  useEffect(() => {
+    fetch("/api/stats").then((r) => r.json()).then((j) => {
+      if (j.ok) setSysStats({
+        total:     j.maintenanceTotal     ?? 0,
+        pending:   j.maintenancePending   ?? 0,
+        repairing: j.maintenanceRepairing ?? 0,
+        done:      j.maintenanceDone      ?? 0,
+      });
+    }).catch(() => { /* แถบภาพรวมหายไปเฉย ๆ ไม่ควรทำให้ฟอร์มใช้ไม่ได้ */ });
+  }, []);
+
   const [form, setForm] = useState({
     target_label: "",
     asset_id: "", room_id: "", equipment_item_id: "", affected_quantity: "1",
@@ -80,40 +99,6 @@ export default function MaintenanceRequestPage() {
   const [result, setResult] = useState<{ code: string; warning?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [needsLogin, setNeedsLogin] = useState(false);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("asia_lb_session");
-      if (raw) {
-        const s = JSON.parse(raw) as {
-          first_name?: string; last_name?: string; student_phone?: string; student_id?: string;
-          photo_url?: string | null;
-        };
-        setMe({
-          name: [s.first_name, s.last_name].filter(Boolean).join(" "),
-          studentId: s.student_id,
-          phone: s.student_phone ?? undefined,
-          photoUrl: s.photo_url ?? undefined,
-        });
-      }
-    } catch { /* ไม่มี session — ฝั่ง server จะปฏิเสธเองด้วย 401 */ }
-  }, []);
-
-  // session ถูกเขียนตอน login ถ้านักเรียนอัปโหลดรูปทีหลัง ค่าใน localStorage จะยังไม่มีรูป
-  // จึงไปถามฐานข้อมูลเฉพาะตอนที่ session ไม่มีรูป เพื่อไม่ให้ยิง request ทุกครั้งที่เปิดหน้า
-  useEffect(() => {
-    if (!me?.studentId || me.photoUrl) return;
-    let alive = true;
-    void (async () => {
-      try {
-        const res = await fetch(`/api/auth/me?student_id=${encodeURIComponent(me.studentId!)}`);
-        const json = await res.json();
-        const url = json?.data?.photo_url as string | null | undefined;
-        if (alive && url) setMe((prev) => (prev ? { ...prev, photoUrl: url } : prev));
-      } catch { /* ไม่มีรูปก็แสดงตัวย่อชื่อแทน ไม่ต้องรบกวนผู้ใช้ */ }
-    })();
-    return () => { alive = false; };
-  }, [me?.studentId, me?.photoUrl]);
 
   const loadTargets = useCallback(async (q?: string) => {
     try {
@@ -270,14 +255,14 @@ export default function MaintenanceRequestPage() {
           </p>
         </div>
 
-        {/* สถิติของตัวเอง ไม่ใช่ของทั้งโรงเรียน เพราะหน้านี้เป็นของผู้แจ้ง */}
-        {mine.length > 0 && (
+        {/* ── ภาพรวมระบบการแจ้ง ── */}
+        {sysStats && (
           <div data-aos="fade-up" className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6" suppressHydrationWarning>
             {[
-              { label: "ที่ฉันแจ้ง", val: stats.total, color: "#7C3AED", bg: "#F5F3FF", icon: "fa-clipboard-list" },
-              { label: "ยังไม่เสร็จ", val: stats.open, color: "#F59E0B", bg: "#FFFBEB", icon: "fa-clock" },
-              { label: "กำลังซ่อม", val: stats.repairing, color: "#0EA5E9", bg: "#EFF6FF", icon: "fa-screwdriver-wrench" },
-              { label: "ซ่อมเสร็จ", val: stats.done, color: "#059669", bg: "#ECFDF5", icon: "fa-circle-check" },
+              { label: "ทั้งหมด", val: sysStats.total, color: "#7C3AED", bg: "#F5F3FF", icon: "fa-clipboard-list" },
+              { label: "รอรับเรื่อง", val: sysStats.pending, color: "#F59E0B", bg: "#FFFBEB", icon: "fa-clock" },
+              { label: "กำลังซ่อม", val: sysStats.repairing, color: "#0EA5E9", bg: "#EFF6FF", icon: "fa-screwdriver-wrench" },
+              { label: "ซ่อมเสร็จ", val: sysStats.done, color: "#059669", bg: "#ECFDF5", icon: "fa-circle-check" },
             ].map((s) => (
               <div key={s.label} className="rounded-2xl border p-3 sm:p-4 flex items-center gap-3"
                 style={{ background: s.bg, borderColor: s.color + "30" }}>
@@ -458,24 +443,6 @@ export default function MaintenanceRequestPage() {
                 </div>
               </div>
 
-              {/* ข้อมูลผู้แจ้งมาจากบัญชีทั้งหมด ไม่มีช่องให้กรอก — ฝั่ง server ก็อ่าน
-                  จาก session ไม่ใช่จากค่าที่หน้าเว็บส่งไป จึงแจ้งในนามคนอื่นไม่ได้
-                  ถ้าเบอร์ไม่ถูกต้องต้องไปแก้ที่โปรไฟล์ ซึ่งทำให้ข้อมูลตรงกันทั้งระบบ */}
-              <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-3">
-                <StudentAvatar src={me?.photoUrl} name={me?.name} size={36} rounded="xl"
-                  className="flex-shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs sm:text-sm font-bold text-slate-700 truncate">
-                    {me?.name || "กำลังโหลด…"}
-                  </div>
-                  <div className="text-[10px] text-slate-400">
-                    ผู้แจ้ง
-                    {me?.studentId ? ` · ${me.studentId}` : ""}
-                    {me?.phone ? ` · ${me.phone}` : ""}
-                  </div>
-                </div>
-              </div>
-
               <button onClick={submit} disabled={!canSubmit || busy}
                 className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-3 rounded-xl text-white transition-all disabled:opacity-70"
                 style={{ background: !canSubmit || busy ? "#94a3b8" : urgencyColor, boxShadow: `0 4px 14px ${urgencyColor}44` }}>
@@ -490,6 +457,27 @@ export default function MaintenanceRequestPage() {
           <aside data-aos="fade-left" suppressHydrationWarning>
             <div className="sticky top-24 space-y-4">
 
+              {/* ข้อมูลผู้แจ้งมาจากบัญชีทั้งหมด ไม่มีช่องให้กรอก — ฝั่ง server ก็อ่าน
+                  จาก session ไม่ใช่จากค่าที่หน้าเว็บส่งไป จึงแจ้งในนามคนอื่นไม่ได้
+                  วางไว้ด้านข้างทรงเดียวกับ /feedback เพื่อให้ฟอร์มเหลือแต่ช่องที่ต้องกรอกจริง */}
+              {session && (
+                <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">บัญชีของคุณ</h3>
+                  <div className="flex items-center gap-3">
+                    <StudentAvatar src={session.photo_url} name={`${session.first_name} ${session.last_name}`} size={48} rounded="xl" />
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold text-slate-800 truncate">{session.first_name} {session.last_name}</div>
+                      <div className="text-[10px] text-slate-400">{session.student_id} · {session.program}</div>
+                      <div className="text-[10px] text-slate-400">{session.department}</div>
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-slate-100 text-[11px] text-slate-500 flex items-center gap-1.5">
+                    <i className="fa-solid fa-id-card text-sky-400" />
+                    แจ้งในนาม <strong>บัญชีนี้</strong>{session.student_phone ? ` · ช่างติดต่อกลับที่ ${session.student_phone}` : ""}
+                  </div>
+                </div>
+              )}
+
               {mine.length > 0 && (
                 <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">งานที่ฉันแจ้ง</h3>
@@ -503,6 +491,11 @@ export default function MaintenanceRequestPage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                  {/* ตัวเลขของตัวเอง แถบด้านบนเป็นของทั้งระบบ จะได้ไม่สับสนกัน */}
+                  <div className="mt-3 pt-3 border-t border-slate-100 text-[11px] text-slate-500 flex items-center gap-1.5">
+                    <i className="fa-solid fa-clipboard-list text-violet-400" />
+                    แจ้งไป {stats.total} · ยังไม่เสร็จ {stats.open} · เสร็จแล้ว {stats.done}
                   </div>
                 </div>
               )}

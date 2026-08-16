@@ -34,9 +34,10 @@ type StudentActivityStats = {
     paidOrders: number;
     borrowedQuantity: number;
     activeRequests: number;
+    openRepairs?: number;
   };
   recent: {
-    type: "shop" | "booking" | "equipment" | "feedback";
+    type: "shop" | "booking" | "equipment" | "feedback" | "maintenance";
     title: string;
     status: string;
     created_at: string;
@@ -570,6 +571,7 @@ export default function StudentPage() {
     booking: "fa-calendar-check",
     equipment: "fa-box-open",
     feedback: "fa-comment-dots",
+    maintenance: "fa-screwdriver-wrench",
   };
   const activityStatusLabel: Record<string, string> = {
     pending: "รอดำเนินการ",
@@ -582,6 +584,15 @@ export default function StudentPage() {
     refunded: "คืนเงิน",
     in_progress: "กำลังดำเนินการ",
     resolved: "เสร็จแล้ว",
+    // สถานะงานซ่อม — ไม่ทับกับคีย์ด้านบนเพราะใช้ชื่อคนละชุด
+    // ยกเว้น cancelled ที่ใช้ร่วมกันได้อยู่แล้ว
+    reported: "แจ้งแล้ว",
+    received: "รับเรื่องแล้ว",
+    inspecting: "กำลังตรวจสอบ",
+    assigned: "มอบหมายช่างแล้ว",
+    repairing: "กำลังซ่อม",
+    waiting_inspection: "รอตรวจรับ",
+    completed: "ซ่อมเสร็จ",
   };
   const studentChartText = "#64748B";
   const studentBarOptions = {

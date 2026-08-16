@@ -31,7 +31,11 @@ export default function Header({ subtitle = "หน้าแรก" }: { subtitl
   const visible = all.filter(l => !isActive(l));
   const feedbackLink = visible.find(l => l.path === "/feedback");
   const registerLink = visible.find(l => l.path === "/register");
-  const baseMainLinks = visible.filter(l => !l.role && !l.external && l !== feedbackLink && l !== registerLink).slice(0, 2);
+  // ปักหมุด /feedback ไว้ท้าย nav เสมอ แต่ตอนอยู่หน้า /feedback เองลิงก์นั้นหายไป
+  // จึงหยิบลิงก์ทั่วไปมาเพิ่มอีกหนึ่งช่อง ทุกหน้าจะได้มีปุ่มเท่ากันคือ 3 ปุ่ม + เพิ่มเติม
+  const baseMainLinks = visible
+    .filter(l => !l.role && !l.external && l !== feedbackLink && l !== registerLink)
+    .slice(0, feedbackLink ? 2 : 3);
   const mainLinks = feedbackLink ? [...baseMainLinks, feedbackLink] : baseMainLinks;
   const ctaStudent = visible.find(l => l.role === "student");
   const ctaShop    = visible.find(l => l.role === "shop");

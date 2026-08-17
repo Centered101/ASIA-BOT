@@ -6,6 +6,7 @@ import {
   AdminPage, Card, Chip, Button, Message, EmptyState,
   Field, Loading, T, inputStyle, type Tone,
 } from "@/components/admin/ui";
+import { adminFetch, readAdminSession } from "@/lib/modules/admin-session";
 import {
   MAINTENANCE_FLOW, MAINTENANCE_STATUS_TH, MAINTENANCE_TRANSITIONS,
 } from "@/lib/server/maintenance";
@@ -21,7 +22,6 @@ import type {
  * เพราะต้องเทียบรูปก่อนกับหลังพร้อมดูว่าใครรับผิดชอบ
  */
 
-const STORAGE_KEY = "asia_admin_session";
 
 const URGENCY_TH: Record<MaintenanceUrgency, string> = {
   low: "ไม่เร่งด่วน", normal: "ปกติ", high: "เร่งด่วน", critical: "วิกฤต",
@@ -64,9 +64,9 @@ export default function MaintenanceDetailPage() {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) { router.replace("/admin"); return; }
-      setAdminId((JSON.parse(raw) as { admin_id: string }).admin_id);
+      const session = readAdminSession();
+      if (!session) { router.replace("/admin"); return; }
+      setAdminId(session.admin_id);
     } catch { router.replace("/admin"); }
   }, [router]);
 
@@ -74,7 +74,7 @@ export default function MaintenanceDetailPage() {
     if (!adminId) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/maintenance/${params.id}`, { headers: { "x-admin-id": adminId } });
+      const res = await adminFetch(`/api/admin/maintenance/${params.id}`);
       const json = await res.json();
       if (json.status === "success") {
         setDetail(json.data);
@@ -103,9 +103,9 @@ export default function MaintenanceDetailPage() {
     setBusy(true);
     setMessage(null);
     try {
-      const res = await fetch(`/api/admin/maintenance/${params.id}`, {
+      const res = await adminFetch(`/api/admin/maintenance/${params.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", "x-admin-id": adminId! },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       const json = await res.json();
@@ -129,17 +129,17 @@ export default function MaintenanceDetailPage() {
       const fd = new FormData();
       fd.append("file", file);
       fd.append("folder", params.id);
-      const up = await fetch("/api/admin/uploads/maintenance-photos", {
-        method: "POST", headers: { "x-admin-id": adminId! }, body: fd,
+      const up = await adminFetch("/api/admin/uploads/maintenance-photos", {
+        method: "POST", body: fd,
       });
       const upJson = await up.json();
       if (upJson.status !== "success") {
         setMessage({ tone: "err", text: upJson.message ?? "อัปโหลดไม่สำเร็จ" });
         return;
       }
-      const res = await fetch(`/api/admin/maintenance/${params.id}/photos`, {
+      const res = await adminFetch(`/api/admin/maintenance/${params.id}/photos`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-id": adminId! },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phase, image_url: upJson.url }),
       });
       const json = await res.json();

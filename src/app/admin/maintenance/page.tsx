@@ -14,6 +14,7 @@ import {
   AdminPage, Card, Chip, Button, FilterChip, Message, EmptyState, Stat, Loading, T,
   type Tone,
 } from "@/components/admin/ui";
+import { adminFetch, readAdminSession } from "@/lib/modules/admin-session";
 
 /**
  * คิวงานซ่อมของฝ่ายอาคารสถานที่
@@ -25,7 +26,6 @@ import {
  * ฝั่ง API ใช้ตรวจ จึงไม่มีทางแสดงปุ่มที่กดแล้วโดนปฏิเสธ
  */
 
-const STORAGE_KEY = "asia_admin_session";
 
 const URGENCY_TONE: Record<MaintenanceUrgency, Tone> = {
   low: "neutral", normal: "info", high: "warn", critical: "danger",
@@ -67,9 +67,9 @@ export default function MaintenanceQueuePage() {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) { router.replace("/admin"); return; }
-      setAdminId((JSON.parse(raw) as { admin_id: string }).admin_id);
+      const session = readAdminSession();
+      if (!session) { router.replace("/admin"); return; }
+      setAdminId(session.admin_id);
     } catch { router.replace("/admin"); }
   }, [router]);
 
@@ -80,7 +80,7 @@ export default function MaintenanceQueuePage() {
       const qs = new URLSearchParams();
       if (filter) qs.set("status", filter);
       if (urgency) qs.set("urgency", urgency);
-      const res = await fetch(`/api/admin/maintenance?${qs}`, { headers: { "x-admin-id": adminId } });
+      const res = await adminFetch(`/api/admin/maintenance?${qs}`);
       const json = await res.json();
       if (json.status === "success") {
         setRows(json.data);
@@ -102,9 +102,9 @@ export default function MaintenanceQueuePage() {
     setBusyId(row.id);
     setMessage(null);
     try {
-      const res = await fetch(`/api/admin/maintenance/${row.id}`, {
+      const res = await adminFetch(`/api/admin/maintenance/${row.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", "x-admin-id": adminId! },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: to }),
       });
       const json = await res.json();

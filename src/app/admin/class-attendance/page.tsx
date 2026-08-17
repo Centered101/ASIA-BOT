@@ -7,6 +7,7 @@ import {
   AdminPage, Card, Chip, Button, FilterChip, Message,
   EmptyState, Stat, Loading, T, inputStyle, type Tone,
 } from "@/components/admin/ui";
+import { adminFetch, readAdminSession } from "@/lib/modules/admin-session";
 import type { ClassAttendanceStatus } from "@/types/database";
 
 /**
@@ -19,7 +20,6 @@ import type { ClassAttendanceStatus } from "@/types/database";
  * เข้าห้องจะไม่มีใครให้เช็ก หน้าจึงบอกทางแก้แทนที่จะขึ้นตารางว่าง
  */
 
-const STORAGE_KEY = "asia_admin_session";
 
 const STATUS: { value: ClassAttendanceStatus; label: string; tone: Tone; color: string }[] = [
   { value: "present",  label: "มา",        tone: "ok",      color: "#22C55E" },
@@ -74,15 +74,15 @@ export default function ClassAttendancePage() {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) { router.replace("/admin"); return; }
-      setAdminId((JSON.parse(raw) as { admin_id: string }).admin_id);
+      const session = readAdminSession();
+      if (!session) { router.replace("/admin"); return; }
+      setAdminId(session.admin_id);
     } catch { router.replace("/admin"); }
   }, [router]);
 
   useEffect(() => {
     if (!adminId) return;
-    fetch("/api/admin/class-schedules", { headers: { "x-admin-id": adminId } })
+    adminFetch("/api/admin/class-schedules")
       .then((r) => r.json())
       .then((j) => { if (j.status === "success") setSchedules(j.data ?? []); })
       .catch(() => setMessage({ tone: "err", text: "โหลดตารางเรียนไม่สำเร็จ" }));
@@ -95,7 +95,7 @@ export default function ClassAttendancePage() {
     try {
       const res = await fetch(
         `/api/admin/class-attendance?class_schedule_id=${scheduleId}&attend_date=${date}`,
-        { headers: { "x-admin-id": adminId } }
+        {}
       );
       const json = await res.json();
       if (json.status === "success") {
@@ -109,7 +109,7 @@ export default function ClassAttendancePage() {
 
       const aRes = await fetch(
         `/api/admin/class-assignments?class_schedule_id=${scheduleId}&assigned_date=${date}`,
-        { headers: { "x-admin-id": adminId } }
+        {}
       );
       const aJson = await aRes.json();
       if (aJson.status === "success") setAssignments(aJson.data ?? []);
@@ -136,9 +136,9 @@ export default function ClassAttendancePage() {
     setAddingTask(true);
     setMessage(null);
     try {
-      const res = await fetch("/api/admin/class-assignments", {
+      const res = await adminFetch("/api/admin/class-assignments", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-id": adminId! },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           class_schedule_id: scheduleId,
           assigned_date: date,
@@ -164,8 +164,8 @@ export default function ClassAttendancePage() {
 
   async function removeTask(id: string) {
     try {
-      const res = await fetch(`/api/admin/class-assignments?id=${id}`, {
-        method: "DELETE", headers: { "x-admin-id": adminId! },
+      const res = await adminFetch(`/api/admin/class-assignments?id=${id}`, {
+        method: "DELETE",
       });
       const json = await res.json();
       if (json.status === "success") await load();
@@ -179,9 +179,9 @@ export default function ClassAttendancePage() {
     setBusy(true);
     setMessage(null);
     try {
-      const res = await fetch("/api/admin/class-attendance", {
+      const res = await adminFetch("/api/admin/class-attendance", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-id": adminId! },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           class_schedule_id: scheduleId,
           attend_date: date,

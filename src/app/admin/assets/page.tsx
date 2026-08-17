@@ -7,6 +7,7 @@ import {
   AdminPage, Card, Chip, Button, FilterChip, Message,
   EmptyState, Stat, Field, Loading, T, inputStyle, type Tone,
 } from "@/components/admin/ui";
+import { adminFetch, readAdminSession } from "@/lib/modules/admin-session";
 import type { AssetCondition, AssetStatus } from "@/types/database";
 
 /**
@@ -20,7 +21,6 @@ import type { AssetCondition, AssetStatus } from "@/types/database";
  * ระบบยอมให้บันทึกของที่ยังไม่มีเลขได้ ไม่งั้นคนจะกรอกเลขมั่วเพื่อให้ผ่านฟอร์ม
  */
 
-const STORAGE_KEY = "asia_admin_session";
 
 const CONDITION_TH: Record<AssetCondition, string> = {
   new: "ใหม่", good: "ดี", fair: "พอใช้", poor: "ทรุดโทรม", broken: "ชำรุด",
@@ -68,9 +68,9 @@ export default function AssetRegistryPage() {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) { router.replace("/admin"); return; }
-      setAdminId((JSON.parse(raw) as { admin_id: string }).admin_id);
+      const session = readAdminSession();
+      if (!session) { router.replace("/admin"); return; }
+      setAdminId(session.admin_id);
     } catch { router.replace("/admin"); }
   }, [router]);
 
@@ -82,7 +82,7 @@ export default function AssetRegistryPage() {
       if (statusFilter) qs.set("status", statusFilter);
       if (missingOnly) qs.set("missing_code", "1");
       if (search.trim()) qs.set("q", search.trim());
-      const res = await fetch(`/api/admin/assets?${qs}`, { headers: { "x-admin-id": adminId } });
+      const res = await adminFetch(`/api/admin/assets?${qs}`);
       const json = await res.json();
       if (json.status === "success") {
         setAssets(json.data);
@@ -103,9 +103,9 @@ export default function AssetRegistryPage() {
     setBusy(true);
     setMessage(null);
     try {
-      const res = await fetch("/api/admin/assets", {
+      const res = await adminFetch("/api/admin/assets", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-id": adminId! },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
           // ช่องว่างต้องเป็น null ไม่ใช่ "" ไม่งั้น unique index ของ asset_code

@@ -6,6 +6,7 @@ import {
   AdminPage, Card, Chip, Button, Message, EmptyState,
   Field, Loading, T, inputStyle, type Tone,
 } from "@/components/admin/ui";
+import { adminFetch, readAdminSession } from "@/lib/modules/admin-session";
 import type { AssetCondition, AssetStatus } from "@/types/database";
 
 /**
@@ -18,7 +19,6 @@ import type { AssetCondition, AssetStatus } from "@/types/database";
  * บังคับให้ทุกการย้ายเขียนประวัติเสมอ ถ้าปนกันคนจะเข้าใจว่าแก้ที่อยู่เฉย ๆ ได้
  */
 
-const STORAGE_KEY = "asia_admin_session";
 
 const CONDITION_TH: Record<AssetCondition, string> = {
   new: "ใหม่", good: "ดี", fair: "พอใช้", poor: "ทรุดโทรม", broken: "ชำรุด",
@@ -96,9 +96,9 @@ export default function AssetDetailPage() {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) { router.replace("/admin"); return; }
-      setAdminId((JSON.parse(raw) as { admin_id: string }).admin_id);
+      const session = readAdminSession();
+      if (!session) { router.replace("/admin"); return; }
+      setAdminId(session.admin_id);
     } catch { router.replace("/admin"); }
   }, [router]);
 
@@ -106,7 +106,7 @@ export default function AssetDetailPage() {
     if (!adminId || !id) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/assets/${id}`, { headers: { "x-admin-id": adminId } });
+      const res = await adminFetch(`/api/admin/assets/${id}`);
       const json = await res.json();
       if (json.status === "success") {
         const a: Asset = json.data.asset;
@@ -142,7 +142,7 @@ export default function AssetDetailPage() {
 
   useEffect(() => {
     if (!adminId) return;
-    fetch("/api/admin/rooms", { headers: { "x-admin-id": adminId } })
+    adminFetch("/api/admin/rooms")
       .then((r) => r.json())
       .then((j) => { if (j.status === "success") setRooms(j.data ?? []); })
       .catch(() => { /* เลือกห้องไม่ได้ก็ยังพิมพ์จุดวางเองได้ ไม่ต้องขึ้น error ทั้งหน้า */ });
@@ -154,7 +154,7 @@ export default function AssetDetailPage() {
     try {
       const res = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json", "x-admin-id": adminId! },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       const json = await res.json();

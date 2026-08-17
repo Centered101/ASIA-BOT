@@ -1,0 +1,82 @@
+/**
+ * session ของแอดมินฝั่ง client + ตัวห่อ fetch — แหล่งความจริงเดียว
+ *
+ * เดิมทุกหน้าที่อยู่นอก admin/page.tsx อ่าน localStorage เองแล้วแนบ
+ * x-admin-id เองทีละจุด (6 หน้า 19 จุด) ปัญหาคือไม่มีที่ไหนดู 401 เลย
+ * โค้ดเช็กแค่ `json.status === "success"` พอ session หมดอายุหรือค้างจาก
+ * บัญชีที่ถูกลบไปแล้ว ทุก request จะได้ 401 แล้วหน้าก็ขึ้นว่างเปล่าเงียบ ๆ
+ * ผู้ใช้เห็นแค่หน้าโล่ง ไม่มีอะไรบอกว่าต้องล็อกอินใหม่
+ *
+ * adminFetch จึงจับ 401 ที่จุดเดียว ล้าง session แล้วพากลับไปหน้าล็อกอิน
+ *
+ * ตัว header ยังเป็นของชั่วคราวตามนโยบาย AUTH_LEGACY_HEADER — วันที่เลิกใช้
+ * จะแก้ที่ไฟล์นี้ที่เดียว ไม่ต้องไล่ 19 จุด
+ */
+
+export const ADMIN_SESSION_KEY = "asia_admin_session";
+export const ADMIN_SESSION_TIME_KEY = "asia_admin_session_time";
+
+export type AdminSession = {
+  admin_id: string;
+  role: string;
+  /** ฝ่ายที่สังกัด — ว่างแปลว่าเห็นเมนูทุกฝ่าย (ดู nav-access.ts) */
+  division?: string | null;
+  username?: string;
+  first_name?: string | null;
+  nickname?: string | null;
+  avatar?: string | null;
+};
+
+export function readAdminSession(): AdminSession | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(ADMIN_SESSION_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw) as AdminSession;
+    // ไม่มี admin_id ก็ยิง API ไม่ได้อยู่ดี ถือว่าไม่มี session ดีกว่าปล่อยให้
+    // ยิงไปแล้วได้ 401 ทุกครั้งโดยไม่รู้ว่าเพราะอะไร
+    return s.admin_id ? s : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearAdminSession() {
+  try {
+    localStorage.removeItem(ADMIN_SESSION_KEY);
+    localStorage.removeItem(ADMIN_SESSION_TIME_KEY);
+  } catch { /* ลบไม่ได้ก็ยังพากลับไปหน้าล็อกอินอยู่ดี */ }
+}
+
+/** ล้าง session แล้วโหลดหน้าล็อกอินใหม่ทั้งหน้า เพื่อทิ้ง state ค้างใน memory ด้วย */
+function bounceToLogin() {
+  clearAdminSession();
+  if (typeof window !== "undefined") window.location.replace("/admin");
+}
+
+/**
+ * fetch ที่แนบ x-admin-id ให้เอง และเด้งออกเมื่อ session ใช้ไม่ได้
+ *
+ * 401 = ยืนยันตัวตนไม่ผ่าน (session ค้าง/ถูกลบ) → เด้งไปล็อกอิน
+ * 403 = ตัวตนใช้ได้แต่ไม่มีสิทธิ์ → ปล่อยให้หน้าจัดการเอง เพราะการเด้ง
+ *       ออกจากระบบเพราะกดปุ่มที่ไม่มีสิทธิ์เป็นพฤติกรรมที่แย่กว่าเดิม
+ */
+export async function adminFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const session = readAdminSession();
+  if (!session) {
+    bounceToLogin();
+    // คืน Response ปลอมให้ caller อ่านต่อได้โดยไม่ต้องเช็ก null ทุกจุด
+    // ระหว่างนี้เบราว์เซอร์กำลังเปลี่ยนหน้าอยู่แล้ว
+    return new Response(JSON.stringify({ status: "error", message: "ยังไม่ได้เข้าสู่ระบบ" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const headers = new Headers(init.headers);
+  headers.set("x-admin-id", session.admin_id);
+
+  const res = await fetch(path, { ...init, headers });
+  if (res.status === 401) bounceToLogin();
+  return res;
+}

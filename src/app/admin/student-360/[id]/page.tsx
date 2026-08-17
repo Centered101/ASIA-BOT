@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 
@@ -11,13 +10,13 @@ import Image from "next/image";
  * หน้านี้อยู่นอก src/app/admin/page.tsx โดยตั้งใจ ไฟล์นั้น 11,546 บรรทัด
  * และการต่อท้ายเข้าไปอีกคือสิ่งที่ Phase 1 ตั้ง module registry ขึ้นมาเพื่อเลิกทำ
  *
- * ใช้ session เดิมจาก localStorage และส่ง x-admin-id เหมือนหน้า admin เดิม
- * เพราะ AUTH_LEGACY_HEADER ยังเปิดอยู่ และจะเลิกใช้พร้อมกันทั้งระบบใน Phase 14
+ * เรียก API ผ่าน adminFetch ซึ่งแนบ x-admin-id ให้เองและเด้งไปหน้าล็อกอิน
+ * เมื่อได้ 401 — ยังใช้ header เพราะ AUTH_LEGACY_HEADER เปิดอยู่ วันที่เลิกใช้
+ * จะแก้ที่ admin-session.ts ที่เดียว ไม่ต้องไล่ทุกหน้า
  */
 
-import { T as C } from "@/components/admin/ui";
-
-const STORAGE_KEY = "asia_admin_session";
+import { AdminPage, T as C } from "@/components/admin/ui";
+import { adminFetch, readAdminSession } from "@/lib/modules/admin-session";
 
 type Guardian = {
   id: string; full_name: string; relationship: string;
@@ -163,11 +162,9 @@ export default function Student360Page() {
   const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) { router.replace("/admin"); return; }
-      setAdminId((JSON.parse(raw) as { admin_id: string }).admin_id);
-    } catch { router.replace("/admin"); }
+    const session = readAdminSession();
+    if (!session) { router.replace("/admin"); return; }
+    setAdminId(session.admin_id);
   }, [router]);
 
   const load = useCallback(async () => {
@@ -175,9 +172,7 @@ export default function Student360Page() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/students/${encodeURIComponent(studentId)}/profile`, {
-        headers: { "x-admin-id": adminId },
-      });
+      const res = await adminFetch(`/api/admin/students/${encodeURIComponent(studentId)}/profile`);
       const json = await res.json();
       if (!res.ok || json.status !== "success") {
         setError(json.message ?? "โหลดข้อมูลไม่สำเร็จ");
@@ -216,9 +211,9 @@ export default function Student360Page() {
     }
 
     try {
-      const res = await fetch(`/api/admin/students/${encodeURIComponent(studentId)}/${spec.path}`, {
+      const res = await adminFetch(`/api/admin/students/${encodeURIComponent(studentId)}/${spec.path}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-id": adminId },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       const json = await res.json();
@@ -239,9 +234,9 @@ export default function Student360Page() {
   async function removeRecord(path: string, param: string, id: string) {
     if (!adminId) return;
     if (!confirm("ยืนยันการลบรายการนี้?")) return;
-    const res = await fetch(
+    const res = await adminFetch(
       `/api/admin/students/${encodeURIComponent(studentId)}/${path}?${param}=${id}`,
-      { method: "DELETE", headers: { "x-admin-id": adminId } }
+      { method: "DELETE" }
     );
     const json = await res.json().catch(() => ({}));
     if (!res.ok) alert(json.message ?? "ลบไม่สำเร็จ");
@@ -255,7 +250,6 @@ export default function Student360Page() {
     return (
       <Shell>
         <p style={{ color: C.accent }}>{error ?? "ไม่พบข้อมูล"}</p>
-        <Link href="/admin?tab=students" style={{ color: C.accent }}>← กลับหน้ารายชื่อนักเรียน</Link>
       </Shell>
     );
   }
@@ -263,20 +257,19 @@ export default function Student360Page() {
   const s = profile.student;
 
   return (
-    <Shell>
-      <Link href="/admin/student-360" style={{ color: C.muted, fontSize: 13, textDecoration: "none" }}>
-        ← รายชื่อนักเรียน
-      </Link>
-
+    <Shell
+      title={fullName}
+      subtitle={`รหัส ${s.student_id} · ${s.program} · ${s.department ?? "ไม่ระบุสาขา"} · เข้าปี ${s.entry_year}`}
+    >
       {partial.length > 0 && (
         <div style={{ background: "#f59e0b18", border: "1px solid #f59e0b55", color: "#f59e0b",
-          borderRadius: 10, padding: "10px 14px", fontSize: 13, marginTop: 12 }}>
+          borderRadius: 10, padding: "10px 14px", fontSize: 13, marginBottom: 12 }}>
           บางส่วนโหลดไม่สำเร็จ ข้อมูลด้านล่างอาจไม่ครบ: {partial.join(" · ")}
         </div>
       )}
 
-      {/* หัวข้อ */}
-      <div style={{ display: "flex", gap: 18, alignItems: "center", marginTop: 14, flexWrap: "wrap" }}>
+      {/* รูปและสถานะ — ชื่อกับรหัสขึ้นเป็นหัวข้อของหน้าไปแล้ว จึงไม่ซ้ำตรงนี้ */}
+      <div style={{ display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap" }}>
         {s.photo_url ? (
           <Image src={s.photo_url} alt={fullName} width={84} height={84}
             style={{ borderRadius: 14, objectFit: "cover", border: `1px solid ${C.line}` }} />
@@ -286,21 +279,15 @@ export default function Student360Page() {
             <i className="fa-solid fa-user" />
           </div>
         )}
-        <div style={{ minWidth: 0 }}>
-          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 800 }}>{fullName}</h1>
-          <div style={{ color: C.muted, fontSize: 13, marginTop: 4 }}>
-            รหัส {s.student_id} · {s.program} · {s.department ?? "ไม่ระบุสาขา"} · เข้าปี {s.entry_year}
-          </div>
-          <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-            <Badge text={STATUS_TH[s.student_status] ?? s.student_status} tone="accent" />
-            <Badge text={`บัตร: ${s.card_status}`} />
-            {profile.class_group
-              ? <Badge text={`ห้อง ${profile.class_group.name}`} />
-              : <Badge text="ยังไม่ได้จัดห้อง" tone="warn" />}
-            {profile.advisor
-              ? <Badge text={`ที่ปรึกษา: ${profile.advisor.full_name}`} />
-              : <Badge text="ยังไม่มีครูที่ปรึกษา" tone="warn" />}
-          </div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", minWidth: 0 }}>
+          <Badge text={STATUS_TH[s.student_status] ?? s.student_status} tone="accent" />
+          <Badge text={`บัตร: ${s.card_status}`} />
+          {profile.class_group
+            ? <Badge text={`ห้อง ${profile.class_group.name}`} />
+            : <Badge text="ยังไม่ได้จัดห้อง" tone="warn" />}
+          {profile.advisor
+            ? <Badge text={`ที่ปรึกษา: ${profile.advisor.full_name}`} />
+            : <Badge text="ยังไม่มีครูที่ปรึกษา" tone="warn" />}
         </div>
       </div>
 
@@ -457,12 +444,24 @@ const btnPrimary: React.CSSProperties = {
   padding: "8px 18px", cursor: "pointer", fontWeight: 700, fontSize: 14, fontFamily: "inherit",
 };
 
-function Shell({ children }: { children: React.ReactNode }) {
+/**
+ * โครงหน้า — ห่อ AdminPage ไว้เพื่อให้ทั้งสถานะกำลังโหลด ไม่พบข้อมูล และหน้าจริง
+ * ได้ sidebar ชุดเดียวกัน ตอนโหลดยังไม่รู้ชื่อนักเรียน จึงต้องให้ title มีค่าตั้งต้น
+ */
+function Shell({ title, subtitle, children }: {
+  title?: string; subtitle?: React.ReactNode; children: React.ReactNode;
+}) {
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, color: C.text,
-      padding: "24px clamp(12px, 4vw, 40px) 60px" }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto" }}>{children}</div>
-    </div>
+    <AdminPage
+      title={title ?? "ข้อมูลนักเรียน"}
+      subtitle={subtitle}
+      navId="student_360"
+      backHref="/admin/student-360"
+      backLabel="รายชื่อนักเรียน"
+      width={1200}
+    >
+      {children}
+    </AdminPage>
   );
 }
 

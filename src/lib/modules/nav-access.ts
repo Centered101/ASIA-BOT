@@ -65,6 +65,17 @@ export function normalizeAdminRole(role: string): AdminRole {
   return role === "superadmin" || role === "admin" || role === "staff" ? role : "staff";
 }
 
+/** ป้ายไทยของ role เดิม — เดิมเขียนซ้ำในหลายที่ ย้ายมาไว้กับการกรองเมนู */
+const ROLE_LABEL: Record<AdminRole, string> = {
+  superadmin: "ผู้ดูแลสูงสุด",
+  admin: "ผู้ดูแลระบบ",
+  staff: "เจ้าหน้าที่",
+};
+
+export function adminRoleLabel(role: string): string {
+  return ROLE_LABEL[normalizeAdminRole(role)];
+}
+
 /**
  * superadmin กับ admin ทำงานข้ามฝ่ายอยู่แล้ว ส่วนคนที่ยังไม่ได้ตั้งฝ่าย
  * ให้เห็นเหมือนเดิมทุกอย่าง บัญชีเก่าจะได้ไม่พังระหว่างทยอยตั้งค่า

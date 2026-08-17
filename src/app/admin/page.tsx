@@ -8,7 +8,9 @@ import { safeImageSrc } from "@/lib/image-url";
 import { supabase as realtimeSupabase } from "@/lib/supabase";
 import type { CustomField } from "@/lib/config";
 import { DEPARTMENTS, SITE_NAME } from "@/lib/config";
-import { NAV_SECTIONS, type AdminRole, type NavItem, type NavSection } from "@/lib/modules/nav";
+import { ADMIN_DIVISIONS, type NavItem } from "@/lib/modules/nav";
+import { canAccessTab, visibleNavSections } from "@/lib/modules/nav-access";
+import { ROLE_LABELS as DIVISION_LABELS } from "@/lib/rbac/definitions";
 import { AMENITY_OPTIONS, getAmenityInfo } from "@/lib/amenities";
 import { Chart, registerables } from "chart.js";
 import { Bar, Doughnut, Line, Radar } from "react-chartjs-2";
@@ -23,6 +25,8 @@ type AdminUser = {
   avatar: string | null;
   email?: string | null; phone?: string | null;
   entry_year?: string | null; department?: string | null;
+  /** ฝ่ายที่สังกัด — ว่างแปลว่ายังไม่ระบุ เห็นเมนูทุกฝ่ายเหมือนเดิม */
+  division?: string | null;
   created_at?: string | null;
   google_email?: string | null;
 };
@@ -316,67 +320,6 @@ type AdminSearchResult = {
   badge?: string;
 };
 
-
-const TAB_ACCESS: Record<string, AdminRole[]> = {
-  dashboard: ["superadmin", "admin", "staff"],
-  students: ["superadmin", "admin", "staff"],
-  // หน้าที่ย้ายออกไปอยู่นอกไฟล์นี้แล้ว — ตัวหน้าเองตรวจสิทธิ์ด้วย RBAC
-  // ฝั่ง server อีกชั้น ตรงนี้คุมแค่ว่าจะโชว์ในเมนูให้ role ไหน
-  student_360: ["superadmin", "admin", "staff"],
-  class_attendance: ["superadmin", "admin", "staff"],
-  maintenance: ["superadmin", "admin", "staff"],
-  assets: ["superadmin", "admin"],
-  data_requests: ["superadmin", "admin"],
-  bookings: ["superadmin", "admin", "staff"],
-  rooms: ["superadmin", "admin"],
-  products: ["superadmin", "admin", "staff"],
-  shoporders: ["superadmin", "admin", "staff"],
-  equipment_items: ["superadmin", "admin", "staff"],
-  equipment_requests: ["superadmin", "admin", "staff"],
-  projects: ["superadmin", "admin", "staff"],
-  evaluations: ["superadmin", "admin", "staff"],
-  class_groups: ["superadmin", "admin"],
-  class_schedule: ["superadmin", "admin"],
-  class_schedule_weekly: ["superadmin", "admin"],
-  class_schedule_override: ["superadmin", "admin"],
-  teachers: ["superadmin", "admin"],
-  feedbacks: ["superadmin", "admin", "staff"],
-  teacher_applications: ["superadmin"],
-  admins: ["superadmin", "admin", "staff"],
-  line_broadcast: ["superadmin", "admin", "staff"],
-  settings: ["superadmin", "admin", "staff"],
-};
-
-function normalizeAdminRole(role: string): AdminRole {
-  return role === "superadmin" || role === "admin" || role === "staff" ? role : "staff";
-}
-
-function canAccessTab(role: string, tab: string) {
-  const allowed = TAB_ACCESS[tab];
-  if (!allowed) {
-    // เมนูที่ไม่มีใน TAB_ACCESS เคยหายไปเงียบ ๆ — เพิ่มรายการใน nav.ts แล้ว
-    // ลืมมาเพิ่มที่นี่ ผลคือเมนูไม่ขึ้นโดยไม่มีอะไรบอกว่าทำไม กว่าจะรู้ก็เสียเวลาไล่หา
-    // ยังคืน false เหมือนเดิมเพราะปลอดภัยกว่าเปิดให้ทุก role โดยไม่ตั้งใจ
-    if (process.env.NODE_ENV !== "production") {
-      console.warn(`[nav] "${tab}" ไม่มีใน TAB_ACCESS จึงถูกซ่อนจากเมนู — เพิ่มเข้าไปที่ TAB_ACCESS ด้วย`);
-    }
-    return false;
-  }
-  return allowed.includes(normalizeAdminRole(role));
-}
-
-function visibleNavSections(role: string): NavSection[] {
-  return NAV_SECTIONS
-    .map(sec => ({
-      ...sec,
-      items: sec.items
-        .filter(item => canAccessTab(role, item.id))
-        .map(item => item.children
-          ? { ...item, children: item.children.filter(child => canAccessTab(role, child.id)) }
-          : item),
-    }))
-    .filter(sec => sec.items.length > 0);
-}
 
 function navBadgeCount(stats: Stats | null, item: NavItem): number {
   if (!stats) return 0;
@@ -676,11 +619,14 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
   const rawTabParam = searchParams.get("tab") ?? "dashboard";
   const rawTab = rawTabParam === "name_requests" || rawTabParam === "name_change_requests" ? "data_requests" : rawTabParam;
   const requestedTab = VALID_TABS.has(rawTab) ? rawTab : "dashboard";
-  const activeTab = canAccessTab(admin.role, requestedTab) ? requestedTab : "dashboard";
-  const navSections = useMemo(() => visibleNavSections(admin.role), [admin.role]);
+  const activeTab = canAccessTab(admin.role, requestedTab, admin.division) ? requestedTab : "dashboard";
+  const navSections = useMemo(
+    () => visibleNavSections(admin.role, admin.division),
+    [admin.role, admin.division],
+  );
 
   function setActiveTab(tab: string) {
-    if (!canAccessTab(admin.role, tab)) return;
+    if (!canAccessTab(admin.role, tab, admin.division)) return;
     setSidebarOpen(false);
     router.push(`/admin?tab=${tab}`, { scroll: false });
   }

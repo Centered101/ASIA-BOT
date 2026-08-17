@@ -78,6 +78,8 @@ export type Database = {
           phone: string | null;
           entry_year: string | null;
           department: string | null;
+          /** ฝ่ายที่สังกัด ใช้ key เดียวกับ roles.key — NULL คือยังไม่ระบุ */
+          division: string | null;
           avatar: string | null;
           admin_status: "active" | "inactive";
           google_email: string | null;
@@ -100,6 +102,7 @@ export type Database = {
           phone?: string | null;
           entry_year?: string | null;
           department?: string | null;
+          division?: string | null;
           avatar?: string | null;
           admin_status?: "active" | "inactive";
           google_email?: string | null;
@@ -121,6 +124,7 @@ export type Database = {
           phone?: string | null;
           entry_year?: string | null;
           department?: string | null;
+          division?: string | null;
           avatar?: string | null;
           admin_status?: "active" | "inactive";
           google_email?: string | null;

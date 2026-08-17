@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AdminPage, Card, Chip, Button, FilterChip, Message,
@@ -270,7 +271,8 @@ export default function AssetRegistryPage() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {assets.map((a) => (
-            <Card key={a.id}>
+            <Link key={a.id} href={`/admin/assets/${a.id}`} style={{ textDecoration: "none", color: "inherit" }}>
+            <Card>
               <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
                 {a.asset_code ? (
                   <span style={{ fontFamily: "ui-monospace, monospace", fontSize: 12, color: T.accent, fontWeight: 700 }}>
@@ -292,6 +294,7 @@ export default function AssetRegistryPage() {
                 {a.responsible_person && <> · ผู้รับผิดชอบ {a.responsible_person}</>}
               </div>
             </Card>
+            </Link>
           ))}
         </div>
       )}

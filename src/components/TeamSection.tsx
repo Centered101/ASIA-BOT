@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { TEAM_GITHUB } from "@/lib/config";
+import { TEAM } from "@/lib/config";
 
 type GithubUser = { login: string; name: string | null; bio: string | null; html_url: string; avatar_url: string };
 
@@ -11,9 +11,22 @@ export default function TeamSection() {
   const noImg = "https://project-test-submission.netlify.app/images/img/noitems.svg";
 
   useEffect(() => {
-    Promise.allSettled(TEAM_GITHUB.map((u) => fetch(`https://api.github.com/users/${u}`).then((r) => r.json())))
+    Promise.allSettled(
+      TEAM.map((m) =>
+        fetch(`https://api.github.com/users/${m.login}`)
+          .then((r) => r.json())
+          // บทบาทจาก env ชนะ bio ของ GitHub เพราะเป็นสิ่งที่เราตั้งใจให้แสดง
+          // ส่วน bio เจ้าตัวแก้เมื่อไหร่ก็ได้ และหลายบัญชีไม่ได้เขียนไว้เลย
+          .then((u: GithubUser) => ({ ...u, bio: m.role ?? u.bio }))
+      )
+    )
       .then((results) => {
-        const ok = results.filter((r): r is PromiseFulfilledResult<GithubUser> => r.status === "fulfilled").map((r) => r.value);
+        const ok = results
+          .filter((r): r is PromiseFulfilledResult<GithubUser> => r.status === "fulfilled")
+          // GitHub ตอบ 200 พร้อม { message: "Not Found" } เมื่อชื่อผู้ใช้ผิด
+          // ถ้าไม่กรอง การ์ดจะขึ้นมาว่างเปล่าโดยไม่มีอะไรบอกว่าพิมพ์ชื่อผิด
+          .map((r) => r.value)
+          .filter((u) => !!u?.login);
         setMembers(ok);
       })
       .finally(() => setLoading(false));

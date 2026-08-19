@@ -37,7 +37,9 @@ export default function Header({ subtitle = "หน้าแรก" }: { subtitl
     .filter(l => !l.role && !l.external && l !== feedbackLink && l !== registerLink)
     .slice(0, feedbackLink ? 2 : 3);
   const mainLinks = feedbackLink ? [...baseMainLinks, feedbackLink] : baseMainLinks;
-  const ctaStudent = visible.find(l => l.role === "student");
+  // จับด้วย path ไม่ใช่ role เพราะ /my-attendance ก็เป็น role "student" เหมือนกัน
+  // และมาก่อนใน QUICK_LINKS ปุ่ม "เข้าสู่ระบบ" จึงเคยลิงก์ไปหน้าการเข้าเรียนแทน
+  const ctaStudent = visible.find(l => l.path === "/student");
   const ctaShop    = visible.find(l => l.role === "shop");
   const moreLinks  = visible.filter(l => !mainLinks.includes(l) && l !== ctaStudent && l !== ctaShop);
   const displayLink = (link: QuickLink) => {
@@ -206,7 +208,7 @@ export default function Header({ subtitle = "หน้าแรก" }: { subtitl
                 const display = displayLink(link);
                 const href = link.url ?? (link.path ?? "#");
                 const active = isActive(link);
-                const isStudentCta = link.role === "student";
+                const isStudentCta = link.path === "/student";
                 return (
                   <Link key={link.name} href={href}
                     target={link.external ? "_blank" : undefined}

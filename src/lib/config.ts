@@ -32,7 +32,46 @@ export type CustomField =
   | { key: string; label: string; required?: boolean; type: "radio";  options: string[] }
   | { key: string; label: string; required?: boolean; type: "text";   placeholder?: string; maxLength?: number };
 
-export const TEAM_GITHUB = ["Centered101", "Centered101-dev", "Centered102-dev"];
+export type TeamMember = {
+  /** ชื่อผู้ใช้ GitHub ใช้ดึงรูปกับชื่อจริงมาแสดง */
+  login: string;
+  /** บทบาทที่กำหนดเอง ใช้แทน bio ของ GitHub เมื่อ bio ว่าง */
+  role?: string;
+};
+
+/**
+ * ทีมผู้พัฒนา — ตั้งค่าได้จาก env ไม่ต้องแก้โค้ด
+ *
+ * รูปแบบ: ชื่อผู้ใช้คั่นด้วยคอมมา ใส่บทบาทต่อท้ายด้วย | ได้ (ไม่ใส่ก็ได้)
+ *   NEXT_PUBLIC_TEAM_GITHUB="Centered101|หัวหน้าทีม, Centered101-dev, Centered102-dev"
+ *
+ * ที่ต้องมีบทบาทให้ใส่เอง เพราะบัญชีที่ไม่ได้เขียน bio ไว้ใน GitHub จะขึ้น
+ * การ์ดเปล่า ๆ มีแต่ชื่อ ซึ่งดูเหมือนโหลดไม่ขึ้นมากกว่าดูเหมือนตั้งใจ
+ *
+ * ค่าตั้งต้นคือทีมเดิม ระบบจึงไม่พังถ้ายังไม่ได้ตั้ง env
+ *
+ * หมายเหตุ: NEXT_PUBLIC_* ถูกฝังตอน build เปลี่ยนค่าบน Vercel แล้วต้อง
+ * deploy ใหม่ถึงจะมีผล (บนเครื่องตัวเองแค่รีสตาร์ท dev server)
+ */
+export function parseTeam(raw: string | undefined): TeamMember[] {
+  return (raw ?? "")
+    .split(",")
+    .map((entry) => {
+      const [login, role] = entry.split("|");
+      return { login: (login ?? "").trim(), role: role?.trim() || undefined };
+    })
+    .filter((m) => m.login !== "");
+}
+
+const TEAM_FALLBACK = "Centered101, Centered101-dev, Centered102-dev";
+
+export const TEAM: TeamMember[] = (() => {
+  const parsed = parseTeam(process.env.NEXT_PUBLIC_TEAM_GITHUB);
+  return parsed.length ? parsed : parseTeam(TEAM_FALLBACK);
+})();
+
+/** ชื่อผู้ใช้อย่างเดียว — ของเดิมที่โค้ดอื่นอาจยังเรียกใช้อยู่ */
+export const TEAM_GITHUB: string[] = TEAM.map((m) => m.login);
 
 export const SESSION_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
 export const SESSION_KEY = "asia_lb_session";

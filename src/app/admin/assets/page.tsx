@@ -13,7 +13,7 @@ import type { AssetCondition, AssetStatus } from "@/types/database";
 /**
  * ทะเบียนครุภัณฑ์รายชิ้น
  *
- * คนละเรื่องกับแท็บ "คุรุภัณฑ์" เดิมใน /admin?tab=equipment_items ซึ่งเป็นคลัง
+ * คนละเรื่องกับแท็บ "คุรุภัณฑ์" เดิมใน /admin/equipment_items ซึ่งเป็นคลัง
  * ของที่ยืมได้และนับเป็นจำนวน ("หูฟัง 20 อัน" = 1 แถว) ส่วนหน้านี้คือของราย
  * ชิ้นที่มีเลขครุภัณฑ์ ประวัติซ่อม และการจำหน่ายของตัวเอง
  *
@@ -155,6 +155,7 @@ export default function AssetRegistryPage() {
 
   return (
     <AdminPage
+      onRefresh={() => void load()}
       navId="assets"
       title="ทะเบียนครุภัณฑ์"
       subtitle={

@@ -2,6 +2,44 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import bcrypt from "bcryptjs";
+import { ADMIN_DIVISIONS } from "@/lib/modules/nav";
+import { LEGACY_ADMIN_ROLE_MAP } from "@/lib/rbac/definitions";
+
+/**
+ * เปลี่ยน admins.role แล้วต้องย้าย user_roles ตามด้วย
+ *
+ * ระบบมีสองชั้นที่ต่างคนต่างอ่าน: route เก่าใช้ hasAdminRole() อ่าน admins.role
+ * ส่วน route ที่ย้ายมาใช้ withAuth({permission}) อ่าน user_roles ผ่าน
+ * resolvePrincipal ถ้าอัปเดตแค่ชั้นแรก คนที่เพิ่งถูกเลื่อนเป็น admin จะเห็นเมนู
+ * ครบแต่กดแล้วได้ 403 จาก API ชุดใหม่ เพราะ user_roles ยังเป็นของเดิม
+ *
+ * ลบเฉพาะ role ที่มาจากการ map ของฝั่ง admin (SUPER_ADMIN/ADMIN/ACADEMIC)
+ * แถวอื่นเช่น STUDENT ของคนที่เป็นทั้งนักเรียนและเจ้าหน้าที่ต้องอยู่ต่อ
+ */
+const LEGACY_ROLE_KEYS = [...new Set(Object.values(LEGACY_ADMIN_ROLE_MAP))];
+
+async function syncUserRole(adminId: string, newRole: string): Promise<void> {
+  const mapped = LEGACY_ADMIN_ROLE_MAP[newRole];
+  if (!mapped) return;
+  try {
+    const { data: admin } = await supabase
+      .from("admins").select("account_id").eq("admin_id", adminId).maybeSingle();
+    const accountId = (admin as { account_id?: string | null } | null)?.account_id;
+    if (!accountId) return; // ยังไม่ได้ผูกบัญชีกลาง ชั้น RBAC จะ fallback ไป admins.role เอง
+
+    await supabase.from("user_roles").delete()
+      .eq("account_id", accountId).in("role_key", LEGACY_ROLE_KEYS).is("scope_type", null);
+    await supabase.from("user_roles").insert({ account_id: accountId, role_key: mapped });
+  } catch {
+    // ฐานที่ยังไม่ได้รัน 0003_rbac ไม่มีตาราง user_roles — ชั้นเก่ายังทำงานได้ปกติ
+  }
+}
+
+/** ต้องตรงกับ CHECK ใน 0019_admin_division.sql — ค่าที่ไม่รู้จักถือว่าไม่ระบุฝ่าย */
+function cleanDivision(value: unknown): string | null {
+  const v = typeof value === "string" ? value.trim() : "";
+  return (ADMIN_DIVISIONS as string[]).includes(v) ? v : null;
+}
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -77,6 +115,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   // profile fields — self or superadmin
+  // division ไม่อยู่ในชุดนี้ เพราะเป็นเรื่องสิทธิ์ไม่ใช่ข้อมูลส่วนตัว ดูด้านล่าง
   const profileKeys = ["first_name", "last_name", "nickname", "email", "phone", "entry_year", "department", "linked_student_id"];
   if (profileKeys.some(k => k in body) && !isSelf && !isSuperAdmin)
     return NextResponse.json({ status: "error", message: "ไม่มีสิทธิ์" }, { status: 403 });
@@ -96,13 +135,28 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   for (const k of profileKeys) {
     if (k in body) patch[k] = body[k]?.trim?.() || body[k] || null;
   }
+  // ฝ่ายเปลี่ยนได้เฉพาะ superadmin ไม่งั้นใครก็ย้ายตัวเองไปฝ่ายที่อยากเห็นเมนูได้
+  // คนอื่นส่งมาก็เมินเฉย ๆ ไม่ตอบ 403 เพราะหน้าแก้โปรไฟล์ส่งทุกฟิลด์มาพร้อมกัน
+  // การตีกลับทั้งก้อนจะทำให้แก้ชื่อตัวเองไม่ได้ไปด้วย
+  if ("division" in body && isSuperAdmin) patch.division = cleanDivision(body.division);
 
   if (Object.keys(patch).length === 0)
     return NextResponse.json({ status: "error", message: "ไม่มีข้อมูลที่จะแก้ไข" }, { status: 400 });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await supabase.from("admins").update(patch as any).eq("admin_id", id);
+  const save = (p: Record<string, any>) => (supabase.from("admins") as any).update(p).eq("admin_id", id);
+  let { error } = await save(patch);
+  // ฐานที่ยังไม่ได้รัน 0019 ยังแก้โปรไฟล์ได้ แค่ตั้งฝ่ายไม่ได้
+  if (error && "division" in patch && /division/i.test(error.message ?? "")) {
+    const { division: _skip, ...withoutDivision } = patch;
+    void _skip;
+    ({ error } = await save(withoutDivision));
+  }
   if (error) return NextResponse.json({ status: "error", message: error.message }, { status: 500 });
+
+  // ย้าย role ในชั้น RBAC ตามด้วย ไม่งั้นสองชั้นจะไม่ตรงกัน (ดูหัวไฟล์)
+  if ("role" in patch) await syncUserRole(id, patch.role as string);
+
   return NextResponse.json({ status: "success" });
 }
 

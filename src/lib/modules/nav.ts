@@ -22,6 +22,14 @@ export type NavItem = {
   children?: NavItem[];
   /** หน้าที่อยู่นอก admin/page.tsx แล้ว */
   href?: string;
+  /**
+   * คำค้นเพิ่มเติมสำหรับช่องค้นหาในหลังบ้าน
+   *
+   * ชื่อเมนูสั้นเพื่อให้ sidebar อ่านง่าย แต่คนค้นมักพิมพ์ชื่อเต็มของงาน
+   * เช่นพิมพ์ "ลงทะเบียนบัตรนักเรียน" แล้วควรเจอเมนู "นักเรียน"
+   * ใส่ไว้ตรงนี้แทนการเปลี่ยนชื่อเมนูให้ยาวขึ้น
+   */
+  keywords?: string[];
 };
 
 export type NavSection = {
@@ -46,9 +54,16 @@ export const NAV_SECTIONS: NavSection[] = [
     title: "ฝ่ายทะเบียน",
     division: "REGISTRAR",
     items: [
-      { id: "students",      label: "ข้อมูลนักเรียน",     icon: "fa-graduation-cap" },
-      { id: "student_360",   label: "Student 360",        icon: "fa-id-card-clip", href: "/admin/student-360" },
-      { id: "data_requests", label: "คำขอแก้ไขข้อมูล",   icon: "fa-id-card", badge: "pendingDataRequests" },
+      // ข้อมูลนักเรียนกับการจัดห้องเคยเป็นสองเมนู (students กับ student_360)
+      // ทั้งที่เริ่มจากรายชื่อชุดเดียวกัน ตอนนี้เป็นหน้าเดียวสองแท็บย่อย
+      { id: "students",      label: "นักเรียน",           icon: "fa-graduation-cap", href: "/admin/students",
+        keywords: ["ลงทะเบียนบัตรนักเรียน", "ทำบัตรนักเรียน", "เพิ่มนักเรียน", "สมัครนักเรียน", "บัตรนักเรียน", "รายชื่อนักเรียน",
+          // กลุ่มเรียนถูกยุบมาเป็นแท็บในหน้านี้ คนที่เคยหาด้วยชื่อเดิมต้องยังเจอ
+          "กลุ่มเรียน", "จัดห้องเรียน", "ห้องเรียน", "จัดกลุ่ม"] },
+      { id: "import",        label: "นำเข้าจากไฟล์",     icon: "fa-file-import", href: "/admin/import",
+        keywords: ["นำเข้านักเรียน", "อัปโหลด csv", "excel"] },
+      { id: "data_requests", label: "คำขอแก้ไขข้อมูล",   icon: "fa-id-card", badge: "pendingDataRequests",
+        keywords: ["คำขอทำบัตร", "อนุมัติข้อมูล", "เปลี่ยนชื่อ"] },
     ],
   },
   {
@@ -56,7 +71,6 @@ export const NAV_SECTIONS: NavSection[] = [
     title: "ฝ่ายวิชาการ",
     division: "ACADEMIC",
     items: [
-      { id: "class_groups", label: "กลุ่มเรียน", icon: "fa-users-rectangle" },
       {
         id: "class_schedule",
         label: "ตารางเรียน",
@@ -106,8 +120,8 @@ export const NAV_SECTIONS: NavSection[] = [
     title: "สหกรณ์โรงเรียน",
     division: "SHOP_MANAGER",
     items: [
-      { id: "products",   label: "สินค้า",     icon: "fa-box", badge: "lowStockProducts" },
-      { id: "shoporders", label: "คำสั่งซื้อ", icon: "fa-receipt", badge: "orderUpdates" },
+      { id: "products",   label: "สินค้า",     icon: "fa-box", badge: "lowStockProducts", href: "/admin/shop" },
+      { id: "shoporders", label: "คำสั่งซื้อ", icon: "fa-receipt", badge: "orderUpdates", href: "/admin/shop/orders" },
     ],
   },
   {
@@ -136,3 +150,35 @@ export const NAV_SECTIONS: NavSection[] = [
 export const ADMIN_DIVISIONS: Role[] = NAV_SECTIONS
   .map(sec => sec.division)
   .filter((d): d is Role => !!d);
+
+/**
+ * เส้นทางของเมนูหนึ่งรายการ ไว้ทำ breadcrumb บนแถบบนสุด
+ *
+ * หน้าที่อยู่นอก admin/page.tsx เคยไม่มีแถบนี้เลย พอสลับจากแท็บเดิมมาหน้าใหม่
+ * แถบบนหายไปทั้งแถบ เหมือนหลุดออกจากระบบไปคนละที่ ทั้งที่เป็นหลังบ้านเดียวกัน
+ *
+ * อ่านจาก NAV_SECTIONS ชุดเดียวกับ sidebar ชื่อในเมนูกับใน breadcrumb
+ * จึงตรงกันเสมอโดยไม่ต้องส่งชื่อซ้ำเข้ามาจากแต่ละหน้า
+ */
+export function navTrail(id?: string): { section: string | null; item: NavItem } | null {
+  if (!id) return null;
+  for (const sec of NAV_SECTIONS) {
+    for (const item of sec.items) {
+      if (item.id === id) return { section: sec.title, item };
+      const child = item.children?.find(c => c.id === id);
+      // เมนูย่อยให้ขึ้นชื่อเมนูแม่เป็นชั้นกลาง จะได้รู้ว่าอยู่ใต้อะไร
+      if (child) return { section: sec.title ? `${sec.title} · ${item.label}` : item.label, item: child };
+    }
+  }
+  return null;
+}
+
+/**
+ * URL ของเมนูหนึ่งรายการ — sidebar กับช่องค้นหาต้องพาไปที่เดียวกัน
+ *
+ * รายการที่มี href คือหน้าที่ย้ายออกมาอยู่นอก admin/page.tsx แล้ว
+ * ที่เหลือยังอยู่ในไฟล์เดิมและเข้าถึงผ่าน /admin/<id> ซึ่ง [tab]/page.tsx รับไว้
+ */
+export function navHref(item: NavItem): string {
+  return item.href ?? (item.id === "dashboard" ? "/admin" : `/admin/${item.id}`);
+}

@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     if (studentIds.length === 0) return rows ?? [];
     const { data: students } = await (supabase as any)
       .from("students")
-      .select("student_id, first_name, last_name, nickname, program, department, photo_url, student_phone, entry_year, uid, card_status, line_user_id")
+      .select("student_id, first_name, last_name, nickname, program, department, photo_url, student_phone, entry_year, uid, card_status, line_user_id, birth_date, gender, national_id, address")
       .in("student_id", studentIds);
     const studentMap = Object.fromEntries((students ?? []).map((s: any) => [s.student_id, s]));
     return (rows ?? []).map((row) => ({
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let q = (supabase.from("change_requests") as any)
-    .select("*, students!change_requests_student_id_fkey(student_id, first_name, last_name, nickname, program, department, photo_url, student_phone, entry_year, uid, card_status, line_user_id)")
+    .select("*, students!change_requests_student_id_fkey(student_id, first_name, last_name, nickname, program, department, photo_url, student_phone, entry_year, uid, card_status, line_user_id, birth_date, gender, national_id, address)")
     .order("created_at", { ascending: false });
   if (status && status !== "all") q = q.eq("status", status);
 

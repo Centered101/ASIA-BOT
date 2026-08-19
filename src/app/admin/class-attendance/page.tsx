@@ -215,6 +215,7 @@ export default function ClassAttendancePage() {
 
   return (
     <AdminPage
+      onRefresh={() => void load()}
       navId="class_attendance"
       title="เช็กชื่อรายวิชา"
       subtitle={groupName ? `${groupName} · ${rows.length} คน` : "เลือกคาบเรียนเพื่อเริ่มเช็กชื่อ"}
@@ -269,7 +270,7 @@ export default function ClassAttendancePage() {
               รายชื่อในคาบมาจากนักเรียนที่ถูกจัดเข้าห้องของคาบนั้น
               ตอนนี้ยังไม่มีใครถูกจัดเข้าห้องนี้ จึงยังเช็กชื่อไม่ได้
             </p>
-            <Link href="/admin/student-360"
+            <Link href="/admin/students"
               style={{
                 display: "inline-block", background: T.accent, color: "#fff",
                 padding: "9px 20px", borderRadius: 9, fontSize: 13,

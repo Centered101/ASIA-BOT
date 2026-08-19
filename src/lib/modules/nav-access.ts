@@ -20,9 +20,13 @@ const TAB_ACCESS: Record<string, AdminRole[]> = {
   students: ["superadmin", "admin", "staff"],
   // หน้าที่ย้ายออกไปอยู่นอก admin/page.tsx แล้ว — ตัวหน้าเองตรวจสิทธิ์ด้วย RBAC
   // ฝั่ง server อีกชั้น ตรงนี้คุมแค่ว่าจะโชว์ในเมนูให้ role ไหน
-  student_360: ["superadmin", "admin", "staff"],
+  // นำเข้าเป็นการเขียนข้อมูลจริงทีละหลายร้อยแถว จึงไม่เปิดให้ staff
+  import: ["superadmin", "admin"],
   class_attendance: ["superadmin", "admin", "staff"],
-  maintenance: ["superadmin", "admin", "staff"],
+  // staff แจ้งซ่อมได้ แต่ดูคิวงานของทั้งโรงเรียนไม่ได้ — /api/admin/maintenance
+  // ขอ permission "maintenance.view_all" ซึ่ง role ACADEMIC (ปลายทางของ staff)
+  // ไม่มี ตรงนี้เคยใส่ staff ไว้ เมนูจึงโชว์หน้าที่กดเข้าไปแล้วได้ 403 เปล่า ๆ
+  maintenance: ["superadmin", "admin"],
   assets: ["superadmin", "admin"],
   data_requests: ["superadmin", "admin"],
   bookings: ["superadmin", "admin", "staff"],
@@ -33,7 +37,6 @@ const TAB_ACCESS: Record<string, AdminRole[]> = {
   equipment_requests: ["superadmin", "admin", "staff"],
   projects: ["superadmin", "admin", "staff"],
   evaluations: ["superadmin", "admin", "staff"],
-  class_groups: ["superadmin", "admin"],
   class_schedule: ["superadmin", "admin"],
   class_schedule_weekly: ["superadmin", "admin"],
   class_schedule_override: ["superadmin", "admin"],
@@ -98,7 +101,7 @@ export function canAccessTab(role: string, tab: string, division?: string | null
   }
   if (!allowed.includes(normalizeAdminRole(role))) return false;
 
-  // เช็กฝ่ายด้วย ไม่ใช่แค่ซ่อนปุ่ม — กันคนพิมพ์ /admin?tab=teachers เข้าตรง ๆ
+  // เช็กฝ่ายด้วย ไม่ใช่แค่ซ่อนปุ่ม — กันคนพิมพ์ /admin/teachers เข้าตรง ๆ
   if (skipsDivisionCheck(role, division)) return true;
   const owner = TAB_DIVISION[tab];
   return !owner || owner === division;

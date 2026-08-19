@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useEffect, useState, useCallback, useMemo, useRef, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { getGoogleSupabase } from "@/lib/supabase-google";
 import { safeImageSrc } from "@/lib/image-url";
@@ -9,7 +9,8 @@ import { supabase as realtimeSupabase } from "@/lib/supabase";
 import type { CustomField } from "@/lib/config";
 import { DEPARTMENTS, SITE_NAME } from "@/lib/config";
 import { ADMIN_DIVISIONS, type NavItem } from "@/lib/modules/nav";
-import { canAccessTab, visibleNavSections } from "@/lib/modules/nav-access";
+import { adminRoleLabel, canAccessTab, visibleNavSections } from "@/lib/modules/nav-access";
+import { syncAdminSession } from "@/lib/modules/admin-session";
 import { ROLE_LABELS as DIVISION_LABELS } from "@/lib/rbac/definitions";
 import { AMENITY_OPTIONS, getAmenityInfo } from "@/lib/amenities";
 import { Chart, registerables } from "chart.js";
@@ -359,6 +360,14 @@ export default function AdminPage() {
     }
   }, []);
 
+  // role ที่จำไว้ตอนล็อกอินอาจถูกเปลี่ยนไปแล้วในฐานข้อมูล ถามค่าจริงตอนเปิดหน้า
+  // ไม่งั้นเมนูและปุ่มจะวาดตามสิทธิ์เก่า กดแล้วได้ 403 โดยไม่มีอะไรอธิบาย
+  useEffect(() => {
+    void syncAdminSession().then((fresh) => {
+      if (fresh) setAdmin((prev) => (prev ? { ...prev, role: fresh.role, division: fresh.division ?? null } : prev));
+    });
+  }, []);
+
   // Cross-tab sync: logging out (or session expiring) in one tab removes STORAGE_KEY,
   // which fires a native "storage" event in every other open admin tab.
   useEffect(() => {
@@ -535,7 +544,7 @@ function AdminLogin({ onLogin }: { onLogin: (a: AdminUser) => void }) {
             <button type="submit" disabled={loading || attempts === 0} suppressHydrationWarning
               className="w-full py-3 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all disabled:opacity-50"
               style={{ background: loading ? "#636363" : "#ff7070", boxShadow: loading ? "none" : "0 4px 20px rgba(255,112,112,0.3)" }}>
-              {loading ? <><i className="fa-solid fa-spinner fa-spin" /> กำลังตรวจสอบ...</>
+              {loading ? <><i className="asia-spinner" /> กำลังตรวจสอบ...</>
                 : <><i className="fa-solid fa-right-to-bracket" /> เข้าสู่ระบบผู้ดูแล</>}
             </button>
           </form>
@@ -558,7 +567,7 @@ function AdminLogin({ onLogin }: { onLogin: (a: AdminUser) => void }) {
             onMouseEnter={e => (e.currentTarget.style.borderColor = "#ff7070")}
             onMouseLeave={e => (e.currentTarget.style.borderColor = "#3e3e3e")}>
             {googleLoading
-              ? <><i className="fa-solid fa-spinner fa-spin text-[#ff7070]" /> กำลังเชื่อม Google...</>
+              ? <><i className="asia-spinner text-[#ff7070]" /> กำลังเชื่อม Google...</>
               : <><i className="fa-brands fa-google" style={{ color: "#ff7070" }} /> เข้าสู่ระบบด้วย Google</>}
           </button>
           <p className="text-[10px] text-center mt-2" style={{ color: "#636363" }}>
@@ -579,7 +588,12 @@ function AdminLogin({ onLogin }: { onLogin: (a: AdminUser) => void }) {
 
 // ─── Admin Shell ──────────────────────────────────────────────────────────────
 
-const VALID_TABS = new Set(["dashboard","students","data_requests","bookings","rooms","products","shoporders","equipment_items","equipment_requests","projects","evaluations","class_groups","class_schedule","class_schedule_weekly","class_schedule_override","teachers","teacher_applications","feedbacks","admins","line_broadcast","settings"]);
+/** ป้ายสถานะคำสั่งซื้อ — ใช้เฉพาะผลค้นหา Ctrl+K หน้าจริงย้ายไป /admin/shop/orders แล้ว */
+const SHOP_ORDER_STATUS_TH: Record<string, string> = {
+  pending: "รอชำระ", paid: "ชำระแล้ว", cancelled: "ยกเลิก", refunded: "คืนเงิน", delivered: "ส่งมอบแล้ว",
+};
+
+const VALID_TABS = new Set(["dashboard","data_requests","bookings","rooms","equipment_items","equipment_requests","projects","evaluations","class_schedule","class_schedule_weekly","class_schedule_override","teachers","teacher_applications","feedbacks","admins","line_broadcast","settings"]);
 
 const ADMIN_REALTIME_TABLE_TABS: Record<string, string[]> = {
   students: ["dashboard", "students", "bookings", "shoporders", "equipment_requests", "data_requests", "admins"],
@@ -597,7 +611,8 @@ const ADMIN_REALTIME_TABLE_TABS: Record<string, string[]> = {
   room_bookings: ["dashboard", "bookings", "rooms"],
   projects: ["dashboard", "projects", "evaluations"],
   evaluations: ["dashboard", "evaluations", "projects"],
-  class_groups: ["dashboard", "class_groups", "class_schedule", "class_schedule_weekly", "class_schedule_override"],
+  // หน้าจัดการกลุ่มเรียนย้ายไป /admin/students แล้ว เหลือไว้ให้ตารางเรียนรีเฟรชตาม
+  class_groups: ["dashboard", "class_schedule", "class_schedule_weekly", "class_schedule_override"],
   class_schedules: ["dashboard", "class_schedule", "class_schedule_weekly"],
   class_schedule_overrides: ["dashboard", "class_schedule", "class_schedule_override"],
   teachers: ["dashboard", "teachers", "class_schedule", "class_schedule_weekly"],
@@ -616,8 +631,26 @@ const ADMIN_REALTIME_TABLES = Object.keys(ADMIN_REALTIME_TABLE_TABS);
 function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onLogout: () => void; onAvatarChange: (url: string | null) => void }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const rawTabParam = searchParams.get("tab") ?? "dashboard";
+  const pathname = usePathname();
+
+  /**
+   * แท็บมาจาก path เป็นหลัก — /admin/<tab> ไม่ใช่ /admin?tab=<tab>
+   *
+   * URL แบบ query อ่านยาก แชร์แล้วดูไม่ออกว่าหน้าอะไร และ Next ถือว่าเป็น
+   * หน้าเดียวกันหมด ตอนนี้ทุกเมนูมี path ของตัวเอง ส่วน ?tab= เดิมยังรับอยู่
+   * แล้วเขียน URL ใหม่ให้เป็น path ลิงก์ที่บุ๊กมาร์กไว้จึงไม่ตาย
+   */
+  const pathTab = pathname.startsWith("/admin/") ? pathname.slice("/admin/".length).split("/")[0] : "";
+  const legacyTabParam = searchParams.get("tab") ?? "";
+  const rawTabParam = pathTab || legacyTabParam || "dashboard";
   const rawTab = rawTabParam === "name_requests" || rawTabParam === "name_change_requests" ? "data_requests" : rawTabParam;
+
+  // students/student_360 ย้ายไปเป็นหน้า /admin/students แล้ว ส่วนลิงก์ ?tab= เดิม
+  // ทั้งหมดให้เขียน URL ใหม่เป็น path — ทำครั้งเดียวตอนเข้า ไม่ได้ redirect ซ้ำ ๆ
+  useEffect(() => {
+    if (rawTab === "students" || rawTab === "student_360") { router.replace("/admin/students"); return; }
+    if (!pathTab && legacyTabParam) router.replace(`/admin/${rawTab}`, { scroll: false });
+  }, [rawTab, pathTab, legacyTabParam, router]);
   const requestedTab = VALID_TABS.has(rawTab) ? rawTab : "dashboard";
   const activeTab = canAccessTab(admin.role, requestedTab, admin.division) ? requestedTab : "dashboard";
   const navSections = useMemo(
@@ -628,13 +661,11 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
   function setActiveTab(tab: string) {
     if (!canAccessTab(admin.role, tab, admin.division)) return;
     setSidebarOpen(false);
-    router.push(`/admin?tab=${tab}`, { scroll: false });
+    router.push(tab === "dashboard" ? "/admin" : `/admin/${tab}`, { scroll: false });
   }
   const [stats, setStats] = useState<Stats | null>(null);
   const [statsError, setStatsError] = useState("");
   const [now, setNow] = useState(new Date());
-  const [showAddStudent, setShowAddStudent] = useState(false);
-  const [studentsRefreshKey, setStudentsRefreshKey] = useState(0);
   const [adminDataVersion, setAdminDataVersion] = useState(0);
   const [refreshingStats, setRefreshingStats] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -767,7 +798,7 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
               title: `คำสั่งซื้อ ${o.order_id}`,
               subtitle: `${o.student_name} · ${o.student_id} · ฿${Number(o.total).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
               icon: "fa-receipt",
-              badge: ORDER_STATUS[o.status] ?? o.status,
+              badge: SHOP_ORDER_STATUS_TH[o.status] ?? o.status,
             })),
           ...equipmentItems
             .filter(i => matches(i.name, i.category, i.asset_code, i.department, i.description, i.available_quantity))
@@ -827,7 +858,6 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
       if (isAdminModalOpen()) return true;
       const filePickerAt = Number((window as any).__asiaAdminFilePickerAt ?? 0);
       if (filePickerAt && Date.now() - filePickerAt < 120000) return true;
-      if (showAddStudent) return true;
       const el = document.activeElement;
       if (!(el instanceof HTMLElement)) return false;
       if (el.isContentEditable) return true;
@@ -863,7 +893,6 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
             });
           }
         }
-        if (table === "students" && !isEditing) setStudentsRefreshKey((v) => v + 1);
       }, 350);
     };
 
@@ -883,14 +912,16 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
       window.removeEventListener("focus", onFocus);
       realtimeSupabase.removeChannel(channel);
     };
-  }, [admin.admin_id, showAddStudent]);
+  }, [admin.admin_id]);
 
   useEffect(() => {
-    if (requestedTab !== activeTab) router.replace(`/admin?tab=${activeTab}`, { scroll: false });
+    if (requestedTab !== activeTab) {
+      router.replace(activeTab === "dashboard" ? "/admin" : `/admin/${activeTab}`, { scroll: false });
+    }
   }, [activeTab, requestedTab, router]);
 
   const displayName = admin.nickname ?? admin.first_name ?? admin.username;
-  const roleLabel = admin.role === "superadmin" ? "ผู้ดูแลสูงสุด" : admin.role === "admin" ? "ผู้ดูแลระบบ" : "เจ้าหน้าที่";
+  const roleLabel = adminRoleLabel(admin.role);
 
   async function refreshCurrentAdminView() {
     if (refreshingStats) return;
@@ -905,7 +936,6 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
         setStatsError("โหลดภาพรวมไม่สำเร็จ");
       }
       setAdminDataVersion((v) => v + 1);
-      if (activeTab === "students") setStudentsRefreshKey((v) => v + 1);
     } catch {
       setStatsError("โหลดภาพรวมไม่สำเร็จ");
     } finally {
@@ -948,6 +978,7 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
         section: sec.title ?? "เมนู",
         icon: item.icon,
         badge: navBadgeCount(stats, item),
+        keywords: item.keywords ?? [],
       };
       const children = item.children?.map(child => ({
         id: child.id,
@@ -955,6 +986,7 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
         section: `${sec.title ?? "เมนู"} / ${item.label}`,
         icon: child.icon,
         badge: navBadgeCount(stats, child),
+        keywords: child.keywords ?? [],
       })) ?? [];
       return [parent, ...children];
     }));
@@ -962,7 +994,8 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
   const adminSearchQuery = adminSearch.trim().toLowerCase();
   const filteredAdminSearchItems = adminSearchItems.filter(item => {
     if (!adminSearchQuery) return true;
-    return `${item.label} ${item.section} ${item.id}`.toLowerCase().includes(adminSearchQuery);
+    return `${item.label} ${item.section} ${item.id} ${item.keywords.join(" ")}`
+      .toLowerCase().includes(adminSearchQuery);
   });
 
   return (
@@ -1297,17 +1330,6 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
               <i className={`fa-solid fa-arrows-rotate text-xs ${refreshingStats ? "fa-spin" : ""}`} />
             </button>
 
-            {activeTab === "students" && admin.role !== "staff" && (
-              <button onClick={() => setShowAddStudent(true)}
-                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-[12px] font-semibold text-white transition-colors"
-                style={{ background: "#ff7070" }}
-                onMouseEnter={e => { e.currentTarget.style.background = "#ff8585"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "#ff7070"; }}>
-                <i className="fa-solid fa-user-plus text-[11px]" />
-                <span className="hidden sm:inline">เพิ่มนักเรียน</span>
-              </button>
-            )}
-
             {/* Role badge */}
             <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md"
               style={{ background: "#1a1a1a", border: "1px solid #252525" }}>
@@ -1321,18 +1343,14 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
         <main className="flex-1 overflow-auto" style={{ background: "#0c0c0c" }}>
           <div key={`${activeTab}-${adminDataVersion}`} className="p-3 sm:p-4 lg:p-6 min-w-0">
             {activeTab === "dashboard"       && <DashboardTab   adminId={admin.admin_id} stats={stats} statsError={statsError} refreshing={refreshingStats} onReload={refreshCurrentAdminView} onOpenTab={setActiveTab} />}
-            {activeTab === "students"        && <StudentsTab    adminId={admin.admin_id} refreshKey={studentsRefreshKey} role={admin.role} />}
             {activeTab === "data_requests"   && <AllRequestsTab adminId={admin.admin_id} />}
             {activeTab === "bookings"        && <BookingsTab    adminId={admin.admin_id} view="bookings" />}
             {activeTab === "rooms"           && <BookingsTab    adminId={admin.admin_id} view="rooms" />}
             {activeTab === "feedbacks"       && <FeedbacksTab   adminId={admin.admin_id} />}
-            {activeTab === "products"        && <ProductsTab    adminId={admin.admin_id} role={admin.role} />}
-            {activeTab === "shoporders"      && <ShopOrdersTab  adminId={admin.admin_id} />}
             {activeTab === "equipment_items"    && <EquipmentItemsTab    adminId={admin.admin_id} role={admin.role} />}
             {activeTab === "equipment_requests" && <EquipmentRequestsTab adminId={admin.admin_id} />}
             {activeTab === "projects"        && <ProjectsTab    adminId={admin.admin_id} role={admin.role} onViewEvals={tab => setActiveTab(tab)} />}
             {activeTab === "evaluations"     && <EvaluationsTab adminId={admin.admin_id} />}
-            {activeTab === "class_groups"    && <ClassGroupsTab adminId={admin.admin_id} />}
             {(activeTab === "class_schedule" || activeTab === "class_schedule_weekly" || activeTab === "class_schedule_override") && (
               <ClassScheduleTab
                 adminId={admin.admin_id}
@@ -1350,13 +1368,6 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
 
       </div>
 
-      {showAddStudent && (
-        <AddStudentModal
-          adminId={admin.admin_id}
-          onClose={() => setShowAddStudent(false)}
-          onSaved={() => { setShowAddStudent(false); setStudentsRefreshKey(k => k + 1); }}
-        />
-      )}
     </div>
   );
 }
@@ -1421,7 +1432,7 @@ function SidebarUser({ admin, onLogout, onAvatarChange }: {
   }
   const fileRef = useRef<HTMLInputElement>(null);
   const displayName = admin.nickname ?? admin.first_name ?? admin.username;
-  const roleLabel = admin.role === "superadmin" ? "ผู้ดูแลสูงสุด" : admin.role === "admin" ? "ผู้ดูแลระบบ" : "เจ้าหน้าที่";
+  const roleLabel = adminRoleLabel(admin.role);
 
   useEffect(() => {
     const raw = localStorage.getItem(STORAGE_TIME_KEY);
@@ -1545,7 +1556,7 @@ function SidebarUser({ admin, onLogout, onAvatarChange }: {
                   onMouseEnter={e => { e.currentTarget.style.borderColor = "#ff7070"; e.currentTarget.style.color = "#ff7070"; }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#9e9e9e"; }}>
                   {googleLinking
-                    ? <><i className="fa-solid fa-spinner fa-spin text-[10px]" /> กำลังเชื่อม...</>
+                    ? <><i className="asia-spinner text-[10px]" /> กำลังเชื่อม...</>
                     : <><i className="fa-brands fa-google text-[10px]" /> เชื่อม Google กับบัญชีนี้</>}
                 </button>
               )}
@@ -1661,7 +1672,7 @@ function StudentInfoTrigger({
               </button>
             </div>
             <div className="p-5 space-y-4">
-              {loading && <div className="text-xs" style={{ color: "#9e9e9e" }}><i className="fa-solid fa-spinner fa-spin mr-1.5" />กำลังโหลดข้อมูลนักเรียน...</div>}
+              {loading && <div className="text-xs" style={{ color: "#9e9e9e" }}><i className="asia-spinner mr-1.5" />กำลังโหลดข้อมูลนักเรียน...</div>}
               <div className="grid grid-cols-2 gap-3">
                 {[
                   ["ชื่อเล่น", student?.nickname ?? "—", "fa-user-tag"],
@@ -1769,7 +1780,7 @@ function DashboardTab({
     { label: "คำขอข้อมูลนักเรียน",     val: stats?.pendingDataRequests,         icon: "fa-file-pen",          color: "#9e9e9e", tab: "data_requests" },
     { label: "ครูทั้งหมด",              val: stats?.teacherTotal,                icon: "fa-person-chalkboard", color: "#9e9e9e", tab: "teachers" },
     { label: "โปรเจกต์",                val: stats?.projectTotal,                icon: "fa-folder-open",       color: "#9e9e9e", tab: "projects" },
-    { label: "กลุ่มเรียน",              val: stats?.classGroupTotal,             icon: "fa-users-rectangle",   color: "#9e9e9e", tab: "class_groups" },
+    { label: "กลุ่มเรียน",              val: stats?.classGroupTotal,             icon: "fa-users-rectangle",   color: "#9e9e9e", tab: "students" },
     { label: "คาบเรียนในตาราง",         val: stats?.scheduleTotal,               icon: "fa-table-cells",       color: "#9e9e9e", tab: "class_schedule_weekly" },
   ];
   const totalPendingWork =
@@ -2368,7 +2379,7 @@ function DashboardTab({
 
         {loadingLogs ? (
           <div className="flex items-center justify-center py-12 text-[#9e9e9e] text-sm">
-            <i className="fa-solid fa-spinner fa-spin mr-2" /> กำลังโหลด...
+            <i className="asia-spinner mr-2" /> กำลังโหลด...
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -2460,7 +2471,7 @@ function DashboardTab({
             <div className="p-5 space-y-4">
               {studentInfoLoading && (
                 <div className="text-xs" style={{ color: "#9e9e9e" }}>
-                  <i className="fa-solid fa-spinner fa-spin mr-1.5" />กำลังโหลดข้อมูลนักเรียน...
+                  <i className="asia-spinner mr-1.5" />กำลังโหลดข้อมูลนักเรียน...
                 </div>
               )}
 
@@ -2632,7 +2643,7 @@ function RoomForm({ room, adminId, onClose, onSaved }: { room: Room | null; admi
         <div className="px-5 pb-6 flex gap-3 sticky bottom-0 pt-4" style={{ borderTop: "1px solid #3e3e3e", background: "#1c1c1c" }}>
           <button onClick={onClose} className="flex-1 py-3 text-sm font-bold rounded-xl text-[#9e9e9e] hover:text-white" style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>ยกเลิก</button>
           <button onClick={handleSave} disabled={saving} className="flex-1 py-3 text-sm font-bold rounded-xl text-white disabled:opacity-50" style={{ background: "#ff7070" }}>
-            {saving ? <><i className="fa-solid fa-spinner fa-spin mr-1.5" />กำลังบันทึก...</> : <><i className="fa-solid fa-floppy-disk mr-1.5" />บันทึก</>}
+            {saving ? <><i className="asia-spinner mr-1.5" />กำลังบันทึก...</> : <><i className="fa-solid fa-floppy-disk mr-1.5" />บันทึก</>}
           </button>
         </div>
       </div>
@@ -3225,7 +3236,7 @@ function FeedbackCard({ f, adminId, onUpdated }: { f: Feedback; adminId: string;
               title="ลบความคิดเห็น"
               className="w-8 h-8 rounded-lg flex items-center justify-center transition-all disabled:opacity-50"
               style={{ background: "rgba(255,112,112,0.08)", color: "#ff7070", border: "1px solid rgba(255,112,112,0.2)" }}>
-              <i className={`fa-solid ${deleting ? "fa-spinner fa-spin" : "fa-trash"} text-[11px]`} />
+              <i className={`fa-solid ${deleting ? "asia-spinner" : "fa-trash"} text-[11px]`} />
             </button>
           </div>
         </div>
@@ -3511,6 +3522,8 @@ type ChangeRequest = {
     program: string; department: string | null; photo_url?: string | null;
     student_phone?: string; entry_year?: string; uid?: string | null;
     card_status?: string | null; line_user_id?: string | null;
+    birth_date?: string | null; gender?: string | null;
+    national_id?: string | null; address?: string | null;
   } | null;
   _current?: Record<string, string>;
 };
@@ -3530,12 +3543,26 @@ const CHANGE_FIELD_LABELS: Record<string, string> = {
   program: "ระดับ", student_id: "รหัสนักเรียน",
   student_phone: "เบอร์โทร", entry_year: "ปีที่เข้า", department: "สาขาวิชา",
   uid: "รหัสบัตร", card_status: "สถานะบัตร", photo_url: "รูปนักเรียน", line_user_id: "รหัส LINE",
+  // มาจากหน้าลงทะเบียนบัตรนักเรียน (/student-card)
+  birth_date: "วันเกิด", gender: "เพศ", national_id: "เลขประจำตัวประชาชน", address: "ที่อยู่",
+  card_request: "ประเภทคำขอ",
 };
 
 const REQUEST_EDITABLE_FIELDS = [
   "student_id", "first_name", "last_name", "nickname", "program", "entry_year",
   "department", "student_phone", "uid", "card_status", "photo_url", "line_user_id",
+  "birth_date", "gender", "national_id", "address",
 ];
+
+/** ค่าที่เก็บเป็นอังกฤษใน DB แต่ต้องอ่านออกตอนแอดมินตรวจคำขอ */
+const CHANGE_VALUE_LABELS: Record<string, Record<string, string>> = {
+  gender: { male: "ชาย", female: "หญิง", other: "อื่น ๆ" },
+  card_status: { active: "ใช้งานอยู่", inactive: "ยังไม่มีบัตร", lost: "แจ้งบัตรหาย" },
+};
+
+function changeValueLabel(field: string, value: string) {
+  return CHANGE_VALUE_LABELS[field]?.[value] ?? value;
+}
 
 const REQ_STATUS_LABEL: Record<string, string> = { pending: "รอดำเนินการ", approved: "อนุมัติแล้ว", rejected: "ปฏิเสธแล้ว" };
 const REQ_STATUS_STYLE: Record<string, { bg: string; text: string }> = {
@@ -3576,7 +3603,12 @@ function AllRequestsTab({ adminId, kind = "all" }: { adminId: string; kind?: "al
       ]));
       const rows = Object.entries(cr.requested_changes ?? {}).map(([field, newVal]) => {
         const oldVal = stu ? ((stu as Record<string, string | null>)[field] ?? "—") : "—";
-        return { field, label: CHANGE_FIELD_LABELS[field] ?? field, old: String(oldVal ?? "—"), new_val: String(newVal) };
+        return {
+          field,
+          label: CHANGE_FIELD_LABELS[field] ?? field,
+          old: changeValueLabel(field, String(oldVal ?? "—")),
+          new_val: changeValueLabel(field, String(newVal)),
+        };
       });
       const meta = stu ? [stu.program, stu.department].filter(Boolean).join(" · ") : "";
       unified.push({ _id: `data-${cr.id}`, _kind: "data", _status: cr.status, _student_id: cr.student_id,
@@ -3892,359 +3924,6 @@ function AllRequestsTab({ adminId, kind = "all" }: { adminId: string; kind?: "al
   );
 }
 
-
-// ─── Students Tab ─────────────────────────────────────────────────────────────
-
-function StudentsTab({ adminId, refreshKey, role }: { adminId: string; refreshKey?: number; role?: string }) {
-  const [students, setStudents] = useState<Student[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [cardFilter, setCardFilter] = useState("all");
-  const [search, setSearch] = useLocalStorageState<string>("asia_admin_students_search", "", isString);
-  const [updating, setUpdating] = useState<string | null>(null);
-  const [searchInput, setSearchInput] = useLocalStorageState<string>("asia_admin_students_search", "", isString);
-  const [viewMode, setViewMode] = useLocalStorageState<ViewMode>(ADMIN_VIEW_MODE_KEY, "grid", isViewMode);
-  const [adminStudentIds, setAdminStudentIds] = useState<Set<string>>(new Set());
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  type EditForm = {
-    first_name: string; last_name: string; nickname: string;
-    student_phone: string; entry_year: string; program: string;
-    department: string; photo_url: string;
-  };
-  const [editStudent, setEditStudent] = useState<Student | null>(null);
-  const [editForm, setEditForm] = useState<EditForm>({ first_name: "", last_name: "", nickname: "", student_phone: "", entry_year: "", program: "", department: "", photo_url: "" });
-  const [editSaving, setEditSaving] = useState(false);
-  const [editError, setEditError] = useState("");
-  const [confirmDelete, setConfirmDelete] = useState<Student | null>(null);
-  const [deleting, setDeleting] = useState(false);
-
-  const isAdminPlus = role === "admin" || role === "superadmin";
-  const isSuperAdmin = role === "superadmin";
-
-  function openEdit(s: Student) {
-    setEditForm({
-      first_name: s.first_name, last_name: s.last_name, nickname: s.nickname ?? "",
-      student_phone: s.student_phone, entry_year: s.entry_year, program: s.program,
-      department: s.department ?? "", photo_url: s.photo_url ?? "",
-    });
-    setEditError("");
-    setEditStudent(s);
-  }
-
-  async function saveEdit() {
-    if (!editStudent) return;
-    if (!editForm.first_name.trim() || !editForm.last_name.trim())
-      return setEditError("กรุณากรอกชื่อและนามสกุล");
-    setEditSaving(true); setEditError("");
-    const res = await adminFetch(`/api/admin/students/${editStudent.id}`, adminId, {
-      method: "PATCH",
-      body: JSON.stringify({
-        first_name: editForm.first_name, last_name: editForm.last_name,
-        nickname: editForm.nickname || null, student_phone: editForm.student_phone,
-        entry_year: editForm.entry_year, program: editForm.program,
-        department: editForm.department || null, photo_url: editForm.photo_url || null,
-      }),
-    });
-    const json = await res.json();
-    setEditSaving(false);
-    if (json.status !== "success") return setEditError(json.message ?? "เกิดข้อผิดพลาด");
-    setEditStudent(null);
-    fetch_();
-  }
-
-  async function doDelete() {
-    if (!confirmDelete) return;
-    setDeleting(true);
-    const res = await adminFetch(`/api/admin/students/${confirmDelete.id}`, adminId, { method: "DELETE" });
-    const json = await res.json();
-    setDeleting(false);
-    if (json.status !== "success") { toast.error(json.message ?? "ลบไม่สำเร็จ"); return; }
-    setConfirmDelete(null);
-    fetch_();
-  }
-
-  const fetch_ = useCallback(async () => {
-    setLoading(true);
-    const params = new URLSearchParams();
-    if (cardFilter !== "all") params.set("card_status", cardFilter);
-    if (search) params.set("q", search);
-    const res = await adminFetch(`/api/admin/students?${params}`, adminId);
-    const json = await res.json();
-    if (json.status === "success") setStudents(json.data ?? []);
-    setLoading(false);
-  }, [adminId, cardFilter, search]);
-
-  useEffect(() => {
-    fetch_();
-    adminFetch("/api/admin/admins", adminId).then(r => r.json()).then(j => {
-      const ids = new Set<string>((j.data ?? []).filter((a: AdminRecord) => a.linked_student_id).map((a: AdminRecord) => a.linked_student_id as string));
-      setAdminStudentIds(ids);
-    });
-  }, [fetch_, refreshKey, adminId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  function handleSearchChange(v: string) {
-    setSearchInput(v);
-    if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => setSearch(v), 400);
-  }
-
-  async function updateCard(id: string, card_status: string) {
-    setUpdating(id);
-    await adminFetch(`/api/admin/students/${id}`, adminId, { method: "PATCH", body: JSON.stringify({ card_status }) });
-    setUpdating(null);
-    fetch_();
-  }
-
-  const CARD_STYLE: Record<string, { bg: string; text: string }> = {
-    active:   { bg: "rgba(63,185,80,0.15)",   text: "#3fb950" },
-    inactive: { bg: "rgba(72,79,88,0.3)",     text: "#9e9e9e" },
-    lost:     { bg: "rgba(255,112,112,0.15)",   text: "#ff7070" },
-    suspended:{ bg: "rgba(240,136,62,0.15)",  text: "#9e9e9e" },
-  };
-
-
-  return (
-    <div>
-        <DarkSectionHeader title="จัดการนักเรียน" icon="fa-graduation-cap" count={students.length} />
-        <div className="flex flex-col sm:flex-row gap-3 mt-4 mb-4 flex-wrap">
-          <div className="relative flex-1 min-w-[180px]">
-            <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-[#636363] text-sm" />
-            <input placeholder="ค้นหารหัส/ชื่อ..." value={searchInput} onChange={(e) => handleSearchChange(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none transition-colors"
-              style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}
-              onFocus={(e) => e.currentTarget.style.borderColor = "#ff7070"}
-              onBlur={(e) => e.currentTarget.style.borderColor = "#3e3e3e"} />
-          </div>
-          <div className="flex gap-2 flex-wrap items-center">
-            {["all","active","inactive","lost"].map((s) => (
-              <button key={s} onClick={() => setCardFilter(s)}
-                className="px-3 py-2 rounded-xl text-xs font-semibold transition-all"
-                style={{ background: cardFilter === s ? "#ff7070" : "#2a2a2a", color: cardFilter === s ? "white" : "#9e9e9e", border: `1px solid ${cardFilter === s ? "#ff7070" : "#3e3e3e"}` }}>
-                {s === "all" ? "บัตรทั้งหมด" : CARD_STATUS[s]}
-              </button>
-            ))}
-            <ViewToggle mode={viewMode} onChange={setViewMode} />
-          </div>
-        </div>
-
-        {loading ? <DarkSpinner /> : students.length === 0 ? <DarkEmpty text="ไม่พบนักเรียน" /> : (
-          <>
-            {/* Grid view */}
-            {viewMode === "grid" && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                {students.map((s) => {
-                  const cs = CARD_STYLE[s.card_status] ?? { bg: "#2a2a2a", text: "#9e9e9e" };
-                  const isAdmin = adminStudentIds.has(s.student_id);
-                  return (
-                    <div key={s.id} className="rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-                      <StudentInfoTrigger adminId={adminId} studentId={s.student_id} fallbackName={`${s.first_name} ${s.last_name}`} fallbackPhotoUrl={s.photo_url}
-                        className="flex items-start gap-3 mb-3 w-full">
-                        <Avatar name={`${s.first_name} ${s.last_name}`} url={s.photo_url} size={40} rounded="xl" />
-                        <div className="flex-1 min-w-0">
-                          <div className="font-bold text-white text-sm leading-tight flex items-center gap-1.5 flex-wrap">
-                            {s.first_name} {s.last_name}
-                            {s.nickname && <span className="text-[#9e9e9e] font-normal text-xs">({s.nickname})</span>}
-                            {isAdmin && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ background: "rgba(255,112,112,0.15)", color: "#ff7070" }}><i className="fa-solid fa-shield-halved mr-0.5" />ผู้ดูแล</span>}
-                          </div>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: cs.bg, color: cs.text }}>{CARD_STATUS[s.card_status]}</span>
-                          </div>
-                        </div>
-                      </StudentInfoTrigger>
-                      <div className="text-[11px] text-[#9e9e9e] space-y-0.5 mb-3">
-                        <div><i className="fa-solid fa-id-card mr-1.5 text-[#636363]" />{s.student_id}</div>
-                        <div><i className="fa-solid fa-graduation-cap mr-1.5 text-[#636363]" />{s.program}{s.department ? ` · ${s.department}` : ""}</div>
-                        <div><i className="fa-solid fa-calendar mr-1.5 text-[#636363]" />ปีที่เข้า {s.entry_year}</div>
-                        <div className="text-[10px]" style={{ color: "#555" }}><i className="fa-solid fa-clock mr-1.5" />เพิ่ม {formatDate(s.created_at)}</div>
-                      </div>
-                      <div className="flex gap-1.5 flex-wrap">
-                        {s.card_status !== "active"   && <DarkAction onClick={() => updateCard(s.id, "active")}   loading={updating === s.id} color="green" icon="fa-check"                label="เปิดบัตร"  small />}
-                        {s.card_status !== "inactive" && <DarkAction onClick={() => updateCard(s.id, "inactive")} loading={updating === s.id} color="gray"  icon="fa-ban"                  label="ปิดบัตร"  small />}
-                        {s.card_status !== "lost"     && <DarkAction onClick={() => updateCard(s.id, "lost")}     loading={updating === s.id} color="red"   icon="fa-triangle-exclamation" label="บัตรหาย" small />}
-                        {isAdminPlus && <DarkAction onClick={() => openEdit(s)} loading={false} color="blue" icon="fa-pen" label="แก้ไข" small />}
-                        {isSuperAdmin && <DarkAction onClick={() => setConfirmDelete(s)} loading={false} color="red" icon="fa-trash" label="ลบ" small />}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* List view */}
-            {viewMode === "list" && (
-              <div className="rounded-2xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs" style={{ minWidth: 1180, tableLayout: "fixed" }}>
-                    <colgroup>
-                      <col style={{ width: 340 }} />
-                      <col style={{ width: 110 }} />
-                      <col style={{ width: 280 }} />
-                      <col style={{ width: 130 }} />
-                      <col style={{ width: 140 }} />
-                      <col style={{ width: 190 }} />
-                    </colgroup>
-                    <thead>
-                      <tr style={{ borderBottom: "1px solid #3e3e3e" }}>
-                        {["นักเรียน","รหัส","ประเภท/สาขา","บัตร","เพิ่มเมื่อ",""].map(h => (
-                          <th key={h} className="px-3 py-2.5 text-left font-semibold whitespace-nowrap" style={{ color: "#636363" }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {students.map((s) => {
-                        const cs = CARD_STYLE[s.card_status] ?? { bg: "#2a2a2a", text: "#9e9e9e" };
-                        const isAdmin = adminStudentIds.has(s.student_id);
-                        return (
-                          <tr key={s.id} style={{ borderBottom: "1px solid #2a2a2a" }}>
-                            <td className="px-3 py-2">
-                              <StudentInfoTrigger adminId={adminId} studentId={s.student_id} fallbackName={`${s.first_name} ${s.last_name}`} fallbackPhotoUrl={s.photo_url}
-                                className="flex items-center gap-2 min-w-0">
-                                <Avatar name={`${s.first_name} ${s.last_name}`} url={s.photo_url} size={28} rounded="lg" />
-                                <div className="min-w-0">
-                                  <div className="font-semibold text-white whitespace-nowrap truncate">{s.first_name} {s.last_name} {s.nickname ? `(${s.nickname})` : ""}</div>
-                                  {isAdmin && <span className="text-[9px] px-1 py-0.5 rounded font-bold" style={{ background: "rgba(255,112,112,0.15)", color: "#ff7070" }}>ผู้ดูแล</span>}
-                                </div>
-                              </StudentInfoTrigger>
-                            </td>
-                            <td className="px-3 py-2 text-[#9e9e9e] whitespace-nowrap font-mono">{s.student_id}</td>
-                            <td className="px-3 py-2 text-[#9e9e9e] whitespace-nowrap truncate">{s.program}{s.department ? ` · ${s.department}` : ""}</td>
-                            <td className="px-3 py-2 whitespace-nowrap"><span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: cs.bg, color: cs.text }}>{CARD_STATUS[s.card_status]}</span></td>
-                            <td className="px-3 py-2 text-[#636363] whitespace-nowrap">{formatDate(s.created_at)}</td>
-                            <td className="px-3 py-2 whitespace-nowrap">
-                              <div className="flex gap-1 justify-end">
-                                {s.card_status !== "active"   && <DarkAction onClick={() => updateCard(s.id, "active")}   loading={updating === s.id} color="green" icon="fa-check"                label="" small />}
-                                {s.card_status !== "inactive" && <DarkAction onClick={() => updateCard(s.id, "inactive")} loading={updating === s.id} color="gray"  icon="fa-ban"                  label="" small />}
-                                {s.card_status !== "lost"     && <DarkAction onClick={() => updateCard(s.id, "lost")}     loading={updating === s.id} color="red"   icon="fa-triangle-exclamation" label="" small />}
-                                {isAdminPlus && <DarkAction onClick={() => openEdit(s)} loading={false} color="blue" icon="fa-pen" label="" small />}
-                                {isSuperAdmin && <DarkAction onClick={() => setConfirmDelete(s)} loading={false} color="red" icon="fa-trash" label="" small />}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* Card view */}
-            {viewMode === "card" && (
-              <div className="space-y-3">
-                {students.map((s) => {
-                  const cs = CARD_STYLE[s.card_status] ?? { bg: "#2a2a2a", text: "#9e9e9e" };
-                  const isAdmin = adminStudentIds.has(s.student_id);
-                  return (
-                    <div key={s.id} className="rounded-2xl p-4 flex flex-col sm:flex-row gap-4" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-                      <StudentInfoTrigger adminId={adminId} studentId={s.student_id} fallbackName={`${s.first_name} ${s.last_name}`} fallbackPhotoUrl={s.photo_url}
-                        className="flex-shrink-0">
-                        <Avatar name={`${s.first_name} ${s.last_name}`} url={s.photo_url} size={56} rounded="xl" />
-                      </StudentInfoTrigger>
-                      <div className="flex-1 min-w-0">
-                        <StudentInfoTrigger adminId={adminId} studentId={s.student_id} fallbackName={`${s.first_name} ${s.last_name}`} fallbackPhotoUrl={s.photo_url}
-                          className="flex items-center gap-2 flex-wrap mb-1">
-                          <span className="font-bold text-white">{s.first_name} {s.last_name}</span>
-                          {s.nickname && <span className="text-xs text-[#9e9e9e]">({s.nickname})</span>}
-                          {isAdmin && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ background: "rgba(255,112,112,0.15)", color: "#ff7070" }}><i className="fa-solid fa-shield-halved mr-0.5" />ผู้ดูแล</span>}
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: cs.bg, color: cs.text }}>{CARD_STATUS[s.card_status]}</span>
-                        </StudentInfoTrigger>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-4 gap-y-1 text-[11px] mb-3" style={{ color: "#9e9e9e" }}>
-                          <div className="whitespace-nowrap"><i className="fa-solid fa-id-card mr-1 text-[#636363]" />{s.student_id}</div>
-                          <div className="whitespace-nowrap"><i className="fa-solid fa-graduation-cap mr-1 text-[#636363]" />{s.program}</div>
-                          {s.department && <div className="whitespace-nowrap"><i className="fa-solid fa-building mr-1 text-[#636363]" />{s.department}</div>}
-                          <div className="whitespace-nowrap"><i className="fa-solid fa-calendar mr-1 text-[#636363]" />รุ่น {s.entry_year}</div>
-                          <div className="whitespace-nowrap"><i className="fa-solid fa-phone mr-1 text-[#636363]" />{s.student_phone}</div>
-                          <div className="whitespace-nowrap"><i className="fa-solid fa-clock mr-1 text-[#636363]" />เพิ่ม {formatDate(s.created_at)}</div>
-                          {s.updated_at && s.updated_at !== s.created_at && <div className="whitespace-nowrap"><i className="fa-solid fa-rotate mr-1 text-[#636363]" />อัพเดต {formatDate(s.updated_at)}</div>}
-                        </div>
-                        <div className="flex gap-1.5 flex-wrap">
-                          {s.card_status !== "active"   && <DarkAction onClick={() => updateCard(s.id, "active")}   loading={updating === s.id} color="green" icon="fa-check"                label="เปิดบัตร"  small />}
-                          {s.card_status !== "inactive" && <DarkAction onClick={() => updateCard(s.id, "inactive")} loading={updating === s.id} color="gray"  icon="fa-ban"                  label="ปิดบัตร"  small />}
-                          {s.card_status !== "lost"     && <DarkAction onClick={() => updateCard(s.id, "lost")}     loading={updating === s.id} color="red"   icon="fa-triangle-exclamation" label="บัตรหาย" small />}
-                          {isAdminPlus && <DarkAction onClick={() => openEdit(s)} loading={false} color="blue" icon="fa-pen" label="แก้ไข" small />}
-                          {isSuperAdmin && <DarkAction onClick={() => setConfirmDelete(s)} loading={false} color="red" icon="fa-trash" label="ลบ" small />}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </>
-        )}
-
-      {/* ── Edit Student Modal ─────────────────────────────────────────── */}
-      {editStudent && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }} onClick={() => setEditStudent(null)} />
-          <div className="relative w-full sm:max-w-lg sm:mx-4 sm:rounded-2xl rounded-t-2xl overflow-y-auto max-h-[90vh]"
-            style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-            <div className="flex items-center justify-between px-5 pt-5 pb-4 sticky top-0 z-10"
-              style={{ background: "#1c1c1c", borderBottom: "1px solid #3e3e3e" }}>
-              <div>
-                <div className="font-bold text-white text-sm">แก้ไขข้อมูลนักเรียน</div>
-                <div className="text-[11px] text-[#636363] mt-0.5">{editStudent.student_id}</div>
-              </div>
-              <button onClick={() => setEditStudent(null)} className="text-[#636363] hover:text-white transition-colors">
-                <i className="fa-solid fa-xmark text-lg" />
-              </button>
-            </div>
-            <div className="px-5 py-4 space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                {([["ชื่อ *","first_name"],["นามสกุล *","last_name"],["ชื่อเล่น","nickname"],["เบอร์โทร","student_phone"],["รุ่นปีที่เข้า","entry_year"],["ประเภท","program"],["สาขา","department"],["รูปโปรไฟล์ URL","photo_url"]] as const).map(([label,key]) => (
-                  <div key={key} className={key === "photo_url" ? "col-span-2" : ""}>
-                    <label className="block text-[11px] text-[#636363] mb-1">{label}</label>
-                    <input value={editForm[key]} onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}
-                      className="w-full px-3 py-2 rounded-xl text-sm text-white focus:outline-none"
-                      style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }} />
-                  </div>
-                ))}
-              </div>
-              {editError && <div className="text-[12px] text-[#ff7070]">{editError}</div>}
-              <div className="flex gap-2 pt-1">
-                <button onClick={() => setEditStudent(null)}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#9e9e9e] transition-colors"
-                  style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>ยกเลิก</button>
-                <button onClick={saveEdit} disabled={editSaving}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors"
-                  style={{ background: editSaving ? "#555" : "#388bfd" }}>
-                  {editSaving ? "กำลังบันทึก..." : "บันทึก"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Delete Confirm Modal ───────────────────────────────────────── */}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }} onClick={() => setConfirmDelete(null)} />
-          <div className="relative w-full max-w-sm mx-4 rounded-2xl p-6" style={{ background: "#1c1c1c", border: "1px solid #ff7070" }}>
-            <div className="text-center mb-4">
-              <i className="fa-solid fa-triangle-exclamation text-[#ff7070] text-3xl mb-3" />
-              <div className="font-bold text-white text-sm">ยืนยันการลบนักเรียน</div>
-              <div className="text-[12px] text-[#9e9e9e] mt-1">
-                {confirmDelete.first_name} {confirmDelete.last_name} ({confirmDelete.student_id})
-              </div>
-              <div className="text-[11px] text-[#ff7070] mt-2">การกระทำนี้ไม่สามารถย้อนกลับได้</div>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => setConfirmDelete(null)} disabled={deleting}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#9e9e9e]"
-                style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>ยกเลิก</button>
-              <button onClick={doDelete} disabled={deleting}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white"
-                style={{ background: deleting ? "#555" : "#ff7070" }}>
-                {deleting ? "กำลังลบ..." : "ลบนักเรียน"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ─── Entry Logs Tab ───────────────────────────────────────────────────────────
 
@@ -4609,359 +4288,6 @@ function AttendanceLocationTab({ adminId, location }: { adminId: string; locatio
 
 // ─── Products Tab ─────────────────────────────────────────────────────────────
 
-function ProductsTab({ adminId, role }: { adminId: string; role: string }) {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState<Product | "new" | null>(null);
-  const [showInactive, setShowInactive] = useLocalStorageState("asia_admin_products_show_inactive", false, isBoolean);
-  const [showDeleted,  setShowDeleted]  = useLocalStorageState("asia_admin_products_show_deleted", false, isBoolean);
-  const [viewMode, setViewMode] = useLocalStorageState<ViewMode>(ADMIN_VIEW_MODE_KEY, "grid", isViewMode);
-  const productStatusChartRef = useRef<HTMLCanvasElement | null>(null);
-  const productCategoryChartRef = useRef<HTMLCanvasElement | null>(null);
-  const canEdit = canAccessTab(role, "products");
-
-  const fetch_ = useCallback(async () => {
-    setLoading(true);
-    const res = await adminFetch("/api/admin/products", adminId);
-    const json = await res.json();
-    if (json.status === "success") setProducts(json.data ?? []);
-    setLoading(false);
-  }, [adminId]);
-
-  useEffect(() => { fetch_(); }, [fetch_]);
-
-  const displayed = products.filter(p => {
-    if (p.deleted_at) return showDeleted;
-    if (!p.active)    return showInactive;
-    return true;
-  });
-
-  async function toggleActive(p: Product) {
-    await adminFetch(`/api/admin/products/${p.id}`, adminId, { method: "PATCH", body: JSON.stringify({ active: !p.active }) });
-    fetch_();
-  }
-
-  async function deleteProduct(p: Product) {
-    if (!confirm(`ลบสินค้า "${p.name}" ? (สามารถกู้คืนได้ภายหลัง)`)) return;
-    try {
-      const res = await adminFetch(`/api/admin/products/${p.id}`, adminId, { method: "DELETE" });
-      const json = await res.json();
-      if (json.status !== "success") { toast.error(`ลบไม่สำเร็จ: ${json.message ?? "unknown error"}`); return; }
-      setProducts(prev => prev.map(pr => pr.id === p.id
-        ? { ...pr, active: false, stock: 0, deleted_at: new Date().toISOString() }
-        : pr));
-    } catch (e) { toast.error(`เกิดข้อผิดพลาด: ${e}`); }
-  }
-
-  async function restoreProduct(p: Product) {
-    try {
-      const res = await adminFetch(`/api/admin/products/${p.id}`, adminId, {
-        method: "PATCH", body: JSON.stringify({ deleted_at: null, active: true }),
-      });
-      const json = await res.json();
-      if (json.status !== "success") { toast.error(`กู้คืนไม่สำเร็จ: ${json.message ?? "unknown error"}`); return; }
-      setProducts(prev => prev.map(pr => pr.id === p.id
-        ? { ...pr, active: true, deleted_at: null }
-        : pr));
-    } catch (e) { toast.error(`เกิดข้อผิดพลาด: ${e}`); }
-  }
-
-  // ── Overview calculations ──────────────────────────────────────────
-  const activeProducts   = products.filter(p => !p.deleted_at && p.active);
-  const inactiveProducts = products.filter(p => !p.deleted_at && !p.active);
-  const deletedProducts  = products.filter(p => !!p.deleted_at);
-  const outOfStock       = activeProducts.filter(p => p.stock === 0);
-  const lowStock         = activeProducts.filter(p => p.stock > 0 && p.stock <= 5);
-  const stockValue       = activeProducts.reduce((s, p) => s + p.stock * p.price, 0);
-  const costValue        = activeProducts.reduce((s, p) => s + p.stock * (p.cost ?? p.price), 0);
-
-  // Category breakdown
-  const categories = useMemo(() => {
-    const catMap: Record<string, number> = {};
-    products
-      .filter(p => !p.deleted_at && p.active)
-      .forEach(p => {
-        const k = p.category ?? "ไม่ระบุหมวด";
-        catMap[k] = (catMap[k] ?? 0) + 1;
-      });
-    return Object.entries(catMap).sort((a, b) => b[1] - a[1]);
-  }, [products]);
-  const topCategories = useMemo(() => categories.slice(0, 6), [categories]);
-  const productUnitOptions = useMemo(() => uniqueTextOptions(products.map(p => p.unit)), [products]);
-  const productCategoryOptions = useMemo(() => uniqueTextOptions(products.map(p => p.category)), [products]);
-  const productTagOptions = useMemo(() => uniqueTextOptions(products.map(p => p.tag)), [products]);
-
-  useChart(productStatusChartRef, () => ({
-    type: "doughnut",
-    data: {
-      labels: ["เปิดขาย", "ปิดการขาย", "หมดสต็อก", "ลบแล้ว"],
-      datasets: [{
-        data: [activeProducts.length, inactiveProducts.length, outOfStock.length, deletedProducts.length],
-        backgroundColor: ["#ff7070", "#636363", "#f59e0b", "#2a2a2a"],
-        borderColor: ["#0c0c0c", "#0c0c0c", "#0c0c0c", "#0c0c0c"],
-        borderWidth: 4,
-      }],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      cutout: "68%",
-      plugins: { legend: { position: "bottom", labels: { color: "#9e9e9e", boxWidth: 10, usePointStyle: true, font: { family: "Kanit, Sarabun, sans-serif" } } } },
-    },
-  }), [activeProducts.length, inactiveProducts.length, outOfStock.length, deletedProducts.length]);
-
-  useChart(productCategoryChartRef, () => ({
-    type: "bar",
-    data: {
-      labels: topCategories.map(([cat]) => cat),
-      datasets: [{
-        label: "สินค้า",
-        data: topCategories.map(([, count]) => count),
-        backgroundColor: "#ff7070cc",
-        borderColor: "#ff7070",
-        borderWidth: 1,
-        borderRadius: 8,
-      }],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      indexAxis: "y",
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { beginAtZero: true, grid: { color: "rgba(255,255,255,0.08)" }, ticks: { color: "#9e9e9e", precision: 0, font: { family: "Kanit, Sarabun, sans-serif" } } },
-        y: { grid: { display: false }, ticks: { color: "#9e9e9e", font: { family: "Kanit, Sarabun, sans-serif" } } },
-      },
-    },
-  }), [topCategories]);
-
-  return (
-    <div>
-      <DarkSectionHeader title="จัดการสินค้า" icon="fa-box" count={displayed.length} />
-
-      {/* ── Overview ── */}
-      {!loading && products.length > 0 && (
-        <div className="mt-4 mb-5 space-y-3">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            {[
-              { label: "สินค้าเปิดขาย", val: activeProducts.length.toString(), icon: "fa-box-open", color: "#3fb950" },
-              { label: "ปิดการขาย",     val: inactiveProducts.length.toString(), icon: "fa-eye-slash", color: "#f0b429" },
-              { label: "หมดสต็อก",      val: outOfStock.length.toString(), icon: "fa-triangle-exclamation", color: "#ff7070" },
-              { label: "สต็อกน้อย (≤5)", val: lowStock.length.toString(), icon: "fa-circle-exclamation", color: "#fb923c" },
-              { label: "มูลค่าขาย",    val: `฿${stockValue.toLocaleString("th-TH", { maximumFractionDigits: 0 })}`, icon: "fa-coins", color: "#ff7070" },
-              { label: "มูลค่าต้นทุน", val: `฿${costValue.toLocaleString("th-TH", { maximumFractionDigits: 0 })}`, icon: "fa-scale-balanced", color: "#636363" },
-            ].map((c) => (
-              <div key={c.label} className="rounded-2xl p-4 flex flex-col gap-2" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
-                <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: `${c.color}20` }}>
-                  <i className={`fa-solid ${c.icon} text-[10px]`} style={{ color: c.color }} />
-                </div>
-                <div className="text-lg font-black leading-tight" style={{ color: c.color }}>{c.val}</div>
-                <div className="text-[10px] font-semibold leading-tight" style={{ color: "#9e9e9e" }}>{c.label}</div>
-              </div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <div className="rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
-              <div className="flex items-center gap-2 mb-3">
-                <i className="fa-solid fa-chart-pie text-xs" style={{ color: "#ff7070" }} />
-                <span className="text-xs font-bold text-white">สถานะสินค้า</span>
-              </div>
-              <div className="relative h-[220px]"><canvas ref={productStatusChartRef} /></div>
-            </div>
-            <div className="rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
-              <div className="flex items-center gap-2 mb-3">
-                <i className="fa-solid fa-chart-bar text-xs" style={{ color: "#ff7070" }} />
-                <span className="text-xs font-bold text-white">หมวดหมู่ยอดนิยม</span>
-              </div>
-              <div className="relative h-[220px]"><canvas ref={productCategoryChartRef} /></div>
-            </div>
-          </div>
-
-          {/* Category + Low stock row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Category breakdown */}
-            {categories.length > 0 && (
-              <div className="rounded-2xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
-                <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: "1px solid #252525" }}>
-                  <i className="fa-solid fa-tags text-xs" style={{ color: "#84D4FA" }} />
-                  <span className="text-xs font-bold text-white">หมวดหมู่สินค้า</span>
-                </div>
-                <div className="p-3 flex flex-wrap gap-2">
-                  {categories.map(([cat, count]) => (
-                    <span key={cat} className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-xl font-semibold"
-                      style={{ background: "#252525", color: "#ededed", border: "1px solid #3e3e3e" }}>
-                      {cat}
-                      <span className="text-[10px] font-black px-1.5 py-0.5 rounded-lg" style={{ background: "#3e3e3e", color: "#9e9e9e" }}>{count}</span>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Low/out of stock list */}
-            {(outOfStock.length > 0 || lowStock.length > 0) && (
-              <div className="rounded-2xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
-                <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: "1px solid #252525" }}>
-                  <i className="fa-solid fa-triangle-exclamation text-xs" style={{ color: "#ff7070" }} />
-                  <span className="text-xs font-bold text-white">สต็อกต้องดูแล</span>
-                </div>
-                <div className="divide-y max-h-40 overflow-y-auto" style={{ borderColor: "#1e1e1e" }}>
-                  {[...outOfStock, ...lowStock].slice(0, 8).map(p => {
-                    const imageSrc = safeImageSrc(p.images?.[0]);
-                    return (
-                    <div key={p.id} className="flex items-center gap-3 px-4 py-2">
-                      {imageSrc
-                        ? <img src={imageSrc} alt="" className="w-7 h-7 rounded-md object-cover flex-shrink-0" style={{ border: "1px solid #3e3e3e" }} />
-                        : <div className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: "#252525", color: "#636363", fontSize: 10 }}>🛍️</div>}
-                      <div className="flex-1 min-w-0 text-xs text-white truncate">{p.name}</div>
-                      <span className="text-[10px] font-black flex-shrink-0 px-2 py-0.5 rounded-lg"
-                        style={{ background: p.stock === 0 ? "rgba(255,112,112,0.15)" : "rgba(251,146,60,0.15)", color: p.stock === 0 ? "#ff7070" : "#fb923c" }}>
-                        {p.stock === 0 ? "หมด" : `${p.stock} ${p.unit ?? "ชิ้น"}`}
-                      </span>
-                    </div>
-                  );})}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <AdminActionBar>
-        {canEdit && (
-          <button onClick={() => setEditing("new")}
-            className={adminActionClass("text-white")}
-            style={{ background: "#ff7070", boxShadow: "0 4px 12px rgba(255,112,112,0.3)" }}>
-            <i className="fa-solid fa-plus" /> เพิ่มสินค้า
-          </button>
-        )}
-        <button onClick={() => setShowInactive(!showInactive)}
-          className={adminActionClass()}
-          style={{ background: "#2a2a2a", color: showInactive ? "#f0b429" : "#9e9e9e", border: `1px solid ${showInactive ? "#f0b429" : "#3e3e3e"}` }}>
-          <i className={`fa-solid fa-eye${showInactive ? "" : "-slash"} mr-1.5 text-xs`} />
-          {showInactive ? "ซ่อนสินค้าปิด" : "แสดงสินค้าปิด"}
-        </button>
-        <button onClick={() => setShowDeleted(!showDeleted)}
-          className={adminActionClass()}
-          style={{ background: "#2a2a2a", color: showDeleted ? "#ff7070" : "#9e9e9e", border: `1px solid ${showDeleted ? "#ff7070" : "#3e3e3e"}` }}>
-          <i className="fa-solid fa-trash-can mr-1.5 text-xs" />
-          {showDeleted ? "ซ่อนที่ลบแล้ว" : "แสดงที่ลบแล้ว"}
-        </button>
-        <div className="col-span-2 sm:col-span-1">
-          <ViewToggle mode={viewMode} onChange={setViewMode} />
-        </div>
-      </AdminActionBar>
-
-      {loading ? <DarkSpinner /> : displayed.length === 0 ? <DarkEmpty text="ไม่มีสินค้า" /> : (
-        <div className={viewMode === "list" ? "space-y-3" : viewMode === "card" ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"}>
-          {displayed.map((p) => {
-            const productImageSrc = safeImageSrc(p.images?.[0]);
-            return (
-            <div key={p.id} className={`rounded-2xl overflow-hidden transition-all ${viewMode === "list" ? "flex items-stretch" : "flex flex-col"} ${!p.active && !p.deleted_at ? "opacity-50" : ""} ${p.deleted_at ? "opacity-40" : ""}`}
-              style={{ background: "#1c1c1c", border: `1px solid ${p.deleted_at ? "#ff7070" : "#3e3e3e"}` }}>
-              <div className={`relative overflow-hidden flex-shrink-0 ${viewMode === "list" ? "h-24 w-24 sm:h-28 sm:w-28" : "aspect-square w-full"}`} style={{ background: "#9bdcf4" }}>
-                {productImageSrc ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={productImageSrc} alt={p.name} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center" style={{ color: "#636363" }}>
-                    <i className="fa-solid fa-image text-3xl" />
-                  </div>
-                )}
-                {p.deleted_at ? (
-                  <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(255,112,112,0.18)" }}>
-                    <span className="text-xs font-bold px-2 py-1 rounded-lg text-white flex items-center gap-1" style={{ background: "rgba(255,112,112,0.7)" }}>
-                      <i className="fa-solid fa-trash text-[10px]" /> ลบแล้ว
-                    </span>
-                  </div>
-                ) : !p.active && (
-                  <div className="absolute inset-0 flex items-center justify-center" style={{ background: "rgba(13,17,23,0.7)" }}>
-                    <span className="text-xs font-bold px-2 py-1 rounded-lg text-white" style={{ background: "#3e3e3e" }}>ปิดการขาย</span>
-                  </div>
-                )}
-                {p.category && (
-                  <div className="absolute top-2 left-2">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: "rgba(13,17,23,0.8)" }}>{p.category}</span>
-                  </div>
-                )}
-              </div>
-              <div className={`${viewMode === "list" ? "p-2.5 min-w-0" : "p-3"} flex flex-1 flex-col`}>
-                <div className="font-bold text-white text-sm leading-tight mb-1">{p.name}</div>
-                <div className={`flex items-center gap-2 text-xs ${viewMode === "list" ? "mb-1.5" : "mb-3"}`}>
-                  <span className="font-black" style={{ color: "#ff7070" }}>฿{p.price.toFixed(2)}</span>
-                  {p.cost != null && <span style={{ color: "#636363" }}>ต้นทุน ฿{p.cost.toFixed(2)}</span>}
-                  {!!p.colors?.length && <span style={{ color: "#84D4FA" }}>มี {p.colors.length} สี</span>}
-                  <span className={`font-semibold ml-auto`} style={{ color: p.stock <= 3 ? "#ff7070" : "#3fb950" }}>
-                    {p.stock} {p.unit ?? "ชิ้น"}
-                  </span>
-                </div>
-                <div className={`${viewMode === "list" ? "h-[24px] mb-2" : "h-[28px] mb-3"} overflow-x-auto overflow-y-hidden`}>
-                  {!!p.colors?.length && (
-                    <div className="flex w-max gap-1">
-                      {p.colors.map(color => {
-                        const qty = p.color_stock?.[color] ?? p.stock;
-                        const out = qty <= 0;
-                        return (
-                          <span key={color} className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-lg"
-                            style={{ background: out ? "rgba(255,112,112,0.12)" : "#252525", color: out ? "#ff7070" : "#ededed", border: "1px solid #3e3e3e" }}>
-                            <span className="h-3 w-3 rounded-full border flex-shrink-0" style={{ background: productColorSwatch(color), borderColor: color.trim() === "ขาว" ? "#ededed" : "#3e3e3e" }} />
-                            {color}: {out ? "หมด" : `${qty}`}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-                {canEdit && (
-                  <div className="mt-auto flex gap-1.5">
-                    {p.deleted_at ? (
-                      <button onClick={() => restoreProduct(p)}
-                        className="flex-1 text-xs font-semibold py-1.5 rounded-lg transition-all flex items-center justify-center gap-1"
-                        style={{ background: "rgba(63,185,80,0.12)", color: "#3fb950", border: "1px solid rgba(63,185,80,0.3)" }}>
-                        <i className="fa-solid fa-rotate-left text-[10px]" /> กู้คืน
-                      </button>
-                    ) : (
-                      <>
-                        <button onClick={() => setEditing(p)}
-                          className={`flex-1 text-xs font-semibold rounded-lg transition-all text-[#9e9e9e] hover:text-white ${viewMode === "list" ? "py-1" : "py-1.5"}`}
-                          style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>
-                          <i className="fa-solid fa-pen mr-1" /> แก้ไข
-                        </button>
-                        <button onClick={() => toggleActive(p)}
-                          className={`text-xs font-semibold px-2.5 rounded-lg transition-all ${viewMode === "list" ? "py-1" : "py-1.5"}`}
-                          style={{ background: p.active ? "rgba(255,112,112,0.1)" : "rgba(63,185,80,0.1)", color: p.active ? "#ff7070" : "#3fb950", border: `1px solid ${p.active ? "rgba(255,112,112,0.3)" : "rgba(63,185,80,0.3)"}` }}>
-                          {p.active ? "ปิด" : "เปิด"}
-                        </button>
-                        <button onClick={() => deleteProduct(p)}
-                          className={`text-xs font-semibold px-2 rounded-lg transition-all ${viewMode === "list" ? "py-1" : "py-1.5"}`}
-                          style={{ background: "rgba(255,112,112,0.08)", color: "#ff7070", border: "1px solid rgba(255,112,112,0.2)" }}>
-                          <i className="fa-solid fa-trash" />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          );})}
-        </div>
-      )}
-
-      {editing !== null && (
-        <ProductForm
-          product={editing === "new" ? null : editing}
-          adminId={adminId}
-          unitOptions={productUnitOptions}
-          categoryOptions={productCategoryOptions}
-          tagOptions={productTagOptions}
-          onClose={() => setEditing(null)}
-          onSaved={() => { setEditing(null); fetch_(); }}
-        />
-      )}
-    </div>
-  );
-}
 
 // ─── Product Form Modal ───────────────────────────────────────────────────────
 
@@ -5134,254 +4460,6 @@ function productToColorRows(product: Product | null): ProductColorRow[] {
   });
 }
 
-function ProductForm({ product, adminId, unitOptions, categoryOptions, tagOptions, onClose, onSaved }: {
-  product: Product | null;
-  adminId: string;
-  unitOptions: string[];
-  categoryOptions: string[];
-  tagOptions: string[];
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [name,     setName]     = useState(product?.name ?? "");
-  const [price,    setPrice]    = useState(product?.price?.toString() ?? "");
-  const [cost,     setCost]     = useState(product?.cost?.toString() ?? "");
-  const [stock,    setStock]    = useState(product?.stock?.toString() ?? "0");
-  const [unit,     setUnit]     = useState(product?.unit ?? "");
-  const [category, setCategory] = useState(product?.category ?? "");
-  const [tag,      setTag]      = useState(product?.tag ?? "");
-  const [colorRows, setColorRows] = useState<ProductColorRow[]>(() => productToColorRows(product));
-  const [customColor, setCustomColor] = useState("");
-  const [active,   setActive]   = useState(product?.active ?? true);
-  const [imgUrl,   setImgUrl]   = useState(product?.images?.[0] ?? "");
-  const [saving,    setSaving]    = useState(false);
-  const [imageBusy, setImageBusy] = useState(false);
-  const [error,     setError]     = useState("");
-  const originalImgUrl = product?.images?.[0] ?? "";
-
-  const inputCls = "w-full px-3 py-2.5 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none transition-colors";
-  const inputStyle = { background: "#0c0c0c", border: "1px solid #3e3e3e" };
-  const cleanColorRows = colorRows.map(row => ({ ...row, name: row.name.trim() })).filter(row => row.name);
-  const hasColorStock = cleanColorRows.some(row => row.qty.trim() !== "");
-  const colorStockTotal = cleanColorRows.reduce((sum, row) => sum + (hasColorStock ? Math.max(0, parseInt(row.qty, 10) || 0) : 0), 0);
-  const addColor = (color: string) => {
-    const name = color.trim();
-    if (!name) return;
-    setColorRows(rows => rows.some(row => row.name.trim() === name) ? rows : [...rows, makeProductColorRow(name, "")]);
-    setCustomColor("");
-  };
-  const updateColorRow = (id: string, patch: Partial<ProductColorRow>) => {
-    setColorRows(rows => rows.map(row => row.id === id ? { ...row, ...patch } : row));
-  };
-  const removeColorRow = (id: string) => setColorRows(rows => rows.filter(row => row.id !== id));
-
-  async function handleSave() {
-    if (!name.trim() || !price.trim()) { setError("กรุณากรอกชื่อสินค้าและราคา"); return; }
-    setSaving(true);
-    setError("");
-    const parsedColors = Array.from(new Set(cleanColorRows.map(row => row.name)));
-    const parsedColorStock = hasColorStock
-      ? Object.fromEntries(parsedColors.map(color => {
-          const row = cleanColorRows.find(item => item.name === color);
-          return [color, Math.max(0, parseInt(row?.qty ?? "", 10) || 0)];
-        }))
-      : {};
-    const nextStock = hasColorStock
-      ? Object.values(parsedColorStock).reduce((sum, qty) => sum + Number(qty || 0), 0)
-      : parseInt(stock) || 0;
-    const body = { name: name.trim(), price: parseFloat(price), cost: cost ? parseFloat(cost) : null, stock: nextStock, unit: unit.trim() || null, category: category.trim() || null, tag: tag.trim() || null, colors: parsedColors.length ? parsedColors : null, color_stock: hasColorStock ? parsedColorStock : null, images: imgUrl.trim() ? [imgUrl.trim()] : null, active };
-    const url = product ? `/api/admin/products/${product.id}` : "/api/admin/products";
-    try {
-      const res = await adminFetch(url, adminId, { method: product ? "PATCH" : "POST", body: JSON.stringify(body) });
-      const json = await res.json();
-      if (json.status === "success") {
-        const nextImgUrl = imgUrl.trim();
-        if (product && originalImgUrl && originalImgUrl !== nextImgUrl) {
-          await deleteStorageFile(originalImgUrl, adminId, "/api/admin/upload");
-        }
-        onSaved();
-      } else {
-        setError(json.message ?? "บันทึกไม่สำเร็จ");
-      }
-    } catch {
-      setError("เชื่อมต่อระบบไม่ได้");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function autoSaveImage(url: string) {
-    if (!product) return;
-    const res = await adminFetch(`/api/admin/products/${product.id}`, adminId, {
-      method: "PATCH",
-      body: JSON.stringify({ images: url.trim() ? [url.trim()] : null }),
-    });
-    const json = await res.json();
-    if (json.status !== "success") {
-      setError(json.message ?? "บันทึกรูปไม่สำเร็จ");
-      throw new Error(json.message ?? "บันทึกรูปไม่สำเร็จ");
-    }
-    setError("");
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }} onClick={onClose} />
-      <div className="relative w-full sm:max-w-lg sm:mx-4 sm:rounded-2xl rounded-t-2xl overflow-y-auto max-h-[90vh]"
-        style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-        <div className="flex items-center justify-between px-5 pt-5 pb-4 sticky top-0 z-10" style={{ background: "#1c1c1c", borderBottom: "1px solid #3e3e3e" }}>
-          <h3 className="font-bold text-white text-lg">{product ? "แก้ไขสินค้า" : "เพิ่มสินค้าใหม่"}</h3>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#2a2a2a] text-[#9e9e9e] hover:text-white transition-colors">
-            <i className="fa-solid fa-xmark" />
-          </button>
-        </div>
-
-        <div className="p-5 space-y-4">
-          {/* Image */}
-          <div>
-            <label className="block text-xs font-semibold text-[#ededed] mb-2">รูปสินค้า</label>
-            <ImgUpload value={imgUrl} onChange={setImgUrl} adminId={adminId}
-              onBusyChange={setImageBusy}
-              onUploaded={autoSaveImage}
-              endpoint="/api/admin/upload" placeholder="https://... หรืออัปโหลดไฟล์ (jpg, png, svg, ico…)" />
-            {imageBusy && (
-              <p className="mt-1 text-[11px]" style={{ color: "#e3b341" }}>
-                <i className="fa-solid fa-spinner fa-spin mr-1" />กำลังจัดการรูปสินค้า กรุณารอให้เสร็จก่อนบันทึก
-              </p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-[#ededed] mb-1.5">ชื่อสินค้า *</label>
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="เช่น น้ำดื่ม 600ml" className={inputCls} style={inputStyle} />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-[#ededed] mb-1.5">ราคาขาย (฿) *</label>
-              <input type="number" min="0" step="0.5" value={price} onChange={(e) => setPrice(e.target.value)} className={inputCls} style={inputStyle} />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-[#ededed] mb-1.5">ต้นทุน (฿)</label>
-              <input type="number" min="0" step="0.5" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="ไม่บังคับ" className={inputCls} style={inputStyle} />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-[#ededed] mb-1.5">สต็อก</label>
-              <input type="number" min="0" value={stock} onChange={(e) => setStock(e.target.value)} className={inputCls} style={inputStyle} />
-              {hasColorStock && (
-                <p className="mt-1 text-[11px]" style={{ color: "#84D4FA" }}>จะใช้ผลรวมสี {colorStockTotal} ชิ้นแทน</p>
-              )}
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-[#ededed] mb-1.5">หน่วย</label>
-              <OptionTextInput value={unit} onChange={setUnit} options={unitOptions} placeholder="พิมพ์หน่วย" className={inputCls} style={inputStyle} />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-[#ededed] mb-1.5">หมวดหมู่</label>
-              <OptionTextInput value={category} onChange={setCategory} options={categoryOptions} placeholder="พิมพ์หมวดหมู่" className={inputCls} style={inputStyle} />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-[#ededed] mb-1.5">แท็ก</label>
-              <OptionTextInput value={tag} onChange={setTag} options={tagOptions} placeholder="พิมพ์แท็ก" className={inputCls} style={inputStyle} />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-[#ededed] mb-1.5">สีที่มีให้เลือก</label>
-            <div className="rounded-xl p-3 space-y-3" style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }}>
-              <div className="flex flex-wrap gap-2">
-                {PRODUCT_COLOR_PRESETS.map(color => {
-                  const selected = cleanColorRows.some(row => row.name === color.name);
-                  return (
-                    <button
-                      key={color.name}
-                      type="button"
-                      onClick={() => addColor(color.name)}
-                      className={`h-8 w-8 rounded-full border-2 transition ${selected ? "ring-2 ring-sky-300" : "hover:scale-105"}`}
-                      style={{ background: color.hex, borderColor: selected ? "#84D4FA" : color.name === "ขาว" ? "#ededed" : "#3e3e3e" }}
-                      aria-label={`เพิ่มสี${color.name}`}
-                      title={color.name}>
-                      {selected && <i className="fa-solid fa-check text-[10px] text-white drop-shadow" />}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="flex gap-2">
-                <input value={customColor} onChange={e => setCustomColor(e.target.value)} placeholder="เพิ่มสีเอง เช่น เงิน, ทอง, #22c55e" className={inputCls} style={inputStyle} />
-                <button type="button" onClick={() => addColor(customColor)}
-                  className="h-10 w-10 flex-shrink-0 rounded-xl text-white transition hover:brightness-110"
-                  style={{ background: "#ff7070" }}
-                  aria-label="เพิ่มสี">
-                  <i className="fa-solid fa-plus text-xs" />
-                </button>
-              </div>
-
-              {colorRows.length > 0 ? (
-                <div className="space-y-2">
-                  {colorRows.map(row => (
-                    <div key={row.id} className="grid grid-cols-[auto_1fr_90px_auto] items-center gap-2">
-                      <span className="h-7 w-7 rounded-full border" style={{ background: productColorSwatch(row.name), borderColor: row.name.trim() === "ขาว" ? "#ededed" : "#3e3e3e" }} />
-                      <input value={row.name} onChange={e => updateColorRow(row.id, { name: e.target.value })} placeholder="ชื่อสี" className={inputCls} style={inputStyle} />
-                      <input type="number" min="0" value={row.qty} onChange={e => updateColorRow(row.id, { qty: e.target.value })} placeholder="จำนวน" className={inputCls} style={inputStyle} />
-                      <button type="button" onClick={() => removeColorRow(row.id)}
-                        className="h-9 w-9 rounded-xl text-[#9e9e9e] hover:bg-[#2a2a2a] hover:text-white transition"
-                        aria-label="ลบสี">
-                        <i className="fa-solid fa-xmark text-xs" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-lg px-3 py-2 text-[11px]" style={{ background: "#111111", color: "#636363" }}>
-                  ไม่เลือกสี = ใช้สต็อกรวมอย่างเดียว
-                </div>
-              )}
-            </div>
-            <p className="mt-1 text-[11px]" style={{ color: "#9e9e9e" }}>ใส่จำนวนในแต่ละสีเพื่อแยกสต็อก ถ้าเว้นจำนวนทั้งหมดจะใช้สต็อกรวม</p>
-          </div>
-
-          <div className="flex items-center justify-between py-2">
-            <label className="text-sm font-semibold text-[#ededed]">เปิดจำหน่าย</label>
-            <button type="button" onClick={() => setActive(!active)}
-              className="w-12 h-6 rounded-full relative transition-colors"
-              style={{ background: active ? "#ff7070" : "#3e3e3e" }}>
-              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${active ? "left-6" : "left-0.5"}`} />
-            </button>
-          </div>
-
-          {error && (
-            <div className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm"
-              style={{ background: "rgba(255,112,112,0.1)", border: "1px solid rgba(255,112,112,0.3)", color: "#ff7070" }}>
-              <i className="fa-solid fa-circle-xmark" /> {error}
-            </div>
-          )}
-        </div>
-
-        <div className="px-5 pb-6 flex gap-3 sticky bottom-0 pt-4" style={{ borderTop: "1px solid #3e3e3e", background: "#1c1c1c" }}>
-          <button onClick={onClose} className="flex-1 py-3 text-sm font-bold rounded-xl transition-all text-[#9e9e9e] hover:text-white" style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>
-            ยกเลิก
-          </button>
-          <button onClick={handleSave} disabled={saving || imageBusy}
-            className="flex-1 py-3 text-sm font-bold rounded-xl text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ background: "#ff7070" }}>
-            {saving
-              ? <><i className="fa-solid fa-spinner fa-spin mr-1.5" />กำลังบันทึก...</>
-              : imageBusy
-                ? <><i className="fa-solid fa-spinner fa-spin mr-1.5" />กำลังอัปโหลดรูป...</>
-                : <><i className="fa-solid fa-floppy-disk mr-1.5" />บันทึก</>}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─── Equipment Items Tab ──────────────────────────────────────────────────────
 
@@ -5834,7 +4912,7 @@ function EquipmentItemForm({ item, adminId, existingCategories, existingUnits, o
               endpoint="/api/admin/upload-equipment" placeholder="https://... หรืออัปโหลดไฟล์ (jpg, png, svg, ico…)" />
             {imageBusy && (
               <p className="mt-1 text-[11px]" style={{ color: "#e3b341" }}>
-                <i className="fa-solid fa-spinner fa-spin mr-1" />กำลังจัดการรูป กรุณารอให้เสร็จก่อนบันทึก
+                <i className="asia-spinner mr-1" />กำลังจัดการรูป กรุณารอให้เสร็จก่อนบันทึก
               </p>
             )}
           </div>
@@ -5912,9 +4990,9 @@ function EquipmentItemForm({ item, adminId, existingCategories, existingUnits, o
             className="flex-1 py-3 text-sm font-bold rounded-xl text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ background: "#ff7070" }}>
             {saving
-              ? <><i className="fa-solid fa-spinner fa-spin mr-1.5" />กำลังบันทึก...</>
+              ? <><i className="asia-spinner mr-1.5" />กำลังบันทึก...</>
               : imageBusy
-                ? <><i className="fa-solid fa-spinner fa-spin mr-1.5" />กำลังอัปโหลดรูป...</>
+                ? <><i className="asia-spinner mr-1.5" />กำลังอัปโหลดรูป...</>
                 : <><i className="fa-solid fa-floppy-disk mr-1.5" />บันทึก</>}
           </button>
         </div>
@@ -6275,533 +5353,7 @@ function EquipmentRequestsTab({ adminId }: { adminId: string }) {
 
 // ─── Shop Orders Tab ──────────────────────────────────────────────────────────
 
-const ORDER_STATUS: Record<string, string> = { pending: "รอชำระ", paid: "ชำระแล้ว", cancelled: "ยกเลิก", refunded: "คืนเงิน", delivered: "ส่งมอบแล้ว" };
-const ORDER_STYLE: Record<string, { bg: string; text: string }> = {
-  pending:   { bg: "rgba(227,179,65,0.15)",  text: "#e3b341" },
-  paid:      { bg: "rgba(63,185,80,0.15)",   text: "#3fb950" },
-  cancelled: { bg: "rgba(72,79,88,0.3)",     text: "#9e9e9e" },
-  refunded:  { bg: "rgba(255,112,112,0.15)",   text: "#ff7070" },
-  delivered: { bg: "rgba(255,112,112,0.15)", text: "#ff7070" },
-};
 
-function ShopOrdersTab({ adminId }: { adminId: string }) {
-  const [orders, setOrders] = useState<ShopOrder[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useLocalStorageState<string>("asia_admin_orders_filter", "all", isString);
-  const [search, setSearch] = useLocalStorageState<string>("asia_admin_orders_search", "", isString);
-  const [viewMode, setViewMode] = useLocalStorageState<ViewMode>(ADMIN_VIEW_MODE_KEY, "grid", isViewMode);
-  const [confirming, setConfirming] = useState<string | null>(null);
-  const orderStatusChartRef = useRef<HTMLCanvasElement | null>(null);
-  const orderTopItemsChartRef = useRef<HTMLCanvasElement | null>(null);
-
-  const fetch_ = useCallback(async () => {
-    setLoading(true);
-    const res = await adminFetch(`/api/admin/orders?status=${filter}`, adminId);
-    const json = await res.json();
-    if (json.status === "success") setOrders(json.data ?? []);
-    setLoading(false);
-  }, [adminId, filter]);
-
-  useEffect(() => { fetch_(); }, [fetch_]);
-
-  async function updateOrderStatus(orderId: string, status: string) {
-    setConfirming(orderId);
-    await adminFetch(`/api/admin/orders/${orderId}`, adminId, { method: "PATCH", body: JSON.stringify({ status }) });
-    setConfirming(null);
-    fetch_();
-  }
-
-  const paidTotal = orders.filter((o) => o.status === "paid").reduce((s, o) => s + o.total, 0);
-  const q = search.trim().toLowerCase();
-  const filtered = q
-    ? orders.filter(o =>
-        o.student_name.toLowerCase().includes(q) ||
-        o.student_id.includes(q) ||
-        o.order_id.toLowerCase().includes(q) ||
-        (o.items_json as OrderItem[])?.some(i => shopOrderItemName(i).toLowerCase().includes(q))
-      )
-    : orders;
-
-  // ── Overview calculations ─────────────────────────────────────────
-  const todayStr = new Date().toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok" });
-  const pendingOrders   = orders.filter(o => o.status === "pending");
-  const paidOrders_     = orders.filter(o => o.status === "paid");
-  const cancelledOrders = orders.filter(o => o.status === "cancelled");
-  const todayOrders     = orders.filter(o => new Date(o.created_at).toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok" }) === todayStr);
-  const paidRevenue     = paidOrders_.reduce((s, o) => s + o.total, 0);
-  const pendingRevenue  = pendingOrders.reduce((s, o) => s + o.total, 0);
-
-  // Top-selling from paid orders
-  const topItems = useMemo(() => {
-    const itemSales: Record<string, { name: string; qty: number; revenue: number; imageUrl?: string | null }> = {};
-    orders.filter(o => o.status === "paid").forEach(o => {
-      ((o.items_json as OrderItem[]) ?? []).forEach(i => {
-        if (!itemSales[i.id]) itemSales[i.id] = { name: i.name, qty: 0, revenue: 0, imageUrl: i.imageUrl };
-        itemSales[i.id].qty     += i.qty;
-        itemSales[i.id].revenue += i.price * i.qty;
-      });
-    });
-    return Object.values(itemSales).sort((a, b) => b.qty - a.qty).slice(0, 5);
-  }, [orders]);
-
-  useChart(orderStatusChartRef, () => ({
-    type: "doughnut",
-    data: {
-      labels: ["รอชำระ", "ชำระแล้ว", "ยกเลิก"],
-      datasets: [{
-        data: [pendingOrders.length, paidOrders_.length, cancelledOrders.length],
-        backgroundColor: ["#f59e0b", "#ff7070", "#2a2a2a"],
-        borderColor: ["#0c0c0c", "#0c0c0c", "#0c0c0c"],
-        borderWidth: 4,
-      }],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      cutout: "68%",
-      plugins: { legend: { position: "bottom", labels: { color: "#9e9e9e", boxWidth: 10, usePointStyle: true, font: { family: "Kanit, Sarabun, sans-serif" } } } },
-    },
-  }), [pendingOrders.length, paidOrders_.length, cancelledOrders.length]);
-
-  useChart(orderTopItemsChartRef, () => ({
-    type: "bar",
-    data: {
-      labels: topItems.map(i => i.name),
-      datasets: [{
-        label: "ชิ้น",
-        data: topItems.map(i => i.qty),
-        backgroundColor: "#ff7070cc",
-        borderColor: "#ff7070",
-        borderWidth: 1,
-        borderRadius: 8,
-      }],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      indexAxis: "y",
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { beginAtZero: true, grid: { color: "rgba(255,255,255,0.08)" }, ticks: { color: "#9e9e9e", precision: 0, font: { family: "Kanit, Sarabun, sans-serif" } } },
-        y: { grid: { display: false }, ticks: { color: "#9e9e9e", font: { family: "Kanit, Sarabun, sans-serif" } } },
-      },
-    },
-  }), [topItems]);
-
-  return (
-    <div>
-      <DarkSectionHeader title="ออเดอร์สหกรณ์" icon="fa-receipt" count={filtered.length} />
-
-      {/* ── Overview ── */}
-      {!loading && orders.length > 0 && (
-        <div className="mt-4 mb-5 space-y-3">
-          {/* Stat cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { label: "รายได้รวม (ชำระแล้ว)", val: `฿${paidRevenue.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: "fa-coins", color: "#ff7070", sub: `${paidOrders_.length} ออเดอร์` },
-              { label: "รอชำระเงิน", val: pendingOrders.length.toString(), icon: "fa-hourglass-half", color: "#f59e0b", sub: pendingOrders.length > 0 ? `฿${pendingRevenue.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "ไม่มี" },
-              { label: "ออเดอร์วันนี้", val: todayOrders.length.toString(), icon: "fa-calendar-day", color: "#84D4FA", sub: `จาก ${orders.length} ทั้งหมด` },
-              { label: "ยกเลิก", val: cancelledOrders.length.toString(), icon: "fa-ban", color: "#636363", sub: `${orders.length > 0 ? Math.round(cancelledOrders.length / orders.length * 100) : 0}%` },
-            ].map((c) => (
-              <div key={c.label} className="rounded-2xl p-4 flex flex-col gap-2" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
-                <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${c.color}20` }}>
-                    <i className={`fa-solid ${c.icon} text-xs`} style={{ color: c.color }} />
-                  </div>
-                </div>
-                <div className="text-xl font-black leading-tight" style={{ color: c.color }}>{c.val}</div>
-                <div>
-                  <div className="text-[10px] font-semibold" style={{ color: "#9e9e9e" }}>{c.label}</div>
-                  <div className="text-[10px]" style={{ color: "#636363" }}>{c.sub}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <div className="rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
-              <div className="flex items-center gap-2 mb-3">
-                <i className="fa-solid fa-chart-pie text-xs" style={{ color: "#ff7070" }} />
-                <span className="text-xs font-bold text-white">สถานะออเดอร์</span>
-              </div>
-              <div className="relative h-[220px]"><canvas ref={orderStatusChartRef} /></div>
-            </div>
-            <div className="rounded-2xl p-4" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
-              <div className="flex items-center gap-2 mb-3">
-                <i className="fa-solid fa-chart-bar text-xs" style={{ color: "#ff7070" }} />
-                <span className="text-xs font-bold text-white">ยอดขายตามสินค้า</span>
-              </div>
-              <div className="relative h-[220px]"><canvas ref={orderTopItemsChartRef} /></div>
-            </div>
-          </div>
-
-          {/* Top selling */}
-          {topItems.length > 0 && (
-            <div className="rounded-2xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #2e2e2e" }}>
-              <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: "1px solid #252525" }}>
-                <i className="fa-solid fa-fire text-xs" style={{ color: "#ff7070" }} />
-                <span className="text-xs font-bold text-white">สินค้าขายดี</span>
-                <span className="text-[10px]" style={{ color: "#636363" }}>(จากออเดอร์ที่ชำระแล้ว)</span>
-              </div>
-              <div className="divide-y" style={{ borderColor: "#1e1e1e" }}>
-                {topItems.map((item, i) => {
-                  const imageSrc = safeImageSrc(item.imageUrl);
-                  return (
-                  <div key={item.name} className="flex items-center gap-3 px-4 py-2.5">
-                    <div className="text-[10px] font-bold w-4 flex-shrink-0" style={{ color: i === 0 ? "#ff7070" : "#636363" }}>#{i + 1}</div>
-                    {imageSrc
-                      ? <img src={imageSrc} alt="" className="w-8 h-8 rounded-lg object-cover flex-shrink-0" style={{ border: "1px solid #3e3e3e" }} />
-                      : <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-sm" style={{ background: "#252525" }}>🛍️</div>}
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-semibold text-white truncate">{item.name}</div>
-                      <div className="text-[10px]" style={{ color: "#636363" }}>฿{item.revenue.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                    </div>
-                    <div className="text-xs font-black flex-shrink-0" style={{ color: "#ff7070" }}>{item.qty} ชิ้น</div>
-                  </div>
-                );})}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Toolbar ── */}
-      <div className="flex flex-col gap-2 mt-4 mb-3">
-        <div className="flex items-center gap-2">
-          <div className="flex gap-1.5 flex-wrap flex-1">
-            {["all", "pending", "paid", "delivered", "cancelled"].map((s) => (
-              <button key={s} onClick={() => setFilter(s)}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                style={{ background: filter === s ? "#ff7070" : "#2a2a2a", color: filter === s ? "white" : "#9e9e9e", border: `1px solid ${filter === s ? "#ff7070" : "#3e3e3e"}` }}>
-                {s === "all" ? "ทั้งหมด" : ORDER_STATUS[s]}
-              </button>
-            ))}
-          </div>
-          <div className="flex-shrink-0 w-full sm:w-auto">
-            <ViewToggle mode={viewMode} onChange={setViewMode} />
-          </div>
-        </div>
-        <div className="relative">
-          <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-[#636363] text-xs" />
-          <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="ค้นหาชื่อ, รหัสนักเรียน, เลขออเดอร์, ชื่อสินค้า..."
-            className="w-full pl-8 pr-4 py-2 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none transition-colors"
-            style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }}
-          />
-          {search && (
-            <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#636363] hover:text-white transition-colors">
-              <i className="fa-solid fa-xmark text-xs" />
-            </button>
-          )}
-        </div>
-        {filter === "all" && orders.length > 0 && (
-          <div className="text-sm text-[#9e9e9e]">ยอดชำระแล้ว: <span className="font-black" style={{ color: "#ff7070" }}>฿{paidTotal.toFixed(2)}</span></div>
-        )}
-      </div>
-
-      {loading ? <DarkSpinner /> : filtered.length === 0 ? <DarkEmpty text={search ? "ไม่พบผลการค้นหา" : "ไม่มีออเดอร์"} /> : (() => {
-        const DeliverBtn = ({ o }: { o: ShopOrder }) => o.status !== "paid" ? null : (
-          <button onClick={() => updateOrderStatus(o.order_id, "delivered")} disabled={confirming === o.order_id}
-            className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition-all disabled:opacity-50 flex items-center gap-1 flex-shrink-0"
-            style={{ background: "rgba(255,112,112,0.15)", color: "#ff7070", border: "1px solid rgba(255,112,112,0.3)" }}>
-            {confirming === o.order_id ? <><i className="fa-solid fa-spinner fa-spin" />ยืนยัน...</> : <><i className="fa-solid fa-box-open" />ส่งมอบแล้ว</>}
-          </button>
-        );
-        const Avatar = ({ o, size = 10 }: { o: ShopOrder; size?: number }) => {
-          const px = size * 4;
-          const fs = Math.max(10, Math.round(px * 0.38));
-          const photoSrc = safeImageSrc(o.student_photo_url);
-          return photoSrc
-            ? <img src={photoSrc} alt={o.student_name} className="object-cover flex-shrink-0" style={{ width: px, height: px, borderRadius: 8, border: "2px solid rgba(255,112,112,0.45)" }} />
-            : <div className="flex items-center justify-center flex-shrink-0 font-black text-white" style={{ width: px, height: px, borderRadius: 8, background: ADMIN_PRIMARY, fontSize: fs }}>{avatarInitials(o.student_name || o.student_id)}</div>;
-        };
-
-        // ══ GRID ══════════════════════════════════════════════════════
-        if (viewMode === "grid") return (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-            {filtered.map((o) => {
-              const items = (o.items_json as OrderItem[]) ?? [];
-              const sc = ORDER_STYLE[o.status] ?? { bg: "#2a2a2a", text: "#9e9e9e" };
-              return (
-                <div key={o.order_id} className="rounded-2xl overflow-hidden flex flex-col"
-                  style={{ background: "#1c1c1c", borderTop: "1px solid #2e2e2e", borderRight: "1px solid #2e2e2e", borderBottom: "1px solid #2e2e2e", borderLeft: `3px solid ${sc.text}` }}>
-                  <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <span className="font-mono text-[11px] font-bold text-[#636363]">#{o.order_id.slice(-8).toUpperCase()}</span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: sc.bg, color: sc.text }}>{ORDER_STATUS[o.status]}</span>
-                      </div>
-                      <StudentInfoTrigger adminId={adminId} studentId={o.student_id} fallbackName={o.student_name} fallbackPhotoUrl={o.student_photo_url}
-                        className="block max-w-full">
-                        <div className="font-bold text-white text-sm truncate">{o.student_name}</div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[10px] font-mono text-[#636363]">{o.student_id}</span>
-                          <span className="text-[#3e3e3e]">·</span>
-                          <span className="text-[10px] text-[#636363]">{formatDateTime(o.created_at)}</span>
-                        </div>
-                      </StudentInfoTrigger>
-                    </div>
-                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                      <div className="text-xl font-black" style={{ color: sc.text }}>฿{o.total.toFixed(2)}</div>
-                      <Avatar o={o} size={10} />
-                    </div>
-                  </div>
-                  {items.length > 0 && (
-                    <div className="px-4 py-3 space-y-2" style={{ borderTop: "1px solid #252525" }}>
-                      {items.map((item, i) => {
-                        const imageSrc = safeImageSrc(item.imageUrl);
-                        return (
-                        <div key={i} className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 min-w-0">
-                            {imageSrc ? <img src={imageSrc} alt="" className="w-7 h-7 rounded-md object-cover flex-shrink-0" style={{ border: "1px solid #3e3e3e" }} />
-                              : <div className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 text-[10px]" style={{ background: "#2a2a2a" }}>🛍️</div>}
-                            <div className="min-w-0">
-                              <span className="text-xs text-[#ededed] truncate block">{shopOrderItemName(item)}</span>
-                              <span className="text-[10px] text-[#636363]">{item.qty} {item.unit} × ฿{item.price.toFixed(2)}</span>
-                            </div>
-                          </div>
-                          <span className="text-xs font-semibold flex-shrink-0" style={{ color: "#9e9e9e" }}>฿{(item.price * item.qty).toFixed(2)}</span>
-                        </div>
-                      );})}
-                    </div>
-                  )}
-                  <div className="px-4 py-2.5 mt-auto flex items-center justify-between gap-2" style={{ borderTop: "1px solid #252525", background: "#161616" }}>
-                    <div className="flex items-center gap-1.5 text-[11px] min-w-0" style={{ color: "#9e9e9e" }}>
-                      <i className={`fa-solid flex-shrink-0 ${o.delivery_mode === "delivery" ? "fa-truck" : "fa-store"} text-[10px]`} />
-                      {o.delivery_mode === "delivery"
-                        ? <span className="truncate">{o.delivery_loc ?? "—"}{o.delivery_slot && <span style={{ color: "#636363" }}> · {o.delivery_slot}</span>}</span>
-                        : <span>รับเองที่สหกรณ์{o.delivery_slot && <span style={{ color: "#636363" }}> · {o.delivery_slot}</span>}</span>}
-                    </div>
-                    <DeliverBtn o={o} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        );
-
-        // ══ LIST ══════════════════════════════════════════════════════
-        if (viewMode === "list") return (
-          <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid #2e2e2e" }}>
-            {filtered.map((o, idx) => {
-              const items = (o.items_json as OrderItem[]) ?? [];
-              const sc = ORDER_STYLE[o.status] ?? { bg: "#2a2a2a", text: "#9e9e9e" };
-              return (
-                <div key={o.order_id} className="flex items-center gap-3 px-4 py-3"
-                  style={{ borderBottom: idx < filtered.length - 1 ? "1px solid #232323" : "none", background: "#1c1c1c", borderLeft: `3px solid ${sc.text}` }}>
-                  <Avatar o={o} size={9} />
-                  <div className="flex-1 min-w-0">
-                    <StudentInfoTrigger adminId={adminId} studentId={o.student_id} fallbackName={o.student_name} fallbackPhotoUrl={o.student_photo_url}
-                      className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-white text-sm truncate">{o.student_name}</span>
-                      <span className="text-[10px] font-mono text-[#636363]">{o.student_id}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ background: sc.bg, color: sc.text }}>{ORDER_STATUS[o.status]}</span>
-                    </StudentInfoTrigger>
-                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                      <span className="font-mono text-[10px] text-[#636363]">#{o.order_id.slice(-8).toUpperCase()}</span>
-                      <span className="text-[#3e3e3e]">·</span>
-                      <span className="text-[10px] text-[#636363]">{formatDateTime(o.created_at)}</span>
-                      <span className="text-[#3e3e3e]">·</span>
-                      <span className="text-[10px] text-[#636363]">
-                        <i className={`fa-solid mr-0.5 ${o.delivery_mode === "delivery" ? "fa-truck" : "fa-store"}`} />
-                        {o.delivery_mode === "delivery" ? (o.delivery_loc ?? "จัดส่ง") : "รับเอง"}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1 mt-1 flex-wrap">
-                      {items.map((item, i) => {
-                        const imageSrc = safeImageSrc(item.imageUrl);
-                        return (
-                        <span key={i} className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded" style={{ background: "#252525", color: "#9e9e9e" }}>
-                          {imageSrc && <img src={imageSrc} alt="" className="w-3.5 h-3.5 rounded object-cover" />}
-                          {shopOrderItemName(item)} ×{item.qty}
-                        </span>
-                      );})}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <div className="text-base font-black text-right" style={{ color: sc.text }}>฿{o.total.toFixed(2)}</div>
-                    <DeliverBtn o={o} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        );
-
-        // ══ CARD ══════════════════════════════════════════════════════
-        return (
-          <div className="space-y-3">
-            {filtered.map((o) => {
-              const items = (o.items_json as OrderItem[]) ?? [];
-              const sc = ORDER_STYLE[o.status] ?? { bg: "#2a2a2a", text: "#9e9e9e" };
-              return (
-                <div key={o.order_id} className="rounded-2xl overflow-hidden"
-                  style={{ background: "#1c1c1c", borderTop: "1px solid #2e2e2e", borderRight: "1px solid #2e2e2e", borderBottom: "1px solid #2e2e2e", borderLeft: `4px solid ${sc.text}` }}>
-                  {/* Top bar */}
-                  <div className="px-5 py-3 flex items-center justify-between gap-4" style={{ background: "#161616" }}>
-                    <div className="flex items-center gap-3">
-                      {safeImageSrc(o.student_photo_url)
-                        ? <img src={safeImageSrc(o.student_photo_url) ?? ""} alt={o.student_name} className="object-cover flex-shrink-0"
-                            style={{ width: 64, height: 64, maxWidth: 64, borderRadius: 8, border: "2px solid rgba(255,112,112,0.45)" }} />
-                        : <div className="flex items-center justify-center flex-shrink-0 font-black text-white"
-                            style={{ width: 64, height: 64, maxWidth: 64, borderRadius: 8, background: ADMIN_PRIMARY, fontSize: 24 }}>
-                            {avatarInitials(o.student_name || o.student_id)}
-                          </div>}
-                      <StudentInfoTrigger adminId={adminId} studentId={o.student_id} fallbackName={o.student_name} fallbackPhotoUrl={o.student_photo_url}
-                        className="block">
-                        <div className="font-bold text-white">{o.student_name}</div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[11px] font-mono text-[#636363]">{o.student_id}</span>
-                          <span className="text-[#3e3e3e]">·</span>
-                          <span className="text-[11px] font-mono text-[#636363]">#{o.order_id.slice(-8).toUpperCase()}</span>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: sc.bg, color: sc.text }}>{ORDER_STATUS[o.status]}</span>
-                        </div>
-                      </StudentInfoTrigger>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <div className="text-2xl font-black" style={{ color: sc.text }}>฿{o.total.toFixed(2)}</div>
-                      <div className="text-[10px] text-[#636363] mt-0.5">{formatDateTime(o.created_at)}</div>
-                    </div>
-                  </div>
-                  {/* Items */}
-                  {items.length > 0 && (
-                    <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {items.map((item, i) => {
-                        const imageSrc = safeImageSrc(item.imageUrl);
-                        return (
-                        <div key={i} className="flex items-center gap-3 rounded-xl p-3" style={{ background: "#252525" }}>
-                          {imageSrc
-                            ? <img src={imageSrc} alt="" className="w-12 h-12 rounded-lg object-cover flex-shrink-0" style={{ border: "1px solid #3e3e3e" }} />
-                            : <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 text-xl" style={{ background: "#2a2a2a" }}>🛍️</div>}
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-bold text-white truncate">{shopOrderItemName(item)}</div>
-                            <div className="text-[11px] text-[#9e9e9e] mt-0.5">{item.qty} {item.unit} × ฿{item.price.toFixed(2)}</div>
-                          </div>
-                          <div className="text-sm font-black flex-shrink-0" style={{ color: sc.text }}>฿{(item.price * item.qty).toFixed(2)}</div>
-                        </div>
-                      );})}
-                    </div>
-                  )}
-                  {/* Footer */}
-                  <div className="px-5 py-3 flex items-center justify-between gap-3" style={{ borderTop: "1px solid #252525" }}>
-                    <div className="flex items-center gap-2 text-sm" style={{ color: "#9e9e9e" }}>
-                      <i className={`fa-solid ${o.delivery_mode === "delivery" ? "fa-truck" : "fa-store"}`} />
-                      {o.delivery_mode === "delivery"
-                        ? <span>{o.delivery_loc ?? "—"}{o.delivery_slot && <span style={{ color: "#636363" }}> · {o.delivery_slot}</span>}</span>
-                        : <span>รับเองที่สหกรณ์{o.delivery_slot && <span style={{ color: "#636363" }}> · {o.delivery_slot}</span>}</span>}
-                    </div>
-                    <DeliverBtn o={o} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        );
-      })()}
-    </div>
-  );
-}
-
-// ─── Add Student Modal ────────────────────────────────────────────────────────
-
-const BLANK_STD = { student_id: "", first_name: "", last_name: "", nickname: "", program: "ปวช.1", department: "", entry_year: String(new Date().getFullYear()), student_phone: "" };
-
-function AddStudentModal({ adminId, onClose, onSaved }: { adminId: string; onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState(BLANK_STD);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  const fi = (k: keyof typeof BLANK_STD) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm(f => ({ ...f, [k]: e.target.value }));
-
-  const inputCls = "w-full px-3 py-2.5 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none transition-colors";
-  const inputStyle = { background: "#0c0c0c", border: "1px solid #3e3e3e" };
-
-  async function handleSave() {
-    if (!form.student_id.trim() || !form.first_name.trim() || !form.last_name.trim() || !form.student_phone.trim()) {
-      setError("กรุณากรอกรหัส, ชื่อ, นามสกุล และเบอร์โทร"); return;
-    }
-    setSaving(true); setError("");
-    const res = await adminFetch("/api/admin/students", adminId, { method: "POST", body: JSON.stringify(form) });
-    const json = await res.json();
-    setSaving(false);
-    if (json.status === "success") onSaved();
-    else setError(json.message ?? "บันทึกไม่สำเร็จ");
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }} onClick={onClose} />
-      <div className="relative w-full sm:max-w-lg sm:mx-4 sm:rounded-2xl rounded-t-2xl overflow-y-auto max-h-[90vh]"
-        style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-        <div className="flex items-center justify-between px-5 pt-5 pb-4 sticky top-0 z-10" style={{ background: "#1c1c1c", borderBottom: "1px solid #3e3e3e" }}>
-          <h3 className="font-bold text-white text-lg"><i className="fa-solid fa-user-plus mr-2 text-red-400" />เพิ่มนักเรียนใหม่</h3>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#2a2a2a] text-[#9e9e9e] hover:text-white transition-colors">
-            <i className="fa-solid fa-xmark" />
-          </button>
-        </div>
-        <div className="p-5 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-[#ededed] mb-1.5">รหัสนักเรียน *</label>
-              <input value={form.student_id} onChange={fi("student_id")} placeholder="เช่น 6501234" className={inputCls} style={inputStyle} />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-[#ededed] mb-1.5">ระดับชั้น</label>
-              <input value={form.program} onChange={fi("program")} placeholder="เช่น ปวช.1" className={inputCls} style={inputStyle} />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-[#ededed] mb-1.5">ชื่อ *</label>
-              <input value={form.first_name} onChange={fi("first_name")} placeholder="ชื่อ" className={inputCls} style={inputStyle} />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-[#ededed] mb-1.5">นามสกุล *</label>
-              <input value={form.last_name} onChange={fi("last_name")} placeholder="นามสกุล" className={inputCls} style={inputStyle} />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-[#ededed] mb-1.5">ชื่อเล่น</label>
-              <input value={form.nickname} onChange={fi("nickname")} placeholder="ชื่อเล่น (ไม่บังคับ)" className={inputCls} style={inputStyle} />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-[#ededed] mb-1.5">เบอร์โทร *</label>
-              <input value={form.student_phone} onChange={fi("student_phone")} placeholder="08x-xxx-xxxx" className={inputCls} style={inputStyle} />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-[#ededed] mb-1.5">สาขาวิชา</label>
-              <input value={form.department} onChange={fi("department")} placeholder="เช่น เทคโนโลยีธุรกิจดิจิทัล" className={inputCls} style={inputStyle} />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-[#ededed] mb-1.5">ปีที่เข้าเรียน</label>
-              <input value={form.entry_year} onChange={fi("entry_year")} placeholder={String(new Date().getFullYear())} className={inputCls} style={inputStyle} />
-            </div>
-          </div>
-          {error && (
-            <div className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm"
-              style={{ background: "rgba(255,112,112,0.1)", border: "1px solid rgba(255,112,112,0.3)", color: "#ff7070" }}>
-              <i className="fa-solid fa-circle-xmark" /> {error}
-            </div>
-          )}
-        </div>
-        <div className="px-5 pb-6 flex gap-3 sticky bottom-0 pt-4" style={{ borderTop: "1px solid #3e3e3e", background: "#1c1c1c" }}>
-          <button onClick={onClose} className="flex-1 py-3 text-sm font-bold rounded-xl transition-all text-[#9e9e9e] hover:text-white" style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>
-            ยกเลิก
-          </button>
-          <button onClick={handleSave} disabled={saving}
-            className="flex-1 py-3 text-sm font-bold rounded-xl text-white transition-all disabled:opacity-50"
-            style={{ background: "#ff7070" }}>
-            {saving ? <><i className="fa-solid fa-spinner fa-spin mr-1.5" />กำลังบันทึก...</> : <><i className="fa-solid fa-floppy-disk mr-1.5" />เพิ่มนักเรียน</>}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─── Admins Tab ───────────────────────────────────────────────────────────────
 
@@ -6809,6 +5361,7 @@ type AdminRecord = {
   admin_id: string; username: string; role: string;
   first_name: string | null; last_name: string | null; nickname: string | null;
   email: string | null; phone: string | null; entry_year: string | null; department: string | null;
+  division: string | null;
   avatar: string | null; admin_status: string; created_at: string;
   username_changed_at: string | null; linked_student_id: string | null;
 };
@@ -6824,9 +5377,12 @@ const ADMIN_STATUS_STYLE: Record<string, { bg: string; text: string }> = {
   inactive: { bg: "rgba(72,79,88,0.3)", text: "#9e9e9e" },
 };
 
-const BLANK_ADMIN_FORM = { username: "", password: "", role: "staff", first_name: "", last_name: "", nickname: "", email: "", phone: "", entry_year: "", department: "", linked_student_id: "" };
+const BLANK_ADMIN_FORM = { username: "", password: "", role: "staff", first_name: "", last_name: "", nickname: "", email: "", phone: "", entry_year: "", department: "", division: "", linked_student_id: "" };
 
-const BLANK_PROFILE = { first_name: "", last_name: "", nickname: "", email: "", phone: "", entry_year: "", department: "", linked_student_id: "" };
+const BLANK_PROFILE = { first_name: "", last_name: "", nickname: "", email: "", phone: "", entry_year: "", department: "", division: "", linked_student_id: "" };
+
+/** ตัวเลือกฝ่ายสำหรับ dropdown — label ไทยมาจาก RBAC ที่เดียว ไม่พิมพ์ซ้ำ */
+const DIVISION_OPTIONS = ADMIN_DIVISIONS.map(key => ({ key, label: DIVISION_LABELS[key] }));
 
 function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleStatus, onDelete, onAvatarUploaded, onProfileSaved }: {
   a: AdminRecord; adminId: string; isSuperAdmin: boolean; updating: string | null;
@@ -6898,6 +5454,7 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
     setPf({
       first_name: a.first_name ?? "", last_name: a.last_name ?? "", nickname: a.nickname ?? "",
       email: a.email ?? "", phone: a.phone ?? "", entry_year: a.entry_year ?? "", department: a.department ?? "",
+      division: a.division ?? "",
       linked_student_id: a.linked_student_id ?? "",
     });
     setNewUsername(""); setNewPassword(""); setStudentAvatarUrl(null);
@@ -6972,7 +5529,7 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
             {canUpload && (
               <div className="absolute inset-0 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                 style={{ background: "rgba(0,0,0,0.55)" }}>
-                {busy ? <i className="fa-solid fa-spinner fa-spin text-white text-[10px]" /> : <i className="fa-solid fa-camera text-white text-[10px]" />}
+                {busy ? <i className="asia-spinner text-white text-[10px]" /> : <i className="fa-solid fa-camera text-white text-[10px]" />}
               </div>
             )}
           </button>
@@ -6999,6 +5556,13 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
             <code className="text-[11px]" style={{ color: "#636363" }}>@{a.username}</code>
             <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: rs.bg, color: rs.text }} title={ROLE_DESC[a.role]}>{ROLE_LABELS[a.role] ?? a.role}</span>
             <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: ss.bg, color: ss.text }}>{a.admin_status === "active" ? "ใช้งาน" : "ปิดใช้"}</span>
+            {/* เห็นฝ่ายตั้งแต่ในรายการ ไม่ต้องกดเข้าไปดูทีละคนว่าใครอยู่ฝ่ายไหน */}
+            {a.division && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
+                style={{ background: "rgba(124,58,237,0.15)", color: "#a78bfa" }}>
+                <i className="fa-solid fa-sitemap mr-1 text-[8px]" />{DIVISION_LABELS[a.division as keyof typeof DIVISION_LABELS] ?? a.division}
+              </span>
+            )}
           </div>
           {/* Extra info chips */}
           <div className="flex items-center gap-2 flex-wrap mt-1">
@@ -7135,6 +5699,20 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
               <input value={pf.department} onChange={e => setPf(p => ({ ...p, department: e.target.value }))} placeholder="แผนก/สาขา" {...inp} /></div>
             <div><label className="block text-[10px] text-[#9e9e9e] mb-1"><i className="fa-solid fa-calendar mr-1" />รุ่นที่เข้า</label>
               <input value={pf.entry_year} onChange={e => setPf(p => ({ ...p, entry_year: e.target.value }))} placeholder="เช่น 2024" {...inp} /></div>
+            {/* ฝ่ายเป็นเรื่องสิทธิ์ ไม่ใช่ข้อมูลส่วนตัว จึงให้เฉพาะ superadmin ตั้ง
+                ไม่งั้นใครก็ย้ายตัวเองไปฝ่ายที่อยากเห็นเมนูได้ */}
+            {isSuperAdmin && (
+              <div><label className="block text-[10px] text-[#9e9e9e] mb-1"><i className="fa-solid fa-sitemap mr-1" />ฝ่ายที่สังกัด</label>
+                <select value={pf.division} onChange={e => setPf(p => ({ ...p, division: e.target.value }))} {...inp}>
+                  <option value="">ทุกฝ่าย (ไม่จำกัด)</option>
+                  {DIVISION_OPTIONS.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
+                </select>
+                <p className="text-[10px] mt-1" style={{ color: "#636363" }}>
+                  เลือกฝ่ายแล้วบัญชีนี้จะเห็นเฉพาะเมนูของฝ่ายนั้น + งานส่วนกลาง
+                  {(a.role === "superadmin" || a.role === "admin") && " — ระดับนี้ทำงานข้ามฝ่าย ตั้งไปก็ไม่มีผล"}
+                </p>
+              </div>
+            )}
           </div>
           <div className="mt-2 pt-2" style={{ borderTop: "1px solid #2a2a2a" }}>
             <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: "#636363" }}>บัญชีผู้ใช้</p>
@@ -7156,7 +5734,7 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
             <button onClick={saveProfile} disabled={pfSaving}
               className="px-4 py-1.5 rounded-lg text-xs font-bold text-white disabled:opacity-50"
               style={{ background: "#ff7070" }}>
-              {pfSaving ? <><i className="fa-solid fa-spinner fa-spin mr-1" />กำลังบันทึก...</> : <><i className="fa-solid fa-floppy-disk mr-1" />บันทึก</>}
+              {pfSaving ? <><i className="asia-spinner mr-1" />กำลังบันทึก...</> : <><i className="fa-solid fa-floppy-disk mr-1" />บันทึก</>}
             </button>
           </div>
         </div>
@@ -7452,6 +6030,13 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
               <label className="block text-[11px] text-[#9e9e9e] mb-1"><i className="fa-solid fa-calendar mr-1" />รุ่นที่เข้า</label>
               <input value={form.entry_year} onChange={e => setForm(f => ({ ...f, entry_year: e.target.value }))} {...inp} placeholder="เช่น 2024" />
             </div>
+            <div>
+              <label className="block text-[11px] text-[#9e9e9e] mb-1"><i className="fa-solid fa-sitemap mr-1" />ฝ่ายที่สังกัด</label>
+              <select value={form.division} onChange={e => setForm(f => ({ ...f, division: e.target.value }))} {...inp}>
+                <option value="">ทุกฝ่าย (ไม่จำกัด)</option>
+                {DIVISION_OPTIONS.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
+              </select>
+            </div>
           </div>
           {msg && <p className="text-xs" style={{ color: "#ff7070" }}>{msg}</p>}
           <div className="flex gap-2 pt-1">
@@ -7594,7 +6179,7 @@ function TeacherApplicationsTab({ adminId, onAddTeacher }: { adminId: string; on
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-16"><i className="fa-solid fa-spinner fa-spin text-2xl" style={{ color: ADMIN_PRIMARY }} /></div>
+        <div className="flex justify-center py-16"><i className="asia-spinner text-2xl" style={{ color: ADMIN_PRIMARY }} /></div>
       ) : apps.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center" style={{ color: "#555" }}>
           <i className="fa-solid fa-chalkboard-user text-4xl mb-3" />
@@ -7719,7 +6304,7 @@ function TeacherApplicationsTab({ adminId, onAddTeacher }: { adminId: string; on
                     disabled={actionLoading}
                     className="w-full py-2 rounded-lg text-sm font-semibold disabled:opacity-50"
                     style={{ background: "#16a34a", color: "#fff" }}>
-                    {actionLoading ? <i className="fa-solid fa-spinner fa-spin" /> : "✅ อนุมัติและสร้างบัญชี Admin"}
+                    {actionLoading ? <i className="asia-spinner" /> : "✅ อนุมัติและสร้างบัญชี Admin"}
                   </button>
                 </div>
 
@@ -7741,7 +6326,7 @@ function TeacherApplicationsTab({ adminId, onAddTeacher }: { adminId: string; on
                     disabled={actionLoading}
                     className="w-full py-2 rounded-lg text-sm font-semibold disabled:opacity-50"
                     style={{ background: "#dc2626", color: "#fff" }}>
-                    {actionLoading ? <i className="fa-solid fa-spinner fa-spin" /> : "❌ ปฏิเสธใบสมัคร"}
+                    {actionLoading ? <i className="asia-spinner" /> : "❌ ปฏิเสธใบสมัคร"}
                   </button>
                 </div>
 
@@ -7986,7 +6571,7 @@ function LineBroadcastTab({ adminId, adminRole }: { adminId: string; adminRole: 
 
   const style = {
     idle: { color: "#636363", bg: "#2a2a2a", icon: "fa-bullhorn" },
-    sending: { color: "#e3b341", bg: "rgba(227,179,65,0.1)", icon: "fa-spinner fa-spin" },
+    sending: { color: "#e3b341", bg: "rgba(227,179,65,0.1)", icon: "asia-spinner" },
     ok: { color: "#3fb950", bg: "rgba(63,185,80,0.1)", icon: "fa-circle-check" },
     error: { color: "#ff7070", bg: "rgba(255,112,112,0.1)", icon: "fa-triangle-exclamation" },
   }[state.state];
@@ -8063,7 +6648,7 @@ function LineBroadcastTab({ adminId, adminRole }: { adminId: string; adminRole: 
                 <DarkField label="ลำดับ" value={categoryForm.sort_order} onChange={v => setCategoryForm(f => ({ ...f, sort_order: v }))} placeholder="90" mono />
                 <div className="flex items-end gap-2">
                   <button onClick={saveCategory} disabled={categoryState.state === "loading"} className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold text-white disabled:opacity-50" style={{ background: "#1f6feb" }}>
-                    <i className={`fa-solid ${categoryState.state === "loading" ? "fa-spinner fa-spin" : "fa-layer-group"}`} />
+                    <i className={`fa-solid ${categoryState.state === "loading" ? "asia-spinner" : "fa-layer-group"}`} />
                     {editingCategoryKey ? "บันทึกหมวด" : "เพิ่มหมวด"}
                   </button>
                   {editingCategoryKey && (
@@ -8127,7 +6712,7 @@ function LineBroadcastTab({ adminId, adminRole }: { adminId: string; adminRole: 
             )}
             <div className="flex flex-wrap gap-2">
               <button onClick={saveGroup} disabled={groupState.state === "loading"} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold text-white disabled:opacity-50" style={{ background: "#1f6feb" }}>
-                <i className={`fa-solid ${groupState.state === "loading" ? "fa-spinner fa-spin" : "fa-floppy-disk"}`} />
+                <i className={`fa-solid ${groupState.state === "loading" ? "asia-spinner" : "fa-floppy-disk"}`} />
                 {editingGroupId ? "บันทึกการแก้ไข" : "เพิ่มกลุ่ม"}
               </button>
               {editingGroupId && (
@@ -8246,7 +6831,7 @@ function LineBroadcastTab({ adminId, adminRole }: { adminId: string; adminRole: 
           )}
 
           <button onClick={sendLineNews} disabled={state.state === "sending" || cooldown > 0} className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold text-white disabled:opacity-50" style={{ background: "#ff7070" }}>
-            <i className={`fa-solid ${state.state === "sending" ? "fa-spinner fa-spin" : "fa-bullhorn"}`} />
+            <i className={`fa-solid ${state.state === "sending" ? "asia-spinner" : "fa-bullhorn"}`} />
             {cooldown > 0 ? `รอ ${cooldown} วินาที` : "ส่งข่าวสาร LINE"}
           </button>
         </div>
@@ -8439,13 +7024,13 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
   const ps = pingStyle[ping];
   const lineStyle = {
     idle: { color: "#636363", bg: "#2a2a2a", icon: "fa-paper-plane" },
-    sending: { color: "#e3b341", bg: "rgba(227,179,65,0.1)", icon: "fa-spinner fa-spin" },
+    sending: { color: "#e3b341", bg: "rgba(227,179,65,0.1)", icon: "asia-spinner" },
     ok: { color: "#3fb950", bg: "rgba(63,185,80,0.1)", icon: "fa-circle-check" },
     error: { color: "#ff7070", bg: "rgba(255,112,112,0.1)", icon: "fa-triangle-exclamation" },
   }[lineTest.state];
   const newsStyle = {
     idle: { color: "#636363", bg: "#2a2a2a", icon: "fa-bullhorn" },
-    sending: { color: "#e3b341", bg: "rgba(227,179,65,0.1)", icon: "fa-spinner fa-spin" },
+    sending: { color: "#e3b341", bg: "rgba(227,179,65,0.1)", icon: "asia-spinner" },
     ok: { color: "#3fb950", bg: "rgba(63,185,80,0.1)", icon: "fa-circle-check" },
     error: { color: "#ff7070", bg: "rgba(255,112,112,0.1)", icon: "fa-triangle-exclamation" },
   }[newsState.state];
@@ -8796,7 +7381,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
           <button onClick={sendLineNews} disabled={newsState.state === "sending" || newsCooldown > 0}
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold text-white disabled:opacity-50"
             style={{ background: "#ff7070" }}>
-            <i className={`fa-solid ${newsState.state === "sending" ? "fa-spinner fa-spin" : "fa-bullhorn"}`} />
+            <i className={`fa-solid ${newsState.state === "sending" ? "asia-spinner" : "fa-bullhorn"}`} />
             {newsCooldown > 0 ? `รอ ${newsCooldown} วินาที` : "ส่งข่าวสาร LINE"}
           </button>
         </div>
@@ -8912,7 +7497,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
             <button onClick={testLineFlex} disabled={lineTest.state === "sending" || lineCooldown > 0}
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-xs font-bold text-white disabled:opacity-50"
               style={{ background: "#ff7070" }}>
-              <i className={`fa-solid ${lineTest.state === "sending" ? "fa-spinner fa-spin" : "fa-paper-plane"}`} />
+              <i className={`fa-solid ${lineTest.state === "sending" ? "asia-spinner" : "fa-paper-plane"}`} />
               {lineCooldown > 0 ? `รอ ${lineCooldown} วินาที` : "ส่งข้อความทดสอบ"}
             </button>
           </div>
@@ -9078,7 +7663,7 @@ function DarkSectionHeader({ title, icon, count }: { title: string; icon: string
 function DarkSpinner() {
   return (
     <div className="flex items-center justify-center py-16 text-sm" style={{ color: "#636363" }}>
-      <i className="fa-solid fa-spinner fa-spin text-2xl mr-2" style={{ color: "#ff7070" }} /> กำลังโหลด...
+      <i className="asia-spinner text-2xl mr-2" style={{ color: "#ff7070" }} /> กำลังโหลด...
     </div>
   );
 }
@@ -9107,7 +7692,7 @@ function DarkAction({ onClick, loading, color, icon, label, small }: {
     <button onClick={onClick} disabled={loading}
       className={`inline-flex items-center justify-center gap-1.5 rounded-lg font-bold leading-none whitespace-nowrap transition-all disabled:opacity-50 ${small ? "h-8 text-xs px-2.5" : "h-10 w-full sm:w-auto text-xs px-3"}`}
       style={{ background: s.bg, color: s.text, border: `1px solid ${s.border}` }}>
-      <i className={`fa-solid ${loading ? "fa-spinner fa-spin" : icon}`} />
+      <i className={`fa-solid ${loading ? "asia-spinner" : icon}`} />
       {label}
     </button>
   );
@@ -9231,7 +7816,7 @@ function ImgUpload({ value, onChange, placeholder, adminId, endpoint = "/api/adm
           className="flex-shrink-0 px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50 transition-colors"
           style={{ background: "#2a2a2a", border: "1px solid #3e3e3e", color: "#9e9e9e" }}>
           {uploading
-            ? <><i className="fa-solid fa-spinner fa-spin" /><span className="hidden sm:inline">กำลังอัปโหลด</span></>
+            ? <><i className="asia-spinner" /><span className="hidden sm:inline">กำลังอัปโหลด</span></>
             : <><i className="fa-solid fa-upload" /><span className="hidden sm:inline">อัปโหลด</span></>}
         </button>
         {value && (
@@ -9239,7 +7824,7 @@ function ImgUpload({ value, onChange, placeholder, adminId, endpoint = "/api/adm
             title={isOwned ? "ลบไฟล์จาก Storage" : "ล้างค่า"}
             className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center disabled:opacity-50 transition-colors"
             style={{ background: "#2a2a2a", border: "1px solid #3e3e3e", color: deleting ? "#ff7070" : "#9e9e9e" }}>
-            {deleting ? <i className="fa-solid fa-spinner fa-spin text-xs" /> : <i className="fa-solid fa-trash text-xs" />}
+            {deleting ? <i className="asia-spinner text-xs" /> : <i className="fa-solid fa-trash text-xs" />}
           </button>
         )}
         <input ref={ref} type="file" accept={IMG_ACCEPT} className="hidden" onChange={onFile} />
@@ -10653,278 +9238,13 @@ function TeachersTab({ adminId, defaultShowForm }: { adminId: string; defaultSho
 
 // ─── ClassGroupsTab ───────────────────────────────────────────────────────────
 
-type ClassGroup = { id: string; name: string; program: string | null; grade: number | null; section: number | null; department: string | null; color: string | null; created_at: string; };
-
-const DEPT_BY_SECTION: Record<number, string> = {
-  1: "การบัญชี",
-  2: "เทคโนโลยีธุรกิจดิจิทัล",
-  3: "ธุรกิจค้าปลีก",
-  4: "ช่างไฟฟ้ากำลัง",
-  5: "ช่างยนต์",
-};
-
-const SECTION_COLORS: Record<number, string> = {
-  1: "#f59e0b", 2: "#6366f1", 3: "#ec4899", 4: "#f97316", 5: "#10b981",
-};
-
-function autoGroupName(program: string, grade: number, section: number) {
-  return `${program}.${grade}/${section}`;
-}
-
-const BLANK_GROUP = { program: "ปวช", grade: 1, section: 1, department: DEPT_BY_SECTION[1], color: SECTION_COLORS[1] };
-
-function ClassGroupsTab({ adminId }: { adminId: string }) {
-  const [groups, setGroups] = useState<ClassGroup[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState(BLANK_GROUP);
-  const [msg, setMsg] = useState("");
-  const [search, setSearch] = useLocalStorageState<string>("asia_admin_class_groups_search", "", isString);
-
-  const previewName = autoGroupName(form.program, form.grade, form.section);
-
-  const inp = { className: "w-full px-3 py-2 rounded-lg text-sm outline-none", style: { background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" } };
-
-  function setSection(sec: number) {
-    setForm(f => ({
-      ...f,
-      section: sec,
-      department: DEPT_BY_SECTION[sec] ?? f.department,
-      color: SECTION_COLORS[sec] ?? f.color,
-    }));
-  }
-
-  function load() {
-    setLoading(true);
-    adminFetch("/api/admin/class-groups", adminId).then(r => r.json())
-      .then(j => { if (j.status === "success") setGroups(j.data); })
-      .finally(() => setLoading(false));
-  }
-  useEffect(load, [adminId]);
-
-  function startEdit(g: ClassGroup) {
-    setEditId(g.id);
-    setForm({ program: g.program ?? "ปวช", grade: g.grade ?? 1, section: g.section ?? 1, department: g.department ?? "", color: g.color ?? "#6366f1" });
-    setMsg("");
-  }
-  function reset() { setEditId(null); setForm({ ...BLANK_GROUP, department: DEPT_BY_SECTION[1] }); setMsg(""); }
-
-  async function save() {
-    setSaving(true); setMsg("");
-    const body = { ...form, name: previewName };
-    const url = editId ? `/api/admin/class-groups/${editId}` : "/api/admin/class-groups";
-    const method = editId ? "PUT" : "POST";
-    try {
-      const res = await adminFetch(url, adminId, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      const j = await res.json();
-      if (j.status === "success") { load(); reset(); } else { setMsg(j.message ?? "เกิดข้อผิดพลาด"); }
-    } finally { setSaving(false); }
-  }
-
-  async function del(id: string, name: string) {
-    if (!confirm(`ลบ "${name}" และตารางทั้งหมดของกลุ่มนี้?`)) return;
-    await adminFetch(`/api/admin/class-groups/${id}`, adminId, { method: "DELETE" });
-    load();
-  }
-
-  const groupQuery = search.trim().toLowerCase();
-  const filteredGroups = groupQuery
-    ? groups.filter(g =>
-        g.name.toLowerCase().includes(groupQuery) ||
-        g.program?.toLowerCase().includes(groupQuery) ||
-        g.department?.toLowerCase().includes(groupQuery) ||
-        String(g.grade ?? "").includes(groupQuery) ||
-        String(g.section ?? "").includes(groupQuery)
-      )
-    : groups;
-  const vocational = groups.filter(g => g.program === "ปวช").length;
-  const higherVocational = groups.filter(g => g.program === "ปวส").length;
-  const departments = [...new Set(groups.map(g => g.department).filter(Boolean))].length;
-  const departmentOptions = uniqueTextOptions([
-    ...Object.values(DEPT_BY_SECTION),
-    ...groups.map(g => g.department),
-    form.department,
-  ]);
-
-  return (
-    <div className="space-y-5">
-      <DarkSectionHeader title="กลุ่มเรียน" icon="fa-users-rectangle" count={groups.length} />
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[
-          { label: "กลุ่มทั้งหมด", value: groups.length, icon: "fa-layer-group" },
-          { label: "ระดับ ปวช", value: vocational, icon: "fa-graduation-cap" },
-          { label: "ระดับ ปวส", value: higherVocational, icon: "fa-user-graduate" },
-          { label: "สาขาวิชา", value: departments, icon: "fa-sitemap" },
-        ].map(k => (
-          <div key={k.label} className="rounded-xl p-4 flex items-center gap-3" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: `${ADMIN_PRIMARY}18`, color: ADMIN_PRIMARY }}>
-              <i className={`fa-solid ${k.icon} text-sm`} />
-            </div>
-            <div>
-              <div className="text-lg font-black text-white leading-none">{k.value}</div>
-              <div className="text-[10px] mt-1" style={{ color: "#9e9e9e" }}>{k.label}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Form */}
-      <div className="rounded-xl p-4 space-y-3" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-        <div className="flex items-center justify-between">
-          <div className="text-xs font-bold text-white">{editId ? "แก้ไขกลุ่ม" : "เพิ่มกลุ่มใหม่"}</div>
-          {/* Preview badge */}
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold"
-            style={{ background: form.color + "22", color: form.color, border: `1px solid ${form.color}44` }}>
-            <span className="w-2 h-2 rounded-full" style={{ background: form.color }} />
-            {previewName}
-            {form.department && <span className="font-normal" style={{ color: form.color + "bb" }}>· {form.department}</span>}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {/* Program */}
-          <div>
-            <label className="block text-[11px] text-[#9e9e9e] mb-1">ระดับ</label>
-            <select value={form.program} onChange={e => {
-              const prog = e.target.value;
-              setForm(f => ({ ...f, program: prog, grade: prog === "ปวส" && f.grade > 2 ? 2 : f.grade }));
-            }} {...inp}>
-              <option value="ปวช">ปวช — ประกาศนียบัตรวิชาชีพ</option>
-              <option value="ปวส">ปวส — ประกาศนียบัตรวิชาชีพชั้นสูง</option>
-            </select>
-          </div>
-
-          {/* Grade */}
-          <div>
-            <label className="block text-[11px] text-[#9e9e9e] mb-1">ชั้นปี</label>
-            <select value={form.grade}
-              onChange={e => setForm(f => ({ ...f, grade: Number(e.target.value) }))}
-              {...inp}>
-              {(form.program === "ปวส" ? [1,2] : [1,2,3]).map(g => (
-                <option key={g} value={g}>ปีที่ {g}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Section — maps to department */}
-          <div className="col-span-2">
-            <label className="block text-[11px] text-[#9e9e9e] mb-1">หมู่ / สาขา</label>
-            <div className="flex gap-1.5 flex-wrap">
-              {Object.entries(DEPT_BY_SECTION).map(([sec, dept]) => {
-                const s = Number(sec);
-                const active = form.section === s;
-                return (
-                  <button key={s} type="button" onClick={() => setSection(s)}
-                    className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all"
-                    style={{
-                      background: active ? SECTION_COLORS[s] : "#2a2a2a",
-                      color: active ? "#fff" : "#9e9e9e",
-                      border: `1px solid ${active ? "transparent" : "#3e3e3e"}`,
-                    }}>
-                    /{s} {dept}
-                  </button>
-                );
-              })}
-              {/* Custom section */}
-              {!DEPT_BY_SECTION[form.section] && (
-                <span className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold"
-                  style={{ background: form.color, color: "#fff" }}>/{form.section}</span>
-              )}
-            </div>
-          </div>
-
-          {/* Department (auto-filled, editable) */}
-          <div className="col-span-2 sm:col-span-3">
-            <label className="block text-[11px] text-[#9e9e9e] mb-1">สาขาวิชา</label>
-            <select value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))}
-              {...inp}>
-              <option value="">-- เลือกสาขาวิชา --</option>
-              {departmentOptions.map(dept => <option key={dept} value={dept}>{dept}</option>)}
-            </select>
-          </div>
-
-          {/* Color */}
-          <div>
-            <label className="block text-[11px] text-[#9e9e9e] mb-1">สี</label>
-            <div className="flex items-center gap-2">
-              <input type="color" value={form.color} onChange={e => setForm(f => ({ ...f, color: e.target.value }))}
-                className="w-8 h-8 rounded cursor-pointer border-0 bg-transparent" />
-              <span className="text-xs font-mono" style={{ color: "#9e9e9e" }}>{form.color}</span>
-            </div>
-          </div>
-        </div>
-
-        {msg && <p className="text-xs text-red-400">{msg}</p>}
-        <div className="flex gap-2 pt-1">
-          <button onClick={save} disabled={saving}
-            className="px-4 py-2 rounded-lg text-xs font-bold text-white transition-opacity hover:opacity-80"
-            style={{ background: "#ff7070" }}>
-            {saving ? "กำลังบันทึก..." : editId ? "บันทึกการแก้ไข" : `เพิ่ม ${previewName}`}
-          </button>
-          {editId && <button onClick={reset} className="px-4 py-2 rounded-lg text-xs font-bold transition-opacity hover:opacity-80" style={{ background: "#2a2a2a", color: "#9e9e9e" }}>ยกเลิก</button>}
-        </div>
-      </div>
-
-      <div className="rounded-xl p-3" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-        <div className="flex flex-col md:flex-row gap-3 md:items-center">
-          <div className="relative flex-1">
-            <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-[11px]" style={{ color: "#636363" }} />
-            <input value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="ค้นหากลุ่มเรียน, ระดับ, ชั้นปี, สาขา..."
-              className="w-full pl-8 pr-3 py-2.5 rounded-lg text-sm outline-none"
-              style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }} />
-          </div>
-          <span className="text-[11px] px-3 py-2 rounded-lg" style={{ background: "#0c0c0c", border: "1px solid #2a2a2a", color: "#9e9e9e" }}>
-            แสดง {filteredGroups.length} จาก {groups.length} กลุ่ม
-          </span>
-        </div>
-      </div>
-
-      {/* List */}
-      {loading ? (
-        <DarkSpinner />
-      ) : groups.length === 0 ? (
-        <div className="text-center py-8 text-[#636363]">ยังไม่มีกลุ่มเรียน</div>
-      ) : filteredGroups.length === 0 ? (
-        <DarkEmpty text="ไม่พบกลุ่มเรียนที่ค้นหา" />
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {filteredGroups.map(g => {
-            const color = g.color ?? ADMIN_PRIMARY;
-            return (
-            <div key={g.id} className="rounded-xl p-4"
-              style={{ background: "#1c1c1c", border: `1px solid ${color}44` }}>
-              <div className="flex items-start gap-3">
-                <div className="w-11 h-11 rounded-lg flex items-center justify-center font-black text-white flex-shrink-0" style={{ background: color }}>
-                  {g.section ? `/${g.section}` : g.name.charAt(0)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-bold text-white truncate">{g.name}</div>
-                  <div className="text-[11px] mt-0.5 truncate" style={{ color: "#9e9e9e" }}>{g.department || "ยังไม่ระบุสาขา"}</div>
-                  <div className="flex gap-1.5 flex-wrap mt-3">
-                    {g.program && <span className="px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ background: "#0c0c0c", color: "#9e9e9e", border: "1px solid #2a2a2a" }}>{g.program}</span>}
-                    {g.grade && <span className="px-2 py-0.5 rounded-full text-[10px] font-bold" style={{ background: "#0c0c0c", color: "#9e9e9e", border: "1px solid #2a2a2a" }}>ปี {g.grade}</span>}
-                  </div>
-                </div>
-              </div>
-              <div className="flex gap-2 mt-4">
-                <button onClick={() => startEdit(g)} className="flex-1 text-[11px] px-2 py-1.5 rounded-lg font-bold" style={{ background: `${ADMIN_PRIMARY}18`, color: ADMIN_PRIMARY }}>แก้ไข</button>
-                <button onClick={() => del(g.id, g.name)} className="text-[11px] px-3 py-1.5 rounded-lg font-bold" style={{ background: "#da363322", color: "#ff7070" }}>ลบ</button>
-              </div>
-            </div>
-          );})}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── ClassScheduleTab ─────────────────────────────────────────────────────────
 
 const DAYS_TH = ["", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์", "อาทิตย์"];
 const COMMON_OVERRIDE_NOTES = ["ซ่อมห้อง", "ครูลา", "สอบ", "กิจกรรม", "ประชุม", "เปลี่ยนตารางชั่วคราว"];
+
+/** ตารางเรียนยังต้องรู้จักกลุ่มเรียน แม้หน้าจัดการกลุ่มจะย้ายไป /admin/students แล้ว */
+type ClassGroup = { id: string; name: string; program: string | null; grade: number | null; section: number | null; department: string | null; color: string | null; created_at: string; };
 
 type ScheduleRow = { id: string; class_group_id: string; room_name: string; subject: string | null; teacher: string | null; day_of_week: number; start_time: string; end_time: string; class_groups?: { id: string; name: string; color: string | null } | null; };
 
@@ -11436,7 +9756,7 @@ function ClassScheduleTab({ adminId, activeView, onViewChange }: {
                           <button onClick={() => saveOverride(s)} disabled={oSaving}
                             className="h-10 w-full sm:w-auto px-4 rounded-lg text-xs font-bold text-white disabled:opacity-50"
                             style={{ background: "#ff7070" }}>
-                            {oSaving ? <i className="fa-solid fa-spinner fa-spin" /> : "บันทึก"}
+                            {oSaving ? <i className="asia-spinner" /> : "บันทึก"}
                           </button>
                         </div>
                       </div>

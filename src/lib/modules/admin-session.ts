@@ -80,3 +80,45 @@ export async function adminFetch(path: string, init: RequestInit = {}): Promise<
   if (res.status === 401) bounceToLogin();
   return res;
 }
+
+/**
+ * ดึง role/ฝ่ายปัจจุบันจาก server มาทับของที่จำไว้
+ *
+ * role ถูกเก็บลง localStorage ตอนล็อกอินแล้วใช้ยาว 8 ชม. ถ้าระหว่างนั้นถูก
+ * เปลี่ยนสิทธิ์ หน้าเว็บจะยังวาดเมนูและปุ่มตามสิทธิ์เก่า กดแล้วเจอ 403 เปล่า ๆ
+ * โดยไม่มีอะไรบอกว่าทำไม (เคยเจอกับปุ่มลบกลุ่มเรียน — badge ขึ้น "ผู้ดูแลสูงสุด"
+ * แต่ฐานข้อมูลเป็น staff) เรียกตอนเปิดหน้าเพื่อให้ UI ตรงกับสิทธิ์จริงเสมอ
+ *
+ * คืนค่า session ที่อัปเดตแล้ว หรือ null ถ้าถามไม่ได้ — ผู้เรียกใช้ของเดิมต่อได้
+ */
+export async function syncAdminSession(): Promise<AdminSession | null> {
+  const current = readAdminSession();
+  if (!current) return null;
+  try {
+    const res = await fetch("/api/admin/auth", { headers: { "x-admin-id": current.admin_id } });
+    if (res.status === 401) { bounceToLogin(); return null; }
+    if (!res.ok) return current;
+    const json = await res.json();
+    if (!json?.ok || !json.admin) return current;
+
+    const fresh: AdminSession = {
+      ...current,
+      role: json.admin.role ?? current.role,
+      division: json.admin.division ?? null,
+    };
+    if (fresh.role === current.role && fresh.division === (current.division ?? null)) return current;
+
+    try { localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(fresh)); } catch { /* โหมดส่วนตัว */ }
+    return fresh;
+  } catch {
+    return current; // ออฟไลน์หรือ server ล่ม ใช้ของเดิมไปก่อน ดีกว่าเตะออก
+  }
+}
+
+/**
+ * อายุ session ของหลังบ้าน — 8 ชั่วโมง เท่ากับที่ /admin ใช้ตัดสินตอนโหลดหน้า
+ *
+ * ค่าเดียวกันนี้เคยเขียนไว้ใน admin/page.tsx อย่างเดียว (SESSION_8H) พอ sidebar
+ * ที่ใช้ร่วมกันต้องนับถอยหลังด้วย จึงย้ายมาไว้ที่เดียวกับตัวจัดการ session
+ */
+export const ADMIN_SESSION_TTL = 8 * 60 * 60 * 1000;

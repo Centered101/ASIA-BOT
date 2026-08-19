@@ -2,6 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import bcrypt from "bcryptjs";
+import { ADMIN_DIVISIONS } from "@/lib/modules/nav";
+
+/**
+ * ฝ่ายที่รับได้ต้องตรงกับ CHECK ใน 0019_admin_division.sql
+ * ค่าที่ไม่รู้จักเก็บเป็น null ดีกว่าปล่อยให้ DB โยน 23514 กลับมาเป็น error ดิบ
+ */
+function cleanDivision(value: unknown): string | null {
+  const v = typeof value === "string" ? value.trim() : "";
+  return (ADMIN_DIVISIONS as string[]).includes(v) ? v : null;
+}
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -24,10 +34,17 @@ export async function GET(req: NextRequest) {
   const me = await getRequester(req);
   if (!me) return NextResponse.json({ status: "error", message: "Unauthorized" }, { status: 401 });
 
+  // ที่นี่ระบุชื่อคอลัมน์แทน * เพราะต้องกัน password_hash ไม่ให้หลุดออกไป
+  // แต่ division เพิ่งเพิ่มใน 0019 และ RUNBOOK ให้ deploy โค้ดก่อนรัน migration
+  // จึงลองแบบมี division ก่อน ถ้าฐานยังไม่มีคอลัมน์ค่อยถอยไปชุดเดิม
+  const BASE_COLS = "admin_id, username, role, first_name, last_name, nickname, email, phone, entry_year, department, avatar, admin_status, created_at, username_changed_at, linked_student_id";
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase.from("admins") as any)
-    .select("admin_id, username, role, first_name, last_name, nickname, email, phone, entry_year, department, avatar, admin_status, created_at, username_changed_at, linked_student_id")
-    .order("created_at", { ascending: true });
+  const list = (cols: string) => (supabase.from("admins") as any).select(cols).order("created_at", { ascending: true });
+
+  let { data, error } = await list(`${BASE_COLS}, division`);
+  if (error && /division/i.test(error.message ?? "")) {
+    ({ data, error } = await list(BASE_COLS));
+  }
 
   if (error) return NextResponse.json({ status: "error", message: error.message }, { status: 500 });
   return NextResponse.json({ status: "success", data: data ?? [] });
@@ -39,7 +56,7 @@ export async function POST(req: NextRequest) {
   if (me.role !== "superadmin")
     return NextResponse.json({ status: "error", message: "ต้องเป็น Superadmin เท่านั้น" }, { status: 403 });
 
-  const { username, password, role, first_name, last_name, nickname, email, phone, entry_year, department, linked_student_id, avatar } = await req.json();
+  const { username, password, role, first_name, last_name, nickname, email, phone, entry_year, department, division, linked_student_id, avatar } = await req.json();
 
   if (!username?.trim() || !password)
     return NextResponse.json({ status: "error", message: "กรุณากรอก username และรหัสผ่าน" }, { status: 400 });
@@ -55,8 +72,7 @@ export async function POST(req: NextRequest) {
 
   const password_hash = await bcrypt.hash(password, 12);
   const newId = `ADM-${Date.now()}`;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase.from("admins") as any).insert({
+  const row = {
     admin_id: newId,
     username: username.trim().toLowerCase(),
     password_hash,
@@ -69,9 +85,20 @@ export async function POST(req: NextRequest) {
     phone: phone?.trim() || null,
     entry_year: entry_year?.trim() || null,
     department: department?.trim() || null,
+    division: cleanDivision(division),
     avatar: avatar?.trim() || null,
     linked_student_id: linked_student_id?.trim() || null,
-  });
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const insert = (r: Record<string, unknown>) => (supabase.from("admins") as any).insert(r);
+  let { error } = await insert(row);
+  // ฐานที่ยังไม่ได้รัน 0019 ยังเพิ่มผู้ดูแลได้ แค่ไม่ได้ฝ่ายติดไปด้วย
+  if (error && /division/i.test(error.message ?? "")) {
+    const { division: _skip, ...withoutDivision } = row;
+    void _skip;
+    ({ error } = await insert(withoutDivision));
+  }
 
   if (error) return NextResponse.json({ status: "error", message: error.message }, { status: 500 });
   return NextResponse.json({ status: "success", admin_id: newId });

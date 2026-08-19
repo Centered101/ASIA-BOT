@@ -455,8 +455,8 @@ function Shell({ title, subtitle, children }: {
     <AdminPage
       title={title ?? "ข้อมูลนักเรียน"}
       subtitle={subtitle}
-      navId="student_360"
-      backHref="/admin/student-360"
+      navId="students"
+      backHref="/admin/students"
       backLabel="รายชื่อนักเรียน"
       width={1200}
     >

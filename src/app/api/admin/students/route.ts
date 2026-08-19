@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { checkAdminAuth } from "@/lib/admin-auth";
+import { checkBirthDate, checkGender, checkNationalId } from "@/lib/student-validate";
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -32,10 +33,26 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   if (!await checkAdminAuth(req)) return NextResponse.json({ status: "error" }, { status: 401 });
 
-  const { student_id, first_name, last_name, nickname, program, department, entry_year, student_phone } = await req.json();
+  const {
+    student_id, first_name, last_name, nickname, program, department, entry_year, student_phone,
+    birth_date, gender, national_id, address,
+  } = await req.json();
 
   if (!student_id?.trim() || !first_name?.trim() || !last_name?.trim() || !program?.trim() || !entry_year?.trim() || !student_phone?.trim())
     return NextResponse.json({ status: "error", message: "กรุณากรอกข้อมูลที่จำเป็นให้ครบ" }, { status: 400 });
+
+  // สี่ช่องนี้ไม่บังคับ ตรวจเฉพาะตอนที่กรอกมา ใช้กฎชุดเดียวกับหน้าสมัคร
+  const cleanNationalId = String(national_id ?? "").replace(/\D/g, "");
+  if (cleanNationalId) {
+    const nidErr = checkNationalId(cleanNationalId);
+    if (nidErr) return NextResponse.json({ status: "error", message: nidErr }, { status: 400 });
+  }
+  if (birth_date) {
+    const bdErr = checkBirthDate(String(birth_date));
+    if (bdErr) return NextResponse.json({ status: "error", message: bdErr }, { status: 400 });
+  }
+  const genderErr = checkGender(String(gender ?? ""));
+  if (genderErr) return NextResponse.json({ status: "error", message: genderErr }, { status: 400 });
 
   const { data: existing } = await supabase.from("students").select("id").eq("student_id", student_id.trim()).maybeSingle();
   if (existing) return NextResponse.json({ status: "error", message: "รหัสนักเรียนนี้มีอยู่แล้ว" }, { status: 409 });
@@ -49,6 +66,10 @@ export async function POST(req: NextRequest) {
     department: department?.trim() || null,
     entry_year: entry_year.trim(),
     student_phone: student_phone.trim(),
+    birth_date: birth_date ? String(birth_date) : null,
+    gender: gender ? (String(gender) as "male" | "female" | "other") : null,
+    national_id: cleanNationalId || null,
+    address: address?.trim() || null,
     card_status: "active",
   });
 

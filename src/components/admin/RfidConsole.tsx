@@ -219,7 +219,7 @@ export default function RfidConsole() {
             <button onClick={sendScan} disabled={sending}
               className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl font-bold text-white transition disabled:opacity-60"
               style={{ background: "#ff7070", boxShadow: "0 4px 20px rgba(255,112,112,0.22)" }}>
-              <i className={`fa-solid ${sending ? "fa-spinner fa-spin" : "fa-tower-broadcast"}`} />
+              <i className={`fa-solid ${sending ? "asia-spinner" : "fa-tower-broadcast"}`} />
               ส่ง UID เข้า API
             </button>
           </div>

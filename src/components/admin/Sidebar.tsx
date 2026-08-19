@@ -4,9 +4,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { SITE_NAME } from "@/lib/config";
-import { type NavItem } from "@/lib/modules/nav";
+import { navHref, type NavItem } from "@/lib/modules/nav";
 import { adminRoleLabel, visibleNavSections } from "@/lib/modules/nav-access";
-import { clearAdminSession, readAdminSession, type AdminSession } from "@/lib/modules/admin-session";
+import {
+  ADMIN_SESSION_TIME_KEY, ADMIN_SESSION_TTL, clearAdminSession, readAdminSession, syncAdminSession,
+  type AdminSession,
+} from "@/lib/modules/admin-session";
 import { T } from "./ui";
 
 /**
@@ -19,25 +22,70 @@ import { T } from "./ui";
  * ที่แชร์กันจริงคือ NAV_SECTIONS ใน src/lib/modules/nav.ts ดังนั้นเมนูจะตรงกัน
  * เสมอ ต่างกันแค่วิธีไป: หน้าเดิมสลับแท็บในที่ ส่วนที่นี่เปลี่ยน URL
  *
- * รายการที่ไม่มี `href` คือแท็บที่ยังอยู่ในไฟล์เดิม จึงลิงก์ไป /admin?tab=<id>
+ * รายการที่ไม่มี `href` คือแท็บที่ยังอยู่ในไฟล์เดิม จึงลิงก์ไป /admin/<id>
  *
  * การกรองสิทธิ์ใช้ visibleNavSections ตัวเดียวกับหน้า /admin — ก่อนหน้านี้ที่นี่
  * map NAV_SECTIONS ตรง ๆ โดยไม่กรองเลย บัญชี staff จึงเห็น "ใบสมัครครู" ซึ่งเป็น
  * ของ superadmin เท่านั้น เมนูสองฝั่งไม่ตรงกันทั้งที่อ่านรายการชุดเดียวกัน
  */
 
-export function AdminSidebar({ activeId }: { activeId?: string }) {
+export function AdminSidebar({
+  activeId,
+  open,
+  onClose,
+}: {
+  activeId?: string;
+  /** สถานะเปิด/ปิดบนจอเล็ก ถือไว้ที่ AdminPage เพราะปุ่มเปิดอยู่บนแถบบนสุด */
+  open: boolean;
+  onClose: () => void;
+}) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const setOpen = (v: boolean) => { if (!v) onClose(); };
   const [me, setMe] = useState<AdminSession | null>(null);
 
   // อ่านหลัง mount เพราะ localStorage ไม่มีตอน render ฝั่ง server
-  useEffect(() => { setMe(readAdminSession()); }, []);
+  // แล้วถาม server ต่อว่า role/ฝ่ายจริงตอนนี้คืออะไร เผื่อถูกเปลี่ยนสิทธิ์
+  // หลังล็อกอิน — ไม่งั้นเมนูจะค้างตามสิทธิ์เก่าจนกว่าจะล็อกอินใหม่
+  useEffect(() => {
+    setMe(readAdminSession());
+    void syncAdminSession().then((fresh) => { if (fresh) setMe(fresh); });
+  }, []);
 
   function logout() {
     clearAdminSession();
     router.push("/admin");
   }
+
+  // นับถอยหลังอายุ session แบบเดียวกับหน้า /admin — เจ้าหน้าที่ทะเบียนกรอก
+  // ข้อมูลยาว ๆ แล้วโดนเตะออกกลางคันโดยไม่รู้ตัวมาก่อน ตัวเลขนี้ทำให้รู้ล่วงหน้า
+  const [timeLeft, setTimeLeft] = useState("");
+  const [expiryPct, setExpiryPct] = useState(1);
+
+  useEffect(() => {
+    let raw: string | null = null;
+    try { raw = localStorage.getItem(ADMIN_SESSION_TIME_KEY); } catch { /* โหมดส่วนตัว */ }
+    if (!raw) return;
+
+    // eslint-disable-next-line prefer-const
+    let tid: ReturnType<typeof setInterval> | undefined;
+    const tick = () => {
+      const rem = new Date(raw!).getTime() + ADMIN_SESSION_TTL - Date.now();
+      if (rem <= 0) {
+        setTimeLeft("หมดอายุ");
+        setExpiryPct(0);
+        clearInterval(tid);
+        return;
+      }
+      const h = Math.floor(rem / 3_600_000);
+      const m = Math.floor((rem % 3_600_000) / 60_000);
+      const sec = Math.floor((rem % 60_000) / 1_000);
+      setTimeLeft(`${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`);
+      setExpiryPct(rem / ADMIN_SESSION_TTL);
+    };
+    tick();
+    tid = setInterval(tick, 1_000);
+    return () => clearInterval(tid);
+  }, []);
 
   // ยังไม่รู้ว่าใคร ให้ถือเป็น staff ไว้ก่อน โชว์เกินสิทธิ์แล้วค่อยหดเป็นภาพที่แย่กว่า
   const sections = useMemo(
@@ -45,20 +93,12 @@ export function AdminSidebar({ activeId }: { activeId?: string }) {
     [me?.role, me?.division],
   );
 
-  const link = (item: NavItem) => item.href ?? `/admin?tab=${item.id}`;
+  const link = navHref;
 
   return (
     <>
-      {/* ปุ่มเปิดเมนูบนจอเล็ก — จอใหญ่ sidebar อยู่ถาวรอยู่แล้ว */}
-      <button
-        onClick={() => setOpen(true)}
-        className="lg:hidden fixed top-3 left-3 z-30 w-9 h-9 rounded-md flex items-center justify-center"
-        style={{ color: "#888", background: "#1a1a1a", border: "1px solid #252525" }}
-        aria-label="เปิดเมนู"
-      >
-        <i className="fa-solid fa-bars text-xs" />
-      </button>
-
+      {/* ปุ่มเปิดเมนูย้ายไปอยู่บนแถบบนสุดแล้ว (AdminPage) ที่เดียวกับหน้า /admin
+          ตอนที่มันลอยอยู่มุมจอ มันทับหัวข้อหน้าและอยู่คนละที่กับของหน้าเดิม */}
       <div
         onClick={() => setOpen(false)}
         className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity lg:hidden ${
@@ -161,6 +201,27 @@ export function AdminSidebar({ activeId }: { activeId?: string }) {
         {/* บัญชีที่ล็อกอินอยู่ + ปุ่มออกจากระบบ
             หน้า /admin มีแถบนี้อยู่ท้าย sidebar แต่หน้าที่อยู่นอกไฟล์นั้นไม่มี
             พอย้ายมาทำงานที่หน้าใหม่จึงออกจากระบบไม่ได้ ต้องกดกลับไป /admin ก่อน */}
+        {me && timeLeft && (
+          <div className="px-3 pt-2 flex-shrink-0">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[9px] uppercase tracking-widest" style={{ color: "#3a3a3a" }}>
+                เซสชันหมดอายุใน
+              </span>
+              <span className="text-[11px] font-mono font-bold"
+                style={{ color: timeLeft === "หมดอายุ" ? T.accent : "#3fb950" }}>
+                {timeLeft}
+              </span>
+            </div>
+            <div className="h-[3px] rounded-full overflow-hidden" style={{ background: "#1a1a1a" }}>
+              <div className="h-full rounded-full transition-all duration-1000"
+                style={{
+                  width: `${Math.max(0, expiryPct) * 100}%`,
+                  background: expiryPct > 0.25 ? "#3fb950" : T.accent,
+                }} />
+            </div>
+          </div>
+        )}
+
         {me && (
           <div className="px-3 py-3 flex-shrink-0" style={{ borderTop: "1px solid #1f1f1f" }}>
             <div className="flex items-center gap-2.5">

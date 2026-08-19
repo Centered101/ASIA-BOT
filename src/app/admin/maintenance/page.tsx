@@ -138,6 +138,7 @@ export default function MaintenanceQueuePage() {
 
   return (
     <AdminPage
+      onRefresh={() => void load()}
       navId="maintenance"
       title="งานแจ้งซ่อม"
       subtitle={<>ค้างอยู่ <strong style={{ color: T.accent }}>{openTotal}</strong> รายการ</>}

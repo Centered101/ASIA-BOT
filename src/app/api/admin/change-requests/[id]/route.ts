@@ -22,7 +22,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: cr } = await (supabase.from("change_requests") as any).select("*").eq("id", id).single();
     if (cr?.requested_changes && typeof cr.requested_changes === "object") {
-      const allowed_fields = ["student_id", "student_phone", "first_name", "last_name", "nickname", "program", "entry_year", "department", "uid", "card_status", "photo_url", "line_user_id"];
+      // birth_date/gender/national_id/address มาจากหน้าลงทะเบียนบัตรนักเรียน (/student-card)
+      const allowed_fields = ["student_id", "student_phone", "first_name", "last_name", "nickname", "program", "entry_year", "department", "uid", "card_status", "photo_url", "line_user_id", "birth_date", "gender", "national_id", "address"];
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const patch: Record<string, any> = {};
       const requestedChanges = body.changes && typeof body.changes === "object" ? body.changes : cr.requested_changes;

@@ -69,12 +69,22 @@ export const MODULES: ModuleDescriptor[] = [
     icon: "fa-solid fa-address-card",
     permission: "student.view_all",
     group: "student",
-    href: "/admin/student-360",
+    href: "/admin/students",
     legacy: false,
     phase: 2,
   },
   legacyTab("data_requests", "คำขอแก้ไขข้อมูล", "fa-solid fa-user-pen", "student.update", "student"),
-  legacyTab("class_groups", "กลุ่มเรียน", "fa-solid fa-users-rectangle", "schedule.manage", "academic"),
+  // กลุ่มเรียนถูกยุบเป็นแท็บในหน้านักเรียนแล้ว จึงไม่ใช่ legacy tab ของ /admin อีกต่อไป
+  {
+    key: "class_groups",
+    label: "กลุ่มเรียน",
+    icon: "fa-solid fa-users-rectangle",
+    permission: "schedule.manage",
+    group: "academic",
+    href: "/admin/students?tab=groups",
+    legacy: false,
+    phase: 2,
+  },
   legacyTab("class_schedule_weekly", "ตารางสัปดาห์", "fa-solid fa-calendar-week", "schedule.view", "academic"),
   legacyTab("class_schedule_override", "แก้ตารางวันพิเศษ", "fa-solid fa-calendar-day", "schedule.manage", "academic"),
   legacyTab("teachers", "ครูผู้สอน", "fa-solid fa-chalkboard-user", "student.view_all", "academic"),
@@ -93,16 +103,7 @@ export const MODULES: ModuleDescriptor[] = [
   legacyTab("settings", "ตั้งค่า", "fa-solid fa-gear", "system.manage", "system"),
 
   // โมดูลที่อยู่นอก admin/page.tsx แล้ว — legacy: false
-  {
-    key: "student-360",
-    label: "Student 360",
-    icon: "fa-solid fa-id-card-clip",
-    permission: "student.view_all",
-    group: "student",
-    href: "/admin/student-360",
-    legacy: false,
-    phase: 2,
-  },
+  // (student-360 อยู่ด้านบนแล้ว ตอนรวมเมนูกับ "นักเรียน" เคยเหลือค้างไว้สองอัน)
   {
     key: "maintenance",
     label: "งานแจ้งซ่อม",
@@ -124,6 +125,19 @@ export const MODULES: ModuleDescriptor[] = [
     phase: 3,
   },
 ];
+
+// คีย์ซ้ำทำให้โมดูลโผล่สองครั้งใน sidebar และ moduleByKey หยิบอันแรกเสมอ
+// ซึ่งอาจไม่ใช่อันที่แก้ล่าสุด — เคยเกิดจริงตอนรวมเมนู student-360 เข้ากับนักเรียน
+// เตือนตอน dev เท่านั้น ไม่ throw เพราะไม่ควรทำให้หลังบ้านล่มเพราะเมนูซ้ำ
+if (process.env.NODE_ENV !== "production") {
+  const seen = new Set<string>();
+  for (const m of MODULES) {
+    if (seen.has(m.key)) {
+      console.warn(`[registry] key "${m.key}" ซ้ำ — โมดูลจะขึ้นสองครั้ง ให้ลบอันที่เกินออก`);
+    }
+    seen.add(m.key);
+  }
+}
 
 /** Modules the caller may see, in sidebar order. */
 export function visibleModules(permissions: readonly string[]): ModuleDescriptor[] {
@@ -155,8 +169,8 @@ export function findModule(key: string): ModuleDescriptor | undefined {
  * Used by the role-aware landing logic in Phase 13.
  */
 export const ROLE_HOME: Partial<Record<Role, string>> = {
-  SHOP_MANAGER: "/admin?tab=shoporders",
-  LIBRARY: "/admin?tab=dashboard",
-  ASSET_MANAGER: "/admin?tab=equipment_requests",
-  ADVISOR: "/admin?tab=students",
+  SHOP_MANAGER: "/admin/shoporders",
+  LIBRARY: "/admin",
+  ASSET_MANAGER: "/admin/equipment_requests",
+  ADVISOR: "/admin/students",
 };

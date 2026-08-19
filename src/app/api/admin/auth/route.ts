@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import bcrypt from "bcryptjs";
 import { attachSessionCookie } from "@/lib/server/session";
+import { checkAdminAuth } from "@/lib/admin-auth";
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,6 +21,38 @@ function isFallbackAdminLogin(username: string, password: string) {
   const fallbackUsername = process.env.ADMIN_FALLBACK_USERNAME;
   const fallbackPassword = process.env.ADMIN_FALLBACK_PASSWORD;
   return !!fallbackUsername && !!fallbackPassword && username === fallbackUsername && password === fallbackPassword;
+}
+
+/**
+ * role/ฝ่ายปัจจุบันของคนที่กำลังเรียก — ใช้ซิงก์ session ฝั่ง client
+ *
+ * session ใน localStorage เก็บ role ตอนล็อกอินไว้ 8 ชม. ถ้าระหว่างนั้นมีคน
+ * เปลี่ยน role ในฐานข้อมูล หน้าเว็บจะยังโชว์เมนูและปุ่มตามสิทธิ์เก่า กดแล้ว
+ * ได้ 403 ทุกครั้งโดยไม่มีอะไรอธิบาย — ฝั่ง server อ่าน admins.role สดเสมอ
+ * จึงให้ client มาถามค่าจริงตอนเปิดหน้าแทนที่จะเชื่อของที่จำไว้
+ */
+export async function GET(req: NextRequest) {
+  const session = await checkAdminAuth(req);
+  if (!session) {
+    return NextResponse.json({ ok: false, message: "กรุณาเข้าสู่ระบบ" }, { status: 401 });
+  }
+
+  // division เพิ่งเพิ่มใน 0019 ฐานที่ยังไม่ได้รัน migration จะไม่มีคอลัมน์นี้
+  // ให้ถือว่าไม่ระบุฝ่ายแทนที่จะทำให้ทั้ง request พัง
+  let division: string | null = null;
+  try {
+    const { data } = await supabase
+      .from("admins")
+      .select("division")
+      .eq("admin_id", session.admin_id)
+      .maybeSingle();
+    division = (data as { division?: string | null } | null)?.division ?? null;
+  } catch { /* ยังไม่มีคอลัมน์ ถือว่าไม่ระบุฝ่าย */ }
+
+  return NextResponse.json({
+    ok: true,
+    admin: { admin_id: session.admin_id, role: session.role, division },
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -45,7 +78,11 @@ export async function POST(req: NextRequest) {
   // ── Try DB admin lookup ──────────────────────────────────────────────────
   const { data: admin, error: dbError } = await supabase
     .from("admins")
-    .select("id, admin_id, username, password_hash, role, first_name, last_name, nickname, email, phone, entry_year, department, avatar, admin_status, google_email, created_at")
+    // ใช้ * แทนการไล่ชื่อคอลัมน์ เพราะ division เพิ่งเพิ่มใน 0019 และ RUNBOOK
+    // ให้ deploy โค้ดก่อนรัน migration — ถ้าระบุชื่อคอลัมน์ที่ยังไม่มี query จะ error
+    // แล้วล็อกอินหลังบ้านพังทั้งระบบ ส่วน * จะได้เท่าที่ฐานมีจริง
+    // ค่าที่ตอบกลับประกอบทีละฟิลด์อยู่แล้ว คอลัมน์ที่เกินมาจึงไม่หลุดออกไป
+    .select("*")
     .eq("username", username)
     .single();
 
@@ -70,6 +107,8 @@ export async function POST(req: NextRequest) {
         phone: (admin as Record<string, unknown>).phone ?? null,
         entry_year: (admin as Record<string, unknown>).entry_year ?? null,
         department: (admin as Record<string, unknown>).department ?? null,
+        // ฝ่ายที่สังกัด — เมนูหลังบ้านใช้ค่านี้กรองว่าจะโชว์งานของฝ่ายไหน
+        division: (admin as Record<string, unknown>).division ?? null,
         created_at:   (admin as Record<string, unknown>).created_at   ?? null,
         google_email: (admin as Record<string, unknown>).google_email ?? null,
       },
@@ -97,6 +136,8 @@ export async function POST(req: NextRequest) {
         phone: null,
         entry_year: null,
         department: null,
+        // superadmin ทำงานข้ามฝ่ายอยู่แล้ว ค่านี้จึงไม่มีผลกับ fallback
+        division: null,
         created_at: null,
         google_email: null,
       },

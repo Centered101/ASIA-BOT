@@ -468,7 +468,17 @@ function BecomeTeacherForm() {
                     <input type="checkbox" checked={acceptedTerms} onChange={e => setAcceptedTerms(e.target.checked)}
                       className="size-5 rounded border-slate-300 mt-0.5 flex-shrink-0" />
                     <span className="text-xs text-slate-500 leading-relaxed">
-                      ฉันยืนยันว่าข้อมูลที่กรอกเป็นความจริง และยอมรับเงื่อนไขการเป็นผู้ดูแลของระบบ ASIA-BOT
+                      ฉันยืนยันว่าข้อมูลที่กรอกเป็นความจริง ได้อ่าน{" "}
+                      <Link href="/privacy-policy" target="_blank" rel="noopener noreferrer"
+                        className="font-bold hover:underline" style={{ color: P }}>
+                        นโยบายความเป็นส่วนตัว
+                      </Link>{" "}
+                      กับ{" "}
+                      <Link href="/terms-of-service" target="_blank" rel="noopener noreferrer"
+                        className="font-bold hover:underline" style={{ color: P }}>
+                        เงื่อนไขการใช้งาน
+                      </Link>{" "}
+                      แล้ว และยอมรับเงื่อนไขการเป็นผู้ดูแลของระบบ ASIA-BOT
                     </span>
                   </label>
                 </div>

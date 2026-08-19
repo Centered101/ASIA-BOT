@@ -466,7 +466,7 @@ function BecomeTeacherForm() {
                   {/* Accept terms */}
                   <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 cursor-pointer">
                     <input type="checkbox" checked={acceptedTerms} onChange={e => setAcceptedTerms(e.target.checked)}
-                      className="size-5 rounded border-slate-300 mt-0.5 flex-shrink-0" />
+                      className="asia-check mt-0.5" />
                     <span className="text-xs text-slate-500 leading-relaxed">
                       ฉันยืนยันว่าข้อมูลที่กรอกเป็นความจริง ได้อ่าน{" "}
                       <Link href="/privacy-policy" target="_blank" rel="noopener noreferrer"

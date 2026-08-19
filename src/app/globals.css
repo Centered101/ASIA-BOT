@@ -149,6 +149,55 @@ a, button, label, .cursor-pointer, [class^="btn-"] { cursor: url(/cursors/hand-2
   animation: spin 0.7s linear infinite;
 }
 
+/* ── กล่องติ๊กกลางของทั้งโปรเจกต์ ──────────────────────────────
+   checkbox ของเบราว์เซอร์ใช้ accent-color ของระบบ (ฟ้าเข้มบน Chrome)
+   ซึ่งไม่ใช่สีของเว็บ และมุมโค้งก็ต่างกันไปในแต่ละเบราว์เซอร์
+   ตัวนี้จึงวาดเองเพื่อให้หน้าตาเหมือนกันทุกที่
+
+   เครื่องหมายถูกเป็นสีน้ำเงินเข้ม ไม่ใช่สีขาว เพราะ --primary-color เป็น
+   ฟ้าอ่อน ถ้าใช้ขาวจะได้ contrast แค่ 1.64 ซึ่งตกเกณฑ์ WCAG ของกราฟิก
+   (ต้องได้ 3.0 ขึ้นไป) ส่วนสีเข้มนี้ได้ 6.96
+
+   ขนาดอิง font-size จึงย่อ/ขยายด้วย text-* ได้เหมือน .asia-spinner ── */
+.asia-check {
+  appearance: none;
+  -webkit-appearance: none;
+  flex-shrink: 0;
+  width: 1.35em;
+  height: 1.35em;
+  border: 2px solid #cbd5e1;
+  border-radius: 0.4em;
+  background: #f8fafc;
+  display: inline-grid;
+  place-content: center;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.asia-check:hover:not(:disabled) { border-color: var(--primary-dark); }
+.asia-check:checked {
+  background: var(--primary-color);
+  border-color: var(--primary-dark);
+}
+.asia-check::after {
+  content: "";
+  width: 0.3em;
+  height: 0.6em;
+  margin-top: -0.12em;
+  border: solid #0b3d5c;
+  border-width: 0 0.16em 0.16em 0;
+  transform: rotate(45deg) scale(0);
+  transition: transform 0.15s ease;
+}
+.asia-check:checked::after { transform: rotate(45deg) scale(1); }
+.asia-check:focus-visible {
+  outline: 2px solid var(--primary-dark);
+  outline-offset: 2px;
+}
+.asia-check:disabled { opacity: 0.5; cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) {
+  .asia-check, .asia-check::after { transition: none; }
+}
+
 /* ── ไอคอน "ASIA-BOT กำลังเชื่อมกับ Google" (components/GoogleLinkIcon) ── */
 @keyframes asiaLinkDot {
   0%   { transform: translateX(0);    opacity: 0; }

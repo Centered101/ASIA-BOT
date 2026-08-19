@@ -591,7 +591,7 @@ function RegisterForm() {
                     type="checkbox"
                     checked={acceptedTerms}
                     onChange={e => setAcceptedTerms(e.target.checked)}
-                    className="size-5 rounded border-slate-300 text-sky-500 focus:ring-sky-300"
+                    className="asia-check"
                   />
                   <span className="text-xs text-slate-500 leading-relaxed">
                     ฉันอ่านและยอมรับ{" "}

@@ -146,7 +146,7 @@ export default function ProjectsGrid() {
 
       {loading && (
         <div className="flex items-center justify-center py-16">
-          <i className="fa-solid fa-spinner fa-spin text-2xl text-indigo-300" />
+          <i className="asia-spinner text-2xl text-indigo-300" />
         </div>
       )}
 

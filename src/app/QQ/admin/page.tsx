@@ -214,7 +214,7 @@ export default function AdminPage() {
             className="bg-white/20 px-3 py-2 rounded-lg"
             title="รีเฟรช"
           >
-            <i className={`fa-solid ${refreshing ? 'fa-spinner animate-spin' : 'fa-rotate'}`} />
+            <i className={`fa-solid ${refreshing ? 'asia-spinner' : 'fa-rotate'}`} />
           </button>
           <button onClick={logout} className="bg-white/20 px-3 py-2 rounded-lg">
             <i className="fa-solid fa-right-from-bracket" />

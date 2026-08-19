@@ -12,6 +12,8 @@ export type StudentSession = {
   photo_url?: string | null;
   // login เก็บทั้งแถวจากตาราง students ลง localStorage อีเมลจึงติดมาด้วยอยู่แล้ว
   google_email?: string | null;
+  // เก็บเป็น male/female/other ตามคอลัมน์ใน DB ไม่ใช่ข้อความไทย
+  gender?: string | null;
 };
 
 export function getStudentSession(): StudentSession | null {

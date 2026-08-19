@@ -139,7 +139,7 @@ export default function QmanLoginPage() {
                 style={{ background: 'linear-gradient(135deg, #ff7300, #ff6200)' }}
               >
                 {loading
-                  ? <><i className="fa-solid fa-spinner animate-spin mr-2" />กำลังเข้าสู่ระบบ...</>
+                  ? <><i className="asia-spinner mr-2" />กำลังเข้าสู่ระบบ...</>
                   : <><i className="fa-solid fa-right-to-bracket mr-2" />เข้าสู่ระบบ</>
                 }
               </button>

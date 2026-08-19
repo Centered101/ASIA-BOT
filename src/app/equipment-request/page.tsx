@@ -580,7 +580,7 @@ export default function EquipmentRequestPage() {
 
             {loading && (
               <div className="text-center py-16">
-                <i className="fa-solid fa-spinner fa-spin text-3xl mb-3 block text-emerald-500" />
+                <i className="asia-spinner text-3xl mb-3 block text-emerald-500" />
                 <div className="text-sm text-slate-400">กำลังโหลดคุรุภัณฑ์...</div>
               </div>
             )}
@@ -953,7 +953,7 @@ export default function EquipmentRequestPage() {
               </div>
 
               <button onClick={handleSubmit} disabled={submitting || noDept || !deliveryReady} className="btn-primary w-full text-sm">
-                {submitting ? <i className="fa-solid fa-spinner fa-spin mr-1.5" /> : <i className="fa-solid fa-paper-plane mr-1.5" />}
+                {submitting ? <i className="asia-spinner mr-1.5" /> : <i className="fa-solid fa-paper-plane mr-1.5" />}
                 ส่งคำขอเบิก
               </button>
             </div>
@@ -980,7 +980,7 @@ export default function EquipmentRequestPage() {
           <div className="overflow-y-auto flex-1 px-5 py-4">
             {historyLoading ? (
               <div className="text-center py-12">
-                <i className="fa-solid fa-spinner fa-spin text-2xl text-emerald-400" />
+                <i className="asia-spinner text-2xl text-emerald-400" />
               </div>
             ) : history.length === 0 ? (
               <div className="text-center py-12">

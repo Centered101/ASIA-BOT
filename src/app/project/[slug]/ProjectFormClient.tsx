@@ -67,6 +67,16 @@ type BaseForm = {
   comments:     string;
 };
 
+/** ป้ายบอกว่าช่องนี้เติมมาจากโปรไฟล์ให้แล้ว (ยังแก้เองได้) */
+function FromProfileBadge() {
+  return (
+    <span className="ml-auto text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1"
+      style={{ background: C.green + "15", color: C.green, border: `1px solid ${C.green}25` }}>
+      <i className="fa-solid fa-circle-check text-[9px]" />จากโปรไฟล์คุณ
+    </span>
+  );
+}
+
 const BLANK: BaseForm = {
   gender: "", evaluator: "", name: "", emoji: null,
   creative: null, content: null, presentation: null,
@@ -676,16 +686,23 @@ export default function ProjectFormClient({ params }: { params: Promise<{ slug: 
     return () => { meta?.setAttribute("content", prev); };
   }, [accent]);
 
+  // เพศใน DB เก็บเป็น male/female/other แต่ฟอร์มนี้ใช้ข้อความไทยเป็นค่า
+  const sessionGender = session?.gender
+    ? ({ male: "ชาย", female: "หญิง", other: "อื่นๆ" } as Record<string, string>)[session.gender] ?? ""
+    : "";
+
   useEffect(() => {
     if (session) {
+      // เติมให้เฉพาะช่องที่ยังว่าง ผู้ใช้แก้เองแล้วต้องไม่ถูกเขียนทับ
       setForm(f => ({
         ...f,
         name:      f.name      || `${session.first_name} ${session.last_name}`,
         evaluator: f.evaluator || "นักเรียน/นักศึกษา",
+        gender:    f.gender    || sessionGender,
       }));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session]);
+  }, [session, sessionGender]);
 
   function setField<K extends keyof BaseForm>(key: K, val: BaseForm[K]) {
     setForm(f => ({ ...f, [key]: val }));
@@ -798,7 +815,7 @@ export default function ProjectFormClient({ params }: { params: Promise<{ slug: 
             className="flex-1 py-3 rounded-xl text-sm font-bold transition-all hover:opacity-90 active:scale-95 shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
             style={{ background: "#1e6fbf", color: "#fff", boxShadow: "0 4px 14px #1e6fbf33" }}>
             {previewLoading
-              ? <><i className="fa-solid fa-spinner fa-spin text-xs" />กำลังสร้าง...</>
+              ? <><i className="asia-spinner text-xs" />กำลังสร้าง...</>
               : <><i className="fa-solid fa-receipt text-xs" />ดูใบเสร็จ</>}
           </button>
           <button onClick={() => router.push("/")}
@@ -1073,8 +1090,11 @@ export default function ProjectFormClient({ params }: { params: Promise<{ slug: 
                   </div>
 
                   <div>
-                    <p className="text-sm font-semibold mb-3" style={{ color: C.text }}>
+                    <p className="text-sm font-semibold mb-3 flex items-center gap-1.5" style={{ color: C.text }}>
                       เพศ <span style={{ color: C.red }}>*</span>
+                      {sessionGender && (
+                        <FromProfileBadge />
+                      )}
                     </p>
                     <div className="grid grid-cols-3 gap-2.5">
                       {[
@@ -1105,10 +1125,7 @@ export default function ProjectFormClient({ params }: { params: Promise<{ slug: 
                       <i className="fa-solid fa-id-badge text-sm" style={{ color: accent }} />
                       สถานะผู้ประเมิน <span style={{ color: C.red }}>*</span>
                       {session && (
-                        <span className="ml-auto text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1"
-                          style={{ background: C.green + "15", color: C.green, border: `1px solid ${C.green}25` }}>
-                          <i className="fa-solid fa-circle-check text-[9px]" />จาก Login
-                        </span>
+                        <FromProfileBadge />
                       )}
                     </p>
                     <LightSelect
@@ -1116,7 +1133,6 @@ export default function ProjectFormClient({ params }: { params: Promise<{ slug: 
                       onChange={v => setField("evaluator", v)}
                       options={["ผู้ปกครอง", "ครู/อาจารย์", "นักเรียน/นักศึกษา", "บุคคลทั่วไป"]}
                       placeholder="-- เลือกสถานะ --"
-                      disabled={!!session}
                     />
                   </div>
 
@@ -1125,10 +1141,7 @@ export default function ProjectFormClient({ params }: { params: Promise<{ slug: 
                       <i className="fa-solid fa-user text-sm" style={{ color: accent }} />
                       ชื่อ - นามสกุล <span style={{ color: C.red }}>*</span>
                       {session && (
-                        <span className="ml-auto text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1"
-                          style={{ background: C.green + "15", color: C.green, border: `1px solid ${C.green}25` }}>
-                          <i className="fa-solid fa-circle-check text-[9px]" />จาก Login
-                        </span>
+                        <FromProfileBadge />
                       )}
                     </p>
                     <LightInput
@@ -1221,7 +1234,7 @@ export default function ProjectFormClient({ params }: { params: Promise<{ slug: 
                       className="py-3.5 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-95 disabled:opacity-50 shadow-md"
                       style={{ background: accent, color: "#fff", boxShadow: `0 4px 16px ${accent}40` }}>
                       {loading
-                        ? <><i className="fa-solid fa-spinner fa-spin" /> กำลังส่ง...</>
+                        ? <><i className="asia-spinner" /> กำลังส่ง...</>
                         : <>ส่งแบบประเมิน <i className="fa-solid fa-paper-plane" /></>}
                     </button>
                   </div>

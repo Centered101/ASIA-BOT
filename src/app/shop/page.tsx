@@ -7,6 +7,7 @@ import Footer from "@/components/Footer";
 import { toast } from "sonner";
 import { SESSION_KEY, SESSION_TIME_KEY, SESSION_TTL, SITE_NAME } from "@/lib/config";
 import { isDisplayableImageUrl, safeImageSrc } from "@/lib/image-url";
+import { calcGrade } from "@/lib/student-grade";
 
 let _welcomeShown = false;
 
@@ -93,17 +94,6 @@ function getEmoji(p: Omit<Product, "emoji">): string {
   if (p.images?.trim() && !isDisplayableImageUrl(p.images)) return p.images.trim();
   for (const [k, v] of EMOJI_MAP) { if (p.name.includes(k)) return v; }
   return CAT_EMOJI[p.cat] || "🏷️";
-}
-function calcGrade(program: string, entryYear: number | string | null): string {
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const thaiYear = now.getFullYear() + 543 - (month < 5 ? 1 : 0);
-  const yr = parseInt(String(entryYear ?? "0"));
-  const diff = thaiYear - yr + 1;
-  const maxYr = program === "ปวส" ? 2 : 3;
-  if (diff < 1) return `${program} (รอเข้าเรียน)`;
-  if (diff > maxYr) return `${program} (จบการศึกษา)`;
-  return `${program}${diff}`;
 }
 function fmt(n: number): string { return "฿" + (+n).toLocaleString(); }
 function cartKey(productId: string, color = ""): string {
@@ -1033,7 +1023,7 @@ export default function ShopPage() {
             {/* Loading */}
             {loading && (
               <div className="text-center py-16">
-                <i className="fa-solid fa-spinner fa-spin text-3xl mb-3 block" style={{ color: "var(--primary-color)" }} />
+                <i className="asia-spinner text-3xl mb-3 block" style={{ color: "var(--primary-color)" }} />
                 <div className="text-sm text-slate-400">กำลังโหลดสินค้า...</div>
               </div>
             )}
@@ -1749,7 +1739,7 @@ export default function ShopPage() {
             <div className="text-center">
               {!qrUrl
                 ? <div className="w-56 h-56 mx-auto rounded-3xl bg-slate-100 flex items-center justify-center">
-                    <i className="fa-solid fa-spinner fa-spin text-3xl text-slate-300" />
+                    <i className="asia-spinner text-3xl text-slate-300" />
                   </div>
                 : <div className="relative inline-block rounded-3xl p-0.5 bg-white border border-sky-100"
                     style={{ boxShadow: "0 18px 45px rgba(14,165,233,.16)" }}>

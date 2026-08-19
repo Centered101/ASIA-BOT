@@ -398,7 +398,7 @@ export default function QmanHomePage() {
                 style={{ background: 'linear-gradient(135deg, #ff7300, #ff6200)' }}
               >
                 {submitting
-                  ? <><i className="fa-solid fa-spinner animate-spin mr-2" />กำลังจอง...</>
+                  ? <><i className="asia-spinner mr-2" />กำลังจอง...</>
                   : <><i className="fa-solid fa-circle-check mr-2" />ยืนยันการจอง</>
                 }
               </button>

@@ -752,7 +752,7 @@ function ClassTrackRoomPageContent() {
                           className="flex-1 min-w-0 px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-300 text-slate-800 placeholder-slate-300"
                         />
                         <button type="button" onClick={addFriendById} disabled={friendLoading} className="px-4 py-2.5 rounded-xl font-bold text-sm text-white disabled:opacity-60" style={{ background: "var(--primary-color)" }}>
-                          {friendLoading ? <i className="fa-solid fa-spinner fa-spin" /> : <><i className="fa-solid fa-plus mr-1" />เพิ่ม</>}
+                          {friendLoading ? <i className="asia-spinner" /> : <><i className="fa-solid fa-plus mr-1" />เพิ่ม</>}
                         </button>
                       </div>
                       {friendError && <div className="text-xs text-red-500 mt-2"><i className="fa-solid fa-circle-exclamation mr-1" />{friendError}</div>}
@@ -819,7 +819,7 @@ function ClassTrackRoomPageContent() {
                       className="btn-primary w-full py-3 rounded-xl font-semibold text-base mt-2"
                     >
                       {submitting ? (
-                        <><i className="fa-solid fa-spinner fa-spin" /> กำลังส่ง...</>
+                        <><i className="asia-spinner" /> กำลังส่ง...</>
                       ) : bookedSlotIds.has(slotId ?? -1) ? (
                         <><i className="fa-solid fa-ban" /> ช่วงเวลานี้ถูกจองแล้ว</>
                       ) : (
@@ -1205,7 +1205,7 @@ function SlotGrid({ timeSlots, bookedSlotIds, selectedSlotId, loading, date, onS
     <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
       <p className="text-xs font-semibold text-slate-600 mb-2">
         <i className="fa-solid fa-clock mr-1.5 text-sky-400" /> ช่วงเวลาวันที่ {displayDate}
-        {loading && <i className="fa-solid fa-spinner fa-spin ml-2 text-slate-400" />}
+        {loading && <i className="asia-spinner ml-2 text-slate-400" />}
       </p>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
         {timeSlots.map((slot) => {

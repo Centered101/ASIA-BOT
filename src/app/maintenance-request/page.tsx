@@ -212,6 +212,12 @@ export default function MaintenanceRequestPage() {
       : kind === "equipment_item" ? form.equipment_item_id
       : form.room_id);
 
+  // ของที่เลือกอยู่ ใช้ดึงหน่วยนับมาแสดงข้าง ๆ ช่องจำนวน จะได้รู้ว่า "3" คือ 3 อะไร
+  const pickedEquipment = equipment.find((e) => e.id === form.equipment_item_id);
+  const affectedQty = Math.max(1, Number(form.affected_quantity) || 1);
+  const setAffectedQty = (n: number) =>
+    setForm((f) => ({ ...f, affected_quantity: String(Math.max(1, n)) }));
+
   const urgencyColor = URGENCY.find((u) => u.value === form.urgency)?.color ?? "#0EA5E9";
   const stats = {
     total: mine.length,
@@ -272,10 +278,10 @@ export default function MaintenanceRequestPage() {
     <>
       <div className="bg-blob" style={{ width: 520, height: 520, background: "var(--primary-color)", top: -120, right: -170 }} />
       <div className="bg-blob" style={{ width: 420, height: 420, background: "#F59E0B", bottom: -110, left: -130 }} />
+
       <Header subtitle="แจ้งซ่อม" />
 
       <main className="min-h-screen max-w-6xl mx-auto px-3 sm:px-6 pt-8 pb-16 relative z-10">
-
         <div data-aos="fade-right" className="mb-6" suppressHydrationWarning>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-800">แจ้งซ่อม</h1>
           <p className="text-sm text-slate-500 mt-1">
@@ -386,10 +392,40 @@ export default function MaintenanceRequestPage() {
                         <option key={e.id} value={e.id}>{e.name} · คงเหลือ {e.available_quantity} {e.unit}</option>
                       ))}
                     </select>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-slate-500 font-semibold">เสียกี่ชิ้น</span>
-                      <input type="number" min={1} className="form-input text-xs sm:text-sm w-24"
-                        value={form.affected_quantity} onChange={(e) => setForm({ ...form, affected_quantity: e.target.value })} />
+                    {/* ป้ายบรรทัดบนแบบเดียวกับช่องอื่นในฟอร์ม ของเดิมเป็น span วางซ้ายช่อง
+                        พอจอแคบคำว่า "เสียกี่ชิ้น" ตัดบรรทัดกลางคำ อ่านไม่รู้เรื่อง */}
+                    <div>
+                      {/* แต่ละวลีห้ามตัดกลางคำ ไทยไม่มีช่องว่างเบราว์เซอร์เลยตัดตรงไหนก็ได้
+                          ของเดิมจึงกลายเป็น "เสียกี่ / ชิ้น" คนละบรรทัด ให้ตัดได้เฉพาะระหว่างวลี */}
+                      <label className="flex flex-wrap items-baseline gap-x-1 text-xs font-semibold text-slate-500 mb-1.5">
+                        <span className="whitespace-nowrap">จำนวนที่เสีย</span>
+                        {pickedEquipment && (
+                          <span className="text-slate-300 font-normal whitespace-nowrap">
+                            (คงเหลือในคลัง {pickedEquipment.available_quantity} {pickedEquipment.unit})
+                          </span>
+                        )}
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={() => setAffectedQty(affectedQty - 1)}
+                          disabled={affectedQty <= 1} aria-label="ลดจำนวน"
+                          className="w-10 h-10 rounded-xl border-2 border-slate-200 bg-slate-50 text-slate-500 flex items-center justify-center flex-shrink-0 transition-colors hover:border-sky-300 hover:text-sky-500 disabled:opacity-40 disabled:hover:border-slate-200 disabled:hover:text-slate-500">
+                          <i className="fa-solid fa-minus text-xs" />
+                        </button>
+                        <div className="field-wrap w-24 flex-shrink-0">
+                          <i className="fa-solid fa-hashtag field-icon" />
+                          <input type="number" min={1} inputMode="numeric"
+                            className="form-input no-spinner text-xs sm:text-sm font-bold tabular-nums"
+                            value={form.affected_quantity}
+                            onChange={(e) => setForm({ ...form, affected_quantity: e.target.value })}
+                            onBlur={() => setAffectedQty(affectedQty)} />
+                        </div>
+                        <button type="button" onClick={() => setAffectedQty(affectedQty + 1)}
+                          aria-label="เพิ่มจำนวน"
+                          className="w-10 h-10 rounded-xl border-2 border-slate-200 bg-slate-50 text-slate-500 flex items-center justify-center flex-shrink-0 transition-colors hover:border-sky-300 hover:text-sky-500">
+                          <i className="fa-solid fa-plus text-xs" />
+                        </button>
+                        <span className="text-sm text-slate-400 whitespace-nowrap">{pickedEquipment?.unit ?? "ชิ้น"}</span>
+                      </div>
                     </div>
                     <p className="text-[11px] text-slate-400 leading-relaxed">
                       จำนวนนี้จะถูกกันออกจากคลัง คนอื่นจะยืมไม่ได้จนกว่างานซ่อมจะปิด
@@ -475,7 +511,7 @@ export default function MaintenanceRequestPage() {
                   {photos.length < MAX_IMAGES && (
                     <button type="button" disabled={uploading} onClick={() => fileRef.current?.click()}
                       className="w-20 h-20 rounded-xl border-2 border-dashed border-slate-300 hover:border-sky-400 bg-slate-50 hover:bg-sky-50 transition-colors flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-sky-500 disabled:opacity-60">
-                      <i className={`fa-solid ${uploading ? "fa-spinner fa-spin" : "fa-plus"} text-lg`} />
+                      <i className={`fa-solid ${uploading ? "asia-spinner" : "fa-plus"} text-lg`} />
                       <span className="text-[10px]">{uploading ? "อัปโหลด" : "เพิ่มรูป"}</span>
                     </button>
                   )}

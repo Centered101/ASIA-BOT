@@ -344,7 +344,7 @@ export default function ProjectsPage() {
         {/* ── Loading ── */}
         {loading && (
           <div className="flex flex-col items-center justify-center py-24 gap-3">
-            <i className="fa-solid fa-spinner fa-spin text-3xl" style={{ color: "var(--primary-color)" }} />
+            <i className="asia-spinner text-3xl" style={{ color: "var(--primary-color)" }} />
             <span className="text-sm text-slate-400">กำลังโหลดโปรเจค...</span>
           </div>
         )}

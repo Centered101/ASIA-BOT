@@ -305,7 +305,7 @@ export function buildOrderFlexMessage(params: {
           action: {
             type: "uri",
             label: "ดูออเดอร์",
-            uri: `${siteUrl}/admin?tab=shoporders`,
+            uri: `${siteUrl}/admin/shoporders`,
           },
         },
       ],
@@ -453,7 +453,7 @@ export function buildFeedbackFlexMessage(params: {
         type: "button",
         style: "primary",
         color: headerColor,
-        action: { type: "uri", label: "เปิด Feedback", uri: `${siteUrl}/admin?tab=feedbacks` },
+        action: { type: "uri", label: "เปิด Feedback", uri: `${siteUrl}/admin/feedbacks` },
       },
     ],
   };
@@ -550,7 +550,7 @@ export function buildBookingFlexMessage(params: {
         type: "button",
         style: "primary",
         color: cfg.badge,
-        action: { type: "uri", label: "เปิดรายการจอง", uri: `${siteUrl}/admin?tab=bookings` },
+        action: { type: "uri", label: "เปิดรายการจอง", uri: `${siteUrl}/admin/bookings` },
       }],
     },
   };
@@ -676,7 +676,7 @@ export function buildEquipmentRequestFlexMessage(params: {
         type: "button",
         style: "primary",
         color: cfg.badge,
-        action: { type: "uri", label: "เปิดรายการคำขอเบิก", uri: `${siteUrl}/admin?tab=equipment_requests` },
+        action: { type: "uri", label: "เปิดรายการคำขอเบิก", uri: `${siteUrl}/admin/equipment_requests` },
       }],
     },
   };
@@ -764,7 +764,7 @@ export function buildStudentDataChangeFlexMessage(params: {
         type: "button",
         style: "primary",
         color: "#2563EB",
-        action: { type: "uri", label: "เปิดคำขอแก้ไขข้อมูล", uri: `${siteUrl}/admin?tab=data_requests` },
+        action: { type: "uri", label: "เปิดคำขอแก้ไขข้อมูล", uri: `${siteUrl}/admin/data_requests` },
       }],
     },
   };

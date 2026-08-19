@@ -10,12 +10,14 @@ const supabase = createClient<Database>(
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { student_id, first_name, last_name, nickname, department, student_phone } = body;
+    const { student_id, first_name, last_name, nickname, department, student_phone, address } = body;
 
     if (!student_id) return NextResponse.json({ status: "error", message: "ไม่พบรหัสนักเรียน" }, { status: 400 });
 
+    // ที่อยู่แก้ได้ทันทีเหมือนเบอร์โทร ไม่ต้องรออนุมัติ (ไม่ใช่ข้อมูลประจำตัวบนบัตร)
     const { error } = await supabase.from("students").update({
       first_name, last_name, nickname, department, student_phone,
+      ...(address === undefined ? {} : { address: String(address).trim() || null }),
       updated_at: new Date().toISOString(),
     }).eq("student_id", student_id);
 

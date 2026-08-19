@@ -9,6 +9,8 @@ import ProfileImageCropModal from "@/components/ProfileImageCropModal";
 import { toast } from "sonner";
 import { DEPARTMENTS, SESSION_KEY, SESSION_TIME_KEY } from "@/lib/config";
 import { getGoogleSupabase } from "@/lib/supabase-google";
+import { birthDateBounds, calcAge, calcGrade, formatAge } from "@/lib/student-grade";
+import { GENDER_LABELS, checkBirthDate, checkNationalId } from "@/lib/student-validate";
 
 type FormData = {
   student_id: string;
@@ -16,18 +18,58 @@ type FormData = {
   first_name: string;
   last_name: string;
   nickname: string;
+  birth_date: string;
+  gender: string;
+  national_id: string;
+  address: string;
   program: string;
   entry_year: string;
   department: string;
 };
 
+
+/* ── ตัวกรองตอนพิมพ์ — ปล่อยเฉพาะอักขระที่ควรมีในช่องนั้น
+   กันพิมพ์ผิดตั้งแต่ต้นทาง ดีกว่าปล่อยผ่านแล้วค่อยเด้ง error ตอนกดถัดไป ── */
+const FILTERS = {
+  /** ตัวเลขล้วน */
+  digits: (v: string) => v.replace(/\D/g, ""),
+  /** ชื่อไทย: พยัญชนะ สระ วรรณยุกต์ และเว้นวรรค (ตรงกับกฎ THAI_ONLY ที่ใช้ตรวจอยู่แล้ว) */
+  thaiName: (v: string) => v.replace(/[^฀-๿\s]/g, "").replace(/\s{2,}/g, " "),
+  /** ที่อยู่: ไทย + เลขไทย/อารบิก + เครื่องหมายที่ใช้เขียนที่อยู่จริง */
+  address: (v: string) => v.replace(/[^฀-๿0-9\s/.,\-()]/g, ""),
+};
+
+/** yyyy-mm-dd → "1 ม.ค. 2551" (พ.ศ.) ใช้เฉพาะตอนโชว์ในหน้าตรวจสอบ */
+function formatThaiDate(value: string) {
+  if (!value) return "";
+  const d = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
+}
+
+/**
+ * 1234567890123 → 1-2345-67890-12-3
+ * ใส่ขีดให้ทีละกลุ่มระหว่างพิมพ์ ไม่ต้องรอครบ 13 หลักถึงจะจัดรูป
+ */
+function formatNationalId(value: string) {
+  const id = value.replace(/\D/g, "").slice(0, 13);
+  const parts: string[] = [];
+  let cursor = 0;
+  for (const size of [1, 4, 5, 2, 1]) {
+    if (cursor >= id.length) break;
+    parts.push(id.slice(cursor, cursor + size));
+    cursor += size;
+  }
+  return parts.join("-");
+}
+
 const THAI_ONLY       = /^[฀-๿\s]+$/;
 const THAI_CONSONANT  = /[ก-ฮ]/;
-const STUDENT_ID_RE   = /^\d{3,10}$/;
+const STUDENT_ID_RE   = /^\d{3,13}$/;
 const THAI_PHONE_RE   = /^0[2-9]\d{7,8}$/;
 
 function checkStudentId(id: string): string | null {
-  if (!STUDENT_ID_RE.test(id))        return "รหัสนักเรียนต้องเป็นตัวเลข 3–10 หลัก";
+  if (!STUDENT_ID_RE.test(id))        return "รหัสนักเรียนต้องเป็นตัวเลข 3–13 หลัก";
   if (/^(\d)\1+$/.test(id))           return "รหัสนักเรียนไม่ถูกต้อง (ซ้ำทั้งหมด)";
   if (/^(0123|1234|2345|3456|4567|5678|6789|9876|8765|7654|6543|5432|4321|3210)/.test(id))
                                        return "รหัสนักเรียนไม่ถูกต้อง (เรียงลำดับ)";
@@ -51,6 +93,22 @@ function checkThaiName(val: string, label: string): string | null {
   if (/^(.)(\1){2,}$/.test(v.replace(/\s/g, ""))) return `${label}ดูเหมือนข้อมูลซ้ำ กรุณากรอกชื่อจริง`;
   return null;
 }
+
+/** ป้ายผลคำนวณที่ลอยชิดขวาในช่องกรอก — ไม่รับคลิก ให้กดทะลุไปที่ input ได้ */
+function CalcBadge({ icon, text, offset = 10 }: { icon: string; text: string; offset?: number }) {
+  return (
+    <span
+      className="pointer-events-none absolute top-1/2 flex max-w-[52%] items-center gap-1 truncate rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700"
+      style={{ right: offset, transform: "translateY(-50%)" }}
+    >
+      <i className={`fa-solid ${icon} text-[9px]`} />
+      {text}
+    </span>
+  );
+}
+
+/** ช่วงวันเกิดที่ปฏิทินเลือกได้ — นอกช่วงนี้เบราว์เซอร์จะเกรย์ทิ้งไปเลย */
+const BIRTH_BOUNDS = birthDateBounds();
 
 const CROP_SIZE   = 280;
 const STEP_ICONS  = ["fa-link", "fa-user", "fa-graduation-cap", "fa-camera", "fa-check"];
@@ -95,7 +153,8 @@ function RegisterForm() {
 
   const [form, setForm] = useState<FormData>({
     student_id: "", student_phone: "", first_name: "", last_name: "",
-    nickname: "", program: "", entry_year: "", department: "",
+    nickname: "", birth_date: "", gender: "", national_id: "", address: "",
+    program: "", entry_year: "", department: "",
   });
 
   const [deptQuery, setDeptQuery] = useState("");
@@ -179,6 +238,25 @@ function RegisterForm() {
     const phoneErr = checkPhone(form.student_phone);
     if (!form.student_phone.trim()) { err("student_phone"); toast.error("กรุณากรอกเบอร์โทรนักเรียน"); return false; }
     if (phoneErr) { err("student_phone"); toast.error(phoneErr); return false; }
+
+    // ── ข้อมูลเพิ่มเติม 4 ช่องนี้ข้ามได้ ตรวจเฉพาะตอนที่กรอกมาเท่านั้น ──
+    if (form.birth_date) {
+      const bdErr = checkBirthDate(form.birth_date);
+      if (bdErr) { err("birth_date"); toast.error(bdErr); return false; }
+    }
+
+    if (form.gender && !(form.gender in GENDER_LABELS)) {
+      err("gender"); toast.error("เพศไม่ถูกต้อง"); return false;
+    }
+
+    if (form.national_id.trim()) {
+      const nidErr = checkNationalId(form.national_id);
+      if (nidErr) { err("national_id"); toast.error(nidErr); return false; }
+    }
+
+    if (form.address.trim() && form.address.trim().length < 10) {
+      err("address"); toast.error("ที่อยู่สั้นเกินไป กรอกให้ครบหรือเว้นว่างไว้ก็ได้"); return false;
+    }
 
     return true;
   }
@@ -336,7 +414,11 @@ function RegisterForm() {
   }
 
   function resetForm() {
-    setForm({ student_id: "", student_phone: "", first_name: "", last_name: "", nickname: "", program: "", entry_year: "", department: "" });
+    setForm({
+      student_id: "", student_phone: "", first_name: "", last_name: "",
+      nickname: "", birth_date: "", gender: "", national_id: "", address: "",
+      program: "", entry_year: "", department: "",
+    });
     setErrs({}); setStep(1); setAcceptedTerms(false); setPhotoFile(null); setPhotoPreview(""); setDeptQuery("");
   }
 
@@ -355,15 +437,28 @@ function RegisterForm() {
     );
   }
 
-  const previewRows = [
+  // ค่าที่ระบบคำนวณให้เอง ไม่ได้กรอก — โชว์ให้ตรวจทานได้ก่อนยืนยัน
+  const ageText   = formatAge(form.birth_date);
+  const ageInfo   = calcAge(form.birth_date);
+  const ageYears  = ageInfo ? `${ageInfo.years} ปี` : "";
+  const gradeText = form.program && form.entry_year ? calcGrade(form.program, form.entry_year) : "";
+
+  const previewRows: Array<{ icon: string; label: string; val: string; computed?: boolean }> = [
     { icon: "fa-hashtag",          label: "รหัสนักเรียน",   val: form.student_id },
     { icon: "fa-phone",            label: "เบอร์โทรนักเรียน", val: form.student_phone },
     { icon: "fa-user",             label: "ชื่อ-นามสกุล",   val: `${form.first_name} ${form.last_name}`.trim() },
     { icon: "fa-face-smile",       label: "ชื่อเล่น",        val: form.nickname },
+    { icon: "fa-cake-candles",     label: "วันเกิด",         val: formatThaiDate(form.birth_date) },
+    { icon: "fa-hourglass-half",   label: "อายุ",            val: ageText, computed: true },
+    { icon: "fa-venus-mars",       label: "เพศ",             val: GENDER_LABELS[form.gender] ?? "" },
+    { icon: "fa-address-card",     label: "เลขประจำตัวประชาชน", val: formatNationalId(form.national_id) },
+    { icon: "fa-location-dot",     label: "ที่อยู่",          val: form.address },
     { icon: "fa-layer-group",      label: "ระดับ",           val: form.program },
     { icon: "fa-calendar",         label: "ปีที่เข้าเรียน",  val: form.entry_year },
+    { icon: "fa-graduation-cap",   label: "ชั้นปีปัจจุบัน",   val: gradeText, computed: true },
     { icon: "fa-building-columns", label: "สาขาวิชา",        val: form.department },
-  ];
+  // แถวที่คำนวณเองไม่ต้องโชว์ "ไม่ระบุ" ถ้ายังคำนวณไม่ได้ ซ่อนไปเลย
+  ].filter(r => !r.computed || r.val);
 
   const inputCls = (field: keyof FormData) => `form-input text-xs sm:text-sm${errs[field] ? " error" : ""}`;
   const wrapCls  = (field: keyof FormData) => `field-wrap${errs[field] ? " has-error" : ""}`;
@@ -532,8 +627,9 @@ function RegisterForm() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className={wrapCls("student_id")}>
                     <i className="fa-solid fa-hashtag field-icon" />
-                    <input suppressHydrationWarning value={form.student_id} onChange={e => set("student_id", e.target.value)}
-                      className={inputCls("student_id")} placeholder="รหัสนักเรียน *" maxLength={10} inputMode="numeric" />
+                    <input suppressHydrationWarning value={form.student_id}
+                      onChange={e => set("student_id", FILTERS.digits(e.target.value))}
+                      className={inputCls("student_id")} placeholder="รหัสนักเรียน *" maxLength={13} inputMode="numeric" />
                   </div>
                   <div className={wrapCls("student_phone")}>
                     <i className="fa-solid fa-phone field-icon" />
@@ -545,19 +641,66 @@ function RegisterForm() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className={wrapCls("first_name")}>
                     <i className="fa-solid fa-user-tag field-icon" />
-                    <input suppressHydrationWarning value={form.first_name} onChange={e => set("first_name", e.target.value)}
+                    <input suppressHydrationWarning value={form.first_name}
+                      onChange={e => set("first_name", FILTERS.thaiName(e.target.value))}
                       className={inputCls("first_name")} placeholder="ชื่อ *" maxLength={30} />
                   </div>
                   <div className={wrapCls("last_name")}>
                     <i className="fa-solid fa-user-tag field-icon" />
-                    <input suppressHydrationWarning value={form.last_name} onChange={e => set("last_name", e.target.value)}
+                    <input suppressHydrationWarning value={form.last_name}
+                      onChange={e => set("last_name", FILTERS.thaiName(e.target.value))}
                       className={inputCls("last_name")} placeholder="นามสกุล *" maxLength={40} />
                   </div>
                 </div>
                 <div className={wrapCls("nickname")}>
                   <i className="fa-solid fa-face-smile field-icon" />
-                  <input suppressHydrationWarning value={form.nickname} onChange={e => set("nickname", e.target.value)}
+                  <input suppressHydrationWarning value={form.nickname}
+                    onChange={e => set("nickname", FILTERS.thaiName(e.target.value))}
                     className={inputCls("nickname")} placeholder="ชื่อเล่น (ไม่บังคับ)" maxLength={15} />
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <div className="h-px flex-1 bg-slate-100" />
+                  <span className="text-[11px] font-semibold text-slate-400">
+                    ข้อมูลเพิ่มเติม · ไม่บังคับ ข้ามได้
+                  </span>
+                  <div className="h-px flex-1 bg-slate-100" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className={wrapCls("birth_date")}>
+                    <i className="fa-solid fa-cake-candles field-icon" />
+                    <input suppressHydrationWarning type="date" value={form.birth_date}
+                      onChange={e => set("birth_date", e.target.value)}
+                      min={BIRTH_BOUNDS.min} max={BIRTH_BOUNDS.max}
+                      className={inputCls("birth_date")}
+                      style={ageYears ? { paddingRight: 78 } : undefined} />
+                    {ageYears && <CalcBadge icon="fa-hourglass-half" text={ageYears} offset={30} />}
+                  </div>
+                  <div className={wrapCls("gender")}>
+                    <i className="fa-solid fa-venus-mars field-icon" />
+                    <select value={form.gender} onChange={e => set("gender", e.target.value)}
+                      className={inputCls("gender")} style={{ paddingLeft: 40 }}>
+                      <option value="">เลือกเพศ</option>
+                      {Object.entries(GENDER_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className={wrapCls("national_id")}>
+                  <i className="fa-solid fa-address-card field-icon" />
+                  <input suppressHydrationWarning
+                    value={formatNationalId(form.national_id)}
+                    onChange={e => set("national_id", FILTERS.digits(e.target.value).slice(0, 13))}
+                    className={inputCls("national_id")} placeholder="เลขประจำตัวประชาชน 13 หลัก"
+                    maxLength={17} inputMode="numeric" />
+                </div>
+                <div className={wrapCls("address")}>
+                  <i className="fa-solid fa-location-dot field-icon" style={{ top: 22, transform: "none" }} />
+                  <textarea value={form.address}
+                    onChange={e => set("address", FILTERS.address(e.target.value))}
+                    className={inputCls("address")} rows={3} maxLength={500}
+                    style={{ resize: "vertical" }}
+                    placeholder="ที่อยู่ปัจจุบัน — บ้านเลขที่ หมู่ ตำบล อำเภอ จังหวัด รหัสไปรษณีย์" />
                 </div>
               </div>
               <div className="flex gap-3 mt-6">
@@ -595,8 +738,11 @@ function RegisterForm() {
                 </div>
                 <div className={wrapCls("entry_year")}>
                   <i className="fa-solid fa-calendar field-icon" />
-                  <input suppressHydrationWarning value={form.entry_year} onChange={e => set("entry_year", e.target.value)}
-                    className={inputCls("entry_year")} placeholder="ปีที่เข้าเรียน (พ.ศ.) เช่น 2567 *" maxLength={4} inputMode="numeric" />
+                  <input suppressHydrationWarning value={form.entry_year}
+                    onChange={e => set("entry_year", FILTERS.digits(e.target.value))}
+                    className={inputCls("entry_year")} placeholder="ปีที่เข้าเรียน (พ.ศ.) เช่น 2567 *" maxLength={4} inputMode="numeric"
+                    style={gradeText ? { paddingRight: 148 } : undefined} />
+                  {gradeText && <CalcBadge icon="fa-graduation-cap" text={gradeText} />}
                 </div>
                 {/* Department combobox */}
                 <div className={wrapCls("department")} ref={deptRef} style={{ position: "relative" }}>
@@ -753,14 +899,20 @@ function RegisterForm() {
 
               <div className="space-y-1.5 mb-6">
                 {previewRows.map(r => (
-                  <div key={r.label} className="flex items-center gap-2 bg-slate-50 rounded-lg p-2 odd:bg-[color:var(--primary-light)]">
-                    <div className="min-w-[120px] flex items-center gap-2 text-slate-400">
+                  <div key={r.label}
+                    className={`flex items-center gap-2 rounded-lg p-2 ${r.computed ? "bg-emerald-50/70" : "bg-slate-50 odd:bg-[color:var(--primary-light)]"}`}>
+                    <div className={`min-w-[120px] flex items-center gap-2 ${r.computed ? "text-emerald-500" : "text-slate-400"}`}>
                       <i className={`fa-solid ${r.icon} text-center text-xs`} />
                       <span className="font-medium text-xs">{r.label}</span>
                     </div>
                     {r.val
-                      ? <span className="flex-1 font-medium text-xs text-gray-600">{r.val}</span>
+                      ? <span className={`flex-1 font-medium text-xs ${r.computed ? "text-emerald-700" : "text-gray-600"}`}>{r.val}</span>
                       : <span className="flex-1 italic font-medium text-xs text-gray-300">ไม่ระบุ</span>}
+                    {r.computed && (
+                      <span className="flex-shrink-0 text-[9px] font-semibold text-emerald-500 bg-emerald-100 rounded-full px-1.5 py-0.5">
+                        คำนวณอัตโนมัติ
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>

@@ -17,6 +17,10 @@ const FIELD_LABELS: Record<string, string> = {
   department: "แผนก/สาขา",
   student_phone: "เบอร์โทร",
   email: "อีเมล",
+  birth_date: "วันเกิด",
+  gender: "เพศ",
+  national_id: "เลขประจำตัวประชาชน",
+  address: "ที่อยู่",
 };
 
 export async function POST(req: NextRequest) {

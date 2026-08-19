@@ -13,6 +13,14 @@ export type StudentStatus =
 export type AccountSubjectType = "admin" | "teacher" | "student" | "parent" | "alumni";
 
 /** ความสัมพันธ์ของผู้ปกครองกับนักเรียน (guardians.relationship) */
+/**
+ * ใครกรอกแถวนี้ — ใช้กับ guardians, student_education_history,
+ * student_achievements (ดู 0020_student_self_service.sql)
+ *
+ * นักเรียนแก้/ลบได้เฉพาะแถวที่เป็น "student" ส่วน "staff" คือของฝ่ายทะเบียน
+ */
+export type RecordSource = "staff" | "student";
+
 export type GuardianRelationship = "บิดา" | "มารดา" | "ผู้ปกครอง" | "ญาติ" | "อื่นๆ";
 
 /** สิ่งที่เปลี่ยนไปในไทม์ไลน์ของนักเรียน (student_status_changes.change_type) */
@@ -1652,6 +1660,8 @@ export type Database = {
       // ─── Phase 2 Student 360 (supabase/migrations/0011-0013) ──────────────
       guardians: {
         Row: {
+          source: RecordSource;
+          recorded_by: string | null;
           id: string;
           student_id: string;
           full_name: string;
@@ -1672,6 +1682,8 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          source?: RecordSource;
+          recorded_by?: string | null;
           id?: string;
           student_id: string;
           full_name: string;
@@ -1692,6 +1704,8 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          source?: RecordSource;
+          recorded_by?: string | null;
           full_name?: string;
           relationship?: GuardianRelationship;
           phone?: string | null;
@@ -1712,6 +1726,7 @@ export type Database = {
       };
       student_education_history: {
         Row: {
+          source: RecordSource;
           id: string;
           student_id: string;
           school_name: string;
@@ -1724,6 +1739,7 @@ export type Database = {
           created_at: string;
         };
         Insert: {
+          source?: RecordSource;
           id?: string;
           student_id: string;
           school_name: string;
@@ -1736,6 +1752,7 @@ export type Database = {
           created_at?: string;
         };
         Update: {
+          source?: RecordSource;
           school_name?: string;
           level?: string | null;
           province?: string | null;
@@ -1779,6 +1796,7 @@ export type Database = {
       };
       student_achievements: {
         Row: {
+          source: RecordSource;
           id: string;
           student_id: string;
           kind: AchievementKind;
@@ -1799,6 +1817,7 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          source?: RecordSource;
           id?: string;
           student_id: string;
           kind?: AchievementKind;
@@ -1819,6 +1838,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          source?: RecordSource;
           kind?: AchievementKind;
           title?: string;
           level?: AchievementLevel | null;

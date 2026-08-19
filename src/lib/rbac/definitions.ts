@@ -76,6 +76,9 @@ const CAN_REPORT_MAINTENANCE = ["maintenance.create", "maintenance.view_own"];
 const STUDENT_PERMISSIONS = [
   "school.info",
   "student.view_own",
+  // แก้ได้เฉพาะข้อมูลที่ตัวเองกรอกไว้ ไม่ใช่ทุกอย่างในแฟ้ม — ฝั่ง API
+  // บังคับอีกชั้นว่าแตะได้เฉพาะแถวที่ source = 'student' (ดู 0020)
+  "student.update_own",
   "attendance.view_own",
   "schedule.view",
   "booking.view_own",

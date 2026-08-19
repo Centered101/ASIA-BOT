@@ -16,8 +16,13 @@ import { getGoogleSupabase } from "@/lib/supabase-google";
 import { safeImageSrc } from "@/lib/image-url";
 import { Chart, registerables } from "chart.js";
 import { Bar, Doughnut } from "react-chartjs-2";
+import { birthDateBounds, calcGrade } from "@/lib/student-grade";
+import { GENDER_LABELS, checkBirthDate, checkNationalId } from "@/lib/student-validate";
 
 Chart.register(...registerables);
+
+/** ช่วงวันเกิดที่เลือกได้ ใช้เกณฑ์อายุชุดเดียวกับหน้าสมัคร */
+const BIRTH_BOUNDS = birthDateBounds();
 
 type Student = Database["public"]["Tables"]["students"]["Row"] & {
   photo_url?: string | null;
@@ -46,18 +51,6 @@ type StudentActivityStats = {
 };
 
 const CROP_SIZE = 280;
-
-function calcGrade(program: string, entryYear: number | string | null) {
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const thaiYear = now.getFullYear() + 543 - (month < 5 ? 1 : 0);
-  const yr = typeof entryYear === "number" ? entryYear : parseInt(String(entryYear ?? "0"));
-  const diff = thaiYear - yr + 1;
-  const maxYr = program === "ปวส" ? 2 : 3;
-  if (diff < 1) return `${program} (รอเข้าเรียน)`;
-  if (diff > maxYr) return `${program} (จบการศึกษา)`;
-  return `${program}${diff}`;
-}
 
 export default function StudentPage() {
   const router = useRouter();
@@ -250,6 +243,7 @@ export default function StudentPage() {
   // Direct-edit (saves immediately): nickname, phone
   const [editNickname, setEditNickname] = useState("");
   const [editPhone, setEditPhone] = useState("");
+  const [editAddress, setEditAddress] = useState("");
   const [showEditPhone, setShowEditPhone] = useState(false);
 
   // Admin-request fields: student_id, name, program, entry_year, dept
@@ -259,6 +253,9 @@ export default function StudentPage() {
   const [reqProgram, setReqProgram] = useState("");
   const [reqEntryYear, setReqEntryYear] = useState("");
   const [reqDept, setReqDept] = useState("");
+  const [reqBirthDate, setReqBirthDate] = useState("");
+  const [reqGender, setReqGender] = useState("");
+  const [reqNationalId, setReqNationalId] = useState("");
   const filteredDepts = useMemo(() => DEPARTMENTS.map(cat => ({
     ...cat,
     items: deptQuery ? cat.items.filter(d => d.toLowerCase().includes(deptQuery.toLowerCase())) : cat.items,
@@ -439,6 +436,10 @@ export default function StudentPage() {
     setReqProgram(student.program ?? "");
     setReqEntryYear(String(student.entry_year ?? ""));
     setReqDept(student.department ?? "");
+    setEditAddress(student.address ?? "");
+    setReqBirthDate(student.birth_date ?? "");
+    setReqGender(student.gender ?? "");
+    setReqNationalId(student.national_id ?? "");
     setShowEditPhone(false);
     setModalEdit(true);
   }
@@ -461,6 +462,7 @@ export default function StudentPage() {
           department: student.department,
           nickname: editNickname,
           student_phone: editPhone || student.student_phone,
+          address: editAddress,
         }),
       });
       const data = await res.json();
@@ -505,6 +507,21 @@ export default function StudentPage() {
     }
     if (reqDept && reqDept !== (student.department ?? "")) {
       changes.department = reqDept;
+    }
+    if (reqBirthDate && reqBirthDate !== (student.birth_date ?? "")) {
+      const bdErr = checkBirthDate(reqBirthDate);
+      if (bdErr) { toast.error(bdErr); return; }
+      changes.birth_date = reqBirthDate;
+    }
+    if (reqGender && reqGender !== (student.gender ?? "")) {
+      if (!(reqGender in GENDER_LABELS)) { toast.error("เพศไม่ถูกต้อง"); return; }
+      changes.gender = reqGender;
+    }
+    const cleanNid = reqNationalId.replace(/\D/g, "");
+    if (cleanNid && cleanNid !== (student.national_id ?? "")) {
+      const nidErr = checkNationalId(cleanNid);
+      if (nidErr) { toast.error(nidErr); return; }
+      changes.national_id = cleanNid;
     }
     if (Object.keys(changes).length === 0) {
       toast.info("ไม่มีข้อมูลที่เปลี่ยนแปลง");
@@ -924,7 +941,16 @@ export default function StudentPage() {
                   <span className={`min-w-0 flex-1 break-words text-sm font-semibold leading-5 ${row.label === "บัญชี Google" ? "break-all" : ""} ${row.cls || "text-slate-800"}`}>{String(row.val)}</span>
                 </div>
               ))}
-              <div className="flex justify-end pt-3">
+              <div className="flex justify-end gap-2 pt-3">
+                {student.card_status !== "active" && (
+                  <a
+                    href="/student-card"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] font-bold text-amber-600 transition hover:bg-amber-100 active:scale-[0.97]"
+                  >
+                    <i className="fa-solid fa-id-card text-[10px]" />
+                    ลงทะเบียนบัตร
+                  </a>
+                )}
                 <button
                   type="button"
                   onClick={openEdit}
@@ -1182,7 +1208,7 @@ export default function StudentPage() {
                 <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-full">
                   <i className="fa-solid fa-bolt text-[8px]" /> บันทึกทันที
                 </span>
-                <span className="text-[10px] text-slate-400">รูปโปรไฟล์ · ชื่อเล่น · เบอร์โทร</span>
+                <span className="text-[10px] text-slate-400">รูปโปรไฟล์ · ชื่อเล่น · เบอร์โทร · ที่อยู่</span>
               </div>
 
               <div className="space-y-2.5">
@@ -1206,6 +1232,14 @@ export default function StudentPage() {
                       inputMode="numeric" maxLength={10} />
                   </div>
                 </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-500 mb-1">ที่อยู่</label>
+                  <textarea suppressHydrationWarning rows={3} maxLength={500}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-none focus:border-sky-400 transition"
+                    style={{ resize: "vertical" }}
+                    value={editAddress} onChange={(e) => setEditAddress(e.target.value)}
+                    placeholder="บ้านเลขที่ หมู่ ตำบล อำเภอ จังหวัด รหัสไปรษณีย์" />
+                </div>
 
               </div>
 
@@ -1224,7 +1258,7 @@ export default function StudentPage() {
                 <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
                   <i className="fa-solid fa-shield-halved text-[8px]" /> ต้องอนุมัติโดยผู้ดูแล
                 </span>
-                <span className="text-[10px] text-slate-400">เลขบัตร · ชื่อ · ระดับ · ปี · สาขา</span>
+                <span className="text-[10px] text-slate-400">เลขบัตร · ชื่อ · วันเกิด · เพศ · บัตร ปชช · ระดับ · ปี · สาขา</span>
               </div>
 
               <div className="space-y-2.5">
@@ -1250,6 +1284,34 @@ export default function StudentPage() {
                       value={reqLastName} onChange={(e) => setReqLastName(e.target.value)}
                       placeholder="นามสกุล" />
                   </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 mb-1">วันเกิด</label>
+                    <input suppressHydrationWarning type="date"
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-none focus:border-amber-400 transition"
+                      value={reqBirthDate} onChange={(e) => setReqBirthDate(e.target.value)}
+                      min={BIRTH_BOUNDS.min} max={BIRTH_BOUNDS.max} />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 mb-1">เพศ</label>
+                    <select suppressHydrationWarning
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-none focus:border-amber-400 transition"
+                      value={reqGender} onChange={(e) => setReqGender(e.target.value)}>
+                      <option value="">-- เลือก --</option>
+                      {Object.entries(GENDER_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-500 mb-1">เลขประจำตัวประชาชน</label>
+                  <input suppressHydrationWarning
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-none focus:border-amber-400 transition"
+                    value={reqNationalId}
+                    onChange={(e) => setReqNationalId(e.target.value.replace(/\D/g, "").slice(0, 13))}
+                    placeholder="13 หลัก" maxLength={13} inputMode="numeric" />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { getServiceClient } from "@/lib/server/supabase-server";
 import { withAuth } from "@/lib/server/with-auth";
 import { parseBody } from "@/lib/server/validation";
+import { GuardianSchema, GuardianUpdateSchema } from "@/lib/server/student-record-schemas";
 import type { Database } from "@/types/database";
 
 type GuardianUpdate = Database["public"]["Tables"]["guardians"]["Update"];
@@ -10,29 +10,6 @@ type GuardianUpdate = Database["public"]["Tables"]["guardians"]["Update"];
 // ผู้ปกครองของนักเรียนหนึ่งคน — เพิ่ม/แก้/ลบ
 // สิทธิ์ใช้ student.update ตัวเดียวกับการแก้ข้อมูลนักเรียน เพราะข้อมูลผู้ปกครอง
 // เป็นส่วนหนึ่งของระเบียนนักเรียน ไม่ใช่ทรัพยากรแยกที่มีเจ้าของต่างหาก
-
-const RELATIONSHIPS = ["บิดา", "มารดา", "ผู้ปกครอง", "ญาติ", "อื่นๆ"] as const;
-
-const GuardianCreateSchema = z.object({
-  full_name: z.string().trim().min(1, "ต้องระบุชื่อผู้ปกครอง"),
-  relationship: z.enum(RELATIONSHIPS).optional(),
-  phone: z.string().trim().nullable().optional(),
-  phone_alt: z.string().trim().nullable().optional(),
-  email: z.string().trim().email("รูปแบบอีเมลไม่ถูกต้อง").nullable().optional().or(z.literal("")),
-  line_user_id: z.string().trim().nullable().optional(),
-  national_id: z.string().trim().nullable().optional(),
-  occupation: z.string().trim().nullable().optional(),
-  workplace: z.string().trim().nullable().optional(),
-  income_range: z.string().trim().nullable().optional(),
-  address: z.string().trim().nullable().optional(),
-  is_primary: z.boolean().optional(),
-  is_emergency_contact: z.boolean().optional(),
-  note: z.string().trim().nullable().optional(),
-});
-
-const GuardianUpdateSchema = GuardianCreateSchema.partial().extend({
-  id: z.string().uuid("ต้องระบุ id ของผู้ปกครองที่จะแก้"),
-});
 
 /** ผู้ปกครองหลักมีได้คนเดียวต่อนักเรียน (มี unique index กันอยู่แล้วในชั้น DB) */
 async function clearOtherPrimary(studentId: string, keepId: string | null) {
@@ -49,7 +26,7 @@ async function clearOtherPrimary(studentId: string, keepId: string | null) {
 export const POST = withAuth<{ id: string }>(
   async (req, { params }) => {
     const studentId = decodeURIComponent(params.id).trim();
-    const parsed = await parseBody(req, GuardianCreateSchema);
+    const parsed = await parseBody(req, GuardianSchema);
     if (!parsed.ok) return parsed.response;
     const body = parsed.data;
 

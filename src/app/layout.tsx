@@ -85,7 +85,7 @@ const toasterIcons = {
   error:   <i className="fa-solid fa-circle-exclamation text-red-500 text-sm" />,
   info:    <i className="fa-solid fa-circle-info text-blue-400 text-sm" />,
   warning: <i className="fa-solid fa-circle-info text-yellow-500 text-sm" />,
-  loading: <i className="fa-solid fa-spinner text-slate-400 text-sm animate-spin" />,
+  loading: <i className="asia-spinner text-slate-400 text-sm" />,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

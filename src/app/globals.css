@@ -41,8 +41,20 @@ body {
   position: relative;
 }
 
-html, select { cursor: url(https://sweezy-cursors.com/wp-content/uploads/cursor/old-roblox/old-roblox-cursor-32x32.png), auto !important; }
-a, button, label, .cursor-pointer, [class^="btn-"] { cursor: url(https://sweezy-cursors.com/wp-content/uploads/cursor/old-roblox/old-roblox-pointer-32x32.png), pointer !important; }
+/* เคอร์เซอร์ Roblox — เก็บไว้ในโปรเจกต์เอง ไม่ดึงจาก sweezy-cursors.com แล้ว
+ *
+ * ไฟล์เดิมชื่อ "...-32x32.png" แต่รูปจริงเป็น 128x128 (ชื่อไฟล์กับเนื้อในไม่ตรงกัน
+ * และ URL ที่ลงท้าย 24x24 กับ 32x32 ก็ส่งไฟล์เดียวกัน) เบราว์เซอร์จึงวาดเคอร์เซอร์
+ * ใหญ่กว่าของระบบราว 5-6 เท่า — cursor: url() ย่อด้วย CSS ไม่ได้ ต้องย่อที่ตัวไฟล์
+ *
+ * 20px เพราะลูกศรกินเต็มผืนผ้าใบ ขนาดนี้จึงออกมาพอ ๆ กับลูกศรมาตรฐานของ Windows
+ * ที่สูงราว 19px ส่วนที่พ่วงมาด้วยคือเลิกยิงไปโฮสต์ภายนอกทุกครั้งที่เปิดหน้า
+ * ถ้าเว็บนั้นล่มหรือช้า เคอร์เซอร์จะกลับไปเป็นของระบบเงียบ ๆ โดยไม่รู้สาเหตุ
+ *
+ * ไม่ระบุ hotspot ให้ค่าปริยาย (0 0) เหมือนเดิม ปลายลูกศรอยู่มุมซ้ายบนพอดีอยู่แล้ว
+ */
+html, select { cursor: url(/cursors/arrow-20.png), auto !important; }
+a, button, label, .cursor-pointer, [class^="btn-"] { cursor: url(/cursors/hand-20.png), pointer !important; }
 
 .bg-blob { position: fixed; border-radius: 50%; filter: blur(80px); opacity: 0.18; pointer-events: none; z-index: 0; }
 @keyframes pl-spin { to { transform: rotate(360deg); } }
@@ -121,6 +133,34 @@ a, button, label, .cursor-pointer, [class^="btn-"] { cursor: url(https://sweezy-
 .btn-text:hover { background: rgba(14,165,233,0.08); color: #0284C7; }
 
 .spinner { border: 2.5px solid var(--primary-color); border-top-color: transparent; border-radius: 50%; display: inline-block; animation: spin 0.7s linear infinite; }
+
+/* ── สปินเนอร์กลางของทั้งโปรเจกต์ (วงแหวนเปิด) ใช้แทน fa-spinner ทุกจุด
+   ขนาดอิง font-size (1em) และสีอิง currentColor
+   จึงยังคุมด้วยคลาสเดิมได้ เช่น text-2xl / text-sky-400 / text-[#ff7070] ── */
+.asia-spinner {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 1em;
+  height: 1em;
+  border: 0.14em solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  vertical-align: -0.125em;
+  animation: spin 0.7s linear infinite;
+}
+
+/* ── ไอคอน "ASIA-BOT กำลังเชื่อมกับ Google" (components/GoogleLinkIcon) ── */
+@keyframes asiaLinkDot {
+  0%   { transform: translateX(0);    opacity: 0; }
+  20%  { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { transform: translateX(38px); opacity: 0; }
+}
+@keyframes asiaLinkPulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--asia-link-ring); }
+  70%      { box-shadow: 0 0 0 9px transparent; }
+}
+.asia-link-glyph > svg { display: block; width: 100%; height: 100%; }
 .fa-spin,
 .animate-spin {
   display: inline-block;
@@ -136,6 +176,11 @@ a, button, label, .cursor-pointer, [class^="btn-"] { cursor: url(https://sweezy-
 .form-input { width: 100%; padding: 12px 0 12px 35px; border: 1.5px solid #E2E8F0; border-radius: 12px; font-family: inherit; font-size: 15px; background: var(--gray-soft); color: #1E293B; outline: none; transition: all 0.25s; }
 .form-input:focus { border-color: var(--primary-color) !important; background: white; box-shadow: 0 0 0 4px rgba(132,212,250,0.18); }
 .form-input.error { border-color: #FCA5A5; background: #FFF5F5; }
+
+/* ช่องจำนวนที่มีปุ่ม −/+ ของตัวเองอยู่แล้ว ลูกศรของเบราว์เซอร์เลยเกินมาและเบียดตัวเลข */
+.no-spinner::-webkit-outer-spin-button,
+.no-spinner::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.no-spinner { -moz-appearance: textfield; appearance: textfield; }
 
 .admin-shell {
   font-family: "Kanit", "Bai Jamjuree", system-ui, sans-serif;

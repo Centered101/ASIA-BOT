@@ -3,6 +3,7 @@
 import { useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { getGoogleSupabase } from "@/lib/supabase-google";
+import GoogleLinkIcon from "@/components/GoogleLinkIcon";
 
 function TeacherGoogleCallbackContent() {
   const searchParams = useSearchParams();
@@ -52,8 +53,12 @@ function TeacherGoogleCallbackContent() {
   }, [searchParams]);
 
   return (
-    <main className="min-h-screen flex items-center justify-center">
-      <p className="text-slate-400 text-sm"><i className="fa-solid fa-spinner fa-spin mr-2" />กำลังเชื่อม Google...</p>
+    <main className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
+      <div className="w-full max-w-sm rounded-2xl bg-white border border-slate-200 shadow-xl p-6 text-center">
+        <GoogleLinkIcon theme="light" className="mb-4" />
+        <h1 className="font-bold text-slate-800">บัญชี Google</h1>
+        <p className="text-sm text-slate-400 mt-1">กำลังเชื่อม Google...</p>
+      </div>
     </main>
   );
 }

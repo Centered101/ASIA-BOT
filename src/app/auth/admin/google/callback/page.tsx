@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState, Suspense } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getGoogleSupabase } from "@/lib/supabase-google";
+import GoogleLinkIcon from "@/components/GoogleLinkIcon";
 
 const STORAGE_KEY      = "asia_admin_session";
 const STORAGE_TIME_KEY = "asia_admin_session_time";
@@ -117,17 +119,14 @@ function AdminGoogleCallbackContent() {
         style={{ background: "linear-gradient(135deg, #0c0c0c, #1c1c1c)" }}>
         <div className="w-full max-w-sm rounded-2xl p-6 text-center"
           style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-          <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center"
-            style={{ background: "rgba(255,112,112,0.15)" }}>
-            <i className="fa-solid fa-circle-xmark text-2xl" style={{ color: "#ff7070" }} />
-          </div>
+          <GoogleLinkIcon failed className="mb-4" />
           <h1 className="font-bold text-white mb-2">เข้าสู่ระบบไม่สำเร็จ</h1>
           <p className="text-sm mb-5" style={{ color: "#9e9e9e" }}>{error}</p>
-          <a href="/admin"
+          <Link href="/admin"
             className="inline-flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-bold text-white"
             style={{ background: "#ff7070" }}>
             <i className="fa-solid fa-arrow-left" /> กลับหน้าเข้าสู่ระบบ
-          </a>
+          </Link>
         </div>
       </main>
     );
@@ -138,13 +137,9 @@ function AdminGoogleCallbackContent() {
       style={{ background: "linear-gradient(135deg, #0c0c0c, #1c1c1c)" }}>
       <div className="w-full max-w-sm rounded-2xl p-6 text-center"
         style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-        <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center"
-          style={{ background: "rgba(255,112,112,0.15)" }}>
-          <i className="fa-brands fa-google text-2xl" style={{ color: "#ff7070" }} />
-        </div>
+        <GoogleLinkIcon className="mb-4" />
         <h1 className="font-bold text-white mb-1">กำลังเข้าสู่ระบบ</h1>
-        <p className="text-sm mb-5" style={{ color: "#9e9e9e" }}>{message}</p>
-        <i className="fa-solid fa-spinner fa-spin" style={{ color: "#ff7070" }} />
+        <p className="text-sm" style={{ color: "#9e9e9e" }}>{message}</p>
       </div>
     </main>
   );

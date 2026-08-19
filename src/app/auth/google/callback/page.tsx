@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { SESSION_KEY, SESSION_TIME_KEY } from "@/lib/config";
 import { getGoogleSupabase } from "@/lib/supabase-google";
+import GoogleLinkIcon from "@/components/GoogleLinkIcon";
 
 function safeNext(raw: string | null) {
   return raw && raw.startsWith("/") && !raw.startsWith("//") ? raw : "/student";
@@ -140,12 +141,9 @@ function GoogleCallbackContent() {
   return (
     <main className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
       <div className="w-full max-w-sm rounded-2xl bg-white border border-slate-200 shadow-xl p-6 text-center">
-        <div className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center" style={{ background: "linear-gradient(135deg,#84D4FA,#4DB8F5)" }}>
-          <i className="fa-brands fa-google text-white text-xl" />
-        </div>
+        <GoogleLinkIcon theme="light" className="mb-4" />
         <h1 className="font-bold text-slate-800">บัญชี Google</h1>
         <p className="text-sm text-slate-400 mt-1">{message}</p>
-        <i className="fa-solid fa-spinner fa-spin mt-5 text-sky-400" />
       </div>
     </main>
   );

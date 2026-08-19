@@ -154,9 +154,11 @@ a, button, label, .cursor-pointer, [class^="btn-"] { cursor: url(/cursors/hand-2
    ซึ่งไม่ใช่สีของเว็บ และมุมโค้งก็ต่างกันไปในแต่ละเบราว์เซอร์
    ตัวนี้จึงวาดเองเพื่อให้หน้าตาเหมือนกันทุกที่
 
-   เครื่องหมายถูกเป็นสีน้ำเงินเข้ม ไม่ใช่สีขาว เพราะ --primary-color เป็น
-   ฟ้าอ่อน ถ้าใช้ขาวจะได้ contrast แค่ 1.64 ซึ่งตกเกณฑ์ WCAG ของกราฟิก
-   (ต้องได้ 3.0 ขึ้นไป) ส่วนสีเข้มนี้ได้ 6.96
+   ไม่มีเครื่องหมายถูกข้างใน สถานะติ๊กบอกด้วยการถมสีทั้งกล่องอย่างเดียว
+   พื้น --primary-color เทียบกับพื้นขาวได้ contrast แค่ 1.64 ซึ่งตกเกณฑ์ WCAG
+   ของกราฟิก (ต้องได้ 3.0) ตอนมีเครื่องหมายถูกสีเข้มยังพอไหว แต่พอเอาออก
+   ก็ไม่เหลืออะไรมาบอกขอบเขต ขอบตอนติ๊กจึงใช้เฉดเข้มขึ้นในโทนเดียวกัน
+   ซึ่งได้ 3.92 ผ่านเกณฑ์ โดยที่ตัวกล่องยังเป็นสี primary เต็ม ๆ
 
    ขนาดอิง font-size จึงย่อ/ขยายด้วย text-* ได้เหมือน .asia-spinner ── */
 .asia-check {
@@ -168,34 +170,49 @@ a, button, label, .cursor-pointer, [class^="btn-"] { cursor: url(/cursors/hand-2
   border: 2px solid #cbd5e1;
   border-radius: 0.4em;
   background: #f8fafc;
-  display: inline-grid;
-  place-content: center;
+  display: inline-block;
   cursor: pointer;
   transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 .asia-check:hover:not(:disabled) { border-color: var(--primary-dark); }
 .asia-check:checked {
   background: var(--primary-color);
-  border-color: var(--primary-dark);
+  border-color: #1b87c9;
 }
-.asia-check::after {
-  content: "";
-  width: 0.3em;
-  height: 0.6em;
-  margin-top: -0.12em;
-  border: solid #0b3d5c;
-  border-width: 0 0.16em 0.16em 0;
-  transform: rotate(45deg) scale(0);
-  transition: transform 0.15s ease;
-}
-.asia-check:checked::after { transform: rotate(45deg) scale(1); }
 .asia-check:focus-visible {
   outline: 2px solid var(--primary-dark);
   outline-offset: 2px;
 }
 .asia-check:disabled { opacity: 0.5; cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) {
-  .asia-check, .asia-check::after { transition: none; }
+  .asia-check { transition: none; }
+}
+
+/* ── Bottom sheet ของ modal หลังบ้าน (components/admin/dark-ui) ────────────
+   เลื่อนขึ้นจากขอบล่างแทนการโผล่กลางจอ ให้เหมือน sheet บนมือถือ
+   ใช้ ease แบบ decelerate เพื่อให้หยุดนุ่ม ไม่กระตุกตอนจบ ── */
+@keyframes asiaSheetUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+@keyframes asiaSheetFade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.asia-sheet          { animation: asiaSheetUp 0.28s cubic-bezier(0.32, 0.72, 0, 1); }
+.asia-sheet-backdrop { animation: asiaSheetFade 0.2s ease; }
+
+/* แถบจับด้านบน sheet — บอกใบ้ว่าลากปิดได้ และเป็นจุดยึดสายตา */
+.asia-sheet-grip {
+  width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: #4a4a4a;
+  margin: 10px auto 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .asia-sheet, .asia-sheet-backdrop { animation: none; }
 }
 
 /* ── ไอคอน "ASIA-BOT กำลังเชื่อมกับ Google" (components/GoogleLinkIcon) ── */

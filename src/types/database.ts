@@ -9,6 +9,9 @@ export type StudentStatus =
   | "resigned"
   | "expelled";
 
+/** ระดับความสำคัญของแจ้งเตือน ใช้จัดลำดับและสีในกล่อง */
+export type NotificationPriority = "low" | "normal" | "high";
+
 /** Which profile table a user_accounts row primarily maps to. */
 export type AccountSubjectType = "admin" | "teacher" | "student" | "parent" | "alumni";
 
@@ -2193,6 +2196,63 @@ export type Database = {
         };
         // append-only ห้าม UPDATE ทับ
         Update: Record<string, never>;
+        Relationships: [];
+      };
+
+      // ─── ศูนย์แจ้งเตือน (0022) ──────────────────────────────────────────
+      notifications: {
+        Row: {
+          id: string;
+          account_id: string;
+          category_key: string;
+          title: string;
+          body: string | null;
+          link: string | null;
+          entity_type: string | null;
+          entity_id: string | null;
+          priority: NotificationPriority;
+          read_at: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          account_id: string;
+          category_key?: string;
+          title: string;
+          body?: string | null;
+          link?: string | null;
+          entity_type?: string | null;
+          entity_id?: string | null;
+          priority?: NotificationPriority;
+          read_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        // แก้ได้เฉพาะ read_at — เนื้อความที่ส่งไปแล้วต้องไม่ถูกเขียนทับ
+        Update: { read_at?: string | null };
+        Relationships: [];
+      };
+      notification_preferences: {
+        Row: {
+          account_id: string;
+          category_key: string;
+          in_app: boolean;
+          line: boolean;
+          updated_at: string;
+        };
+        Insert: {
+          account_id: string;
+          category_key: string;
+          in_app?: boolean;
+          line?: boolean;
+          updated_at?: string;
+        };
+        Update: {
+          in_app?: boolean;
+          line?: boolean;
+          updated_at?: string;
+        };
         Relationships: [];
       };
     };

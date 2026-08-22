@@ -91,6 +91,10 @@ const STUDENT_PERMISSIONS = [
   "equipment.create_request",
   "feedback.create",
   "project.view",
+  // แฟ้มเอกสารของตัวเอง — ส่งเข้าแฟ้มและขอให้โรงเรียนออกให้ (0023)
+  "document.view_own",
+  "document.upload_own",
+  "document.request",
   ...CAN_REPORT_MAINTENANCE,
 ];
 
@@ -109,6 +113,7 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     "booking.view_all", "booking.approve", "room.manage",
     "shop.view_products", "shop.manage_products", "shop.view_all_orders", "shop.manage_orders",
     "equipment.view_items", "equipment.manage_items", "equipment.view_all_requests", "equipment.approve",
+    "document.view_all", "document.review", "document.issue",
     "feedback.view_all", "feedback.manage",
     "project.view", "project.manage",
     "notifications.send", "iot.manage",
@@ -127,6 +132,8 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     "school.info", "dashboard.view",
     "student.view_all", "student.create", "student.update", "student.export",
     "schedule.view",
+    // งานเอกสารเป็นของฝ่ายทะเบียนโดยตรง ทั้งตรวจแฟ้มและออกเอกสารให้ (0023)
+    "document.view_all", "document.review", "document.issue",
     ...CAN_REPORT_MAINTENANCE,
   ],
 
@@ -224,7 +231,9 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     ...CAN_REPORT_MAINTENANCE,
   ],
 
-  ALUMNI: ["school.info", "project.view"],
+  // ศิษย์เก่ากลับมาที่ระบบด้วยเหตุผลเดียวเป็นส่วนใหญ่: ขอ Transcript หรือ
+  // ใบรับรอง ถ้าขอไม่ได้ บัญชีศิษย์เก่าก็ไม่มีประโยชน์
+  ALUMNI: ["school.info", "project.view", "document.view_own", "document.request"],
 
   GUEST: ["school.info"],
 };

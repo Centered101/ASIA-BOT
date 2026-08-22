@@ -140,3 +140,37 @@ describe("hasPermission", () => {
     expect(hasPermission([], "shop.view_products")).toBe(false);
   });
 });
+
+describe("เอกสาร (0023)", () => {
+  const can = (role: Role, perm: string) =>
+    hasPermission(permissionsForRoles([role]), perm);
+
+  it("ให้นักเรียนส่งและขอเอกสารของตัวเอง แต่ตรวจของคนอื่นไม่ได้", () => {
+    expect(can("STUDENT", "document.upload_own")).toBe(true);
+    expect(can("STUDENT", "document.request")).toBe(true);
+    expect(can("STUDENT", "document.view_all")).toBe(false);
+    expect(can("STUDENT", "document.review")).toBe(false);
+  });
+
+  it("ให้ศิษย์เก่าขอเอกสารได้", () => {
+    // เหตุผลหลักที่ศิษย์เก่ากลับมาที่ระบบคือขอ Transcript ถ้าขอไม่ได้
+    // บัญชีศิษย์เก่าก็ไม่มีประโยชน์
+    expect(can("ALUMNI", "document.request")).toBe(true);
+    expect(can("ALUMNI", "document.view_own")).toBe(true);
+    expect(can("ALUMNI", "document.review")).toBe(false);
+  });
+
+  it("ให้ฝ่ายทะเบียนตรวจและออกเอกสาร", () => {
+    expect(can("REGISTRAR", "document.view_all")).toBe(true);
+    expect(can("REGISTRAR", "document.review")).toBe(true);
+    expect(can("REGISTRAR", "document.issue")).toBe(true);
+  });
+
+  it("ยังไม่ให้ครูที่ปรึกษาและฝ่ายวิชาการเห็นเอกสารทุกคน", () => {
+    // document.view_all แปลว่าเห็นเอกสารของนักเรียนทั้งโรงเรียน ซึ่งกว้างเกิน
+    // สำหรับครูที่ปรึกษาที่ควรเห็นเฉพาะเด็กในที่ปรึกษา — ต้องรอ scope
+    // (user_roles.scope_id) ต่อเข้ากับโมดูลนี้ก่อน
+    expect(can("ADVISOR", "document.view_all")).toBe(false);
+    expect(can("ACADEMIC", "document.view_all")).toBe(false);
+  });
+});

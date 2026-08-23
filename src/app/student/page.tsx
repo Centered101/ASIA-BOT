@@ -9,7 +9,8 @@ import Footer from "@/components/Footer";
 import ProfileImageCropModal from "@/components/ProfileImageCropModal";
 import { refreshAOS } from "@/components/AOSProvider";
 import { toast } from "sonner";
-import { SESSION_KEY, SESSION_TIME_KEY, SESSION_TTL, DEPARTMENTS, SITE_NAME } from "@/lib/config";
+import { SESSION_KEY, SESSION_TIME_KEY, SESSION_TTL, DEPARTMENTS, SITE_NAME, LINE_ADD_FRIEND_URL } from "@/lib/config";
+import StudentRecords from "@/components/student/StudentRecords";
 import type { Database } from "@/types/database";
 import QRCode from "qrcode";
 import { getGoogleSupabase } from "@/lib/supabase-google";
@@ -60,6 +61,7 @@ export default function StudentPage() {
   const [qrUrl, setQrUrl] = useState("");
   const [modalEdit, setModalEdit] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [unlinkingLine, setUnlinkingLine] = useState(false);
   const [requesting, setRequesting] = useState(false);
   const [adminRole, setAdminRole] = useState<string | null>(null);
   const [activityStats, setActivityStats] = useState<StudentActivityStats | null>(null);
@@ -444,6 +446,38 @@ export default function StudentPage() {
     setModalEdit(true);
   }
 
+  /**
+   * ปลดการเชื่อม LINE ของตัวเอง
+   *
+   * อัปเดต session ใน localStorage ด้วย ไม่ใช่แค่รีโหลดจากเซิร์ฟเวอร์ เพราะทั้งหน้า
+   * อ่านนักเรียนจาก session ก้อนนั้น ถ้าไม่แก้ตาม ป้ายจะยังขึ้นว่า "เชื่อมแล้ว"
+   * จนกว่าจะล็อกอินใหม่
+   */
+  async function unlinkLine() {
+    if (!student) return;
+    if (!confirm("ยกเลิกการเชื่อม LINE? จะไม่ได้รับแจ้งเตือนทาง LINE อีก")) return;
+    setUnlinkingLine(true);
+    try {
+      const res = await fetch("/api/student/line-link", { method: "DELETE" });
+      const json = await res.json();
+      if (json.status === "success") {
+        setStudent((prev) => {
+          if (!prev) return prev;
+          const next = { ...prev, line_user_id: null };
+          try { localStorage.setItem(SESSION_KEY, JSON.stringify(next)); } catch { /* โหมดส่วนตัวเขียนไม่ได้ */ }
+          return next;
+        });
+        toast.success(json.message);
+      } else {
+        toast.error(json.message ?? "ยกเลิกไม่สำเร็จ");
+      }
+    } catch {
+      toast.error("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้");
+    } finally {
+      setUnlinkingLine(false);
+    }
+  }
+
   async function saveDirectEdit() {
     if (!student) return;
     if (editPhone && !/^[0-9]{9,10}$/.test(editPhone)) {
@@ -648,10 +682,10 @@ export default function StudentPage() {
 
       <div className="session-banner">
         {/* Colored accent bar */}
-        <div className="flex-shrink-0 self-stretch w-[3px] rounded-full" style={{ background: isPvs ? "#EF4444" : "#0EA5E9" }} />
+        <div className="shrink-0 self-stretch w-[3px] rounded-full" style={{ background: isPvs ? "#EF4444" : "#0EA5E9" }} />
 
         {/* Avatar */}
-        <div className="w-9 h-9 rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-white text-sm shadow-sm"
+        <div className="w-9 h-9 rounded-xl overflow-hidden shrink-0 flex items-center justify-center font-bold text-white text-sm shadow-xs"
           style={{ background: isPvs ? "linear-gradient(135deg,#EF4444,#F87171)" : "linear-gradient(135deg,#0EA5E9,#38BDF8)" }}>
           {studentPhotoSrc
             // eslint-disable-next-line @next/next/no-img-element
@@ -670,7 +704,7 @@ export default function StudentPage() {
         </div>
 
         {/* Session info */}
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           {sessionCountdown && (
             <span className={`session-badge ${sessionCountdown === "หมดอายุ" ? "red" : "green"}`}>
               <i className="fa-regular fa-clock" style={{ fontSize: 9 }} />
@@ -687,7 +721,7 @@ export default function StudentPage() {
         <div className="flex flex-col md:flex-row gap-6 lg:gap-8 items-start">
 
           {/* ── LEFT: Flip Card ── */}
-          <div className="w-full md:basis-[400px] lg:basis-[420px] flex-shrink-0">
+          <div className="w-full md:basis-[400px] lg:basis-[420px] shrink-0">
             <p data-aos="fade-up" className="text-xs font-bold tracking-widest text-slate-500 uppercase flex items-center gap-1.5 mb-3">
               <i className="fa-solid fa-id-card text-primary-dark" /> บัตรประจำตัวนักเรียน
             </p>
@@ -719,7 +753,7 @@ export default function StudentPage() {
                           บัตรประจำตัวนักเรียน
                         </div>
                       </div>
-                      <div className="rounded-lg flex items-center justify-center bg-white/20 border border-white/35 flex-shrink-0"
+                      <div className="rounded-lg flex items-center justify-center bg-white/20 border border-white/35 shrink-0"
                         style={{ width: "clamp(22px,6vw,34px)", height: "clamp(22px,6vw,34px)" }}>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src="/favicon.png" className="w-3/4 h-3/4 object-contain" alt="logo" />
@@ -728,7 +762,7 @@ export default function StudentPage() {
 
                     {/* Middle: initials + name + id */}
                     <div className="flex items-center gap-[3%]">
-                      <div className="flex-shrink-0 rounded-[10px] overflow-hidden flex items-center justify-center font-bold text-white flex-shrink-0"
+                      <div className="shrink-0 rounded-[10px] overflow-hidden flex items-center justify-center font-bold text-white shrink-0"
                         style={{
                           width: "clamp(30px,9vw,48px)", height: "clamp(30px,9vw,48px)",
                           fontSize: "clamp(10px,2.8vw,16px)",
@@ -778,7 +812,7 @@ export default function StudentPage() {
                           {student.department ?? "ไม่ระบุสาขา"}
                         </div>
                         <div className="flex items-center gap-1 mt-0.5">
-                          <div className={`rounded-full flex-shrink-0 ${isGraduated ? "bg-amber-400" : isPending ? "bg-slate-400" : "bg-green-400"}`}
+                          <div className={`rounded-full shrink-0 ${isGraduated ? "bg-amber-400" : isPending ? "bg-slate-400" : "bg-green-400"}`}
                             style={{ width: "clamp(4px,1.2vw,6px)", height: "clamp(4px,1.2vw,6px)" }} />
                           <span className="text-white/75 truncate" style={{ fontSize: "clamp(5px,1.4vw,7px)" }}>
                             {isGraduated ? "จบการศึกษา" : isPending ? "รอเข้าเรียน" : "กำลังศึกษา"}
@@ -787,8 +821,8 @@ export default function StudentPage() {
                       </div>
 
                       {/* QR Code */}
-                      <div className="flex flex-col items-center gap-0.5 flex-shrink-0">
-                        <div className="relative bg-white rounded shadow-lg"
+                      <div className="flex flex-col items-center gap-0.5 shrink-0">
+                        <div className="relative bg-white rounded-sm shadow-lg"
                           style={{ padding: "clamp(2px,0.6vw,4px)" }}>
                           {qrUrl
                             ? <img src={qrUrl} alt="QR" style={{ display: "block", width: "clamp(40px,11vw,56px)", height: "clamp(40px,11vw,56px)" }} />
@@ -830,7 +864,7 @@ export default function StudentPage() {
                     </span>
                   </div>
                   {/* Last-4 box */}
-                  <div className="absolute right-[3%] bg-white/25 rounded flex items-center justify-center px-[2%]"
+                  <div className="absolute right-[3%] bg-white/25 rounded-sm flex items-center justify-center px-[2%]"
                     style={{ top: "clamp(20px,6vw,30px)", height: "clamp(13px,3.8vw,20px)" }}>
                     <span className="font-mono text-white/85" style={{ fontSize: "clamp(5px,1.4vw,8px)" }}>
                       {String(student.student_id).slice(-4)}
@@ -851,17 +885,17 @@ export default function StudentPage() {
                         ["fa-calendar",       `พ.ศ. ${student.entry_year ?? "—"}`],
                       ] as [string, string][]).map(([icon, val]) => (
                         <div key={icon} className="flex items-center gap-[3%]">
-                          <i className={`fa-solid ${icon} text-white/55 flex-shrink-0`} style={{ fontSize: "clamp(4px,1.1vw,7px)", width: "clamp(7px,1.8vw,10px)" }} />
+                          <i className={`fa-solid ${icon} text-white/55 shrink-0`} style={{ fontSize: "clamp(4px,1.1vw,7px)", width: "clamp(7px,1.8vw,10px)" }} />
                           <span className="text-white/90 truncate leading-tight" style={{ fontSize: "clamp(5px,1.4vw,8px)" }}>{val}</span>
                         </div>
                       ))}
                     </div>
 
                     {/* Divider */}
-                    <div className="bg-white/20 self-stretch flex-shrink-0" style={{ width: 1 }} />
+                    <div className="bg-white/20 self-stretch shrink-0" style={{ width: 1 }} />
 
                     {/* Right column: QR */}
-                    <div className="flex-shrink-0 flex flex-col items-center justify-center min-w-0" style={{ width: "40%" }}>
+                    <div className="shrink-0 flex flex-col items-center justify-center min-w-0" style={{ width: "40%" }}>
                       <div className="relative bg-white rounded-xl shadow-lg"
                         style={{ padding: "clamp(4px,1vw,7px)", width: "min(82%, 112px)", aspectRatio: "1 / 1" }}>
                         {qrUrl
@@ -884,14 +918,14 @@ export default function StudentPage() {
                         </div>
                       )}
                       <div className="mt-1 flex items-center justify-center gap-1">
-                        <div className={`rounded-full flex-shrink-0 ${isGraduated ? "bg-amber-400" : isPending ? "bg-slate-400" : "bg-green-400"}`}
+                        <div className={`rounded-full shrink-0 ${isGraduated ? "bg-amber-400" : isPending ? "bg-slate-400" : "bg-green-400"}`}
                           style={{ width: "clamp(4px,1vw,5px)", height: "clamp(4px,1vw,5px)" }} />
                         <span className="text-white/90 leading-tight" style={{ fontSize: "clamp(5px,1.4vw,8px)" }}>
                           {isGraduated ? "จบการศึกษา" : isPending ? "รอเข้าเรียน" : "กำลังศึกษา"}
                         </span>
                       </div>
                       <div className="mt-0.5 flex items-center justify-center gap-1">
-                        <div className={`rounded-full flex-shrink-0 ${student.card_status === "active" ? "bg-green-400" : "bg-amber-400"}`}
+                        <div className={`rounded-full shrink-0 ${student.card_status === "active" ? "bg-green-400" : "bg-amber-400"}`}
                           style={{ width: "clamp(4px,1vw,5px)", height: "clamp(4px,1vw,5px)" }} />
                         <span className="text-white/70" style={{ fontSize: "clamp(4px,1.1vw,7px)" }}>
                           {student.card_status === "active" ? "บัตรใช้งานได้" : "รอเปิดใช้งาน"}
@@ -933,10 +967,12 @@ export default function StudentPage() {
                 { icon: "fa-phone",          label: "เบอร์โทร",     val: student.student_phone ?? "—",               cls: "" },
                 { icon: "fa-id-card",        label: "สถานะบัตร",   val: student.card_status === "active" ? "ใช้งานได้" : "รอเปิดใช้", cls: "" },
                 { icon: "fa-brands fa-google", label: "บัญชี Google", val: isGoogleLinked ? (student.google_email ?? "เชื่อมต่อแล้ว") : "ยังไม่เชื่อมต่อ", cls: isGoogleLinked ? "text-sky-500" : "text-slate-400" },
+                // ไม่โชว์ line_user_id ดิบ ๆ เป็นรหัสที่ LINE ออกให้ ไม่มีความหมายกับเจ้าตัว
+                { icon: "fa-brands fa-line", label: "บัญชี LINE", val: student.line_user_id ? "เชื่อมต่อแล้ว" : "ยังไม่เชื่อมต่อ", cls: student.line_user_id ? "text-green-600" : "text-slate-400" },
                 ...(adminRole ? [{ icon: "fa-shield-halved", label: "สิทธิ์ผู้ดูแล", val: `${ADMIN_ROLE_LABEL[adminRole] ?? adminRole}`, cls: adminRole === "superadmin" ? "text-red-500" : adminRole === "admin" ? "text-blue-500" : "text-slate-500" }] : []),
               ].map((row) => (
                 <div key={row.label} className="flex items-start gap-2.5 py-2.5 border-b border-slate-100 last:border-0">
-                  <i className={`${row.icon.startsWith("fa-brands") ? row.icon : `fa-solid ${row.icon}`} text-slate-300 text-xs w-4 text-center flex-shrink-0`} />
+                  <i className={`${row.icon.startsWith("fa-brands") ? row.icon : `fa-solid ${row.icon}`} text-slate-300 text-xs w-4 text-center shrink-0`} />
                   <span className="text-xs text-slate-400 font-medium w-[94px] shrink-0 leading-5 sm:w-[110px]">{row.label}</span>
                   <span className={`min-w-0 flex-1 break-words text-sm font-semibold leading-5 ${row.label === "บัญชี Google" ? "break-all" : ""} ${row.cls || "text-slate-800"}`}>{String(row.val)}</span>
                 </div>
@@ -1082,7 +1118,7 @@ export default function StudentPage() {
             </div>
 
             <div className={`rounded-2xl border px-3.5 py-3 mb-4 flex items-start gap-3 ${isGoogleLinked ? "bg-sky-50 border-sky-100" : "bg-slate-50 border-slate-200"}`}>
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${isGoogleLinked ? "bg-white text-[#4285F4]" : "bg-white text-slate-300"}`}>
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isGoogleLinked ? "bg-white text-[#4285F4]" : "bg-white text-slate-300"}`}>
                 <i className="fa-brands fa-google" />
               </div>
               <div className="min-w-0 flex-1">
@@ -1099,10 +1135,10 @@ export default function StudentPage() {
                     type="button"
                     onClick={connectGoogle}
                     disabled={googleLinking}
-                    className="mt-2 inline-flex items-center gap-2 rounded-xl bg-white border border-sky-100 px-3 py-2 text-[11px] font-bold text-sky-600 shadow-sm hover:bg-sky-50 disabled:opacity-60 transition"
+                    className="mt-2 inline-flex items-center gap-2 rounded-xl bg-white border border-sky-100 px-3 py-2 text-[11px] font-bold text-sky-600 shadow-xs hover:bg-sky-50 disabled:opacity-60 transition"
                   >
                     {googleLinking
-                      ? <><span className="spinner w-3.5 h-3.5 border-2 border-sky-400 border-t-transparent inline-block" /> กำลังเชื่อม...</>
+                      ? <><span className="spinner inline-block" /> กำลังเชื่อม...</>
                       : <><i className="fa-brands fa-google text-[#4285F4]" /> เชื่อม Google</>}
                   </button>
                 )}
@@ -1120,16 +1156,30 @@ export default function StudentPage() {
               </p>
               <p className="text-[11px] text-slate-400 mt-1">ทางลัดสำหรับดูข้อมูล จอง และส่งคำขอที่ใช้บ่อย</p>
             </div>
-            <span className="shrink-0 text-[11px] font-bold text-slate-500 bg-white/80 border border-slate-200 rounded-full px-3 py-1 shadow-sm">
+            <span className="shrink-0 text-[11px] font-bold text-slate-500 bg-white/80 border border-slate-200 rounded-full px-3 py-1 shadow-xs">
               ใช้งานเร็ว
             </span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {/*
+              รายการนี้คัดมาเอง ไม่ได้ derive จาก QUICK_LINKS เพราะบางบริการต้องแตกเป็น
+              หลายการ์ดที่ชี้หน้าเดียวกันคนละพารามิเตอร์ (ตารางเรียน/จองห้อง = class-track-room)
+              และแต่ละใบมี desc กับ tag ของตัวเองที่เมนูไม่มี
+
+              ข้อเสียคือหน้าใหม่ไม่โผล่มาเอง ต้องมาเติมตรงนี้ด้วย — แฟ้มของฉัน การเข้าเรียน
+              และแจ้งซ่อม เคยตกหล่นเพราะเหตุนี้ ถ้าเพิ่มหน้าใหม่ใน QUICK_LINKS อย่าลืมที่นี่
+
+              สีกับไอคอนยึดตามที่ตั้งไว้ใน QUICK_LINKS ของแต่ละฟีเจอร์ ยกเว้นสองใบแรกที่เป็น
+              หน้าเดียวกัน จึงต้องใช้คนละสีเพื่อให้แยกออกว่าเป็นคนละบริการ
+            */}
             {([
               { icon: "fa-solid fa-calendar-days",     color: "#3B82F6", bg: "#EFF6FF", path: "/class-track-room?view=classroom", title: "ตารางเรียน",       desc: "ดูห้องเรียนวันนี้",      tag: "เรียน" },
               { icon: "fa-solid fa-calendar-check",    color: "#F59E0B", bg: "#FFFBEB", path: "/class-track-room?view=booking",   title: "จองห้อง",          desc: "ห้องประชุม/ห้องเรียน",  tag: "จอง" },
-              { icon: "fa-solid fa-box-open",          color: "#EF4444", bg: "#FEF2F2", path: "/equipment-request",              title: "เบิกคุรุภัณฑ์",     desc: "เลือกและส่งคำขอ",       tag: "คำขอ" },
+              { icon: "fa-solid fa-toolbox",           color: "#059669", bg: "#ECFDF5", path: "/equipment-request",              title: "เบิกคุรุภัณฑ์",     desc: "เลือกและส่งคำขอ",       tag: "คำขอ" },
               { icon: "fa-solid fa-store",             color: "#EC4899", bg: "#FDF2F8", path: "/shop",                           title: "สหกรณ์",           desc: "ซื้อสินค้าในโรงเรียน",  tag: "Shop" },
+              { icon: "fa-solid fa-screwdriver-wrench", color: "#F59E0B", bg: "#FFFBEB", path: "/maintenance-request",           title: "แจ้งซ่อม",         desc: "แจ้งของชำรุด",          tag: "คำขอ" },
+              { icon: "fa-solid fa-user-check",        color: "#8B5CF6", bg: "#F5F3FF", path: "/my-attendance",                  title: "การเข้าเรียน",     desc: "ขาด สาย และงานที่ค้าง", tag: "เรียน" },
+              { icon: "fa-solid fa-file-lines",        color: "#0891B2", bg: "#ECFEFF", path: "/my-documents",                   title: "เอกสารของฉัน",     desc: "ส่งเอกสารและขอเอกสาร",  tag: "ข้อมูล" },
               { icon: "fa-solid fa-folder-open",       color: "#6366F1", bg: "#EEF2FF", path: "/projects",                       title: "ประเมินโปรเจค",    desc: "ผลงานและการประเมิน",    tag: "งาน" },
               { icon: "fa-solid fa-comment-dots",      color: "#14B8A6", bg: "#F0FDFA", path: "/feedback",                       title: "ความคิดเห็น",      desc: "แจ้งปัญหา/ข้อเสนอแนะ", tag: "ติดต่อ" },
             ] as { icon: string; color: string; bg: string; path: string; title: string; desc: string; tag: string }[]).map((item, i) => (
@@ -1161,13 +1211,16 @@ export default function StudentPage() {
           </div>
         </div>
 
+        {/* แฟ้มข้อมูล — ย้ายมาจากหน้า /my-profile ที่แยกอยู่ ดูเหตุผลใน StudentRecords */}
+        <StudentRecords />
+
       </main>
 
       {/* ── Modal: แก้ไขข้อมูล ── */}
       <div className={`modal-overlay ${modalEdit ? "open" : ""}`}
         onClick={(e) => e.target === e.currentTarget && setModalEdit(false)}>
         <div className="modal-sheet">
-          <div className="w-10 h-1 bg-slate-200 rounded mx-auto mt-3" />
+          <div className="w-10 h-1 bg-slate-200 rounded-sm mx-auto mt-3" />
           <div className="flex items-center gap-2.5 px-4 py-4 border-b sticky top-0 bg-white z-10 rounded-t-3xl">
             <div className="w-9 h-9 rounded-[10px] flex items-center justify-center text-sm"
               style={{ background: "#EFF6FF", color: "#2563EB" }}>
@@ -1192,13 +1245,13 @@ export default function StudentPage() {
                   <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
                   <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-slate-200 bg-slate-100 flex items-center justify-center font-bold text-slate-400 text-2xl">
                     {uploadingPhoto
-                      ? <span className="spinner w-6 h-6 border-2 border-sky-400 border-t-transparent inline-block" />
+                      ? <span className="spinner text-2xl inline-block" />
                       : studentPhotoSrc
                         // eslint-disable-next-line @next/next/no-img-element
                         ? <img src={studentPhotoSrc} alt="" className="w-full h-full object-cover" />
                         : <span>{initials}</span>}
                   </div>
-                  <div className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-sky-500 border-2 border-white flex items-center justify-center shadow group-hover:bg-sky-600 transition">
+                  <div className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-sky-500 border-2 border-white flex items-center justify-center shadow-sm group-hover:bg-sky-600 transition">
                     <i className="fa-solid fa-camera text-white text-xs" />
                   </div>
                 </label>
@@ -1215,7 +1268,7 @@ export default function StudentPage() {
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-500 mb-1">ชื่อเล่น</label>
                   <input suppressHydrationWarning
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-none focus:border-sky-400 transition"
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-hidden focus:border-sky-400 transition"
                     value={editNickname} onChange={(e) => setEditNickname(e.target.value)}
                     placeholder="ชื่อเล่น (ถ้ามี)" />
                 </div>
@@ -1227,7 +1280,7 @@ export default function StudentPage() {
                   <div className="relative">
                     <input suppressHydrationWarning
                       type="text"
-                      className="w-full px-3 py-2.5 pr-10 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-none focus:border-sky-400 transition"
+                      className="w-full px-3 py-2.5 pr-10 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-hidden focus:border-sky-400 transition"
                       value={editPhone} onChange={(e) => setEditPhone(e.target.value)}
                       inputMode="numeric" maxLength={10} />
                   </div>
@@ -1235,7 +1288,7 @@ export default function StudentPage() {
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-500 mb-1">ที่อยู่</label>
                   <textarea suppressHydrationWarning rows={3} maxLength={500}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-none focus:border-sky-400 transition"
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-hidden focus:border-sky-400 transition"
                     style={{ resize: "vertical" }}
                     value={editAddress} onChange={(e) => setEditAddress(e.target.value)}
                     placeholder="บ้านเลขที่ หมู่ ตำบล อำเภอ จังหวัด รหัสไปรษณีย์" />
@@ -1247,9 +1300,55 @@ export default function StudentPage() {
                 className="btn-primary w-full mt-3 overflow-hidden"
                 style={{ boxShadow: "0 4px 14px rgba(77,184,245,0.38)" }}>
                 {saving
-                  ? <><span className="spinner w-4 h-4 border-2 border-white border-t-transparent inline-block mr-2" />กำลังบันทึก...</>
+                  ? <><span className="spinner inline-block mr-2" />กำลังบันทึก...</>
                   : <><i className="fa-solid fa-floppy-disk text-sm" />&nbsp;บันทึกการเปลี่ยนแปลง</>}
               </button>
+
+              {/* ── เชื่อม LINE ──
+                  แยกออกจากฟอร์มด้านบนเพราะไม่ได้บันทึกพร้อมกัน และ "เชื่อม" ทำที่นี่ไม่ได้
+                  — line_user_id เป็นรหัสที่ LINE ออกให้ เจ้าตัวไม่รู้ค่าตัวเอง ต้องให้
+                  webhook ผูกให้ตอนทักเข้า OA (ดู /api/student/line-link) เว็บทำได้แค่
+                  บอกสถานะ พาไปแอด และปลดการเชื่อมเมื่ออยากเปลี่ยนบัญชี */}
+              <div className="mt-4 rounded-2xl border border-slate-200 p-3.5">
+                <div className="flex items-center gap-2 mb-2">
+                  <i className="fa-brands fa-line text-[#06C755]" />
+                  <span className="text-xs font-bold text-slate-700">แจ้งเตือนทาง LINE</span>
+                  <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    student.line_user_id
+                      ? "text-green-700 bg-green-50 border border-green-200"
+                      : "text-slate-500 bg-slate-100 border border-slate-200"}`}>
+                    {student.line_user_id ? "เชื่อมแล้ว" : "ยังไม่เชื่อม"}
+                  </span>
+                </div>
+
+                {student.line_user_id ? (
+                  <>
+                    <p className="text-[11px] text-slate-400 leading-relaxed mb-2.5">
+                      ระบบจะส่งเรื่องของคุณเข้า LINE เช่น ผลอนุมัติคำขอ และการแจ้งเตือนการเข้าเรียน
+                    </p>
+                    <button type="button" onClick={() => void unlinkLine()} disabled={unlinkingLine}
+                      className="text-[11px] font-semibold text-red-500 hover:underline disabled:opacity-50">
+                      {unlinkingLine ? "กำลังยกเลิก..." : "ยกเลิกการเชื่อม LINE"}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[11px] text-slate-500 leading-relaxed mb-2.5">
+                      เชื่อมแล้วจะได้รับแจ้งเตือนเรื่องของตัวเองทาง LINE — แอดเพื่อน LINE
+                      ของโรงเรียน แล้วพิมพ์รหัสนักเรียน{" "}
+                      <strong className="font-mono text-slate-700">{student.student_id}</strong>{" "}
+                      ส่งไปในแชท ระบบจะผูกให้เอง
+                    </p>
+                    {LINE_ADD_FRIEND_URL && (
+                      <a href={LINE_ADD_FRIEND_URL} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-[11px] font-bold text-white px-3 py-1.5 rounded-lg"
+                        style={{ background: "#06C755" }}>
+                        <i className="fa-brands fa-line" /> แอด LINE โรงเรียน
+                      </a>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
 
             {/* ── Section 2: Admin-required ── */}
@@ -1265,7 +1364,7 @@ export default function StudentPage() {
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-500 mb-1">เลขบัตรนักเรียน</label>
                   <input suppressHydrationWarning
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-none focus:border-amber-400 transition"
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-hidden focus:border-amber-400 transition"
                     value={reqStudentId} onChange={(e) => setReqStudentId(e.target.value)}
                     placeholder="รหัสนักเรียน" maxLength={20} inputMode="numeric" />
                 </div>
@@ -1273,14 +1372,14 @@ export default function StudentPage() {
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-500 mb-1">ชื่อ</label>
                     <input suppressHydrationWarning
-                      className="w-full px-3 py-2.5 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-none focus:border-amber-400 transition"
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-hidden focus:border-amber-400 transition"
                       value={reqFirstName} onChange={(e) => setReqFirstName(e.target.value)}
                       placeholder="ชื่อ" />
                   </div>
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-500 mb-1">นามสกุล</label>
                     <input suppressHydrationWarning
-                      className="w-full px-3 py-2.5 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-none focus:border-amber-400 transition"
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-hidden focus:border-amber-400 transition"
                       value={reqLastName} onChange={(e) => setReqLastName(e.target.value)}
                       placeholder="นามสกุล" />
                   </div>
@@ -1289,14 +1388,14 @@ export default function StudentPage() {
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-500 mb-1">วันเกิด</label>
                     <input suppressHydrationWarning type="date"
-                      className="w-full px-3 py-2.5 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-none focus:border-amber-400 transition"
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-hidden focus:border-amber-400 transition"
                       value={reqBirthDate} onChange={(e) => setReqBirthDate(e.target.value)}
                       min={BIRTH_BOUNDS.min} max={BIRTH_BOUNDS.max} />
                   </div>
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-500 mb-1">เพศ</label>
                     <select suppressHydrationWarning
-                      className="w-full px-3 py-2.5 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-none focus:border-amber-400 transition"
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-hidden focus:border-amber-400 transition"
                       value={reqGender} onChange={(e) => setReqGender(e.target.value)}>
                       <option value="">-- เลือก --</option>
                       {Object.entries(GENDER_LABELS).map(([value, label]) => (
@@ -1308,7 +1407,7 @@ export default function StudentPage() {
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-500 mb-1">เลขประจำตัวประชาชน</label>
                   <input suppressHydrationWarning
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-none focus:border-amber-400 transition"
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-hidden focus:border-amber-400 transition"
                     value={reqNationalId}
                     onChange={(e) => setReqNationalId(e.target.value.replace(/\D/g, "").slice(0, 13))}
                     placeholder="13 หลัก" maxLength={13} inputMode="numeric" />
@@ -1317,7 +1416,7 @@ export default function StudentPage() {
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-500 mb-1">ระดับชั้น</label>
                     <select suppressHydrationWarning
-                      className="w-full px-3 py-2.5 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-none focus:border-amber-400 transition"
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-hidden focus:border-amber-400 transition"
                       value={reqProgram} onChange={(e) => setReqProgram(e.target.value)}>
                       <option value="">-- เลือก --</option>
                       <option value="ปวช">ปวช — ประกาศนียบัตรวิชาชีพ</option>
@@ -1327,7 +1426,7 @@ export default function StudentPage() {
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-500 mb-1">ปีที่เข้าเรียน (พ.ศ.)</label>
                     <input suppressHydrationWarning
-                      className="w-full px-3 py-2.5 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-none focus:border-amber-400 transition"
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-hidden focus:border-amber-400 transition"
                       value={reqEntryYear} onChange={(e) => setReqEntryYear(e.target.value)}
                       placeholder="เช่น 2567" maxLength={4} inputMode="numeric" />
                   </div>
@@ -1340,7 +1439,7 @@ export default function StudentPage() {
                       onFocus={() => openDeptPicker(true)}
                       onChange={e => { setDeptQuery(e.target.value); openDeptPicker(false); }}
                       onBlur={() => window.setTimeout(() => { setDeptOpen(false); setDeptQuery(""); }, 120)}
-                      className="w-full px-3 py-2.5 pr-9 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-none focus:border-amber-400 transition"
+                      className="w-full px-3 py-2.5 pr-9 border border-slate-200 rounded-[10px] bg-slate-50 text-sm outline-hidden focus:border-amber-400 transition"
                       placeholder="พิมพ์เพื่อค้นหาสาขาวิชา"
                       maxLength={60}
                       autoComplete="off"
@@ -1384,7 +1483,7 @@ export default function StudentPage() {
               </div>
 
               <p className="flex items-start gap-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5 mt-3">
-                <i className="fa-solid fa-circle-info mt-0.5 flex-shrink-0" />
+                <i className="fa-solid fa-circle-info mt-0.5 shrink-0" />
                 การเปลี่ยนแปลงจะมีผลหลังจากผู้ดูแลตรวจสอบและอนุมัติแล้วเท่านั้น
               </p>
 
@@ -1392,7 +1491,7 @@ export default function StudentPage() {
                 className="w-full mt-3 px-4 py-2.5 rounded-xl text-sm font-bold text-white overflow-hidden transition-all"
                 style={{ background: "linear-gradient(135deg,#F59E0B,#D97706)", boxShadow: "0 4px 14px rgba(245,158,11,0.38)" }}>
                 {requesting
-                  ? <><span className="spinner w-4 h-4 border-2 border-white border-t-transparent inline-block mr-2" />กำลังส่ง...</>
+                  ? <><span className="spinner inline-block mr-2" />กำลังส่ง...</>
                   : <><i className="fa-solid fa-paper-plane mr-1.5" />ส่งคำขอแก้ไข</>}
               </button>
             </div>
@@ -1426,7 +1525,7 @@ export default function StudentPage() {
           onZoomChange={setZoomAndClamp}
           confirmDisabled={uploadingPhoto}
           confirmLabel={uploadingPhoto
-            ? <><span className="spinner w-4 h-4 border-2 border-white border-t-transparent inline-block" />กำลังบันทึก</>
+            ? <><span className="spinner inline-block" />กำลังบันทึก</>
             : "บันทึกเป็นรูปโปรไฟล์"}
         />
       ), document.body)}

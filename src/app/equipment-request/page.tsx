@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { toast } from "sonner";
 import { getStudentSession, type StudentSession } from "@/lib/session";
+import LoginGate from "@/components/LoginGate";
 
 type EquipmentItem = {
   id: string;
@@ -62,8 +62,6 @@ function formatDateTH(d: string) {
 }
 
 export default function EquipmentRequestPage() {
-  const router = useRouter();
-
   const [authed,  setAuthed]  = useState<boolean | null>(null); // null = checking
   const [student, setStudent] = useState<StudentSession | null>(null);
 
@@ -100,15 +98,16 @@ export default function EquipmentRequestPage() {
 
   const [successCode, setSuccessCode] = useState<string | null>(null);
 
+  // ไม่เด้งไป /login เอง — คนที่ยังไม่ล็อกอินต้องได้เห็นหน้ากั้นด้านล่างก่อน
+  // แล้วค่อยกดปุ่มไปเอง การเด้งทันทีทำให้เขาไปโผล่หน้าล็อกอินโดยไม่รู้ว่ามาจากไหน
+  // และกดย้อนกลับก็จะโดนเด้งซ้ำจนออกไม่ได้ ที่สำคัญคือหน้ากั้นที่เขียนไว้แล้ว
+  // กลายเป็นโค้ดที่ไม่มีใครได้เห็นเลย
   useEffect(() => {
     const s = getStudentSession();
-    if (!s) {
-      router.replace("/login?next=/equipment-request");
-    }
     setStudent(s);
     setAuthed(!!s);
     if (s?.student_phone) setRequesterPhone(s.student_phone);
-  }, [router]);
+  }, []);
 
   const fetchItems = () => {
     setLoading(true); setLoadErr("");
@@ -272,7 +271,7 @@ export default function EquipmentRequestPage() {
       <>
         <Header subtitle="เบิกคุรุภัณฑ์" />
         <main className="min-h-screen flex items-center justify-center">
-          <span className="spinner w-10 h-10 border-4" />
+          <span className="spinner text-4xl" />
         </main>
       </>
     );
@@ -281,29 +280,8 @@ export default function EquipmentRequestPage() {
   // ── Not logged in ──
   if (!authed || !student) {
     return (
-      <>
-        <div className="bg-blob" style={{ width: 500, height: 500, background: "var(--primary-color)", top: -120, right: -170 }} />
-        <div className="bg-blob" style={{ width: 400, height: 400, background: "#059669", bottom: -100, left: -130 }} />
-        <Header subtitle="เบิกคุรุภัณฑ์" />
-        <main className="min-h-screen max-w-6xl mx-auto px-4 py-20 flex flex-col items-center justify-center text-center relative z-10">
-          <div className="w-16 h-16 flex items-center justify-center bg-emerald-100 rounded-full mb-6">
-            <i className="fa-solid fa-toolbox text-2xl text-emerald-500" />
-          </div>
-          <h2 className="text-2xl font-extrabold text-slate-800 mb-2">ต้องเข้าสู่ระบบก่อน</h2>
-          <p className="text-slate-500 text-sm mb-8 max-w-xs">การเบิก-ยืมคุรุภัณฑ์ต้องเข้าสู่ระบบเพื่อยืนยันตัวตนผู้ขอเบิก</p>
-          <div className="flex gap-3">
-            <button onClick={() => router.push("/login?next=/equipment-request")}
-              className="btn-primary flex items-center gap-2 px-6 py-2.5">
-              <i className="fa-solid fa-id-card" /> เข้าสู่ระบบ
-            </button>
-            <button onClick={() => router.push("/")}
-              className="btn-secondary flex items-center gap-2 px-6 py-2.5">
-              <i className="fa-solid fa-house" /> กลับหน้าแรก
-            </button>
-          </div>
-        </main>
-        <Footer />
-      </>
+      <LoginGate path="/equipment-request" subtitle="เบิกคุรุภัณฑ์"
+        reason="การเบิก-ยืมคุรุภัณฑ์ต้องเข้าสู่ระบบเพื่อยืนยันตัวตนผู้ขอเบิก" />
     );
   }
 
@@ -321,11 +299,11 @@ export default function EquipmentRequestPage() {
 
         {/* ── Search bar ── */}
         <div data-aos="fade-down" className="flex items-center gap-2 mb-5">
-          <div className="flex items-center gap-2 flex-1 max-w-md bg-white/90 backdrop-blur-sm border border-slate-200 rounded-2xl px-3 py-2.5 focus-within:border-sky-300 focus-within:ring-2 focus-within:ring-sky-100 shadow-sm transition-all">
-            <i className="fa-solid fa-magnifying-glass text-slate-400 text-xs flex-shrink-0" />
+          <div className="flex items-center gap-2 flex-1 max-w-md bg-white/90 backdrop-blur-xs border border-slate-200 rounded-2xl px-3 py-2.5 focus-within:border-sky-300 focus-within:ring-2 focus-within:ring-sky-100 shadow-xs transition-all">
+            <i className="fa-solid fa-magnifying-glass text-slate-400 text-xs shrink-0" />
             <input value={searchQ} onChange={e => setSearchQ(e.target.value)}
               type="text" placeholder="ค้นหาคุรุภัณฑ์..."
-              className="w-full bg-transparent outline-none text-sm text-slate-700 placeholder:text-slate-400" />
+              className="w-full bg-transparent outline-hidden text-sm text-slate-700 placeholder:text-slate-400" />
             {searchQ && (
               <button onClick={() => setSearchQ("")} className="text-slate-300 hover:text-slate-500 transition">
                 <i className="fa-solid fa-xmark text-xs" />
@@ -334,7 +312,7 @@ export default function EquipmentRequestPage() {
           </div>
           {/* mobile-only history */}
           <div className="flex lg:hidden items-center gap-1">
-            <button onClick={openCart} className="relative p-2.5 rounded-2xl bg-white/90 border border-slate-200 shadow-sm hover:bg-slate-50 transition text-emerald-600">
+            <button onClick={openCart} className="relative p-2.5 rounded-2xl bg-white/90 border border-slate-200 shadow-xs hover:bg-slate-50 transition text-emerald-600">
               <i className="fa-solid fa-basket-shopping text-sm" />
               {cartCount > 0 && (
                 <span className="absolute -top-1 -right-1 bg-emerald-500 text-white rounded-full w-4 h-4 text-[9px] font-bold flex items-center justify-center">
@@ -342,7 +320,7 @@ export default function EquipmentRequestPage() {
                 </span>
               )}
             </button>
-            <button onClick={() => setHistoryOpen(true)} className="relative p-2.5 rounded-2xl bg-white/90 border border-slate-200 shadow-sm hover:bg-slate-50 transition text-slate-500">
+            <button onClick={() => setHistoryOpen(true)} className="relative p-2.5 rounded-2xl bg-white/90 border border-slate-200 shadow-xs hover:bg-slate-50 transition text-slate-500">
               <i className="fa-solid fa-clock-rotate-left text-sm" />
               {history.filter(h => h.status === "pending" || h.status === "approved" || h.status === "picked_up").length > 0 && (
                 <span className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 text-[9px] font-bold flex items-center justify-center">
@@ -356,9 +334,9 @@ export default function EquipmentRequestPage() {
         {successCode && (
           <div className="flex items-center gap-2 px-4 py-3 rounded-2xl mb-5 text-white font-bold text-sm"
             style={{ background: "linear-gradient(135deg,#059669,#047857)" }}>
-            <i className="fa-solid fa-circle-check flex-shrink-0" />
+            <i className="fa-solid fa-circle-check shrink-0" />
             <span className="flex-1">ส่งคำขอสำเร็จ! รหัสคำขอของคุณคือ <span className="text-base">{successCode}</span> — รอแอดมินอนุมัติ</span>
-            <button onClick={() => setSuccessCode(null)} className="bg-white/25 rounded-xl px-3 py-1.5 text-xs font-bold flex-shrink-0">
+            <button onClick={() => setSuccessCode(null)} className="bg-white/25 rounded-xl px-3 py-1.5 text-xs font-bold shrink-0">
               ปิด
             </button>
           </div>
@@ -366,21 +344,21 @@ export default function EquipmentRequestPage() {
 
         {noDept && (
           <div className="flex items-center gap-2 px-4 py-3 rounded-2xl mb-5 bg-red-50 border border-red-200 text-red-500 text-xs font-medium">
-            <i className="fa-solid fa-triangle-exclamation flex-shrink-0" />
+            <i className="fa-solid fa-triangle-exclamation shrink-0" />
             บัญชีของคุณยังไม่มีข้อมูลสาขาวิชา กรุณาไปที่หน้าโปรไฟล์เพื่อแก้ไขข้อมูลก่อนส่งคำขอเบิก
           </div>
         )}
 
         <div className="flex flex-col lg:flex-row gap-6">
           {/* ── LEFT sidebar ── */}
-          <div className="w-full lg:w-80 flex-shrink-0 space-y-4">
+          <div className="w-full lg:w-80 shrink-0 space-y-4">
             {/* Profile card */}
             <div data-aos="fade-right" data-aos-delay="200"
               className="rounded-2xl p-4 text-white relative overflow-hidden bg-gradient-to-br from-emerald-500 to-emerald-400"
               style={{ boxShadow: "0 12px 32px rgba(5,150,105,.3)" }}>
               <div className="absolute -top-8 -right-8 w-28 h-28 rounded-full bg-white/10 pointer-events-none" />
               <div className="flex items-center gap-3 relative">
-                <div className="w-12 h-12 rounded-2xl border-2 border-white/40 flex-shrink-0 overflow-hidden bg-white/20 flex items-center justify-center">
+                <div className="w-12 h-12 rounded-2xl border-2 border-white/40 shrink-0 overflow-hidden bg-white/20 flex items-center justify-center">
                   {student.photo_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={student.photo_url} alt={student.first_name}
@@ -402,8 +380,8 @@ export default function EquipmentRequestPage() {
             {/* History button */}
             <div data-aos="fade-right" data-aos-delay="270" className="hidden lg:block space-y-3">
               <button onClick={openCart}
-                className="relative w-full flex items-center gap-3 px-4 py-3 bg-white/80 backdrop-blur-sm rounded-2xl border border-emerald-100 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all text-left">
-                <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                className="relative w-full flex items-center gap-3 px-4 py-3 bg-white/80 backdrop-blur-xs rounded-2xl border border-emerald-100 shadow-xs hover:shadow-md hover:border-emerald-200 transition-all text-left">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
                   <i className="fa-solid fa-basket-shopping text-emerald-500 text-sm" />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -411,14 +389,14 @@ export default function EquipmentRequestPage() {
                   <div className="text-xs text-slate-400">{cartCount > 0 ? `${cartCount} รายการ` : "ยังไม่มีรายการ"}</div>
                 </div>
                 {cartCount > 0 && (
-                  <span className="bg-emerald-500 text-white rounded-full w-5 h-5 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                  <span className="bg-emerald-500 text-white rounded-full w-5 h-5 text-[10px] font-bold flex items-center justify-center shrink-0">
                     {cartCount}
                   </span>
                 )}
               </button>
               <button onClick={() => setHistoryOpen(true)}
-                className="relative w-full flex items-center gap-3 px-4 py-3 bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all text-left">
-                <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0">
+                className="relative w-full flex items-center gap-3 px-4 py-3 bg-white/80 backdrop-blur-xs rounded-2xl border border-slate-100 shadow-xs hover:shadow-md hover:border-emerald-200 transition-all text-left">
+                <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
                   <i className="fa-solid fa-clock-rotate-left text-amber-500 text-sm" />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -426,7 +404,7 @@ export default function EquipmentRequestPage() {
                   <div className="text-xs text-slate-400">{history.length > 0 ? `${history.length} รายการ` : "ยังไม่มีรายการ"}</div>
                 </div>
                 {history.filter(h => h.status === "pending" || h.status === "approved" || h.status === "picked_up").length > 0 && (
-                  <span className="bg-red-500 text-white rounded-full w-5 h-5 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                  <span className="bg-red-500 text-white rounded-full w-5 h-5 text-[10px] font-bold flex items-center justify-center shrink-0">
                     {history.filter(h => h.status === "pending" || h.status === "approved" || h.status === "picked_up").length}
                   </span>
                 )}
@@ -436,22 +414,22 @@ export default function EquipmentRequestPage() {
                   เพราะเป็นที่ที่เขาเบิกไป การมีทางออกตรงนี้ทำให้ไม่ต้องไปหาเมนูเอง
                   และงานซ่อมจะได้ผูกกับคลังจริง แทนที่เขาจะพิมพ์ชื่อของเอาเอง */}
               <Link href="/maintenance-request"
-                className="w-full flex items-center gap-3 px-4 py-3 bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-amber-200 transition-all text-left">
-                <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0">
+                className="w-full flex items-center gap-3 px-4 py-3 bg-white/80 backdrop-blur-xs rounded-2xl border border-slate-100 shadow-xs hover:shadow-md hover:border-amber-200 transition-all text-left">
+                <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
                   <i className="fa-solid fa-screwdriver-wrench text-amber-500 text-sm" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-bold text-slate-700">ของชำรุด แจ้งซ่อม</div>
                   <div className="text-xs text-slate-400">ของที่ยืมไปหรือของในโรงเรียนเสีย</div>
                 </div>
-                <i className="fa-solid fa-chevron-right text-slate-300 text-xs flex-shrink-0" />
+                <i className="fa-solid fa-chevron-right text-slate-300 text-xs shrink-0" />
               </Link>
             </div>
 
             {/* Category list (desktop) */}
             <div data-aos="fade-right" data-aos-delay="300" className="hidden lg:block">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">ประเภทเครื่อง</p>
-              <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+              <div className="bg-white/80 backdrop-blur-xs rounded-2xl border border-slate-100 shadow-xs overflow-hidden">
                 {cats.map(c => {
                   const cnt = c === "ทั้งหมด" ? items.length : items.filter(i => i.category === c).length;
                   const on = c === currentCat;
@@ -472,7 +450,7 @@ export default function EquipmentRequestPage() {
             {depts.length > 2 && (
               <div data-aos="fade-right" data-aos-delay="330" className="hidden lg:block">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">สาขา</p>
-                <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                <div className="bg-white/80 backdrop-blur-xs rounded-2xl border border-slate-100 shadow-xs overflow-hidden">
                   {depts.map(d => {
                     const cnt = d === "ทั้งหมด" ? items.length
                       : d === GENERAL_DEPT ? items.filter(i => !i.department).length
@@ -493,7 +471,7 @@ export default function EquipmentRequestPage() {
             )}
 
             {/* Stats (desktop) */}
-            <div data-aos="fade-right" data-aos-delay="400" className="hidden lg:block bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-100 shadow-sm p-4">
+            <div data-aos="fade-right" data-aos-delay="400" className="hidden lg:block bg-white/80 backdrop-blur-xs rounded-2xl border border-slate-100 shadow-xs p-4">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">สรุปคุรุภัณฑ์</p>
               <div className="space-y-2.5">
                 {[
@@ -567,12 +545,12 @@ export default function EquipmentRequestPage() {
                 </button>
                 <button onClick={() => setViewMode("grid")}
                   className={`w-8 h-8 rounded-xl border flex items-center justify-center text-xs transition
-                    ${viewMode === "grid" ? "text-white shadow border-transparent bg-emerald-500" : "bg-white border-slate-200 text-slate-400 hover:border-emerald-200"}`}>
+                    ${viewMode === "grid" ? "text-white shadow-sm border-transparent bg-emerald-500" : "bg-white border-slate-200 text-slate-400 hover:border-emerald-200"}`}>
                   <i className="fa-solid fa-grip" />
                 </button>
                 <button onClick={() => setViewMode("table")}
                   className={`w-8 h-8 rounded-xl border flex items-center justify-center text-xs transition
-                    ${viewMode === "table" ? "text-white shadow border-transparent bg-emerald-500" : "bg-white border-slate-200 text-slate-400 hover:border-emerald-200"}`}>
+                    ${viewMode === "table" ? "text-white shadow-sm border-transparent bg-emerald-500" : "bg-white border-slate-200 text-slate-400 hover:border-emerald-200"}`}>
                   <i className="fa-solid fa-table-list" />
                 </button>
               </div>
@@ -642,7 +620,7 @@ export default function EquipmentRequestPage() {
                             <div key={it.id}
                               data-aos="fade-up" data-aos-delay={`${Math.min(i * 40, 200)}`}
                               onClick={() => addToCart(it)}
-                              className={`bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm transition-all duration-200 ${out ? "opacity-50" : "hover:shadow-md hover:-translate-y-1 cursor-pointer"}`}>
+                              className={`bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-xs transition-all duration-200 ${out ? "opacity-50" : "hover:shadow-md hover:-translate-y-1 cursor-pointer"}`}>
                               <div className="relative aspect-square w-full flex items-center justify-center bg-gradient-to-br from-emerald-50 to-slate-50">
                                 {it.image_url ? (
                                   <img src={it.image_url} alt={it.name} className="w-full h-full aspect-square object-cover" loading="lazy"
@@ -693,9 +671,9 @@ export default function EquipmentRequestPage() {
                     const out = it.available_quantity <= 0;
                     const low = !out && it.available_quantity <= 2;
                     return (
-                      <div key={it.id} className={`rounded-2xl border border-slate-100 bg-white p-3 shadow-sm ${out ? "opacity-60" : ""}`}>
+                      <div key={it.id} className={`rounded-2xl border border-slate-100 bg-white p-3 shadow-xs ${out ? "opacity-60" : ""}`}>
                         <div className="flex gap-3">
-                          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-50 to-slate-50 flex items-center justify-center overflow-hidden flex-shrink-0">
+                          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-50 to-slate-50 flex items-center justify-center overflow-hidden shrink-0">
                             {it.image_url ? (
                               <img src={it.image_url} alt={it.name} className="w-full h-full aspect-square object-cover" loading="lazy"
                                 onError={e => { e.currentTarget.style.display = "none"; const fb = e.currentTarget.nextElementSibling as HTMLElement; if (fb) fb.style.display = "inline"; }} />
@@ -736,7 +714,7 @@ export default function EquipmentRequestPage() {
                   })}
                 </div>
 
-                <div className="hidden sm:block overflow-x-auto rounded-2xl border border-slate-100 shadow-sm bg-white">
+                <div className="hidden sm:block overflow-x-auto rounded-2xl border border-slate-100 shadow-xs bg-white">
                   <table className="w-full min-w-[720px] text-sm border-collapse table-fixed">
                     <colgroup>
                       <col className="w-20" />
@@ -807,19 +785,19 @@ export default function EquipmentRequestPage() {
       </main>
 
       {/* ════ MODAL: Equipment cart (bottom sheet) ════ */}
-      <div className={`fixed inset-0 z-[999] bg-black/40 backdrop-blur-sm flex items-end justify-center transition-all duration-300 ${cartOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+      <div className={`fixed inset-0 z-[999] bg-black/40 backdrop-blur-xs flex items-end justify-center transition-all duration-300 ${cartOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
         onClick={e => { if (e.target === e.currentTarget) setCartOpen(false); }}>
         <div className={`bg-white rounded-t-3xl w-full max-w-lg max-h-[92vh] flex flex-col transition-transform duration-300 ${cartOpen ? "translate-y-0" : "translate-y-full"}`}>
-          <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mt-3 mb-1 flex-shrink-0" />
-          <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-100 flex-shrink-0">
-            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center flex-shrink-0">
+          <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mt-3 mb-1 shrink-0" />
+          <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-100 shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center shrink-0">
               <i className="fa-solid fa-basket-shopping text-sm" />
             </div>
             <div className="min-w-0">
               <div className="font-bold text-slate-800 truncate">ตะกร้าเบิกคุรุภัณฑ์</div>
               <div className="text-xs text-slate-400">{cartCount} รายการในคำขอนี้</div>
             </div>
-            <button onClick={() => setCartOpen(false)} className="ml-auto text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition flex-shrink-0">
+            <button onClick={() => setCartOpen(false)} className="ml-auto text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition shrink-0">
               <i className="fa-solid fa-xmark" />
             </button>
           </div>
@@ -878,7 +856,7 @@ export default function EquipmentRequestPage() {
                 <textarea value={purpose} maxLength={300} rows={3}
                   onChange={e => setPurpose(e.target.value)}
                   placeholder="ใช้เพื่อ..."
-                  className="w-full text-xs sm:text-sm bg-gray-50 border-2 border-slate-200 rounded-xl p-3 transition-colors resize-none focus:outline-none focus:border-[color:var(--primary-color)]" />
+                  className="w-full text-xs sm:text-sm bg-gray-50 border-2 border-slate-200 rounded-xl p-3 transition-colors resize-none focus:outline-hidden focus:border-[color:var(--primary-color)]" />
               </div>
 
               {/* ── Delivery mode ── */}
@@ -926,7 +904,7 @@ export default function EquipmentRequestPage() {
                     {selectedLoc === "ห้องเรียน" && (
                       <input value={customLoc} onChange={e => { setCustomLoc(e.target.value); setDeliveryLoc(e.target.value ? "ห้องเรียน: " + e.target.value : ""); }}
                         placeholder="ระบุห้องเรียน เช่น ห้อง 201" maxLength={40}
-                        className="mt-2 w-full px-3 py-2 rounded-xl text-sm border-2 border-emerald-400 outline-none focus:ring-2 focus:ring-emerald-100 transition" />
+                        className="mt-2 w-full px-3 py-2 rounded-xl text-sm border-2 border-emerald-400 outline-hidden focus:ring-2 focus:ring-emerald-100 transition" />
                     )}
                   </div>
                 )}
@@ -961,12 +939,12 @@ export default function EquipmentRequestPage() {
       </div>
 
       {/* ════ MODAL: History (bottom sheet) ════ */}
-      <div className={`fixed inset-0 z-[999] bg-black/40 backdrop-blur-sm flex items-end justify-center transition-all duration-300 ${historyOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+      <div className={`fixed inset-0 z-[999] bg-black/40 backdrop-blur-xs flex items-end justify-center transition-all duration-300 ${historyOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
         onClick={e => { if (e.target === e.currentTarget) setHistoryOpen(false); }}>
         <div className={`bg-white rounded-t-3xl w-full max-w-lg max-h-[92vh] flex flex-col transition-transform duration-300 ${historyOpen ? "translate-y-0" : "translate-y-full"}`}>
-          <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mt-3 mb-1 flex-shrink-0" />
-          <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-100 flex-shrink-0">
-            <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center flex-shrink-0">
+          <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mt-3 mb-1 shrink-0" />
+          <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-100 shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center shrink-0">
               <i className="fa-solid fa-clock-rotate-left text-sm" />
             </div>
             <div>
@@ -984,7 +962,7 @@ export default function EquipmentRequestPage() {
               </div>
             ) : history.length === 0 ? (
               <div className="text-center py-12">
-                <div className="text-5xl mb-3">🧰</div>
+                <i className="fa-solid fa-toolbox text-5xl mb-3 block text-slate-300" />
                 <div className="text-slate-400 text-sm">ยังไม่มีประวัติการเบิกคุรุภัณฑ์</div>
               </div>
             ) : (
@@ -997,7 +975,7 @@ export default function EquipmentRequestPage() {
                         <div className="text-sm font-bold text-slate-700 truncate">{h.equipment_items?.name ?? "คุรุภัณฑ์"}</div>
                         <div className="text-xs text-slate-400">{h.quantity} {h.equipment_items?.unit ?? ""} · {h.request_code}</div>
                       </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${style.bg} ${style.text}`}>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${style.bg} ${style.text}`}>
                         {HISTORY_STATUS[h.status]}
                       </span>
                     </div>

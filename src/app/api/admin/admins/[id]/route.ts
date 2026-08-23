@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import bcrypt from "bcryptjs";
 import { ADMIN_DIVISIONS } from "@/lib/modules/nav";
+import { canHaveDivision } from "@/lib/modules/nav-access";
 import { LEGACY_ADMIN_ROLE_MAP } from "@/lib/rbac/definitions";
 
 /**
@@ -138,7 +139,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   // ฝ่ายเปลี่ยนได้เฉพาะ superadmin ไม่งั้นใครก็ย้ายตัวเองไปฝ่ายที่อยากเห็นเมนูได้
   // คนอื่นส่งมาก็เมินเฉย ๆ ไม่ตอบ 403 เพราะหน้าแก้โปรไฟล์ส่งทุกฟิลด์มาพร้อมกัน
   // การตีกลับทั้งก้อนจะทำให้แก้ชื่อตัวเองไม่ได้ไปด้วย
-  if ("division" in body && isSuperAdmin) patch.division = cleanDivision(body.division);
+  //
+  // สภานักเรียนไม่สังกัดฝ่าย (ดู canHaveDivision) role ที่ใช้ตัดสินคือค่าใหม่ถ้า
+  // กำลังเปลี่ยนยศอยู่ ไม่งั้นอ่านค่าปัจจุบันจากฐาน — และการลดยศลงมาเป็น staff
+  // ต้องล้างฝ่ายเดิมทิ้งด้วย ไม่งั้นค่าจะค้างอยู่ในแถวโดยไม่มีทางแก้ผ่านหน้าจอ
+  if (("division" in body && isSuperAdmin) || patch.role === "staff") {
+    const effectiveRole =
+      "role" in patch
+        ? String(patch.role)
+        : (await supabase.from("admins").select("role").eq("admin_id", id).maybeSingle()).data?.role ?? "staff";
+
+    if (!canHaveDivision(effectiveRole)) patch.division = null;
+    else if ("division" in body && isSuperAdmin) patch.division = cleanDivision(body.division);
+  }
 
   if (Object.keys(patch).length === 0)
     return NextResponse.json({ status: "error", message: "ไม่มีข้อมูลที่จะแก้ไข" }, { status: 400 });

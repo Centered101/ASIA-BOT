@@ -1,10 +1,11 @@
 "use client";
 
 import { Suspense, useEffect, useState, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { Mascot, MascotState } from "@/components/Mascot";
+import LoginGate from "@/components/LoginGate";
+import { MascotState } from "@/components/Mascot";
 import { getAmenityInfo } from "@/lib/amenities";
 import { getStudentSession, type StudentSession } from "@/lib/session";
 
@@ -135,22 +136,21 @@ export default function ClassTrackRoomPage() {
 }
 
 function ClassTrackRoomPageContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [authed, setAuthed] = useState<boolean | null>(null);
 
+  // ไม่เด้งไป /login เอง — คนที่ยังไม่ล็อกอินต้องได้เห็นหน้ากั้นก่อนแล้วค่อยกดไปเอง
+  // การเด้งทันทีทำให้เขาไปโผล่หน้าล็อกอินโดยไม่รู้ว่ามาจากไหน และกดย้อนกลับก็โดนเด้งซ้ำ
   useEffect(() => {
     const s = getStudentSession();
-    if (!s) {
-      router.replace("/login?next=/class-track-room");
-    } else {
-      setAuthed(true);
+    setAuthed(!!s);
+    if (s) {
       // Auto-fill from session
       setStudentId(s.student_id);
       setStudentName(`${s.first_name} ${s.last_name}`);
       setStudentPhone(s.student_phone ?? "");
     }
-  }, [router]);
+  }, []);
 
   const [rooms, setRooms] = useState<Room[]>([]);
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
@@ -413,6 +413,13 @@ function ClassTrackRoomPageContent() {
 
   if (authed === null) return null;
 
+  if (!authed) {
+    return (
+      <LoginGate path="/class-track-room" subtitle="สถานะห้องเรียน"
+        reason="การจองห้องต้องรู้ว่าใครเป็นผู้จอง เพื่อให้ติดต่อกลับได้และกันการจองชนกันเอง" />
+    );
+  }
+
   return (
     <>
       <Header subtitle="สถานะห้องเรียน" />
@@ -447,7 +454,7 @@ function ClassTrackRoomPageContent() {
                   })}
                 </div>
               </div>
-              <div className="relative hidden sm:block rounded-3xl border border-slate-200 bg-slate-900 p-4 shadow-sm overflow-hidden">
+              <div className="relative hidden sm:block rounded-3xl border border-slate-200 bg-slate-900 p-4 shadow-xs overflow-hidden">
                 <div className="absolute inset-x-6 top-5 h-28 rounded-2xl border border-emerald-500/30 bg-emerald-950/80 shadow-inner" />
                 <div className="relative pt-4 text-center text-emerald-100">
                   <div className="text-xs font-bold opacity-80">CLASS STATUS BOARD</div>
@@ -477,7 +484,7 @@ function ClassTrackRoomPageContent() {
         </section>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-          <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-slate-50/90 backdrop-blur border-b border-slate-100 mb-5">
+          <div className="sticky top-0 z-20 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-slate-50/90 backdrop-blur-sm border-b border-slate-100 mb-5">
             <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
               <div className="relative flex-1">
                 <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -486,10 +493,10 @@ function ClassTrackRoomPageContent() {
                   placeholder="ค้นหาห้อง, สถานที่, วิชา, กลุ่มเรียน..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary-light)] text-sm text-slate-800"
+                  className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 bg-white shadow-xs focus:outline-hidden focus:ring-2 focus:ring-[var(--primary-light)] text-sm text-slate-800"
                 />
               </div>
-              <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_auto_2.5rem] sm:flex sm:items-center gap-1.5 rounded-xl border border-slate-200 bg-white p-1 shadow-sm w-full lg:w-auto">
+              <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_auto_2.5rem] sm:flex sm:items-center gap-1.5 rounded-xl border border-slate-200 bg-white p-1 shadow-xs w-full lg:w-auto">
                 <button
                   type="button"
                   onClick={() => setScheduleDate(prev => addDays(prev, -1))}
@@ -508,7 +515,7 @@ function ClassTrackRoomPageContent() {
                     onChange={(e) => {
                       if (e.target.value) setScheduleDate(e.target.value);
                     }}
-                    className="h-10 w-full rounded-lg border border-slate-100 bg-slate-50 pl-9 pr-2 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[var(--primary-light)]"
+                    className="h-10 w-full rounded-lg border border-slate-100 bg-slate-50 pl-9 pr-2 text-sm font-bold text-slate-700 focus:outline-hidden focus:ring-2 focus:ring-[var(--primary-light)]"
                   />
                 </label>
                 <button
@@ -618,7 +625,7 @@ function ClassTrackRoomPageContent() {
       {/* Booking Modal */}
       {showModal && selectedRoom && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closeModal} />
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-xs" onClick={closeModal} />
           <div className="relative w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[96dvh] sm:max-h-[92vh] overflow-y-auto animate-slideUp">
             <div className="sticky top-0 bg-white border-b border-slate-100 px-4 sm:px-6 py-4 rounded-t-3xl sm:rounded-t-2xl z-10">
               <div className="flex items-center justify-between">
@@ -667,7 +674,7 @@ function ClassTrackRoomPageContent() {
                         min={todayStr()}
                         value={date}
                         onChange={(e) => setDate(e.target.value)}
-                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-300 text-slate-800 bg-white"
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-sky-300 text-slate-800 bg-white"
                       />
                     </div>
 
@@ -749,7 +756,7 @@ function ClassTrackRoomPageContent() {
                           value={friendId}
                           onChange={(e) => { setFriendId(e.target.value); setFriendError(""); }}
                           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addFriendById(); } }}
-                          className="flex-1 min-w-0 px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-300 text-slate-800 placeholder-slate-300"
+                          className="flex-1 min-w-0 px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-sky-300 text-slate-800 placeholder-slate-300"
                         />
                         <button type="button" onClick={addFriendById} disabled={friendLoading} className="px-4 py-2.5 rounded-xl font-bold text-sm text-white disabled:opacity-60" style={{ background: "var(--primary-color)" }}>
                           {friendLoading ? <i className="asia-spinner" /> : <><i className="fa-solid fa-plus mr-1" />เพิ่ม</>}
@@ -769,7 +776,7 @@ function ClassTrackRoomPageContent() {
                           value={studentPhone}
                           onChange={(e) => setStudentPhone(e.target.value)}
                           maxLength={20}
-                          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-300 text-slate-800 placeholder-slate-300"
+                          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-sky-300 text-slate-800 placeholder-slate-300"
                         />
                       </div>
 
@@ -798,7 +805,7 @@ function ClassTrackRoomPageContent() {
                         value={purpose}
                         onChange={(e) => setPurpose(e.target.value)}
                         maxLength={100}
-                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-300 text-slate-800 placeholder-slate-300"
+                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-sky-300 text-slate-800 placeholder-slate-300"
                       />
                     </div>
 
@@ -859,11 +866,11 @@ function SummaryCard({ icon, label, value, color = "#64748b", bg = "#f8fafc", bo
   mascot?: string;
 }) {
   return (
-    <div className="relative flex items-center gap-3 p-4 rounded-2xl border bg-white shadow-sm overflow-hidden min-h-[92px]" style={{ borderColor: border }}>
-      <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: bg, color }}>
+    <div className="relative flex items-center gap-3 p-4 rounded-2xl border bg-white shadow-xs overflow-hidden min-h-[92px]" style={{ borderColor: border }}>
+      <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: bg, color }}>
         {mascot ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={mascot} alt={label} className="h-12 w-12 object-contain drop-shadow-sm" />
+          <img src={mascot} alt={label} className="h-12 w-12 object-contain drop-shadow-xs" />
         ) : (
           <i className={`fa-solid ${icon}`} />
         )}
@@ -898,7 +905,7 @@ function SectionTitle({ icon, title, count, muted }: { icon: string; title: stri
 function LoadingState() {
   return (
     <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-      <Mascot mood="thinking" size={104} float />
+      <i className="asia-spinner text-5xl" style={{ color: "var(--primary-color)" }} />
       <span className="mt-3">กำลังโหลด...</span>
     </div>
   );
@@ -912,7 +919,7 @@ function RoomStatusCard({ room }: { room: Room }) {
   const status = statusOf(room);
   const cfg = STATUS_CFG[status];
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col">
+    <div className="bg-white rounded-2xl shadow-xs border border-slate-100 overflow-hidden flex flex-col">
       <div className="h-64 relative overflow-hidden" style={{ background: cfg.bg }}>
         <div className="absolute inset-x-4 top-4 h-24 rounded-2xl border shadow-inner"
           style={{ background: status === "maintenance" ? "#dbeafe" : "#064e3b", borderColor: cfg.border }} />
@@ -934,7 +941,7 @@ function RoomStatusCard({ room }: { room: Room }) {
         )}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={cfg.mascot} alt={cfg.label} className="absolute right-5 bottom-2 h-36 w-auto object-contain drop-shadow-lg" />
-        <span className="absolute top-3 right-3 inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full shadow-sm"
+        <span className="absolute top-3 right-3 inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full shadow-xs"
           style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
           <span className="w-1.5 h-1.5 rounded-full" style={{ background: cfg.color }} />
           {cfg.label}
@@ -1099,7 +1106,7 @@ function ScheduleList({ icon, title, count, entries, cancelled }: {
           return (
             <div
               key={entry.id}
-              className={`relative overflow-hidden rounded-2xl border bg-white p-4 shadow-sm ${cancelled ? "border-red-100" : "border-slate-100"}`}
+              className={`relative overflow-hidden rounded-2xl border bg-white p-4 shadow-xs ${cancelled ? "border-red-100" : "border-slate-100"}`}
               style={{ opacity: cancelled ? 0.78 : 1 }}>
               <div className="absolute left-0 top-0 h-full w-1" style={{ background: cancelled ? "#ef4444" : color }} />
               <div className="grid gap-4 md:grid-cols-[118px_1fr_auto] md:items-center">
@@ -1120,7 +1127,7 @@ function ScheduleList({ icon, title, count, entries, cancelled }: {
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="flex items-center gap-2 min-w-0">
-                      <div className="h-9 w-9 rounded-xl flex items-center justify-center text-white shadow-sm flex-shrink-0" style={{ background: cancelled ? "#ef4444" : color }}>
+                      <div className="h-9 w-9 rounded-xl flex items-center justify-center text-white shadow-xs shrink-0" style={{ background: cancelled ? "#ef4444" : color }}>
                         <i className={`fa-solid ${cancelled ? "fa-ban" : "fa-door-open"} text-sm`} />
                       </div>
                       <div className="min-w-0">
@@ -1244,7 +1251,7 @@ function RoomCard({ room, status, onBook, disabled }: { room: Room; status?: Roo
   const effectiveStatus = status ?? statusOf(room);
   const cfg = STATUS_CFG[effectiveStatus];
   return (
-    <div className={`bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col transition-all duration-200 ${!disabled ? "hover:shadow-md hover:-translate-y-0.5" : ""}`}>
+    <div className={`bg-white rounded-2xl shadow-xs border border-slate-100 overflow-hidden flex flex-col transition-all duration-200 ${!disabled ? "hover:shadow-md hover:-translate-y-0.5" : ""}`}>
       <div className="h-52 sm:h-72 relative flex items-center justify-center overflow-hidden" style={{ background: cfg.bg }}>
         {room.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -1255,7 +1262,7 @@ function RoomCard({ room, status, onBook, disabled }: { room: Room; status?: Roo
         <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-amber-100/95 to-amber-200 border-t border-amber-200" />
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={cfg.mascot} alt={cfg.label} className="absolute bottom-2 right-5 h-28 sm:h-36 w-auto object-contain drop-shadow-lg" />
-        <span className="absolute top-3 right-3 inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full shadow"
+        <span className="absolute top-3 right-3 inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full shadow-sm"
           style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
           <span className="w-1.5 h-1.5 rounded-full" style={{ background: cfg.color }} />
           {cfg.label}

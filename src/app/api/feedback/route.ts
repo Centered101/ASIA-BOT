@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { sendLineFlexMessage, buildFeedbackFlexMessage } from "@/lib/line";
 import { getLineNotificationTarget } from "@/lib/line-targets";
+import { withAuth } from "@/lib/server/with-auth";
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -75,17 +76,27 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET() {
-  try {
-    const { data, error } = await supabase
-      .from("feedback")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(100);
-
-    if (error) return NextResponse.json({ status: "error", message: error.message }, { status: 500 });
-    return NextResponse.json({ status: "success", data });
-  } catch {
-    return NextResponse.json({ status: "error", message: "เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์" }, { status: 500 });
+/**
+ * เรื่องที่ตัวเองแจ้ง — ของเดิมเป็น endpoint สาธารณะที่คืน 100 รายการล่าสุด
+ * ของ "ทุกคน" พร้อมชื่อ อีเมล เบอร์ และข้อความ ใครยิงก็ได้ ตอนนี้บังคับ
+ * ให้ล็อกอินและกรองเหลือเฉพาะของเจ้าตัว แบบเดียวกับ /api/maintenance
+ *
+ * โหมดไม่ระบุตัวตนไม่เขียน student_id ลงแถวเลย จึงไม่มีวันโผล่ที่นี่ —
+ * นั่นคือความตั้งใจของโหมดนั้น ไม่ใช่ข้อผิดพลาด
+ */
+export const GET = withAuth(async (_req, { principal }) => {
+  // นักเรียนเท่านั้นที่ผูกกับแถวได้ แอดมินมีหน้าหลังบ้านของตัวเองอยู่แล้ว
+  if (principal.subjectType !== "student") {
+    return NextResponse.json({ status: "success", data: [] });
   }
-}
+
+  const { data, error } = await (supabase as any)
+    .from("feedback")
+    .select("id, type, category, message, status, admin_note, image_urls, created_at")
+    .eq("student_id", principal.subjectId)
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  if (error) return NextResponse.json({ status: "error", message: error.message }, { status: 500 });
+  return NextResponse.json({ status: "success", data });
+});

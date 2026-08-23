@@ -4,6 +4,35 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { QUICK_LINKS, SITE_NAME, type QuickLink } from "@/lib/config";
+
+/**
+ * จำนวนปุ่มนำทางที่โชว์นอกเมนู "เพิ่มเติม" ตามความกว้างจอ — [lg, xl]
+ *
+ * เดิมเป็น 3 ปุ่มคงที่ทุกความกว้าง จอ 1280px ขึ้นไปจึงเหลือที่ว่างกลางแถบเป็นพืด
+ * ทั้งที่ยังมีลิงก์รออยู่ในเมนู "เพิ่มเติม"
+ *
+ * ไม่มีชั้น 2xl เพราะกล่องนอกสุดเป็น max-w-7xl (1280px) พอถึง xl ก็ชนเพดานแล้ว
+ * จอที่กว้างกว่านั้นได้พื้นที่เท่าเดิมเป๊ะ เพิ่มชั้นไปก็ไม่มีที่ให้ปุ่มโผล่
+ *
+ * ชั้น xl เคยตั้งไว้ 5 แล้วแถบแน่นจนปุ่ม "เพิ่มเติม" ถูกบีบตัดคำเป็นสองบรรทัด
+ * 4 คือจำนวนที่ยังเหลือที่หายใจให้ปุ่มขวามือ
+ */
+const NAV_TIERS = [3, 4] as const;
+const MAX_NAV = NAV_TIERS[NAV_TIERS.length - 1];
+
+/** ปุ่มลำดับที่ i โผล่ที่ความกว้างไหน */
+function navReveal(i: number) {
+  return i < NAV_TIERS[0] ? "flex" : "hidden xl:flex";
+}
+
+/**
+ * รายการเดียวกันในเมนู "เพิ่มเติม" ต้องหายไปตอนปุ่มข้างนอกโผล่ ไม่งั้นตอนจอกว้าง
+ * ลิงก์เดียวกันจะอยู่สองที่พร้อมกัน — ซ่อนด้วย CSS ทั้งคู่ ไม่ใช่วัดความกว้างด้วย JS
+ * เพราะการวัดต้องรอ mount ก่อน แถบจึงกระตุกทุกครั้งที่โหลดหน้า
+ */
+function moreHide(i: number) {
+  return i < NAV_TIERS[0] ? "hidden" : "xl:hidden";
+}
 import { getStudentSession, clearStudentSession, type StudentSession } from "@/lib/session";
 import StudentAvatar from "@/components/StudentAvatar";
 
@@ -31,17 +60,28 @@ export default function Header({ subtitle = "หน้าแรก" }: { subtitl
   const visible = all.filter(l => !isActive(l));
   const feedbackLink = visible.find(l => l.path === "/feedback");
   const registerLink = visible.find(l => l.path === "/register");
-  // ปักหมุด /feedback ไว้ท้าย nav เสมอ แต่ตอนอยู่หน้า /feedback เองลิงก์นั้นหายไป
-  // จึงหยิบลิงก์ทั่วไปมาเพิ่มอีกหนึ่งช่อง ทุกหน้าจะได้มีปุ่มเท่ากันคือ 3 ปุ่ม + เพิ่มเติม
-  const baseMainLinks = visible
-    .filter(l => !l.role && !l.external && l !== feedbackLink && l !== registerLink)
-    .slice(0, feedbackLink ? 2 : 3);
-  const mainLinks = feedbackLink ? [...baseMainLinks, feedbackLink] : baseMainLinks;
   // จับด้วย path ไม่ใช่ role เพราะ /my-attendance ก็เป็น role "student" เหมือนกัน
   // และมาก่อนใน QUICK_LINKS ปุ่ม "เข้าสู่ระบบ" จึงเคยลิงก์ไปหน้าการเข้าเรียนแทน
   const ctaStudent = visible.find(l => l.path === "/student");
   const ctaShop    = visible.find(l => l.role === "shop");
-  const moreLinks  = visible.filter(l => !mainLinks.includes(l) && l !== ctaStudent && l !== ctaShop);
+
+  // ปักหมุด /feedback ไว้ท้ายสามปุ่มแรกเสมอ แต่ตอนอยู่หน้า /feedback เองลิงก์นั้น
+  // หายไป จึงหยิบลิงก์ทั่วไปมาเพิ่มอีกหนึ่งช่อง สามปุ่มแรกจะได้เท่ากันทุกหน้า
+  const baseMainLinks = visible
+    .filter(l => !l.role && !l.external && l !== feedbackLink && l !== registerLink)
+    .slice(0, feedbackLink ? 2 : 3);
+  const tier1 = feedbackLink ? [...baseMainLinks, feedbackLink] : baseMainLinks;
+
+  // ที่เหลือเอาไว้เติมช่องที่ xl เรียงตามลำดับใน QUICK_LINKS ต่อจากสามปุ่มแรก
+  // สามปุ่มแรกจึงไม่ขยับ ไม่ว่าจะมีลิงก์ใหม่เพิ่มเข้ามาในตารางกี่อัน
+  const spare = MAX_NAV - tier1.length;
+  const rest = visible.filter(l => !tier1.includes(l) && l !== ctaStudent && l !== ctaShop);
+  const mainLinks = [...tier1, ...rest.slice(0, spare)];
+  const moreLinks = rest.slice(Math.max(0, spare));
+
+  // เมนู "เพิ่มเติม" ซ่อนไปเลยเมื่อของในนั้นถูกดันออกไปอยู่นอกแถบหมดแล้ว
+  const hasMoreAtLg = moreLinks.length > 0 || mainLinks.length > NAV_TIERS[0];
+  const hasMoreAtXl = moreLinks.length > 0;
   const displayLink = (link: QuickLink) => {
     if (link.role === "student" && session) {
       return { ...link, name: "บัตรประจำตัวนักเรียน", desc: "บัตรนักเรียนดิจิทัล" };
@@ -51,12 +91,12 @@ export default function Header({ subtitle = "หน้าแรก" }: { subtitl
 
   return (
     <>
-      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200/60 shadow-sm">
+      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200/60 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="h-16 flex items-center gap-3 min-w-0">
 
             {/* ── Logo ── */}
-            <Link href="/" className="flex items-center gap-2.5 flex-shrink-0 group">
+            <Link href="/" className="flex items-center gap-2.5 shrink-0 group">
               <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shadow-md group-hover:shadow-sky-200 transition-shadow"
                 style={{ background: "linear-gradient(135deg,var(--primary-color),var(--primary-dark))" }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -70,19 +110,22 @@ export default function Header({ subtitle = "หน้าแรก" }: { subtitl
 
             {/* ── Desktop nav ── */}
             <nav className="hidden lg:flex items-center gap-0.5 flex-1 min-w-0 ml-1">
-              {mainLinks.map(link => (
+              {mainLinks.map((link, i) => (
                 <Link key={link.name} href={link.url ?? (link.path ?? "#")}
                   target={link.external ? "_blank" : undefined}
-                  className="flex items-center gap-1.5 px-2.5 xl:px-3 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition-all whitespace-nowrap">
+                  className={`${navReveal(i)} shrink-0 items-center gap-1.5 px-2.5 xl:px-3 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition-all whitespace-nowrap`}>
                   {link.icon && <i className={`${link.icon} text-xs`} style={{ color: link.color ?? "#94A3B8" }} />}
                   <span>{link.name}</span>
                 </Link>
               ))}
 
               {/* More dropdown */}
-              {moreLinks.length > 0 && (
-                <div className="relative group/more">
-                  <button suppressHydrationWarning className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-all">
+              {hasMoreAtLg && (
+                <div className={`relative group/more ${hasMoreAtXl ? "" : "xl:hidden"}`}>
+                  {/* whitespace-nowrap + shrink-0 เหมือนปุ่มลิงก์อื่น — ไม่มีสองคลาสนี้
+                      พอที่ว่างหด flex จะบีบปุ่มจนคำว่า "เพิ่มเติม" ตัดเป็นสองบรรทัด
+                      แล้วแถบสูงขึ้นทั้งแถบตามไปด้วย */}
+                  <button suppressHydrationWarning className="flex shrink-0 items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-all whitespace-nowrap">
                     <i className="fa-solid fa-grip text-xs text-slate-400" />
                     <span>เพิ่มเติม</span>
                     <i className="fa-solid fa-chevron-down text-[9px] text-slate-400" />
@@ -90,11 +133,16 @@ export default function Header({ subtitle = "หน้าแรก" }: { subtitl
                   <div className="absolute left-0 top-full mt-2 w-60 bg-white border border-slate-100 rounded-2xl shadow-xl z-50
                     opacity-0 invisible translate-y-1 group-hover/more:opacity-100 group-hover/more:visible group-hover/more:translate-y-0 transition-all duration-200">
                     <div className="p-2">
-                      {moreLinks.map(link => (
+                      {/* ปุ่มที่ยังไม่โผล่ที่ความกว้างนี้ต้องอยู่ในเมนูด้วย ไม่งั้นจอ lg
+                          จะเข้าถึงมันไม่ได้เลยสักทาง แล้วค่อยซ่อนตัวเองตอนจอกว้างพอ */}
+                      {[
+                        ...mainLinks.slice(NAV_TIERS[0]).map((l, k) => ({ l, hide: moreHide(NAV_TIERS[0] + k) })),
+                        ...moreLinks.map(l => ({ l, hide: "" })),
+                      ].map(({ l: link, hide }) => (
                         <Link key={link.name} href={link.url ?? (link.path ?? "#")}
                           target={link.external ? "_blank" : undefined}
-                          className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-50 transition group/item">
-                          <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+                          className={`${hide} flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-50 transition group/item`}>
+                          <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
                             style={{ background: link.color ? `${link.color}18` : "#F1F5F9" }}>
                             <i className={`${link.icon ?? "fa-solid fa-link"} text-xs`} style={{ color: link.color ?? "#64748B" }} />
                           </div>
@@ -112,7 +160,7 @@ export default function Header({ subtitle = "หน้าแรก" }: { subtitl
             </nav>
 
             {/* ── Desktop CTA buttons ── */}
-            <div className="hidden lg:flex items-center gap-2 flex-shrink-0">
+            <div className="hidden lg:flex items-center gap-2 shrink-0">
               {session ? (
                 <>
                   {ctaShop && (
@@ -170,17 +218,17 @@ export default function Header({ subtitle = "หน้าแรก" }: { subtitl
       {/* ── Mobile bottom-sheet menu ── */}
       <div className={`lg:hidden fixed inset-0 z-[1100] transition-all duration-300 ${menuOpen ? "pointer-events-auto" : "pointer-events-none"}`}>
         {/* Backdrop */}
-        <div className={`absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-300 ${menuOpen ? "opacity-100" : "opacity-0"}`}
+        <div className={`absolute inset-0 bg-black/40 backdrop-blur-xs transition-opacity duration-300 ${menuOpen ? "opacity-100" : "opacity-0"}`}
           onClick={() => setMenuOpen(false)} />
 
         {/* Sheet */}
         <div className={`absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl transition-transform duration-300 ease-out max-h-[88vh] flex flex-col
           ${menuOpen ? "translate-y-0" : "translate-y-full"}`}>
           {/* Handle */}
-          <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mt-3 mb-1 flex-shrink-0" />
+          <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mt-3 mb-1 shrink-0" />
 
           {/* Sheet header */}
-          <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 flex-shrink-0">
+          <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 shrink-0">
             <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">เมนูหลัก</span>
             <button onClick={() => setMenuOpen(false)} className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500">
               <i className="fa-solid fa-xmark text-xs" />
@@ -220,7 +268,7 @@ export default function Header({ subtitle = "หน้าแรก" }: { subtitl
                           ? "border-sky-200 bg-sky-50"
                           : "border-slate-100 bg-slate-50 hover:bg-slate-100"}`}
                     style={isStudentCta ? { background: "linear-gradient(135deg,var(--primary-color),var(--primary-dark))", boxShadow: "0 4px 12px rgba(14,165,233,.3)" } : undefined}>
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0
                       ${isStudentCta ? "bg-white/20" : ""}`}
                       style={!isStudentCta ? { background: link.color ? `${link.color}20` : "#F1F5F9" } : undefined}>
                       <i className={`${link.icon ?? "fa-solid fa-link"} text-sm`}
@@ -236,7 +284,7 @@ export default function Header({ subtitle = "หน้าแรก" }: { subtitl
                         </div>
                       )}
                     </div>
-                    {link.external && <i className="fa-solid fa-arrow-up-right-from-square text-[9px] opacity-40 flex-shrink-0" />}
+                    {link.external && <i className="fa-solid fa-arrow-up-right-from-square text-[9px] opacity-40 shrink-0" />}
                   </Link>
                 );
               })}

@@ -9,13 +9,14 @@ import { supabase as realtimeSupabase } from "@/lib/supabase";
 import type { CustomField } from "@/lib/config";
 import { DEPARTMENTS, SITE_NAME } from "@/lib/config";
 import { ADMIN_DIVISIONS, type NavItem } from "@/lib/modules/nav";
-import { adminRoleLabel, canAccessTab, visibleNavSections } from "@/lib/modules/nav-access";
+import { adminRoleLabel, canAccessTab, canHaveDivision, visibleNavSections } from "@/lib/modules/nav-access";
 import { syncAdminSession } from "@/lib/modules/admin-session";
 import { ROLE_LABELS as DIVISION_LABELS } from "@/lib/rbac/definitions";
 import { AMENITY_OPTIONS, getAmenityInfo } from "@/lib/amenities";
 import { Chart, registerables } from "chart.js";
 import { Bar, Doughnut, Line, Radar } from "react-chartjs-2";
 import { toast } from "sonner";
+import { AdminConfirmModal, AdminModal } from "@/components/admin/dark-ui";
 Chart.register(...registerables);
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -74,12 +75,27 @@ type Feedback = {
   created_at: string;
 };
 
+/**
+ * แถวครูตามที่ /api/admin/teachers ส่งกลับมาจริง
+ *
+ * ตัวเลือก "จากครู" เคยประกาศเป็น { name, active } ซึ่งไม่มีอยู่ในผลลัพธ์เลย
+ * (คอลัมน์จริงคือ full_name กับ status) ผลคือ filter คัดออกหมดทุกแถว
+ * แล้วรายการขึ้นว่างเปล่าโดยไม่มี error ให้เห็น
+ */
+type PickerTeacher = {
+  id: string; full_name: string; nickname: string | null;
+  email: string | null; phone: string | null; department: string | null;
+  subject: string | null; status: string;
+};
+
 type Student = {
   id: string; student_id: string; first_name: string; last_name: string;
   nickname: string | null; program: string; department: string | null;
   entry_year: string; student_phone: string;
   uid: string | null;
   photo_url: string | null;
+  /** นักเรียนไม่มีคอลัมน์อีเมลธรรมดา มีแต่อีเมล Google ที่ผูกไว้ */
+  google_email: string | null;
   card_status: "active" | "inactive" | "lost";
   created_at: string; updated_at: string;
 };
@@ -296,7 +312,22 @@ function adminActionClass(extra = "") {
 
 const BOOKING_STATUS: Record<string, string> = { pending: "รอดำเนินการ", approved: "อนุมัติ", rejected: "ปฏิเสธ", cancelled: "ยกเลิก" };
 const FEEDBACK_STATUS: Record<string, string> = { pending: "รอดำเนินการ", in_progress: "กำลังดำเนินการ", resolved: "แก้ไขแล้ว", rejected: "ปฏิเสธ" };
-const ROLE_DESC: Record<string, string> = { superadmin: "ผู้ดูแลสูงสุด", admin: "ผู้ดูแลระบบ", staff: "เจ้าหน้าที่" };
+/**
+ * ใครคือใครจริง ๆ ในสามระดับนี้
+ *
+ *   staff  = ประธานนักเรียนและสมาชิกสภานักเรียน — เป็น "นักเรียน" ไม่ใช่บุคลากร
+ *   admin  = ครู แยกขอบเขตกันด้วยฝ่ายที่สังกัด
+ *   superadmin = เข้าได้ทุกส่วน
+ *
+ * ค่าในคอลัมน์ admins.role เขียนว่า staff/admin ซึ่งอ่านแล้วเข้าใจเป็นอย่างอื่น
+ * ได้ง่ายมาก (staff ปกติแปลว่าเจ้าหน้าที่ธุรการ) label เดิมก็เขียนตามคำนั้นตรง ๆ
+ * จนไม่มีใครรู้ว่าคนที่ถือ staff อยู่คือนักเรียน ตรงนี้จึงเขียนตามความจริง
+ */
+const ROLE_DESC: Record<string, string> = {
+  superadmin: "เข้าถึงได้ทุกส่วนของระบบ",
+  admin: "ครู แยกตามฝ่ายที่สังกัด",
+  staff: "ประธานและสมาชิกสภานักเรียน",
+};
 const CARD_STATUS: Record<string, string> = { active: "บัตรใช้งานได้", inactive: "บัตรไม่ได้ใช้งาน", lost: "บัตรหาย" };
 
 function isAdminModalOpen() {
@@ -507,7 +538,7 @@ function AdminLogin({ onLogin }: { onLogin: (a: AdminUser) => void }) {
                 <input type="text" required autoFocus placeholder="กรอกชื่อผู้ใช้ผู้ดูแล"
                   value={username} onChange={(e) => setUsername(e.target.value)}
                   suppressHydrationWarning
-                  className="w-full pl-9 pr-4 py-3 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none transition-colors"
+                  className="w-full pl-9 pr-4 py-3 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-hidden transition-colors"
                   style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }}
                   onFocus={(e) => e.currentTarget.style.borderColor = "#ff7070"}
                   onBlur={(e) => e.currentTarget.style.borderColor = "#3e3e3e"} />
@@ -523,7 +554,7 @@ function AdminLogin({ onLogin }: { onLogin: (a: AdminUser) => void }) {
                 <input type={showPw ? "text" : "password"} required placeholder="กรอกรหัสผ่าน"
                   value={password} onChange={(e) => setPassword(e.target.value)}
                   suppressHydrationWarning
-                  className="w-full pl-9 pr-10 py-3 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none transition-colors"
+                  className="w-full pl-9 pr-10 py-3 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-hidden transition-colors"
                   style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }}
                   onFocus={(e) => e.currentTarget.style.borderColor = "#ff7070"}
                   onBlur={(e) => e.currentTarget.style.borderColor = "#3e3e3e"} />
@@ -537,7 +568,7 @@ function AdminLogin({ onLogin }: { onLogin: (a: AdminUser) => void }) {
             {error && (
               <div className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-xs"
                 style={{ background: "rgba(255,112,112,0.1)", border: "1px solid rgba(255,112,112,0.3)", color: "#ff7070" }}>
-                <i className="fa-solid fa-circle-xmark flex-shrink-0" /> {error}
+                <i className="fa-solid fa-circle-xmark shrink-0" /> {error}
               </div>
             )}
 
@@ -1002,13 +1033,13 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
     <div className="admin-shell flex h-[100dvh] overflow-hidden" style={{ background: "#0c0c0c" }}>
 
       <div
-        className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity lg:hidden ${sidebarOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+        className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-xs transition-opacity lg:hidden ${sidebarOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
         onClick={() => setSidebarOpen(false)}
       />
 
       {adminSearchOpen && (
         <div
-          className="fixed inset-0 z-[80] flex items-start justify-center bg-black/60 px-3 pt-[8vh] backdrop-blur-sm"
+          className="fixed inset-0 z-[80] flex items-start justify-center bg-black/60 px-3 pt-[8vh] backdrop-blur-xs"
           onMouseDown={() => setAdminSearchOpen(false)}
         >
           <div
@@ -1026,7 +1057,7 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
                 value={adminSearch}
                 onChange={e => setAdminSearch(e.target.value)}
                 placeholder="ค้นหาเมนู เช่น นักเรียน สินค้า คำสั่งซื้อ..."
-                className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-[#636363]"
+                className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-hidden placeholder:text-[#636363]"
                 style={{ color: "#ededed" }}
               />
               <button
@@ -1055,7 +1086,7 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
                           setActiveTab(item.id);
                           setAdminSearchOpen(false);
                         }}
-                        className="flex w-full items-center gap-3 rounded-sm px-3 py-3 text-left text-sm font-bold transition-colors"
+                        className="flex w-full items-center gap-3 rounded-xs px-3 py-3 text-left text-sm font-bold transition-colors"
                         style={{
                           background: isCurrent ? "rgba(255,112,112,0.16)" : "transparent",
                           color: isCurrent ? "#fff" : "#ededed",
@@ -1092,7 +1123,7 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
                         setActiveTab(item.tab);
                         setAdminSearchOpen(false);
                       }}
-                      className="flex w-full items-center gap-3 rounded-sm px-3 py-3 text-left text-sm font-bold transition-colors"
+                      className="flex w-full items-center gap-3 rounded-xs px-3 py-3 text-left text-sm font-bold transition-colors"
                       style={{ color: "#ededed", background: "transparent" }}
                       onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
                       onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
@@ -1123,19 +1154,19 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
       )}
 
       {/* ── Sidebar ── */}
-      <aside className={`fixed lg:static inset-y-0 left-0 z-50 flex flex-col w-[280px] sm:w-[300px] lg:w-[240px] flex-shrink-0 h-[100dvh] overflow-hidden transition-transform duration-300 ease-out lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
+      <aside className={`fixed lg:static inset-y-0 left-0 z-50 flex flex-col w-[280px] sm:w-[300px] lg:w-[240px] shrink-0 h-[100dvh] overflow-hidden transition-transform duration-300 ease-out lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
         style={{ background: "#111111", borderRight: "1px solid #1f1f1f" }}>
 
         {/* Logo / org selector */}
-        <div className="flex items-center gap-2.5 px-4 h-[52px] flex-shrink-0"
+        <div className="flex items-center gap-2.5 px-4 h-[52px] shrink-0"
           style={{ borderBottom: "1px solid #1f1f1f" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/admin/favicon.ico" alt="logo" className="w-6 h-6 rounded-md object-contain flex-shrink-0" />
+          <img src="/admin/favicon.ico" alt="logo" className="w-6 h-6 rounded-md object-contain shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="text-[13px] font-semibold text-white truncate leading-tight">{SITE_NAME}</div>
             <div className="text-[10px] truncate leading-tight" style={{ color: "#636363" }}>แผงควบคุมผู้ดูแล</div>
           </div>
-          <div className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0" style={{ color: "#636363" }}>
+          <div className="w-5 h-5 rounded-sm flex items-center justify-center shrink-0" style={{ color: "#636363" }}>
             <i className="fa-solid fa-chevron-up-down text-[9px]" />
           </div>
           <button
@@ -1176,7 +1207,7 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
                       }}
                       onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "rgba(255,255,255,0.03)"; }}
                       onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}>
-                      <i className={`fa-solid ${item.icon} w-[14px] text-center text-[11px] flex-shrink-0`}
+                      <i className={`fa-solid ${item.icon} w-[14px] text-center text-[11px] shrink-0`}
                         style={{ color: isActive ? "#ff7070" : "#555" }} />
                       <span className="flex-1 truncate font-[450]">{item.label}</span>
                       {item.children && (
@@ -1223,13 +1254,13 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
         {/* Topbar */}
-        <header className="flex-shrink-0 flex items-center justify-between gap-2 px-3 sm:px-4 lg:px-6 h-[52px]"
+        <header className="shrink-0 flex items-center justify-between gap-2 px-3 sm:px-4 lg:px-6 h-[52px]"
           style={{ borderBottom: "1px solid #1f1f1f", background: "#0c0c0c" }}>
 
           {/* Breadcrumb */}
           <div className="flex items-center gap-2 min-w-0 text-[13px]">
             <button
-              className="lg:hidden w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0"
+              className="lg:hidden w-9 h-9 rounded-md flex items-center justify-center shrink-0"
               style={{ color: "#ededed", background: "#1a1a1a", border: "1px solid #252525" }}
               onClick={() => setSidebarOpen(true)}
               aria-label="เปิดเมนู">
@@ -1241,7 +1272,7 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
                 const hiddenOnMobile = index < breadcrumbParts.length - 2;
                 return (
                   <div key={`${part.label}-${index}`} className={`min-w-0 flex items-center gap-1.5 ${hiddenOnMobile ? "hidden sm:flex" : "flex"}`}>
-                    {index > 0 && <i className="fa-solid fa-chevron-right text-[9px] flex-shrink-0" style={{ color: "#333" }} />}
+                    {index > 0 && <i className="fa-solid fa-chevron-right text-[9px] shrink-0" style={{ color: "#333" }} />}
                     <button
                       type="button"
                       onClick={part.onClick}
@@ -1266,7 +1297,7 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
           </div>
 
           {/* Right actions */}
-          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <span className="admin-number text-[12px] tabular-nums hidden md:block" style={{ color: "#555" }}>
               {now.toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "numeric" })}
               {" "}{now.toLocaleTimeString("th-TH")}
@@ -1292,7 +1323,7 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
             >
               <i className="fa-solid fa-magnifying-glass text-[11px]" />
               <span className="min-w-0 flex-1 truncate">ค้นหาเมนู...</span>
-              <span className="hidden lg:inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold"
+              <span className="hidden lg:inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] font-bold"
                 style={{ color: "#777", background: "#111", border: "1px solid #333" }}>
                 Ctrl+K
               </span>
@@ -1333,7 +1364,7 @@ function AdminShell({ admin, onLogout, onAvatarChange }: { admin: AdminUser; onL
             {/* Role badge */}
             <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md"
               style={{ background: "#1a1a1a", border: "1px solid #252525" }}>
-              <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "#ff7070" }} />
+              <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#ff7070" }} />
               <span className="text-[11px]" style={{ color: "#888" }}>{roleLabel}</span>
             </div>
           </div>
@@ -1586,7 +1617,7 @@ function SidebarUser({ admin, onLogout, onAvatarChange }: {
       <div className="px-3 py-3">
         <div className="flex items-center gap-2.5">
           {/* Avatar — click to toggle info */}
-          <button type="button" onClick={() => setShowInfo(s => !s)} className="relative flex-shrink-0" title="ดูข้อมูลของฉัน">
+          <button type="button" onClick={() => setShowInfo(s => !s)} className="relative shrink-0" title="ดูข้อมูลของฉัน">
             <Avatar name={displayName} url={admin.avatar} size={32} rounded="xl" />
           </button>
           <input ref={fileRef} type="file" accept={IMG_ACCEPT} className="hidden" onChange={handleFile} />
@@ -1599,7 +1630,7 @@ function SidebarUser({ admin, onLogout, onAvatarChange }: {
             </div>
           </div>
           <button onClick={onLogout} title="ออกจากระบบ"
-            className="w-6 h-6 flex items-center justify-center rounded-lg transition-colors flex-shrink-0"
+            className="w-6 h-6 flex items-center justify-center rounded-lg transition-colors shrink-0"
             style={{ color: "#636363" }}
             onMouseEnter={(e) => e.currentTarget.style.color = "#ff7070"}
             onMouseLeave={(e) => e.currentTarget.style.color = "#636363"}>
@@ -1655,23 +1686,17 @@ function StudentInfoTrigger({
         {children}
       </button>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(4px)" }} onClick={() => setOpen(false)} />
-          <div className="relative w-full sm:max-w-lg sm:mx-4 sm:rounded-2xl rounded-t-2xl overflow-hidden"
-            style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-            <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid #3e3e3e" }}>
-              <div className="flex items-center gap-3 min-w-0">
-                <Avatar name={displayName} url={student?.photo_url ?? fallbackPhotoUrl} size={44} rounded="xl" />
-                <div className="min-w-0">
-                  <div className="font-black text-white truncate">{displayName}</div>
-                  <div className="text-[11px] font-mono" style={{ color: "#636363" }}>{student?.student_id ?? studentId ?? "—"}</div>
-                </div>
+        <AdminModal onClose={() => setOpen(false)}
+          header={
+            <div className="flex items-center gap-3 min-w-0">
+              <Avatar name={displayName} url={student?.photo_url ?? fallbackPhotoUrl} size={44} rounded="xl" />
+              <div className="min-w-0">
+                <div className="font-black text-white truncate">{displayName}</div>
+                <div className="text-[11px] font-mono" style={{ color: "#636363" }}>{student?.student_id ?? studentId ?? "—"}</div>
               </div>
-              <button onClick={() => setOpen(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-[#9e9e9e] hover:text-white hover:bg-[#2a2a2a] transition-colors">
-                <i className="fa-solid fa-xmark" />
-              </button>
             </div>
-            <div className="p-5 space-y-4">
+          }>
+            <div className="space-y-4">
               {loading && <div className="text-xs" style={{ color: "#9e9e9e" }}><i className="asia-spinner mr-1.5" />กำลังโหลดข้อมูลนักเรียน...</div>}
               <div className="grid grid-cols-2 gap-3">
                 {[
@@ -1698,8 +1723,7 @@ function StudentInfoTrigger({
                 </div>
               )}
             </div>
-          </div>
-        </div>
+        </AdminModal>
       )}
     </>
   );
@@ -2147,7 +2171,7 @@ function DashboardTab({
                 style={{ background: "#0c0c0c", border: "1px solid #2a2a2a" }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = `${item.color}66`; }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = "#2a2a2a"; }}>
-                <span className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${item.color}18`, color: item.color }}>
+                <span className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${item.color}18`, color: item.color }}>
                   <i className={`fa-solid ${item.icon} text-xs`} />
                 </span>
                 <span className="flex-1 min-w-0">
@@ -2324,7 +2348,7 @@ function DashboardTab({
           <button key={item.title} type="button" onClick={() => onOpenTab(item.tab)}
             className="rounded-xl p-3 flex items-center gap-3 text-left min-h-[76px]"
             style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-            <span className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "rgba(255,112,112,0.12)", color: "#ff7070" }}>
+            <span className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "rgba(255,112,112,0.12)", color: "#ff7070" }}>
               <i className={`fa-solid ${item.icon}`} />
             </span>
             <span className="flex-1 min-w-0">
@@ -2353,7 +2377,7 @@ function DashboardTab({
               <i className="fa-solid fa-chevron-left" />
             </button>
             <input type="date" value={date} onChange={e => setDate(e.target.value)}
-              className="px-2.5 py-1.5 rounded-lg text-xs font-mono text-white outline-none"
+              className="px-2.5 py-1.5 rounded-lg text-xs font-mono text-white outline-hidden"
               style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }} />
             <button onClick={() => setDate(todayISODate())} className="px-3 py-1.5 rounded-lg text-xs font-bold text-white" style={{ background: "#ff7070" }}>
               วันนี้
@@ -2364,7 +2388,7 @@ function DashboardTab({
             <div className="relative">
               <i className="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-[#636363] text-xs" />
               <input placeholder="ค้นหาชื่อ / รหัส" value={search} onChange={(e) => setSearch(e.target.value)}
-                className="pl-7 pr-3 py-1.5 text-xs rounded-lg text-white placeholder:text-[#636363] focus:outline-none transition-colors"
+                className="pl-7 pr-3 py-1.5 text-xs rounded-lg text-white placeholder:text-[#636363] focus:outline-hidden transition-colors"
                 style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", width: 160 }}
                 onFocus={(e) => e.currentTarget.style.borderColor = "#ff7070"}
                 onBlur={(e) => e.currentTarget.style.borderColor = "#3e3e3e"} />
@@ -2532,7 +2556,7 @@ function RoomForm({ room, adminId, onClose, onSaved }: { room: Room | null; admi
   const [saving,      setSaving]      = useState(false);
   const [error,       setError]       = useState("");
 
-  const inputCls = "w-full px-3 py-2.5 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none";
+  const inputCls = "w-full px-3 py-2.5 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-hidden";
   const inputStyle = { background: "#0c0c0c", border: "1px solid #3e3e3e" };
   const availableAmenityOptions = AMENITY_OPTIONS.filter(opt => !amenities.includes(opt.value));
 
@@ -2579,17 +2603,16 @@ function RoomForm({ room, adminId, onClose, onSaved }: { room: Room | null; admi
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }} onClick={onClose} />
-      <div className="relative w-full sm:max-w-lg sm:mx-4 sm:rounded-2xl rounded-t-2xl overflow-y-auto max-h-[90vh]"
-        style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-        <div className="flex items-center justify-between px-5 pt-5 pb-4 sticky top-0 z-10" style={{ background: "#1c1c1c", borderBottom: "1px solid #3e3e3e" }}>
-          <h3 className="font-bold text-white text-lg">{room ? "แก้ไขห้อง" : "เพิ่มห้องใหม่"}</h3>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#2a2a2a] text-[#9e9e9e] hover:text-white transition-colors">
-            <i className="fa-solid fa-xmark" />
+    <AdminModal onClose={onClose} title={room ? "แก้ไขห้อง" : "เพิ่มห้องใหม่"} icon="fa-door-open"
+      footer={
+        <>
+          <button onClick={onClose} className="flex-1 py-3 text-sm font-bold rounded-xl text-[#9e9e9e] hover:text-white" style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>ยกเลิก</button>
+          <button onClick={handleSave} disabled={saving} className="flex-1 py-3 text-sm font-bold rounded-xl text-white disabled:opacity-50" style={{ background: "#ff7070" }}>
+            {saving ? <><i className="asia-spinner mr-1.5" />กำลังบันทึก...</> : <><i className="fa-solid fa-floppy-disk mr-1.5" />บันทึก</>}
           </button>
-        </div>
-        <div className="p-5 space-y-4">
+        </>
+      }>
+        <div className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-[#ededed] mb-2">รูปห้อง</label>
             <ImgUpload value={imageUrl} onChange={setImageUrl} adminId={adminId} endpoint="/api/admin/upload-project" placeholder="https://... หรืออัปโหลดรูปห้อง" onUploaded={autoSaveImage} />
@@ -2640,14 +2663,7 @@ function RoomForm({ room, adminId, onClose, onSaved }: { room: Room | null; admi
           </div>
           {error && <div className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm" style={{ background: "rgba(255,112,112,0.1)", border: "1px solid rgba(255,112,112,0.3)", color: "#ff7070" }}><i className="fa-solid fa-circle-xmark" /> {error}</div>}
         </div>
-        <div className="px-5 pb-6 flex gap-3 sticky bottom-0 pt-4" style={{ borderTop: "1px solid #3e3e3e", background: "#1c1c1c" }}>
-          <button onClick={onClose} className="flex-1 py-3 text-sm font-bold rounded-xl text-[#9e9e9e] hover:text-white" style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>ยกเลิก</button>
-          <button onClick={handleSave} disabled={saving} className="flex-1 py-3 text-sm font-bold rounded-xl text-white disabled:opacity-50" style={{ background: "#ff7070" }}>
-            {saving ? <><i className="asia-spinner mr-1.5" />กำลังบันทึก...</> : <><i className="fa-solid fa-floppy-disk mr-1.5" />บันทึก</>}
-          </button>
-        </div>
-      </div>
-    </div>
+    </AdminModal>
   );
 }
 
@@ -2873,7 +2889,7 @@ function BookingsTab({ adminId, view }: { adminId: string; view: "rooms" | "book
               <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: "#636363" }} />
               <input value={roomSearch} onChange={e => setRoomSearch(e.target.value)}
                 placeholder="ค้นหาห้อง สถานที่ รายละเอียด..."
-                className="w-full pl-8 pr-3 py-2 rounded-xl text-sm text-white outline-none"
+                className="w-full pl-8 pr-3 py-2 rounded-xl text-sm text-white outline-hidden"
                 style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }} />
             </div>
             <button onClick={() => setEditRoom("new")} className="ml-auto flex items-center gap-2 text-sm font-bold px-4 py-2 rounded-xl text-white" style={{ background: "#ff7070" }}>
@@ -2951,7 +2967,7 @@ function BookingsTab({ adminId, view }: { adminId: string; view: "rooms" | "book
               <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: "#636363" }} />
               <input value={bookingSearch} onChange={e => setBookingSearch(e.target.value)}
                 placeholder="ค้นหาผู้จอง ห้อง รหัส หรือวัตถุประสงค์..."
-                className="w-full pl-8 pr-3 py-2 rounded-xl text-sm text-white outline-none"
+                className="w-full pl-8 pr-3 py-2 rounded-xl text-sm text-white outline-hidden"
                 style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }} />
             </div>
           </div>
@@ -3080,7 +3096,7 @@ function BookingsTab({ adminId, view }: { adminId: string; view: "rooms" | "book
                             {noteEdit?.id === b.id ? (
                               <div className="flex gap-1.5">
                                 <input type="text" value={noteEdit.value} onChange={(e) => setNoteEdit({ id: b.id, value: e.target.value })}
-                                  placeholder="หมายเหตุ..." className="flex-1 px-2.5 py-1 text-xs rounded-lg text-white placeholder:text-[#636363] outline-none"
+                                  placeholder="หมายเหตุ..." className="flex-1 px-2.5 py-1 text-xs rounded-lg text-white placeholder:text-[#636363] outline-hidden"
                                   style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }} />
                                 <button onClick={() => saveNote(b.id)} className="text-xs px-2.5 py-1 rounded-lg font-semibold text-white" style={{ background: "#ff7070" }}>บันทึก</button>
                                 <button onClick={() => setNoteEdit(null)} className="text-xs px-2 text-[#9e9e9e]">ยกเลิก</button>
@@ -3202,7 +3218,7 @@ function FeedbackCard({ f, adminId, onUpdated }: { f: Feedback; adminId: string;
                   {f.category}
                 </span>
               )}
-              <span className="text-[10px] ml-auto flex-shrink-0" style={{ color: "#636363" }}>
+              <span className="text-[10px] ml-auto shrink-0" style={{ color: "#636363" }}>
                 <i className="fa-solid fa-clock mr-1" />{formatDateTime(f.created_at)}
               </span>
             </div>
@@ -3226,9 +3242,9 @@ function FeedbackCard({ f, adminId, onUpdated }: { f: Feedback; adminId: string;
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             <select value={f.status} onChange={e => changeStatus(e.target.value)} disabled={updating || deleting}
-              className="text-[10px] px-2 py-1.5 rounded-lg outline-none font-bold cursor-pointer"
+              className="text-[10px] px-2 py-1.5 rounded-lg outline-hidden font-bold cursor-pointer"
               style={{ background: sc.bg, color: sc.text, border: `1px solid ${sc.text}55` }}>
               {Object.entries(FB_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
@@ -3451,7 +3467,7 @@ function FeedbacksTab({ adminId }: { adminId: string }) {
               </button>
             ))}
           </div>
-          <div className="w-px h-5 flex-shrink-0" style={{ background: "#3e3e3e" }} />
+          <div className="w-px h-5 shrink-0" style={{ background: "#3e3e3e" }} />
           {/* Status filter */}
           <div className="flex gap-1.5 flex-wrap">
             {[["all","ทั้งหมด"], ...Object.entries(FB_STATUS).map(([k,v]) => [k, v.label])].map(([v,l]) => (
@@ -3466,7 +3482,7 @@ function FeedbacksTab({ adminId }: { adminId: string }) {
               </button>
             ))}
           </div>
-          <div className="w-px h-5 flex-shrink-0" style={{ background: "#3e3e3e" }} />
+          <div className="w-px h-5 shrink-0" style={{ background: "#3e3e3e" }} />
           {/* Identity filter */}
           <div className="flex gap-1.5">
             {([
@@ -3481,7 +3497,7 @@ function FeedbacksTab({ adminId }: { adminId: string }) {
               </button>
             ))}
           </div>
-          <button onClick={fetch_} className="ml-auto flex items-center gap-1.5 text-xs transition-colors flex-shrink-0" style={{ color: "#636363" }}
+          <button onClick={fetch_} className="ml-auto flex items-center gap-1.5 text-xs transition-colors shrink-0" style={{ color: "#636363" }}
             onMouseEnter={e => (e.currentTarget.style.color = "#ededed")} onMouseLeave={e => (e.currentTarget.style.color = "#636363")}>
             <i className="fa-solid fa-rotate" /> รีเฟรช
           </button>
@@ -3490,7 +3506,7 @@ function FeedbacksTab({ adminId }: { adminId: string }) {
           <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-[#636363] text-xs" />
           <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder="ค้นหาชื่อ, ข้อความ, ติดต่อ, หมวดหมู่..."
-            className="w-full pl-8 pr-8 py-2 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none"
+            className="w-full pl-8 pr-8 py-2 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-hidden"
             style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }} />
           {search && (
             <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#636363] hover:text-white">
@@ -3801,7 +3817,7 @@ function AllRequestsTab({ adminId, kind = "all" }: { adminId: string; kind?: "al
                     <input
                       value={currentChanges[field] ?? ""}
                       onChange={e => setFieldValue(field, e.target.value)}
-                      className="w-full rounded-lg px-3 py-2 text-xs text-white outline-none"
+                      className="w-full rounded-lg px-3 py-2 text-xs text-white outline-hidden"
                       style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }}
                     />
                   </label>
@@ -3813,7 +3829,7 @@ function AllRequestsTab({ adminId, kind = "all" }: { adminId: string; kind?: "al
                 <select
                   value={fieldToAdd}
                   onChange={e => setFieldToAdd(e.target.value)}
-                  className="flex-1 rounded-lg px-3 py-2 text-xs text-white outline-none"
+                  className="flex-1 rounded-lg px-3 py-2 text-xs text-white outline-hidden"
                   style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }}
                 >
                   {availableExtraFields.map(field => (
@@ -3898,7 +3914,7 @@ function AllRequestsTab({ adminId, kind = "all" }: { adminId: string; kind?: "al
         <div className="relative flex-1 min-w-[220px]">
           <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-[#636363] text-sm" />
           <input placeholder="ค้นหารหัส/ชื่อ/รายละเอียดคำขอ..." value={search} onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none transition-colors"
+            className="w-full pl-9 pr-4 py-2 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-hidden transition-colors"
             style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}
             onFocus={(e) => e.currentTarget.style.borderColor = ADMIN_PRIMARY}
             onBlur={(e) => e.currentTarget.style.borderColor = "#3e3e3e"} />
@@ -3999,7 +4015,7 @@ function EntryLogsTab({ adminId }: { adminId: string }) {
           <i className="fa-solid fa-chevron-left mr-1" /> วันก่อนหน้า
         </button>
         <input type="date" value={date} onChange={e => setDate(e.target.value)}
-          className="px-3 py-2 rounded-xl text-sm text-white outline-none"
+          className="px-3 py-2 rounded-xl text-sm text-white outline-hidden"
           style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }} />
         <button onClick={() => setDate(todayISODate())} className="px-3 py-2 rounded-xl text-xs font-bold text-white" style={{ background: "#ff7070" }}>
           วันนี้
@@ -4218,7 +4234,7 @@ function AttendanceLocationTab({ adminId, location }: { adminId: string; locatio
         <div className="relative flex-1 min-w-[220px]">
           <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-[#636363] text-sm" />
           <input placeholder={`ค้นหานักเรียนใน${meta.place}`} value={search} onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none transition-colors"
+            className="w-full pl-9 pr-4 py-2 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-hidden transition-colors"
             style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}
             onFocus={(e) => e.currentTarget.style.borderColor = "#ff7070"}
             onBlur={(e) => e.currentTarget.style.borderColor = "#3e3e3e"} />
@@ -4227,7 +4243,7 @@ function AttendanceLocationTab({ adminId, location }: { adminId: string; locatio
           <i className="fa-solid fa-chevron-left mr-1" /> ก่อนหน้า
         </button>
         <input type="date" value={date} onChange={e => setDate(e.target.value)}
-          className="px-3 py-2 rounded-xl text-sm text-white outline-none"
+          className="px-3 py-2 rounded-xl text-sm text-white outline-hidden"
           style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }} />
         <button onClick={() => setDate(todayISODate())} className="px-3 py-2 rounded-xl text-xs font-bold text-white" style={{ background: "#ff7070" }}>
           วันนี้
@@ -4732,7 +4748,7 @@ function EquipmentItemsTab({ adminId, role }: { adminId: string; role: string })
             return (
             <div key={i.id} className={`rounded-2xl overflow-hidden transition-all ${viewMode === "list" ? "flex items-stretch" : ""} ${!i.active && !i.deleted_at ? "opacity-50" : ""} ${i.deleted_at ? "opacity-40" : ""}`}
               style={{ background: "#1c1c1c", border: `1px solid ${i.deleted_at ? "#ff7070" : "#3e3e3e"}` }}>
-              <div className={`relative overflow-hidden flex-shrink-0 ${viewMode === "list" ? "h-24 w-24 sm:h-28 sm:w-28" : "aspect-square w-full"}`} style={{ background: "#21a47c" }}>
+              <div className={`relative overflow-hidden shrink-0 ${viewMode === "list" ? "h-24 w-24 sm:h-28 sm:w-28" : "aspect-square w-full"}`} style={{ background: "#21a47c" }}>
                 {itemImageSrc ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={itemImageSrc} alt={i.name} className="w-full h-full object-cover" />
@@ -4841,7 +4857,7 @@ function EquipmentItemForm({ item, adminId, existingCategories, existingUnits, o
     setUnit(item?.unit ?? "");
   }, [item?.id, item?.unit]);
 
-  const inputCls = "w-full px-3 py-2.5 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none transition-colors";
+  const inputCls = "w-full px-3 py-2.5 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-hidden transition-colors";
   const inputStyle = { background: "#0c0c0c", border: "1px solid #3e3e3e" };
 
   async function handleSave() {
@@ -4892,18 +4908,24 @@ function EquipmentItemForm({ item, adminId, existingCategories, existingUnits, o
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }} onClick={onClose} />
-      <div className="relative w-full sm:max-w-lg sm:mx-4 sm:rounded-2xl rounded-t-2xl overflow-y-auto max-h-[90vh]"
-        style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-        <div className="flex items-center justify-between px-5 pt-5 pb-4 sticky top-0 z-10" style={{ background: "#1c1c1c", borderBottom: "1px solid #3e3e3e" }}>
-          <h3 className="font-bold text-white text-lg">{item ? "แก้ไขคุรุภัณฑ์" : "เพิ่มคุรุภัณฑ์ใหม่"}</h3>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#2a2a2a] text-[#9e9e9e] hover:text-white transition-colors">
-            <i className="fa-solid fa-xmark" />
+    <AdminModal onClose={onClose} title={item ? "แก้ไขคุรุภัณฑ์" : "เพิ่มคุรุภัณฑ์ใหม่"} icon="fa-toolbox"
+      footer={
+        <>
+          <button onClick={onClose} className="flex-1 py-3 text-sm font-bold rounded-xl transition-all text-[#9e9e9e] hover:text-white" style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>
+            ยกเลิก
           </button>
-        </div>
-
-        <div className="p-5 space-y-4">
+          <button onClick={handleSave} disabled={saving || imageBusy}
+            className="flex-1 py-3 text-sm font-bold rounded-xl text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ background: "#ff7070" }}>
+            {saving
+              ? <><i className="asia-spinner mr-1.5" />กำลังบันทึก...</>
+              : imageBusy
+                ? <><i className="asia-spinner mr-1.5" />กำลังอัปโหลดรูป...</>
+                : <><i className="fa-solid fa-floppy-disk mr-1.5" />บันทึก</>}
+          </button>
+        </>
+      }>
+        <div className="space-y-4">
           <div>
             <label className="block text-xs font-semibold text-[#ededed] mb-2">รูปภาพ</label>
             <ImgUpload value={imgUrl} onChange={setImgUrl} adminId={adminId}
@@ -4964,7 +4986,7 @@ function EquipmentItemForm({ item, adminId, existingCategories, existingUnits, o
             <button type="button" onClick={() => setActive(!active)}
               className="w-12 h-6 rounded-full relative transition-colors"
               style={{ background: active ? "#ff7070" : "#3e3e3e" }}>
-              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${active ? "left-6" : "left-0.5"}`} />
+              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all ${active ? "left-6" : "left-0.5"}`} />
             </button>
           </div>
 
@@ -4982,22 +5004,7 @@ function EquipmentItemForm({ item, adminId, existingCategories, existingUnits, o
           )}
         </div>
 
-        <div className="px-5 pb-6 flex gap-3 sticky bottom-0 pt-4" style={{ borderTop: "1px solid #3e3e3e", background: "#1c1c1c" }}>
-          <button onClick={onClose} className="flex-1 py-3 text-sm font-bold rounded-xl transition-all text-[#9e9e9e] hover:text-white" style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>
-            ยกเลิก
-          </button>
-          <button onClick={handleSave} disabled={saving || imageBusy}
-            className="flex-1 py-3 text-sm font-bold rounded-xl text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ background: "#ff7070" }}>
-            {saving
-              ? <><i className="asia-spinner mr-1.5" />กำลังบันทึก...</>
-              : imageBusy
-                ? <><i className="asia-spinner mr-1.5" />กำลังอัปโหลดรูป...</>
-                : <><i className="fa-solid fa-floppy-disk mr-1.5" />บันทึก</>}
-          </button>
-        </div>
-      </div>
-    </div>
+    </AdminModal>
   );
 }
 
@@ -5308,7 +5315,7 @@ function EquipmentRequestsTab({ adminId }: { adminId: string }) {
                     {group.rows.map(row => (
                       <div key={row.id} className="flex items-center justify-between gap-3 text-xs">
                         <span className="text-white truncate">{row.equipment_items?.name ?? "คุรุภัณฑ์"}</span>
-                        <span className="font-bold flex-shrink-0" style={{ color: "#9e9e9e" }}>x{row.quantity} {row.equipment_items?.unit ?? ""}</span>
+                        <span className="font-bold shrink-0" style={{ color: "#9e9e9e" }}>x{row.quantity} {row.equipment_items?.unit ?? ""}</span>
                       </div>
                     ))}
                   </div>
@@ -5324,7 +5331,7 @@ function EquipmentRequestsTab({ adminId }: { adminId: string }) {
                   value={noteEdit[group.code] ?? r.admin_note ?? ""}
                   onChange={e => setNoteEdit(prev => ({ ...prev, [group.code]: e.target.value }))}
                   placeholder="หมายเหตุแอดมิน (ไม่บังคับ)"
-                  className="w-full px-3 py-2 rounded-lg text-xs text-white placeholder:text-[#636363] mb-3 focus:outline-none"
+                  className="w-full px-3 py-2 rounded-lg text-xs text-white placeholder:text-[#636363] mb-3 focus:outline-hidden"
                   style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }}
                 />
 
@@ -5366,7 +5373,6 @@ type AdminRecord = {
   username_changed_at: string | null; linked_student_id: string | null;
 };
 
-const ROLE_LABELS: Record<string, string> = { superadmin: "ผู้ดูแลสูงสุด", admin: "ผู้ดูแลระบบ", staff: "เจ้าหน้าที่" };
 const ROLE_STYLE: Record<string, { bg: string; text: string }> = {
   superadmin: { bg: "rgba(255,112,112,0.15)", text: "#ff7070" },
   admin:      { bg: "rgba(56,139,253,0.15)", text: "#ff7070" },
@@ -5401,7 +5407,7 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
   const fileRef = useRef<HTMLInputElement>(null);
   const [pickerType, setPickerType] = useState<"student" | "teacher" | null>(null);
   const [pickerSearch, setPickerSearch] = useState("");
-  const [pickerResults, setPickerResults] = useState<Array<{ id: string; label: string; sub: string; phone?: string; department?: string; entry_year?: string; first_name: string; last_name: string; nickname?: string | null; photo_url?: string | null }>>([]);
+  const [pickerResults, setPickerResults] = useState<Array<{ id: string; label: string; sub: string; phone?: string; email?: string; department?: string; entry_year?: string; first_name: string; last_name: string; nickname?: string | null; photo_url?: string | null }>>([]);
   const [pickerLoading, setPickerLoading] = useState(false);
 
   async function searchPicker(q: string, type: "student" | "teacher") {
@@ -5413,19 +5419,20 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
         setPickerResults((j.data ?? []).slice(0, 8).map((s: Student) => ({
           id: s.student_id, label: `${s.first_name} ${s.last_name}`,
           sub: `${s.student_id} · ${s.program}${s.department ? ` · ${s.department}` : ""}`,
-          phone: s.student_phone ?? "", department: s.department ?? "", entry_year: s.entry_year ?? "",
+          phone: s.student_phone ?? "", email: s.google_email ?? "",
+          department: s.department ?? "", entry_year: s.entry_year ?? "",
           first_name: s.first_name, last_name: s.last_name, nickname: s.nickname, photo_url: s.photo_url ?? null,
         })));
       } else {
         const res = await fetch(`/api/admin/teachers?q=${encodeURIComponent(q)}`, { headers: { "x-admin-id": adminId } });
         const j = await res.json();
         setPickerResults(
-          (j.data ?? []).filter((t: { active: boolean }) => t.active).slice(0, 8)
-            .map((t: { id: string; name: string; subject: string | null; phone: string | null; nickname: string | null }) => {
-              const parts = t.name.split(" ");
-              return { id: t.id, label: t.name, sub: t.subject ?? "ครูผู้สอน",
-                phone: t.phone ?? "", department: "", entry_year: "",
-                first_name: parts[0] ?? t.name, last_name: parts.slice(1).join(" ") ?? "", nickname: t.nickname };
+          (j.data ?? []).filter((t: PickerTeacher) => t.status === "active").slice(0, 8)
+            .map((t: PickerTeacher) => {
+              const parts = t.full_name.split(" ");
+              return { id: t.id, label: t.full_name, sub: t.subject ?? "ครูผู้สอน",
+                phone: t.phone ?? "", email: t.email ?? "", department: t.department ?? "", entry_year: "",
+                first_name: parts[0] ?? t.full_name, last_name: parts.slice(1).join(" "), nickname: t.nickname };
             })
         );
       }
@@ -5437,6 +5444,9 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
       ...p,
       first_name: item.first_name, last_name: item.last_name,
       nickname: item.nickname ?? "", phone: item.phone ?? "",
+      // เติมอีเมลเฉพาะเมื่อคนที่เลือกมีจริง — ค่าว่างแปลว่า "เขายังไม่ได้เชื่อม Google"
+      // ไม่ใช่ "เขาไม่มีอีเมล" การเอาค่าว่างไปทับของที่พิมพ์ไว้แล้วจึงเป็นการลบทิ้งเปล่า ๆ
+      email: item.email || p.email,
       department: item.department ?? "", entry_year: item.entry_year ?? "",
       linked_student_id: pickerType === "student" ? item.id : p.linked_student_id,
     }));
@@ -5463,10 +5473,11 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
 
   async function saveProfile() {
     setPfSaving(true); setPfMsg("");
-    const payload: Record<string, string> = { ...pf };
+    const payload: Record<string, string | null> = { ...pf };
     if (newUsername.trim()) payload.username = newUsername.trim();
     if (newPassword) payload.new_password = newPassword;
-    if (studentAvatarUrl) payload.avatar = studentAvatarUrl;
+    // null = ไม่ได้แตะช่องรูป, "" = ล้างรูปทิ้ง — ต้องแยกกันไม่งั้นล้างไม่ได้
+    if (studentAvatarUrl !== null) payload.avatar = studentAvatarUrl || null;
     const res = await fetch(`/api/admin/admins/${a.admin_id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json", "x-admin-id": adminId },
@@ -5475,7 +5486,7 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
     const j = await res.json();
     setPfSaving(false);
     if (j.status === "success") {
-      if (studentAvatarUrl) onAvatarUploaded(studentAvatarUrl);
+      if (studentAvatarUrl !== null) onAvatarUploaded(studentAvatarUrl || null);
       setEditing(false); setNewUsername(""); setNewPassword(""); setStudentAvatarUrl(null); onProfileSaved();
     }
     else setPfMsg(j.message ?? "เกิดข้อผิดพลาด");
@@ -5514,32 +5525,17 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
     } finally { setBusy(false); }
   }
 
-  const inp = { className: "w-full px-2.5 py-1.5 rounded-lg text-xs outline-none", style: { background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" } };
+  const inp = { className: "w-full px-2.5 py-1.5 rounded-lg text-xs outline-hidden", style: { background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" } };
 
   return (
     <div className="rounded-xl overflow-hidden" style={{ background: "#1c1c1c", border: `1px solid ${isMe ? "rgba(255,112,112,0.3)" : "#3e3e3e"}` }}>
       {/* ── Main row ── */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4">
-        {/* Avatar */}
-        <div className="relative flex-shrink-0">
-          <button type="button" onClick={() => canUpload && !busy && fileRef.current?.click()}
-            className={`relative block ${canUpload ? "group cursor-pointer" : "cursor-default"}`}
-            disabled={busy} title={canUpload ? "เปลี่ยน Avatar" : undefined}>
-            <Avatar name={displayName} url={studentAvatarUrl ?? a.avatar} size={44} rounded="xl" />
-            {canUpload && (
-              <div className="absolute inset-0 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                style={{ background: "rgba(0,0,0,0.55)" }}>
-                {busy ? <i className="asia-spinner text-white text-[10px]" /> : <i className="fa-solid fa-camera text-white text-[10px]" />}
-              </div>
-            )}
-          </button>
-          {canUpload && a.avatar && !busy && (
-            <button type="button" onClick={handleDeleteAvatar} title="ลบ Avatar"
-              className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center transition-transform hover:scale-110"
-              style={{ background: "#ff7070", color: "#fff", fontSize: 8 }}>
-              <i className="fa-solid fa-xmark" />
-            </button>
-          )}
+        {/* Avatar — แสดงอย่างเดียว การเปลี่ยน/ลบรูปย้ายไปอยู่ในฟอร์มแก้ไขแล้ว
+            ของเดิมซ่อนไว้บนตัวรูป (กดที่รูป = เปลี่ยน, กากบาทมุมขวาบน = ลบ) ซึ่งกดโดน
+            ตอนไม่ได้ตั้งใจได้ง่ายและไม่มีขั้นยืนยัน — ปุ่มลบอยู่ห่างจากปุ่มอื่นแค่ไม่กี่พิกเซล */}
+        <div className="shrink-0">
+          <Avatar name={displayName} url={studentAvatarUrl || a.avatar} size={44} rounded="xl" />
         </div>
         <input ref={fileRef} type="file" accept={IMG_ACCEPT} className="hidden" onChange={handleFile} />
 
@@ -5554,7 +5550,7 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <code className="text-[11px]" style={{ color: "#636363" }}>@{a.username}</code>
-            <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: rs.bg, color: rs.text }} title={ROLE_DESC[a.role]}>{ROLE_LABELS[a.role] ?? a.role}</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: rs.bg, color: rs.text }} title={ROLE_DESC[a.role]}>{adminRoleLabel(a.role)}</span>
             <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: ss.bg, color: ss.text }}>{a.admin_status === "active" ? "ใช้งาน" : "ปิดใช้"}</span>
             {/* เห็นฝ่ายตั้งแต่ในรายการ ไม่ต้องกดเข้าไปดูทีละคนว่าใครอยู่ฝ่ายไหน */}
             {a.division && (
@@ -5575,7 +5571,7 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
         </div>
 
         {/* Action buttons */}
-        <div className="flex gap-1.5 flex-shrink-0 flex-wrap justify-start sm:justify-end w-full sm:w-auto">
+        <div className="flex gap-1.5 shrink-0 flex-wrap justify-start sm:justify-end w-full sm:w-auto">
           {canEdit && (
             <button onClick={() => editing ? setEditing(false) : openEdit()}
               className="text-[11px] px-2.5 py-1.5 rounded-lg font-semibold"
@@ -5590,15 +5586,15 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
               value={a.role}
               onChange={async (e) => {
                 const newRole = e.target.value;
-                const pw = prompt(`ยืนยันรหัสผ่านของคุณเพื่อเปลี่ยนสิทธิ์ของ @${a.username} เป็น "${ROLE_LABELS[newRole]}"`);
+                const pw = prompt(`ยืนยันรหัสผ่านของคุณเพื่อเปลี่ยนสิทธิ์ของ @${a.username} เป็น "${adminRoleLabel(newRole)}"`);
                 if (!pw) return;
                 await onCycleRole({ ...a, _newRole: newRole, _confirmPassword: pw } as AdminRecord & { _newRole: string; _confirmPassword: string });
               }}
               disabled={updating === a.admin_id}
               className="text-[11px] px-2 py-1.5 rounded-lg font-semibold disabled:opacity-50 cursor-pointer"
               style={{ background: "rgba(255,255,255,0.05)", color: "#9e9e9e", border: "1px solid #3e3e3e" }}>
-              <option value="staff">เจ้าหน้าที่</option>
-              <option value="admin">ผู้ดูแลระบบ</option>
+              <option value="staff">สภานักเรียน</option>
+              <option value="admin">ครู</option>
               <option value="superadmin">ผู้ดูแลสูงสุด</option>
             </select>
             <button onClick={() => onToggleStatus(a)} disabled={updating === a.admin_id}
@@ -5615,11 +5611,20 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
         </div>
       </div>
 
-      {/* ── Edit profile panel ── */}
+      {/* ── Edit profile panel ──
+          เปิดเป็น sheet ไม่ใช่แผงที่แทรกอยู่ในการ์ด เพราะฟอร์มยาวกว่าการ์ดหลายเท่า
+          พอกางออกมันดันรายชื่อคนอื่นหายลงไปข้างล่างจนไม่รู้ว่ากำลังแก้ของใครอยู่ */}
       {editing && (
-        <div className="px-4 pb-4 pt-1" style={{ borderTop: "1px solid #2a2a2a" }}>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#636363" }}>แก้ไขข้อมูลส่วนตัว</p>
+        <AdminModal onClose={() => setEditing(false)} size="lg"
+          title="แก้ไขข้อมูลส่วนตัว" subtitle={`@${a.username}`} icon="fa-user-pen"
+          footer={
+            <button onClick={saveProfile} disabled={pfSaving}
+              className="flex-1 px-4 py-2.5 rounded-xl text-xs font-bold text-white disabled:opacity-50"
+              style={{ background: "#ff7070" }}>
+              {pfSaving ? <><i className="asia-spinner mr-1" />กำลังบันทึก...</> : <><i className="fa-solid fa-floppy-disk mr-1" />บันทึก</>}
+            </button>
+          }>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-2 mb-3">
             <div className="flex gap-1.5 flex-wrap">
               <button type="button" onClick={() => { setPickerType("student"); setPickerSearch(""); setPickerResults([]); }}
                 className="text-[10px] px-2 py-1 rounded-lg font-semibold"
@@ -5644,12 +5649,12 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
                     placeholder={pickerType === "student" ? "ค้นหาชื่อ/รหัสนักเรียน..." : "ค้นหาชื่อครู..."}
                     value={pickerSearch}
                     onChange={e => { setPickerSearch(e.target.value); if (e.target.value.length >= 1) searchPicker(e.target.value, pickerType!); else setPickerResults([]); }}
-                    className="w-full pl-7 pr-3 py-1 rounded-lg text-[11px] outline-none"
+                    className="w-full pl-7 pr-3 py-1 rounded-lg text-[11px] outline-hidden"
                     style={{ background: "#1c1c1c", border: "1px solid #3e3e3e", color: "#ededed" }}
                     autoFocus />
                 </div>
                 <button type="button" onClick={() => { setPickerType(null); setPickerSearch(""); setPickerResults([]); }}
-                  className="text-[#636363] hover:text-white text-[11px] flex-shrink-0">
+                  className="text-[#636363] hover:text-white text-[11px] shrink-0">
                   <i className="fa-solid fa-xmark" />
                 </button>
               </div>
@@ -5671,18 +5676,45 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            {/* รูปโปรไฟล์ — ปุ่มอัปโหลด/ลบใช้ตัวเดียวกับที่ซ่อนอยู่บนอวาตาร์ในการ์ด
+                (กดที่รูป = เปลี่ยน, กากบาทมุมขวาบน = ลบ) ซึ่งเจอได้ก็ต่อเมื่อเอาเมาส์ไปวาง
+                ตรงนี้ยกขึ้นมาเป็นปุ่มจริงให้เห็นพร้อมตัวอย่างรูป แบบเดียวกับหน้าแก้ไขนักเรียน */}
             <div className="col-span-2 sm:col-span-3">
               <label className="block text-[10px] text-[#9e9e9e] mb-1">
-                <i className="fa-solid fa-link mr-1" />ลิงก์รูปโปรไฟล์
+                <i className="fa-solid fa-image mr-1" />รูปโปรไฟล์
               </label>
+              <div className="flex items-center gap-3 mb-2">
+                <Avatar name={displayName} url={studentAvatarUrl || a.avatar} size={56} rounded="xl" />
+                {canUpload && (
+                  <div className="flex gap-1.5 flex-wrap">
+                    <button type="button" onClick={() => fileRef.current?.click()} disabled={busy}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
+                      style={{ background: "#2a2a2a", border: "1px solid #3e3e3e", color: "#9e9e9e" }}>
+                      {busy
+                        ? <><i className="asia-spinner mr-1.5" />กำลังอัปโหลด</>
+                        : <><i className="fa-solid fa-upload mr-1.5" />{a.avatar ? "เปลี่ยนรูป" : "อัปโหลดรูป"}</>}
+                    </button>
+                    {a.avatar && (
+                      <button type="button" onClick={handleDeleteAvatar} disabled={busy}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
+                        style={{ background: "rgba(255,112,112,0.1)", border: "1px solid rgba(255,112,112,0.3)", color: "#ff7070" }}>
+                        <i className="fa-solid fa-trash mr-1.5" />ลบรูป
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
               <input
                 value={studentAvatarUrl ?? ""}
-                onChange={e => setStudentAvatarUrl(e.target.value.trim() || null)}
+                // เก็บสตริงว่างไว้ ไม่แปลงเป็น null เพราะ null แปลว่า "ไม่ได้แตะ"
+                // ส่วนว่างแปลว่า "ตั้งใจล้าง" ถ้ายุบสองอย่างนี้เป็นค่าเดียวกัน
+                // การลบลิงก์ทิ้งแล้วกดบันทึกจะเงียบไปเฉย ๆ โดยไม่มีอะไรเปลี่ยน
+                onChange={e => setStudentAvatarUrl(e.target.value.trim())}
                 placeholder={a.avatar || "https://..."}
                 {...inp}
               />
               <p className="text-[10px] mt-1" style={{ color: "#636363" }}>
-                ใส่ลิงก์รูปแล้วกดบันทึกเพื่อเปลี่ยนรูป หรือใช้ปุ่มจากนักเรียนเพื่อดึงรูปอัตโนมัติ
+                กดอัปโหลดเพื่อเปลี่ยนรูปทันที หรือใส่ลิงก์แล้วกดบันทึก — ปุ่มจากนักเรียน/จากครูจะดึงรูปมาให้เอง
               </p>
             </div>
             <div><label className="block text-[10px] text-[#9e9e9e] mb-1">ชื่อ</label>
@@ -5702,16 +5734,41 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
             {/* ฝ่ายเป็นเรื่องสิทธิ์ ไม่ใช่ข้อมูลส่วนตัว จึงให้เฉพาะ superadmin ตั้ง
                 ไม่งั้นใครก็ย้ายตัวเองไปฝ่ายที่อยากเห็นเมนูได้ */}
             {isSuperAdmin && (
-              <div><label className="block text-[10px] text-[#9e9e9e] mb-1"><i className="fa-solid fa-sitemap mr-1" />ฝ่ายที่สังกัด</label>
-                <select value={pf.division} onChange={e => setPf(p => ({ ...p, division: e.target.value }))} {...inp}>
-                  <option value="">ทุกฝ่าย (ไม่จำกัด)</option>
-                  {DIVISION_OPTIONS.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
-                </select>
-                <p className="text-[10px] mt-1" style={{ color: "#636363" }}>
-                  เลือกฝ่ายแล้วบัญชีนี้จะเห็นเฉพาะเมนูของฝ่ายนั้น + งานส่วนกลาง
-                  {(a.role === "superadmin" || a.role === "admin") && " — ระดับนี้ทำงานข้ามฝ่าย ตั้งไปก็ไม่มีผล"}
-                </p>
-              </div>
+              canHaveDivision(a.role) ? (
+                <div><label className="block text-[10px] text-[#9e9e9e] mb-1"><i className="fa-solid fa-sitemap mr-1" />ฝ่ายที่สังกัด</label>
+                  <select value={pf.division} onChange={e => setPf(p => ({ ...p, division: e.target.value }))} {...inp}>
+                    <option value="">ทุกฝ่าย (ไม่จำกัด)</option>
+                    {DIVISION_OPTIONS.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
+                  </select>
+                  <p className="text-[10px] mt-1" style={{ color: "#636363" }}>
+                    เลือกฝ่ายแล้วบัญชีนี้จะเห็นเฉพาะเมนูของฝ่ายนั้น + งานส่วนกลาง
+                    {(a.role === "superadmin" || a.role === "admin") && " — ระดับนี้ทำงานข้ามฝ่าย ตั้งไปก็ไม่มีผล"}
+                  </p>
+                </div>
+              ) : (
+                /* สภานักเรียนไม่ได้สังกัดฝ่ายของโรงเรียน ตำแหน่งของเขามาจากการ
+                   "แต่งตั้ง" ซึ่งในระบบนี้คือแถวใน user_roles (ดู 0021 — ตำแหน่งที่
+                   ไม่มีผลกับสิทธิ์จริงคือข้อความประดับ) จึงพาไปทำที่แฟ้มนักเรียน
+                   ซึ่งมีหน้าจอแต่งตั้งอยู่แล้ว ไม่ทำช่องซ้ำขึ้นมาอีกที่ */
+                <div><label className="block text-[10px] text-[#9e9e9e] mb-1"><i className="fa-solid fa-user-tie mr-1" />การแต่งตั้ง</label>
+                  {a.linked_student_id ? (
+                    <Link href={`/admin/students/${encodeURIComponent(a.linked_student_id)}`}
+                      className="flex items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-semibold"
+                      style={{ background: "rgba(255,255,255,0.05)", border: "1px solid #3e3e3e", color: "#9e9e9e" }}>
+                      <i className="fa-solid fa-arrow-up-right-from-square text-[9px]" />
+                      แต่งตั้งที่แฟ้มนักเรียน {a.linked_student_id}
+                    </Link>
+                  ) : (
+                    <div className="rounded-lg px-3 py-2 text-[11px]"
+                      style={{ background: "rgba(255,255,255,0.03)", border: "1px solid #3e3e3e", color: "#636363" }}>
+                      ยังไม่ได้ผูกกับรหัสนักเรียน จึงแต่งตั้งไม่ได้
+                    </div>
+                  )}
+                  <p className="text-[10px] mt-1" style={{ color: "#636363" }}>
+                    สภานักเรียนไม่สังกัดฝ่าย ต้องแต่งตั้งเป็นตำแหน่งในหัวข้อ &ldquo;ตำแหน่งในโรงเรียน&rdquo; ของแฟ้มนักเรียน
+                  </p>
+                </div>
+              )
             )}
           </div>
           <div className="mt-2 pt-2" style={{ borderTop: "1px solid #2a2a2a" }}>
@@ -5730,14 +5787,7 @@ function AdminCard({ a, adminId, isSuperAdmin, updating, onCycleRole, onToggleSt
             </div>
           </div>
           {pfMsg && <p className="text-xs mt-2" style={{ color: "#ff7070" }}>{pfMsg}</p>}
-          <div className="mt-2.5">
-            <button onClick={saveProfile} disabled={pfSaving}
-              className="px-4 py-1.5 rounded-lg text-xs font-bold text-white disabled:opacity-50"
-              style={{ background: "#ff7070" }}>
-              {pfSaving ? <><i className="asia-spinner mr-1" />กำลังบันทึก...</> : <><i className="fa-solid fa-floppy-disk mr-1" />บันทึก</>}
-            </button>
-          </div>
-        </div>
+        </AdminModal>
       )}
     </div>
   );
@@ -5757,11 +5807,11 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
   const [msg, setMsg] = useState("");
   const [pickerType, setPickerType] = useState<"student" | "teacher" | null>(null);
   const [pickerSearch, setPickerSearch] = useState("");
-  const [pickerResults, setPickerResults] = useState<Array<{ id: string; label: string; sub: string; phone?: string; department?: string; entry_year?: string; first_name: string; last_name: string; nickname?: string | null; photo_url?: string | null }>>([]);
+  const [pickerResults, setPickerResults] = useState<Array<{ id: string; label: string; sub: string; phone?: string; email?: string; department?: string; entry_year?: string; first_name: string; last_name: string; nickname?: string | null; photo_url?: string | null }>>([]);
   const [pickerLoading, setPickerLoading] = useState(false);
   const isSuperAdmin = role === "superadmin";
 
-  const inp = { className: "w-full px-3 py-2 rounded-lg text-sm outline-none", style: { background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" } };
+  const inp = { className: "w-full px-3 py-2 rounded-lg text-sm outline-hidden", style: { background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" } };
 
   function load() {
     setLoading(true);
@@ -5779,16 +5829,18 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
         const j = await res.json();
         setPickerResults((j.data ?? []).slice(0, 10).map((s: Student) => ({
           id: s.student_id, label: `${s.first_name} ${s.last_name}`, sub: `${s.student_id} · ${s.program}${s.department ? ` · ${s.department}` : ""}`,
-          phone: s.student_phone, department: s.department ?? "", entry_year: s.entry_year,
+          phone: s.student_phone, email: s.google_email ?? "",
+          department: s.department ?? "", entry_year: s.entry_year,
           first_name: s.first_name, last_name: s.last_name, nickname: s.nickname, photo_url: s.photo_url ?? null,
         })));
       } else {
         const res = await adminFetch(`/api/admin/teachers?q=${encodeURIComponent(q)}`, adminId);
         const j = await res.json();
-        setPickerResults((j.data ?? []).filter((t: { name: string; active: boolean }) => t.active).slice(0, 10).map((t: { id: string; name: string; subject: string | null; phone: string | null; nickname: string | null }) => {
-          const parts = t.name.split(" ");
-          return { id: t.id, label: t.name, sub: t.subject ?? "ครูผู้สอน", phone: t.phone ?? "", department: "",
-            entry_year: "", first_name: parts[0] ?? t.name, last_name: parts.slice(1).join(" ") ?? "", nickname: t.nickname };
+        setPickerResults((j.data ?? []).filter((t: PickerTeacher) => t.status === "active").slice(0, 10).map((t: PickerTeacher) => {
+          const parts = t.full_name.split(" ");
+          return { id: t.id, label: t.full_name, sub: t.subject ?? "ครูผู้สอน",
+            phone: t.phone ?? "", email: t.email ?? "", department: t.department ?? "",
+            entry_year: "", first_name: parts[0] ?? t.full_name, last_name: parts.slice(1).join(" "), nickname: t.nickname };
         }));
       }
     } finally { setPickerLoading(false); }
@@ -5801,6 +5853,8 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
       password: pickerType === "student" && !f.password ? (item.phone ?? "") : f.password,
       first_name: item.first_name, last_name: item.last_name,
       nickname: item.nickname ?? "", phone: item.phone ?? "",
+      // ดูเหตุผลที่ไม่ทับด้วยค่าว่างใน applyPicker ของ AdminCard
+      email: item.email || f.email,
       department: item.department ?? "", entry_year: item.entry_year ?? "",
       linked_student_id: pickerType === "student" ? item.id : "",
     }));
@@ -5883,9 +5937,17 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
       )}
 
       {showForm && (
-        <div className="mb-5 rounded-xl p-4 space-y-3" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="text-xs font-bold text-white">เพิ่มผู้ดูแลใหม่ <span className="font-normal text-[#636363]">(เฉพาะผู้ดูแลสูงสุดเท่านั้น)</span></div>
+        <AdminModal onClose={() => setShowForm(false)} size="lg"
+          title="เพิ่มผู้ดูแลใหม่" subtitle="เฉพาะผู้ดูแลสูงสุดเท่านั้น" icon="fa-user-plus"
+          footer={
+            <button onClick={addAdmin} disabled={saving}
+              className="flex-1 px-4 py-2.5 rounded-xl text-xs font-bold text-white hover:opacity-80 disabled:opacity-50"
+              style={{ background: "#ff7070" }}>
+              {saving ? "กำลังบันทึก..." : "+ เพิ่มผู้ดูแล"}
+            </button>
+          }>
+          <div className="space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-2">
             <div className="flex gap-1.5 flex-wrap">
               <button type="button" onClick={() => { setPickerType("student"); setPickerSearch(""); setPickerResults([]); }}
                 className="text-[11px] px-2.5 py-1.5 rounded-lg font-semibold"
@@ -5909,7 +5971,7 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
                   <input placeholder={pickerType === "student" ? "ค้นหาชื่อ/รหัสนักเรียน..." : "ค้นหาชื่อครู..."}
                     value={pickerSearch}
                     onChange={e => { setPickerSearch(e.target.value); if (e.target.value.length >= 1) searchPicker(e.target.value, pickerType); else setPickerResults([]); }}
-                    className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs outline-none"
+                    className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs outline-hidden"
                     style={{ background: "#1c1c1c", border: "1px solid #3e3e3e", color: "#ededed" }} autoFocus />
                 </div>
                 <button type="button" onClick={() => { setPickerType(null); setPickerSearch(""); setPickerResults([]); }}
@@ -5935,7 +5997,7 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
           {/* Avatar picker */}
           <div className="flex items-center gap-3">
             <button type="button" onClick={() => avatarInputRef.current?.click()}
-              className="relative group flex-shrink-0" title="เลือก Avatar">
+              className="relative group shrink-0" title="เลือก Avatar">
               {avatarPreview
                 // eslint-disable-next-line @next/next/no-img-element
                 ? <img src={avatarPreview} alt="preview" style={{ width: 52, height: 52, borderRadius: 12, objectFit: "cover" }} />
@@ -5997,8 +6059,8 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
             <div>
               <label className="block text-[11px] text-[#9e9e9e] mb-1">สิทธิ์การใช้งาน</label>
               <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))} {...inp}>
-                <option value="staff">เจ้าหน้าที่ — {ROLE_DESC.staff}</option>
-                <option value="admin">ผู้ดูแลระบบ — {ROLE_DESC.admin}</option>
+                <option value="staff">สภานักเรียน — {ROLE_DESC.staff}</option>
+                <option value="admin">ครู — {ROLE_DESC.admin}</option>
                 <option value="superadmin">ผู้ดูแลสูงสุด — {ROLE_DESC.superadmin}</option>
               </select>
             </div>
@@ -6032,21 +6094,22 @@ function AdminsTab({ adminId, role, onAvatarChange }: { adminId: string; role: s
             </div>
             <div>
               <label className="block text-[11px] text-[#9e9e9e] mb-1"><i className="fa-solid fa-sitemap mr-1" />ฝ่ายที่สังกัด</label>
-              <select value={form.division} onChange={e => setForm(f => ({ ...f, division: e.target.value }))} {...inp}>
+              <select value={canHaveDivision(form.role) ? form.division : ""}
+                onChange={e => setForm(f => ({ ...f, division: e.target.value }))}
+                disabled={!canHaveDivision(form.role)} {...inp}>
                 <option value="">ทุกฝ่าย (ไม่จำกัด)</option>
                 {DIVISION_OPTIONS.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
               </select>
+              {!canHaveDivision(form.role) && (
+                <p className="text-[10px] mt-1" style={{ color: "#636363" }}>
+                  สภานักเรียนไม่สังกัดฝ่าย — สร้างบัญชีแล้วไปแต่งตั้งเป็นตำแหน่งที่แฟ้มนักเรียน (ต้องผูกรหัสนักเรียนไว้ด้วย)
+                </p>
+              )}
             </div>
           </div>
           {msg && <p className="text-xs" style={{ color: "#ff7070" }}>{msg}</p>}
-          <div className="flex gap-2 pt-1">
-            <button onClick={addAdmin} disabled={saving}
-              className="px-4 py-2 rounded-lg text-xs font-bold text-white hover:opacity-80 disabled:opacity-50"
-              style={{ background: "#ff7070" }}>
-              {saving ? "กำลังบันทึก..." : "+ เพิ่มผู้ดูแล"}
-            </button>
           </div>
-        </div>
+        </AdminModal>
       )}
 
       {loading ? <DarkSpinner /> : admins.length === 0 ? <DarkEmpty text="ไม่มีผู้ดูแลระบบ" /> : (
@@ -6276,8 +6339,7 @@ function TeacherApplicationsTab({ adminId, onAddTeacher }: { adminId: string; on
                   {selected.has_desired_password && (
                     <label className="flex items-center gap-2 cursor-pointer rounded-lg px-3 py-2 text-sm"
                       style={{ background: "#0c1f0c", border: "1px solid #14532d" }}>
-                      <input type="checkbox" checked={useDesiredPwd} onChange={e => setUseDesired(e.target.checked)}
-                        className="accent-green-500 w-4 h-4" />
+                      <input type="checkbox" className="asia-check text-xs" checked={useDesiredPwd} onChange={e => setUseDesired(e.target.checked)} />
                       <span style={{ color: "#86efac" }}>ใช้รหัสผ่านที่ครูตั้งเองไว้</span>
                     </label>
                   )}
@@ -6691,16 +6753,16 @@ function LineBroadcastTab({ adminId, adminRole }: { adminId: string; adminRole: 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#9e9e9e" }}>ประเภทแจ้งเตือน</label>
-                <select value={groupForm.category_key} onChange={e => setGroupForm(f => ({ ...f, category_key: e.target.value }))} className="w-full px-3 py-2 rounded-lg text-xs outline-none" style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}>
+                <select value={groupForm.category_key} onChange={e => setGroupForm(f => ({ ...f, category_key: e.target.value }))} className="w-full px-3 py-2 rounded-lg text-xs outline-hidden" style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}>
                   {lineCategories.map(category => <option key={category.key} value={category.key}>{category.label}</option>)}
                 </select>
               </div>
               <label className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}>
-                <input type="checkbox" checked={groupForm.is_active} onChange={e => setGroupForm(f => ({ ...f, is_active: e.target.checked }))} />
+                <input type="checkbox" className="asia-check text-xs" checked={groupForm.is_active} onChange={e => setGroupForm(f => ({ ...f, is_active: e.target.checked }))} />
                 เปิดใช้งาน
               </label>
               <label className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}>
-                <input type="checkbox" checked={groupForm.is_default} onChange={e => setGroupForm(f => ({ ...f, is_default: e.target.checked }))} />
+                <input type="checkbox" className="asia-check text-xs" checked={groupForm.is_default} onChange={e => setGroupForm(f => ({ ...f, is_default: e.target.checked }))} />
                 ค่าเริ่มต้นของประเภทนี้
               </label>
             </div>
@@ -6781,7 +6843,7 @@ function LineBroadcastTab({ adminId, adminRole }: { adminId: string; adminRole: 
           {lineGroups.filter(g => g.is_active).length > 0 && (
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#9e9e9e" }}>เลือกกลุ่มจากระบบ</label>
-              <select value={targetId} onChange={e => setTargetId(e.target.value)} className="w-full px-3 py-2 rounded-lg text-xs outline-none" style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}>
+              <select value={targetId} onChange={e => setTargetId(e.target.value)} className="w-full px-3 py-2 rounded-lg text-xs outline-hidden" style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}>
                 <option value="">ค่าเริ่มต้นตามประเภทแจ้งเตือน</option>
                 {lineGroups.filter(g => g.is_active).map(group => (
                   <option key={group.id} value={group.group_id}>{group.name} · {lineCategories.find(category => category.key === group.category_key)?.label ?? group.category_key}</option>
@@ -6800,7 +6862,7 @@ function LineBroadcastTab({ adminId, adminRole }: { adminId: string; adminRole: 
               <DarkField label="คำอธิบายสั้น" value={subtitle} onChange={setSubtitle} placeholder="คำอธิบายใต้หัวข้อ" />
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#9e9e9e" }}>ข้อความ</label>
-                <textarea value={text} onChange={e => setText(e.target.value)} className="w-full min-h-[110px] px-3 py-2 rounded-lg text-xs outline-none resize-y" style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }} />
+                <textarea value={text} onChange={e => setText(e.target.value)} className="w-full min-h-[110px] px-3 py-2 rounded-lg text-xs outline-hidden resize-y" style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }} />
               </div>
             </>
           )}
@@ -6819,7 +6881,7 @@ function LineBroadcastTab({ adminId, adminRole }: { adminId: string; adminRole: 
           {mode === "custom_json" && (
             <div>
               <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#9e9e9e" }}>ข้อความกำหนดเอง</label>
-              <textarea value={json} onChange={e => setJson(e.target.value)} spellCheck={false} className="w-full min-h-[170px] px-3 py-2 rounded-lg text-[11px] font-mono outline-none resize-y" style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }} />
+              <textarea value={json} onChange={e => setJson(e.target.value)} spellCheck={false} className="w-full min-h-[170px] px-3 py-2 rounded-lg text-[11px] font-mono outline-hidden resize-y" style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }} />
             </div>
           )}
 
@@ -6844,7 +6906,7 @@ function DarkField({ label, value, onChange, placeholder, mono, help }: { label:
   return (
     <div>
       <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#9e9e9e" }}>{label}</label>
-      <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} className={`w-full px-3 py-2 rounded-lg text-xs outline-none ${mono ? "font-mono" : ""}`} style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }} />
+      <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} className={`w-full px-3 py-2 rounded-lg text-xs outline-hidden ${mono ? "font-mono" : ""}`} style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }} />
       {help && <p className="text-[10px] mt-1" style={{ color: "#636363" }}>{help}</p>}
     </div>
   );
@@ -7273,7 +7335,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
                 value={newsTargetId}
                 onChange={e => setNewsTargetId(e.target.value)}
                 placeholder="เว้นว่าง = กลุ่มผู้ดูแล"
-                className="w-full px-3 py-2 rounded-lg text-xs font-mono outline-none"
+                className="w-full px-3 py-2 rounded-lg text-xs font-mono outline-hidden"
                 style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}
               />
             </div>
@@ -7283,7 +7345,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
                 value={newsTitle}
                 onChange={e => setNewsTitle(e.target.value)}
                 placeholder="หัวข้อข่าวสาร"
-                className="w-full px-3 py-2 rounded-lg text-xs outline-none"
+                className="w-full px-3 py-2 rounded-lg text-xs outline-hidden"
                 style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}
               />
             </div>
@@ -7297,7 +7359,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
                   value={newsSubtitle}
                   onChange={e => setNewsSubtitle(e.target.value)}
                   placeholder="คำอธิบายใต้หัวข้อ"
-                  className="w-full px-3 py-2 rounded-lg text-xs outline-none"
+                  className="w-full px-3 py-2 rounded-lg text-xs outline-hidden"
                   style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}
                 />
               </div>
@@ -7307,7 +7369,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
                   value={newsText}
                   onChange={e => setNewsText(e.target.value)}
                   placeholder="รายละเอียดข่าวสาร"
-                  className="w-full min-h-[110px] px-3 py-2 rounded-lg text-xs outline-none resize-y"
+                  className="w-full min-h-[110px] px-3 py-2 rounded-lg text-xs outline-hidden resize-y"
                   style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}
                 />
               </div>
@@ -7321,7 +7383,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
                 value={newsImageUrl}
                 onChange={e => setNewsImageUrl(e.target.value)}
                 placeholder="https://example.com/image.jpg"
-                className="w-full px-3 py-2 rounded-lg text-xs font-mono outline-none"
+                className="w-full px-3 py-2 rounded-lg text-xs font-mono outline-hidden"
                 style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}
               />
               <p className="text-[10px] mt-1" style={{ color: "#636363" }}>
@@ -7338,7 +7400,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
                   value={newsButtonLabel}
                   onChange={e => setNewsButtonLabel(e.target.value)}
                   placeholder="เปิดดูเพิ่มเติม"
-                  className="w-full px-3 py-2 rounded-lg text-xs outline-none"
+                  className="w-full px-3 py-2 rounded-lg text-xs outline-hidden"
                   style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}
                 />
               </div>
@@ -7348,7 +7410,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
                   value={newsButtonUrl}
                   onChange={e => setNewsButtonUrl(e.target.value)}
                   placeholder="/ หรือ https://..."
-                  className="w-full px-3 py-2 rounded-lg text-xs font-mono outline-none"
+                  className="w-full px-3 py-2 rounded-lg text-xs font-mono outline-hidden"
                   style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}
                 />
               </div>
@@ -7362,7 +7424,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
                 value={newsJson}
                 onChange={e => setNewsJson(e.target.value)}
                 spellCheck={false}
-                className="w-full min-h-[170px] px-3 py-2 rounded-lg text-[11px] font-mono outline-none resize-y"
+                className="w-full min-h-[170px] px-3 py-2 rounded-lg text-[11px] font-mono outline-hidden resize-y"
                 style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}
               />
             </div>
@@ -7437,7 +7499,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
                   value={lineTargetId}
                   onChange={e => setLineTargetId(e.target.value)}
                   placeholder="เช่น รหัสผู้ใช้หรือรหัสกลุ่ม (เว้นว่าง = กลุ่มผู้ดูแล)"
-                  className="flex-1 px-3 py-2 rounded-lg text-xs font-mono outline-none"
+                  className="flex-1 px-3 py-2 rounded-lg text-xs font-mono outline-hidden"
                   style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}
                 />
                 {lineTargetId && (
@@ -7462,7 +7524,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
                   value={lineJson}
                   onChange={e => setLineJson(e.target.value)}
                   spellCheck={false}
-                  className="w-full min-h-[180px] px-3 py-2 rounded-lg text-[11px] font-mono outline-none resize-y"
+                  className="w-full min-h-[180px] px-3 py-2 rounded-lg text-[11px] font-mono outline-hidden resize-y"
                   style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }}
                 />
                 <p className="text-[10px] mt-1" style={{ color: "#636363" }}>
@@ -7515,7 +7577,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
             </span>
           </div>
           <div className="p-4" style={{ background: "#101010" }}>
-            <div className="mx-auto max-w-[420px] overflow-hidden rounded" style={{ background: "#ffffff", border: "1px solid #d9d9d9" }}>
+            <div className="mx-auto max-w-[420px] overflow-hidden rounded-sm" style={{ background: "#ffffff", border: "1px solid #d9d9d9" }}>
               <div className="p-4 flex items-start justify-between gap-4" style={{ background: linePreview.color }}>
                 <div className="min-w-0">
                   <div className="text-base font-black text-black leading-tight">{linePreview.header}</div>
@@ -7523,7 +7585,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
                 </div>
                 {typeof linePreview.avatar === "string" && safeImageSrc(linePreview.avatar) && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={safeImageSrc(linePreview.avatar) ?? ""} alt="" className="w-14 h-14 rounded-lg object-cover flex-shrink-0" />
+                  <img src={safeImageSrc(linePreview.avatar) ?? ""} alt="" className="w-14 h-14 rounded-lg object-cover shrink-0" />
                 )}
               </div>
 
@@ -7542,7 +7604,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
                   {"titleImage" in linePreview && typeof linePreview.titleImage === "string" && safeImageSrc(linePreview.titleImage) ? (
                     <div className="flex items-center gap-3">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={safeImageSrc(linePreview.titleImage) ?? ""} alt="" className="w-14 h-14 rounded object-cover flex-shrink-0 bg-slate-100" />
+                      <img src={safeImageSrc(linePreview.titleImage) ?? ""} alt="" className="w-14 h-14 rounded-sm object-cover shrink-0 bg-slate-100" />
                       <div className="text-xl font-black leading-tight" style={{ color: linePreview.titleColor }}>{linePreview.title}</div>
                     </div>
                   ) : (
@@ -7566,9 +7628,9 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
                   <div className="flex gap-3 pt-3" style={{ borderTop: "1px solid #e5e7eb" }}>
                     {"productImage" in linePreview && typeof linePreview.productImage === "string" && safeImageSrc(linePreview.productImage) ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={safeImageSrc(linePreview.productImage) ?? ""} alt="" className="w-16 h-16 rounded object-cover flex-shrink-0 bg-slate-100" />
+                      <img src={safeImageSrc(linePreview.productImage) ?? ""} alt="" className="w-16 h-16 rounded-sm object-cover shrink-0 bg-slate-100" />
                     ) : (
-                      <div className="w-16 h-16 rounded bg-slate-100 flex items-center justify-center text-[#84D4FA] flex-shrink-0">
+                      <div className="w-16 h-16 rounded-sm bg-slate-100 flex items-center justify-center text-[#84D4FA] shrink-0">
                         <span className="text-xl">🛍️</span>
                       </div>
                     )}
@@ -7626,7 +7688,7 @@ function SettingsTab({ adminId, adminName, adminRole, adminAvatar, stats }: { ad
               { icon: "fa-rotate", label: "ถ้าหน้าเว็บแสดงผลแปลก", text: "ให้ลองรีเฟรชหน้าเว็บก่อน หากยังผิดปกติค่อยให้ผู้ดูแลระบบตรวจเซิร์ฟเวอร์" },
             ].map(item => (
               <div key={item.label} className="flex items-start gap-3 rounded-lg px-3 py-2" style={{ background: "#0c0c0c", border: "1px solid #2a2a2a" }}>
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "rgba(255,112,112,0.12)", color: "#ff7070" }}>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: "rgba(255,112,112,0.12)", color: "#ff7070" }}>
                   <i className={`fa-solid ${item.icon} text-xs`} />
                 </div>
                 <div className="min-w-0">
@@ -7804,16 +7866,16 @@ function ImgUpload({ value, onChange, placeholder, adminId, endpoint = "/api/adm
       <div className="flex gap-2 items-center">
         <input value={value} onChange={e => onChange(e.target.value)}
           placeholder={placeholder ?? "https://... หรืออัปโหลดไฟล์"}
-          className="flex-1 px-3 py-2 rounded-lg text-sm focus:outline-none min-w-0"
+          className="flex-1 px-3 py-2 rounded-lg text-sm focus:outline-hidden min-w-0"
           style={inp} />
         {previewSrc && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={previewSrc} alt="" className="w-9 h-9 rounded-lg object-cover flex-shrink-0"
+          <img src={previewSrc} alt="" className="w-9 h-9 rounded-lg object-cover shrink-0"
             style={{ border: "1px solid #3e3e3e" }}
             onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
         )}
         <button type="button" onClick={() => { (window as any).__asiaAdminFilePickerAt = Date.now(); ref.current?.click(); }} disabled={uploading || deleting}
-          className="flex-shrink-0 px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50 transition-colors"
+          className="shrink-0 px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50 transition-colors"
           style={{ background: "#2a2a2a", border: "1px solid #3e3e3e", color: "#9e9e9e" }}>
           {uploading
             ? <><i className="asia-spinner" /><span className="hidden sm:inline">กำลังอัปโหลด</span></>
@@ -7822,7 +7884,7 @@ function ImgUpload({ value, onChange, placeholder, adminId, endpoint = "/api/adm
         {value && (
           <button type="button" onClick={onDelete} disabled={uploading || deleting}
             title={isOwned ? "ลบไฟล์จาก Storage" : "ล้างค่า"}
-            className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center disabled:opacity-50 transition-colors"
+            className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center disabled:opacity-50 transition-colors"
             style={{ background: "#2a2a2a", border: "1px solid #3e3e3e", color: deleting ? "#ff7070" : "#9e9e9e" }}>
             {deleting ? <i className="asia-spinner text-xs" /> : <i className="fa-solid fa-trash text-xs" />}
           </button>
@@ -7863,7 +7925,7 @@ function CustomFieldsEditor({ fields, onChange }: { fields: CustomField[]; onCha
     setCf(BLANK_CF); setErr("");
   }
 
-  const inp = (style?: object) => ({ className: "w-full px-2 py-1.5 rounded text-xs outline-none", style: { background: "#1c1c1c", border: "1px solid #3e3e3e", color: "#ededed", ...style } });
+  const inp = (style?: object) => ({ className: "w-full px-2 py-1.5 rounded-sm text-xs outline-hidden", style: { background: "#1c1c1c", border: "1px solid #3e3e3e", color: "#ededed", ...style } });
 
   return (
     <div className="space-y-2">
@@ -7872,7 +7934,7 @@ function CustomFieldsEditor({ fields, onChange }: { fields: CustomField[]; onCha
           {fields.map((f, i) => (
             <div key={f.key} className="flex items-center gap-2 px-3 py-2"
               style={{ borderTop: i > 0 ? "1px solid #2a2a2a" : undefined, background: "#0c0c0c" }}>
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0"
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-sm shrink-0"
                 style={{ background: CF_COLORS[f.type as CFType] + "22", color: CF_COLORS[f.type as CFType] }}>{f.type}</span>
               <div className="flex-1 min-w-0 flex items-center gap-1.5 flex-wrap">
                 <span className="text-xs font-bold text-white">{f.label}</span>
@@ -7881,7 +7943,7 @@ function CustomFieldsEditor({ fields, onChange }: { fields: CustomField[]; onCha
                 {"options" in f && <span className="text-[10px]" style={{ color: "#636363" }}>[{f.options.join(", ")}]</span>}
               </div>
               <button onClick={() => onChange(fields.filter(x => x.key !== f.key))}
-                className="text-[10px] px-1.5 py-0.5 rounded flex-shrink-0"
+                className="text-[10px] px-1.5 py-0.5 rounded-sm shrink-0"
                 style={{ background: "#da363322", color: "#ff7070" }}>ลบ</button>
             </div>
           ))}
@@ -7908,7 +7970,7 @@ function CustomFieldsEditor({ fields, onChange }: { fields: CustomField[]; onCha
           </div>
           <div className="flex items-end pb-0.5">
             <label className="flex items-center gap-1.5 text-xs text-[#9e9e9e] cursor-pointer">
-              <input type="checkbox" checked={cf.required} onChange={e => setCf(f => ({ ...f, required: e.target.checked }))} /> จำเป็น
+              <input type="checkbox" className="asia-check text-xs" checked={cf.required} onChange={e => setCf(f => ({ ...f, required: e.target.checked }))} /> จำเป็น
             </label>
           </div>
         </div>
@@ -7931,7 +7993,7 @@ function CustomFieldsEditor({ fields, onChange }: { fields: CustomField[]; onCha
           </div>
         )}
         {err && <p className="text-[11px] text-red-400">{err}</p>}
-        <button onClick={add} className="text-xs px-3 py-1.5 rounded font-bold text-white" style={{ background: "#1f6feb" }}>+ เพิ่มคำถาม</button>
+        <button onClick={add} className="text-xs px-3 py-1.5 rounded-sm font-bold text-white" style={{ background: "#1f6feb" }}>+ เพิ่มคำถาม</button>
       </div>
     </div>
   );
@@ -8030,7 +8092,7 @@ function ProjectsTab({ adminId, role, onViewEvals }: { adminId: string; role: st
   }
 
   const fi = (k: keyof PForm) => (v: string) => setForm(f => ({ ...f, [k]: v }));
-  const darkInput = "w-full px-3 py-2 rounded-lg text-sm focus:outline-none";
+  const darkInput = "w-full px-3 py-2 rounded-lg text-sm focus:outline-hidden";
   const darkStyle = { background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" };
   const labelCls = "text-[10px] font-bold uppercase tracking-widest block mb-1";
   const q = search.trim().toLowerCase();
@@ -8058,7 +8120,7 @@ function ProjectsTab({ adminId, role, onViewEvals }: { adminId: string; role: st
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         {projectKpis.map(k => (
           <div key={k.label} className="rounded-xl p-4 flex items-center gap-3" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${ADMIN_PRIMARY}18` }}>
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${ADMIN_PRIMARY}18` }}>
               <i className={`fa-solid ${k.icon} text-sm`} style={{ color: ADMIN_PRIMARY }} />
             </div>
             <div className="min-w-0">
@@ -8078,7 +8140,7 @@ function ProjectsTab({ adminId, role, onViewEvals }: { adminId: string; role: st
             <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-[11px]" style={{ color: "#636363" }} />
             <input value={search} onChange={e => setSearch(e.target.value)}
               placeholder="ค้นหาโปรเจค, slug, วันที่..."
-              className="w-full pl-8 pr-3 py-2.5 rounded-lg text-sm outline-none"
+              className="w-full pl-8 pr-3 py-2.5 rounded-lg text-sm outline-hidden"
               style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }} />
           </div>
           <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 w-full lg:w-auto">
@@ -8145,14 +8207,14 @@ function ProjectsTab({ adminId, role, onViewEvals }: { adminId: string; role: st
                 <div>
                   <label className={labelCls} style={{ color: "#9e9e9e" }}>สีหลัก (Primary)</label>
                   <div className="flex gap-2 items-center">
-                    <input type="color" value={form.primary_color} onChange={e => fi("primary_color")(e.target.value)} className="w-9 h-9 rounded cursor-pointer p-0.5" style={{ border: "1px solid #3e3e3e", background: "none" }} />
+                    <input type="color" value={form.primary_color} onChange={e => fi("primary_color")(e.target.value)} className="w-9 h-9 rounded-sm cursor-pointer p-0.5" style={{ border: "1px solid #3e3e3e", background: "none" }} />
                     <input value={form.primary_color} onChange={e => fi("primary_color")(e.target.value)} className={`flex-1 ${darkInput}`} style={darkStyle} />
                   </div>
                 </div>
                 <div>
                   <label className={labelCls} style={{ color: "#9e9e9e" }}>สีพื้นหลัง (BG Color)</label>
                   <div className="flex gap-2 items-center">
-                    <input type="color" value={form.bg_color} onChange={e => fi("bg_color")(e.target.value)} className="w-9 h-9 rounded cursor-pointer p-0.5" style={{ border: "1px solid #3e3e3e", background: "none" }} />
+                    <input type="color" value={form.bg_color} onChange={e => fi("bg_color")(e.target.value)} className="w-9 h-9 rounded-sm cursor-pointer p-0.5" style={{ border: "1px solid #3e3e3e", background: "none" }} />
                     <input value={form.bg_color} onChange={e => fi("bg_color")(e.target.value)} className={`flex-1 ${darkInput}`} style={darkStyle} />
                   </div>
                 </div>
@@ -8232,7 +8294,7 @@ function ProjectsTab({ adminId, role, onViewEvals }: { adminId: string; role: st
         </div>
       )}
 
-      {loading ? <DarkEmpty text="กำลังโหลด..." /> : projects.length === 0 ? <DarkEmpty text="ยังไม่มีโปรเจค" /> : filteredProjects.length === 0 ? <DarkEmpty text="ไม่พบโปรเจคที่ค้นหา" /> : view !== "list" ? (
+      {loading ? <DarkSpinner /> : projects.length === 0 ? <DarkEmpty text="ยังไม่มีโปรเจค" /> : filteredProjects.length === 0 ? <DarkEmpty text="ไม่พบโปรเจคที่ค้นหา" /> : view !== "list" ? (
         <div className={view === "card" ? "grid grid-cols-1 md:grid-cols-2 gap-3" : "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3"}>
           {filteredProjects.map(p => {
             const posterSrc = safeImageSrc(p.poster_url);
@@ -8259,10 +8321,10 @@ function ProjectsTab({ adminId, role, onViewEvals }: { adminId: string; role: st
 
               <div className="p-3">
                 <div className="flex items-center gap-2 mb-1.5">
-                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: ADMIN_PRIMARY }} />
+                  <div className="w-3 h-3 rounded-full shrink-0" style={{ background: ADMIN_PRIMARY }} />
                   <a href={`/project/${p.slug}`} target="_blank" rel="noreferrer"
                     className="text-sm font-bold truncate hover:underline" style={{ color: "#ededed" }}>{p.name}</a>
-                  <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: "#2a2a2a", color: "#9e9e9e" }}>{p.project_date ? new Date(p.project_date).getFullYear() : "—"}</span>
+                  <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full shrink-0" style={{ background: "#2a2a2a", color: "#9e9e9e" }}>{p.project_date ? new Date(p.project_date).getFullYear() : "—"}</span>
                 </div>
                 <code className="text-[10px] block mb-2" style={{ color: "#636363" }}>/project/{p.slug}</code>
                 <div className="flex gap-1.5 flex-wrap text-[10px] mb-2" style={{ color: "#636363" }}>
@@ -8304,9 +8366,9 @@ function ProjectsTab({ adminId, role, onViewEvals }: { adminId: string; role: st
                     <div className="flex items-center gap-3 min-w-0">
                       {posterSrc ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={posterSrc} alt={p.name} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                        <img src={posterSrc} alt={p.name} className="w-10 h-10 rounded-lg object-cover shrink-0" />
                       ) : (
-                        <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${ADMIN_PRIMARY}18`, color: ADMIN_PRIMARY }}>
+                        <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${ADMIN_PRIMARY}18`, color: ADMIN_PRIMARY }}>
                           <i className="fa-solid fa-folder-open" />
                         </div>
                       )}
@@ -8698,7 +8760,7 @@ function EvalCard({ r }: { r: EvalRow }) {
     <div className="rounded-xl transition-all" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
       <div className="flex items-start gap-3 p-4 cursor-pointer select-none" onClick={() => setOpen(o => !o)}>
         {/* Emoji bubble */}
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-xl"
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-xl"
           style={{ background: "#0c0c0c" }}>
           {r.emoji ? (EVAL_EMOJI[r.emoji] ?? "?") : "?"}
         </div>
@@ -8754,7 +8816,7 @@ function EvalCard({ r }: { r: EvalRow }) {
         </div>
 
         {/* Date + chevron */}
-        <div className="flex-shrink-0 text-right">
+        <div className="shrink-0 text-right">
           <div className="text-[10px] mb-1" style={{ color: "#636363" }}>
             {new Date(r.created_at).toLocaleDateString("th-TH", { day: "numeric", month: "short" })}
           </div>
@@ -8773,7 +8835,7 @@ function EvalCard({ r }: { r: EvalRow }) {
               const val = (r[k] as number | null) ?? 0;
               return (
                 <div key={String(k)} className="flex items-center gap-2">
-                  <span className="text-[10px] w-20 flex-shrink-0" style={{ color: "#9e9e9e" }}>{label}</span>
+                  <span className="text-[10px] w-20 shrink-0" style={{ color: "#9e9e9e" }}>{label}</span>
                   <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "#2a2a2a" }}>
                     <div className="h-full rounded-full transition-all" style={{ width: `${val / 5 * 100}%`, background: EVAL_SCORE_COLOR(val) }} />
                   </div>
@@ -8840,7 +8902,7 @@ function EvalList({ rows }: { rows: EvalRow[] }) {
           style={{ color: "#636363" }} />
         <input value={search} onChange={e => setSearch(e.target.value)}
           placeholder="ค้นหาชื่อ, ความเห็น, โปรเจค..."
-          className="w-full pl-8 pr-4 py-2.5 rounded-xl text-sm outline-none"
+          className="w-full pl-8 pr-4 py-2.5 rounded-xl text-sm outline-hidden"
           style={{ background: "#1c1c1c", border: "1px solid #3e3e3e", color: "#ededed" }} />
       </div>
       {vis.length === 0 ? <DarkEmpty text="ไม่พบรายการ" /> : (
@@ -8912,7 +8974,7 @@ function EvaluationsTab({ adminId }: { adminId: string }) {
             <select
               value={projectFilter}
               onChange={e => setProjectFilter(e.target.value)}
-              className="w-full pl-8 pr-9 py-2 rounded-lg text-[11px] font-semibold outline-none appearance-none truncate"
+              className="w-full pl-8 pr-9 py-2 rounded-lg text-[11px] font-semibold outline-hidden appearance-none truncate"
               style={{ background: "#0c0c0c", color: "#ededed", border: "1px solid #3e3e3e" }}
             >
               <option value="all">ทั้งหมด</option>
@@ -8933,7 +8995,7 @@ function EvaluationsTab({ adminId }: { adminId: string }) {
             {kpis.map(k => (
               <div key={k.label} className="rounded-xl p-4 flex items-center gap-3"
                 style={{ background: "#1c1c1c", border: `1px solid ${k.color === "#ff7070" ? ADMIN_PRIMARY : "#3e3e3e"}44` }}>
-                <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
                   style={{ background: k.color + "18" }}>
                   <i className={`fa-solid ${k.icon} text-sm`} style={{ color: k.color }} />
                 </div>
@@ -9006,7 +9068,7 @@ function TeachersTab({ adminId, defaultShowForm }: { adminId: string; defaultSho
   const [view, setView]         = useLocalStorageState<ViewMode>(ADMIN_VIEW_MODE_KEY, "grid", isViewMode);
   const [showForm, setShowForm] = useState(defaultShowForm ?? false);
 
-  const inp = { className: "w-full px-3 py-2 rounded-lg text-sm outline-none", style: { background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" } };
+  const inp = { className: "w-full px-3 py-2 rounded-lg text-sm outline-hidden", style: { background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" } };
 
   function load() {
     setLoading(true);
@@ -9139,7 +9201,7 @@ function TeachersTab({ adminId, defaultShowForm }: { adminId: string; defaultSho
             <div className="flex gap-2">
               <input type="color" value={form.color || "#ff7070"} onChange={e => setForm(f => ({ ...f, color: e.target.value }))}
                 className="w-10 h-9 rounded-lg cursor-pointer p-0.5" style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }} />
-              <input value={form.color} onChange={e => setForm(f => ({ ...f, color: e.target.value }))} {...inp} placeholder="#ff7070" className="flex-1 px-3 py-2 rounded-lg text-sm outline-none font-mono" />
+              <input value={form.color} onChange={e => setForm(f => ({ ...f, color: e.target.value }))} {...inp} placeholder="#ff7070" className="flex-1 px-3 py-2 rounded-lg text-sm outline-hidden font-mono" />
             </div>
           </div>
         </div>
@@ -9161,7 +9223,7 @@ function TeachersTab({ adminId, defaultShowForm }: { adminId: string; defaultSho
             <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-[11px]" style={{ color: "#636363" }} />
             <input value={search} onChange={e => setSearch(e.target.value)}
               placeholder="ค้นหาครู, ชื่อเล่น, วิชา, เบอร์โทร..."
-              className="w-full pl-8 pr-3 py-2.5 rounded-lg text-sm outline-none"
+              className="w-full pl-8 pr-3 py-2.5 rounded-lg text-sm outline-hidden"
               style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }} />
           </div>
           <div className="w-full md:w-auto">
@@ -9182,7 +9244,7 @@ function TeachersTab({ adminId, defaultShowForm }: { adminId: string; defaultSho
           {filteredTeachers.map(t => (
             <div key={t.id} className="rounded-xl p-4" style={{ background: "#1c1c1c", borderWidth: 1, borderStyle: "solid", borderColor: "#3e3e3e" }}>
               <div className="flex items-start gap-3">
-                <div className="w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0 text-base font-black text-white" style={{ background: t.color || ADMIN_PRIMARY }}>
+                <div className="w-11 h-11 rounded-lg flex items-center justify-center shrink-0 text-base font-black text-white" style={{ background: t.color || ADMIN_PRIMARY }}>
                   {t.full_name.charAt(0)}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -9211,7 +9273,7 @@ function TeachersTab({ adminId, defaultShowForm }: { adminId: string; defaultSho
                 borderTopStyle: "solid",
                 borderTopColor: "#2a2a2a",
               }}>
-              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold"
+              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold"
                 style={{ background: t.color || ADMIN_PRIMARY, color: "#fff" }}>
                 {t.full_name.charAt(0)}
               </div>
@@ -9226,8 +9288,8 @@ function TeachersTab({ adminId, defaultShowForm }: { adminId: string; defaultSho
                   {t.phone && <span><i className="fa-solid fa-phone mr-1" />{t.phone}</span>}
                 </div>
               </div>
-              <button onClick={() => startEdit(t)} className="text-[11px] px-2 py-1 rounded flex-shrink-0" style={{ background: `${ADMIN_PRIMARY}18`, color: ADMIN_PRIMARY }}>แก้ไข</button>
-              <button onClick={() => del(t.id, t.full_name)} className="text-[11px] px-2 py-1 rounded flex-shrink-0" style={{ background: "#da363322", color: "#ff7070" }}>ลบ</button>
+              <button onClick={() => startEdit(t)} className="text-[11px] px-2 py-1 rounded-sm shrink-0" style={{ background: `${ADMIN_PRIMARY}18`, color: ADMIN_PRIMARY }}>แก้ไข</button>
+              <button onClick={() => del(t.id, t.full_name)} className="text-[11px] px-2 py-1 rounded-sm shrink-0" style={{ background: "#da363322", color: "#ff7070" }}>ลบ</button>
             </div>
           ))}
         </div>
@@ -9235,8 +9297,6 @@ function TeachersTab({ adminId, defaultShowForm }: { adminId: string; defaultSho
     </div>
   );
 }
-
-// ─── ClassGroupsTab ───────────────────────────────────────────────────────────
 
 // ─── ClassScheduleTab ─────────────────────────────────────────────────────────
 
@@ -9288,7 +9348,7 @@ function ClassScheduleTab({ adminId, activeView, onViewChange }: {
   const [oForm, setOForm]         = useState({ room_name: "", note: "" });
   const [oSaving, setOSaving]     = useState(false);
 
-  const inp = { className: "w-full px-3 py-2 rounded-lg text-sm outline-none", style: { background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" } };
+  const inp = { className: "w-full px-3 py-2 rounded-lg text-sm outline-hidden", style: { background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" } };
 
   function loadGroups() {
     adminFetch("/api/admin/class-groups", adminId).then(r => r.json())
@@ -9462,7 +9522,7 @@ function ClassScheduleTab({ adminId, activeView, onViewChange }: {
           { label: "รายวิชา", value: scheduleSubjects, icon: "fa-book" },
         ].map(k => (
           <div key={k.label} className="rounded-xl p-3 sm:p-4 flex items-center gap-3 min-w-0" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${ADMIN_PRIMARY}18`, color: ADMIN_PRIMARY }}>
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${ADMIN_PRIMARY}18`, color: ADMIN_PRIMARY }}>
               <i className={`fa-solid ${k.icon} text-sm`} />
             </div>
             <div className="min-w-0">
@@ -9487,7 +9547,7 @@ function ClassScheduleTab({ adminId, activeView, onViewChange }: {
             style={view === k
               ? { background: `${ADMIN_PRIMARY}18`, color: "#fff", border: `1px solid ${ADMIN_PRIMARY}55` }
               : { background: "#0c0c0c", color: "#9e9e9e", border: "1px solid #2a2a2a" }}>
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
               style={{ background: view === k ? ADMIN_PRIMARY : "#1c1c1c", color: view === k ? "#fff" : "#636363" }}>
               <i className={`fa-solid ${icon} text-sm`} />
             </div>
@@ -9507,7 +9567,7 @@ function ClassScheduleTab({ adminId, activeView, onViewChange }: {
           <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
             {[{ id: "all", name: "ทั้งหมด" }, ...groups].map(g => (
               <button key={g.id} onClick={() => changeFilter(g.id)}
-                className="text-[11px] px-3 py-1.5 rounded-lg font-bold transition-all whitespace-nowrap flex-shrink-0"
+                className="text-[11px] px-3 py-1.5 rounded-lg font-bold transition-all whitespace-nowrap shrink-0"
                 style={{
                   background: filterGroup === g.id ? ((g as ClassGroup).color ?? "#1f6feb") : "#2a2a2a",
                   color: filterGroup === g.id ? "#fff" : "#9e9e9e",
@@ -9608,7 +9668,7 @@ function ClassScheduleTab({ adminId, activeView, onViewChange }: {
 
         {/* Schedule list grouped by day */}
         {loading ? (
-          <div className="text-center py-8"><span className="spinner w-8 h-8 border-2" /></div>
+          <div className="text-center py-8"><span className="spinner text-3xl" /></div>
         ) : schedules.length === 0 ? (
           <div className="text-center py-8 text-[#636363]">ยังไม่มีตารางเรียน</div>
         ) : (
@@ -9622,17 +9682,17 @@ function ClassScheduleTab({ adminId, activeView, onViewChange }: {
                     return (
                       <div key={s.id} className="grid grid-cols-[auto_1fr] sm:flex sm:items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3"
                         style={{ borderTop: i > 0 ? "1px solid #2a2a2a" : undefined, background: "#1c1c1c" }}>
-                        <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5 sm:mt-0" style={{ background: color }} />
+                        <div className="w-2 h-2 rounded-full shrink-0 mt-1.5 sm:mt-0" style={{ background: color }} />
                         <div className="min-w-0 sm:w-24 text-xs font-mono" style={{ color: "#9e9e9e" }}>{s.start_time.slice(0,5)}–{s.end_time.slice(0,5)}</div>
                         <div className="col-start-2 sm:col-start-auto sm:w-24 text-xs font-bold text-white truncate">{s.room_name}</div>
                         <div className="col-start-2 sm:col-start-auto flex-1 min-w-0 flex flex-wrap items-center gap-2">
                           {s.class_groups && (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white flex-shrink-0" style={{ background: color }}>{s.class_groups.name}</span>
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white shrink-0" style={{ background: color }}>{s.class_groups.name}</span>
                           )}
                           {s.subject && <span className="text-xs truncate" style={{ color: "#9e9e9e" }}>{s.subject}</span>}
                           {s.teacher && <span className="text-xs" style={{ color: "#636363" }}>— {s.teacher}</span>}
                         </div>
-                        <div className="col-start-2 sm:col-start-auto flex gap-2 sm:gap-1.5 sm:flex-shrink-0">
+                        <div className="col-start-2 sm:col-start-auto flex gap-2 sm:gap-1.5 sm:shrink-0">
                           <button onClick={() => startEditSchedule(s)}
                             className="h-8 px-3 rounded-lg text-[11px] font-bold flex-1 sm:flex-none"
                             style={{ background: `${ADMIN_PRIMARY}18`, color: ADMIN_PRIMARY, border: `1px solid ${ADMIN_PRIMARY}33` }}>แก้ไข</button>
@@ -9658,7 +9718,7 @@ function ClassScheduleTab({ adminId, activeView, onViewChange }: {
             <div>
               <label className="block text-[11px] text-[#9e9e9e] mb-1">เลือกวันที่</label>
               <input type="date" value={oDate} onChange={e => setODate(e.target.value)}
-                className="h-10 w-full sm:w-auto px-3 rounded-lg text-sm outline-none"
+                className="h-10 w-full sm:w-auto px-3 rounded-lg text-sm outline-hidden"
                 style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }} />
             </div>
             <div>
@@ -9677,7 +9737,7 @@ function ClassScheduleTab({ adminId, activeView, onViewChange }: {
 
           {/* Schedules for this day */}
           {oLoading ? (
-            <div className="text-center py-8"><span className="spinner w-8 h-8 border-2" /></div>
+            <div className="text-center py-8"><span className="spinner text-3xl" /></div>
           ) : oSchedules.length === 0 ? (
             <div className="text-center py-8 text-[#636363]">ไม่มีคาบเรียนในวัน{DAYS_TH[oDow]}</div>
           ) : (
@@ -9691,9 +9751,9 @@ function ClassScheduleTab({ adminId, activeView, onViewChange }: {
                   <div key={s.id} className="rounded-xl overflow-hidden" style={{ border: `1px solid ${ov ? "#f0883e44" : "#3e3e3e"}` }}>
                     {/* Row */}
                     <div className="grid grid-cols-[auto_1fr] sm:flex sm:items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3" style={{ background: "#1c1c1c" }}>
-                      <div className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5 sm:mt-0" style={{ background: color }} />
-                      <div className="min-w-0 sm:w-20 text-xs font-mono sm:flex-shrink-0" style={{ color: "#9e9e9e" }}>{s.start_time.slice(0,5)}–{s.end_time.slice(0,5)}</div>
-                      <span className="col-start-2 sm:col-start-auto w-fit text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white sm:flex-shrink-0" style={{ background: color }}>{s.class_groups?.name ?? "?"}</span>
+                      <div className="w-2 h-2 rounded-full shrink-0 mt-1.5 sm:mt-0" style={{ background: color }} />
+                      <div className="min-w-0 sm:w-20 text-xs font-mono sm:shrink-0" style={{ color: "#9e9e9e" }}>{s.start_time.slice(0,5)}–{s.end_time.slice(0,5)}</div>
+                      <span className="col-start-2 sm:col-start-auto w-fit text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white sm:shrink-0" style={{ background: color }}>{s.class_groups?.name ?? "?"}</span>
                       <div className="col-start-2 sm:col-start-auto flex-1 min-w-0 flex flex-wrap items-center gap-2">
                         {/* Show override or normal room */}
                         {ov ? (
@@ -9712,7 +9772,7 @@ function ClassScheduleTab({ adminId, activeView, onViewChange }: {
                         )}
                         {s.subject && <span className="text-[10px] truncate" style={{ color: "#636363" }}>{s.subject}</span>}
                       </div>
-                      <div className="col-start-2 sm:col-start-auto flex gap-2 sm:gap-1.5 sm:flex-shrink-0">
+                      <div className="col-start-2 sm:col-start-auto flex gap-2 sm:gap-1.5 sm:shrink-0">
                         {ov && (
                           <button onClick={() => delOverride(ov.id)}
                             className="h-8 px-3 rounded-lg text-[11px] font-bold flex-1 sm:flex-none" style={{ background: "#da363322", color: "#ff7070", border: "1px solid #da363344" }}>
@@ -9737,7 +9797,7 @@ function ClassScheduleTab({ adminId, activeView, onViewChange }: {
                         <div className="flex-1">
                           <label className="block text-[10px] text-[#9e9e9e] mb-1">ห้องใหม่ <span style={{ color: "#636363" }}>(เว้นว่าง = ยกเลิกเรียน)</span></label>
                           <select value={oForm.room_name} onChange={e => setOForm(f => ({ ...f, room_name: e.target.value }))}
-                            className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+                            className="w-full px-3 py-2 rounded-lg text-sm outline-hidden"
                             style={{ background: "#1c1c1c", border: "1px solid #3e3e3e", color: "#ededed" }}>
                             <option value="">ยกเลิกเรียน / ไม่ใช้ห้อง</option>
                             {roomOptions.map(name => <option key={name} value={name}>{name}</option>)}
@@ -9746,7 +9806,7 @@ function ClassScheduleTab({ adminId, activeView, onViewChange }: {
                         <div className="flex-1">
                           <label className="block text-[10px] text-[#9e9e9e] mb-1">หมายเหตุ</label>
                           <select value={oForm.note} onChange={e => setOForm(f => ({ ...f, note: e.target.value }))}
-                            className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+                            className="w-full px-3 py-2 rounded-lg text-sm outline-hidden"
                             style={{ background: "#1c1c1c", border: "1px solid #3e3e3e", color: "#ededed" }}>
                             <option value="">-- ไม่ระบุหมายเหตุ --</option>
                             {noteOptions.map(note => <option key={note} value={note}>{note}</option>)}

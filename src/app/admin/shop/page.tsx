@@ -14,6 +14,7 @@ import { adminFetch, readAdminSession } from "@/lib/modules/admin-session";
 import { canAccessTab } from "@/lib/modules/nav-access";
 import { safeImageSrc } from "@/lib/image-url";
 import { ShopNav } from "./ShopNav";
+import { AdminModal } from "@/components/admin/dark-ui";
 
 /**
  * สหกรณ์โรงเรียน — สินค้า
@@ -247,10 +248,10 @@ function ProductsTab({ role }: { role: string }) {
                     return (
                     <div key={p.id} className="flex items-center gap-3 px-4 py-2">
                       {imageSrc
-                        ? <img src={imageSrc} alt="" className="w-7 h-7 rounded-md object-cover flex-shrink-0" style={{ border: "1px solid #3e3e3e" }} />
-                        : <div className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: "#252525", color: "#636363", fontSize: 10 }}>🛍️</div>}
+                        ? <img src={imageSrc} alt="" className="w-7 h-7 rounded-md object-cover shrink-0" style={{ border: "1px solid #3e3e3e" }} />
+                        : <div className="w-7 h-7 rounded-md flex items-center justify-center shrink-0" style={{ background: "#252525", color: "#636363", fontSize: 10 }}>🛍️</div>}
                       <div className="flex-1 min-w-0 text-xs text-white truncate">{p.name}</div>
-                      <span className="text-[10px] font-black flex-shrink-0 px-2 py-0.5 rounded-lg"
+                      <span className="text-[10px] font-black shrink-0 px-2 py-0.5 rounded-lg"
                         style={{ background: p.stock === 0 ? "rgba(255,112,112,0.15)" : "rgba(251,146,60,0.15)", color: p.stock === 0 ? "#ff7070" : "#fb923c" }}>
                         {p.stock === 0 ? "หมด" : `${p.stock} ${p.unit ?? "ชิ้น"}`}
                       </span>
@@ -295,7 +296,7 @@ function ProductsTab({ role }: { role: string }) {
             return (
             <div key={p.id} className={`rounded-2xl overflow-hidden transition-all ${viewMode === "list" ? "flex items-stretch" : "flex flex-col"} ${!p.active && !p.deleted_at ? "opacity-50" : ""} ${p.deleted_at ? "opacity-40" : ""}`}
               style={{ background: "#1c1c1c", border: `1px solid ${p.deleted_at ? "#ff7070" : "#3e3e3e"}` }}>
-              <div className={`relative overflow-hidden flex-shrink-0 ${viewMode === "list" ? "h-24 w-24 sm:h-28 sm:w-28" : "aspect-square w-full"}`} style={{ background: "#9bdcf4" }}>
+              <div className={`relative overflow-hidden shrink-0 ${viewMode === "list" ? "h-24 w-24 sm:h-28 sm:w-28" : "aspect-square w-full"}`} style={{ background: "#9bdcf4" }}>
                 {productImageSrc ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={productImageSrc} alt={p.name} className="w-full h-full object-cover" />
@@ -340,7 +341,7 @@ function ProductsTab({ role }: { role: string }) {
                         return (
                           <span key={color} className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-lg"
                             style={{ background: out ? "rgba(255,112,112,0.12)" : "#252525", color: out ? "#ff7070" : "#ededed", border: "1px solid #3e3e3e" }}>
-                            <span className="h-3 w-3 rounded-full border flex-shrink-0" style={{ background: productColorSwatch(color), borderColor: color.trim() === "ขาว" ? "#ededed" : "#3e3e3e" }} />
+                            <span className="h-3 w-3 rounded-full border shrink-0" style={{ background: productColorSwatch(color), borderColor: color.trim() === "ขาว" ? "#ededed" : "#3e3e3e" }} />
                             {color}: {out ? "หมด" : `${qty}`}
                           </span>
                         );
@@ -421,7 +422,7 @@ function ProductForm({ product, unitOptions, categoryOptions, tagOptions, onClos
   const [error,     setError]     = useState("");
   const originalImgUrl = product?.images?.[0] ?? "";
 
-  const inputCls = "w-full px-3 py-2.5 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none transition-colors";
+  const inputCls = "w-full px-3 py-2.5 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-hidden transition-colors";
   const inputStyle = { background: "#0c0c0c", border: "1px solid #3e3e3e" };
   const cleanColorRows = colorRows.map(row => ({ ...row, name: row.name.trim() })).filter(row => row.name);
   const hasColorStock = cleanColorRows.some(row => row.qty.trim() !== "");
@@ -487,18 +488,24 @@ function ProductForm({ product, unitOptions, categoryOptions, tagOptions, onClos
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }} onClick={onClose} />
-      <div className="relative w-full sm:max-w-lg sm:mx-4 sm:rounded-2xl rounded-t-2xl overflow-y-auto max-h-[90vh]"
-        style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-        <div className="flex items-center justify-between px-5 pt-5 pb-4 sticky top-0 z-10" style={{ background: "#1c1c1c", borderBottom: "1px solid #3e3e3e" }}>
-          <h3 className="font-bold text-white text-lg">{product ? "แก้ไขสินค้า" : "เพิ่มสินค้าใหม่"}</h3>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#2a2a2a] text-[#9e9e9e] hover:text-white transition-colors">
-            <i className="fa-solid fa-xmark" />
+    <AdminModal onClose={onClose} title={product ? "แก้ไขสินค้า" : "เพิ่มสินค้าใหม่"} icon="fa-box"
+      footer={
+        <>
+          <button onClick={onClose} className="flex-1 py-3 text-sm font-bold rounded-xl transition-all text-[#9e9e9e] hover:text-white" style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>
+            ยกเลิก
           </button>
-        </div>
-
-        <div className="p-5 space-y-4">
+          <button onClick={handleSave} disabled={saving || imageBusy}
+            className="flex-1 py-3 text-sm font-bold rounded-xl text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ background: "#ff7070" }}>
+            {saving
+              ? <><i className="asia-spinner mr-1.5" />กำลังบันทึก...</>
+              : imageBusy
+                ? <><i className="asia-spinner mr-1.5" />กำลังอัปโหลดรูป...</>
+                : <><i className="fa-solid fa-floppy-disk mr-1.5" />บันทึก</>}
+          </button>
+        </>
+      }>
+        <div className="space-y-4">
           {/* Image */}
           <div>
             <label className="block text-xs font-semibold text-[#ededed] mb-2">รูปสินค้า</label>
@@ -568,7 +575,7 @@ function ProductForm({ product, unitOptions, categoryOptions, tagOptions, onClos
                       style={{ background: color.hex, borderColor: selected ? "#84D4FA" : color.name === "ขาว" ? "#ededed" : "#3e3e3e" }}
                       aria-label={`เพิ่มสี${color.name}`}
                       title={color.name}>
-                      {selected && <i className="fa-solid fa-check text-[10px] text-white drop-shadow" />}
+                      {selected && <i className="fa-solid fa-check text-[10px] text-white drop-shadow-sm" />}
                     </button>
                   );
                 })}
@@ -577,7 +584,7 @@ function ProductForm({ product, unitOptions, categoryOptions, tagOptions, onClos
               <div className="flex gap-2">
                 <input value={customColor} onChange={e => setCustomColor(e.target.value)} placeholder="เพิ่มสีเอง เช่น เงิน, ทอง, #22c55e" className={inputCls} style={inputStyle} />
                 <button type="button" onClick={() => addColor(customColor)}
-                  className="h-10 w-10 flex-shrink-0 rounded-xl text-white transition hover:brightness-110"
+                  className="h-10 w-10 shrink-0 rounded-xl text-white transition hover:brightness-110"
                   style={{ background: "#ff7070" }}
                   aria-label="เพิ่มสี">
                   <i className="fa-solid fa-plus text-xs" />
@@ -613,7 +620,7 @@ function ProductForm({ product, unitOptions, categoryOptions, tagOptions, onClos
             <button type="button" onClick={() => setActive(!active)}
               className="w-12 h-6 rounded-full relative transition-colors"
               style={{ background: active ? "#ff7070" : "#3e3e3e" }}>
-              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${active ? "left-6" : "left-0.5"}`} />
+              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all ${active ? "left-6" : "left-0.5"}`} />
             </button>
           </div>
 
@@ -625,22 +632,7 @@ function ProductForm({ product, unitOptions, categoryOptions, tagOptions, onClos
           )}
         </div>
 
-        <div className="px-5 pb-6 flex gap-3 sticky bottom-0 pt-4" style={{ borderTop: "1px solid #3e3e3e", background: "#1c1c1c" }}>
-          <button onClick={onClose} className="flex-1 py-3 text-sm font-bold rounded-xl transition-all text-[#9e9e9e] hover:text-white" style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>
-            ยกเลิก
-          </button>
-          <button onClick={handleSave} disabled={saving || imageBusy}
-            className="flex-1 py-3 text-sm font-bold rounded-xl text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ background: "#ff7070" }}>
-            {saving
-              ? <><i className="asia-spinner mr-1.5" />กำลังบันทึก...</>
-              : imageBusy
-                ? <><i className="asia-spinner mr-1.5" />กำลังอัปโหลดรูป...</>
-                : <><i className="fa-solid fa-floppy-disk mr-1.5" />บันทึก</>}
-          </button>
-        </div>
-      </div>
-    </div>
+    </AdminModal>
   );
 }
 

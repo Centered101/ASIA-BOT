@@ -84,7 +84,7 @@ function MenuContent() {
           <button onClick={() => router.push(`/QQ?table=${table}`)} className="text-white/80 text-2xl">
             <i className="fa-solid fa-arrow-left" />
           </button>
-          <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center shadow overflow-hidden">
+          <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center shadow-sm overflow-hidden">
             <img src="/qq/favicon.ico" alt="QQ" className="w-7 h-7 object-contain" />
           </div>
           <div>
@@ -125,7 +125,7 @@ function MenuContent() {
                 key={item.id}
                 data-aos="zoom-in"
                 data-aos-delay={i * 60}
-                className={`bg-orange-50 border border-orange-100 rounded-2xl shadow overflow-hidden ${!item.is_available ? 'opacity-50' : ''}`}
+                className={`bg-orange-50 border border-orange-100 rounded-2xl shadow-sm overflow-hidden ${!item.is_available ? 'opacity-50' : ''}`}
               >
                 <div className="bg-white/60 flex items-center justify-center h-40">
                   {isUrl(item.image) ? (

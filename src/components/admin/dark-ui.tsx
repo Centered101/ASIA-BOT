@@ -189,3 +189,148 @@ export function AdminActionBar({ children }: { children: React.ReactNode }) {
 export function adminActionClass(extra = "") {
   return `h-10 w-full sm:w-auto inline-flex items-center justify-center gap-2 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-bold leading-none whitespace-nowrap transition-all ${extra}`;
 }
+
+/* ── Modal ────────────────────────────────────────────────────────────────
+   เดิมทุกหน้าเขียนเปลือก modal เองด้วย copy-paste ผลคือค่าที่ควรเหมือนกัน
+   กลับเพี้ยนกันทีละนิด: ฉากหลัง 0.7/0.72/0.8, พื้น #1c1c1c บ้าง #161616 บ้าง,
+   หัวบางอัน sticky บางอันไม่, ปุ่มปิดคนละทรง
+   รวมมาไว้ที่นี่ที่เดียว แก้ทีเดียวเปลี่ยนทั้งหลังบ้าน
+   ------------------------------------------------------------------------ */
+
+/** ปิดด้วย Escape + ล็อกไม่ให้พื้นหลังเลื่อนตอนเปิด modal */
+function useModalBehavior(onClose: () => void) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+}
+
+const MODAL_WIDTH: Record<"sm" | "md" | "lg", string> = {
+  sm: "sm:max-w-sm",
+  md: "sm:max-w-lg",
+  lg: "sm:max-w-2xl",
+};
+
+export function AdminModal({
+  onClose, title, subtitle, icon, size = "md", header, footer, danger, children,
+}: {
+  onClose: () => void;
+  /** ข้ามได้ถ้าส่ง header เองทั้งก้อน */
+  title?: string;
+  subtitle?: string;
+  /** ชื่อไอคอน Font Awesome เช่น "fa-user-plus" */
+  icon?: string;
+  size?: "sm" | "md" | "lg";
+  /** แทนหัวมาตรฐานทั้งแถบ (เช่นอยากได้รูปโปรไฟล์) ปุ่มปิดยังมีให้เอง */
+  header?: React.ReactNode;
+  /** แถบล่างติดขอบ ใส่ปุ่มยืนยัน/ยกเลิก */
+  footer?: React.ReactNode;
+  danger?: boolean;
+  children: React.ReactNode;
+}) {
+  useModalBehavior(onClose);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center" role="dialog" aria-modal="true">
+      <div className="asia-sheet-backdrop absolute inset-0" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }} onClick={onClose} />
+      <div className={`asia-sheet relative w-full ${MODAL_WIDTH[size]} rounded-t-2xl overflow-y-auto max-h-[92vh]`}
+        style={{
+          background: "#1c1c1c",
+          borderTop: `1px solid ${danger ? ADMIN_PRIMARY : "#3e3e3e"}`,
+          borderLeft: `1px solid ${danger ? ADMIN_PRIMARY : "#3e3e3e"}`,
+          borderRight: `1px solid ${danger ? ADMIN_PRIMARY : "#3e3e3e"}`,
+        }}>
+
+        <div className="sticky top-0 z-10" style={{ background: "#1c1c1c" }}>
+          <div className="asia-sheet-grip" />
+        </div>
+
+        {/* pb-3 ตรงนี้คู่กับ pt-3 ของเนื้อหาข้างล่าง — ระยะใต้หัวเกิดจากสองค่านี้
+            บวกกัน ถ้าแก้ทีละตัวจะได้ช่องว่างเบี้ยวข้างเดียว ต้องขยับพร้อมกันเสมอ */}
+        <div className="flex items-center justify-between gap-3 px-5 pt-3 pb-3 sticky z-10"
+          style={{ top: 14, background: "#1c1c1c", borderBottom: "1px solid #3e3e3e" }}>
+          {header ?? (
+            <div className="flex items-center gap-2.5 min-w-0">
+              {icon && <i className={`fa-solid ${icon} text-base`} style={{ color: ADMIN_PRIMARY }} />}
+              <div className="min-w-0">
+                <div className="font-bold text-white text-base truncate">{title}</div>
+                {subtitle && <div className="text-[11px] mt-0.5 truncate" style={{ color: "#636363" }}>{subtitle}</div>}
+              </div>
+            </div>
+          )}
+          <button onClick={onClose} aria-label="ปิด"
+            className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg hover:bg-[#2a2a2a] text-[#9e9e9e] hover:text-white transition-colors">
+            <i className="fa-solid fa-xmark" />
+          </button>
+        </div>
+
+        <div className="px-5 pt-3 pb-4">{children}</div>
+
+        {footer && (
+          <div className="px-5 pb-5 pt-4 flex gap-3 sticky bottom-0"
+            style={{ borderTop: "1px solid #3e3e3e", background: "#1c1c1c" }}>
+            {footer}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** กล่องยืนยันก่อนทำสิ่งที่ย้อนกลับไม่ได้ — ใช้แทนการเขียน modal เตือนเองทุกหน้า */
+export function AdminConfirmModal({
+  onClose, onConfirm, title, message, note, confirmLabel = "ยืนยัน", loading, icon = "fa-triangle-exclamation",
+}: {
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  message?: React.ReactNode;
+  /** บรรทัดเตือนสีแดงใต้ข้อความ */
+  note?: string;
+  confirmLabel?: string;
+  loading?: boolean;
+  icon?: string;
+}) {
+  useModalBehavior(onClose);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center" role="dialog" aria-modal="true">
+      <div className="asia-sheet-backdrop absolute inset-0" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }} onClick={onClose} />
+      <div className="asia-sheet relative w-full sm:max-w-sm rounded-t-2xl px-6 pb-7"
+        style={{
+          background: "#1c1c1c",
+          borderTop: `1px solid ${ADMIN_PRIMARY}`,
+          borderLeft: `1px solid ${ADMIN_PRIMARY}`,
+          borderRight: `1px solid ${ADMIN_PRIMARY}`,
+        }}>
+        <div className="asia-sheet-grip" />
+        <div className="text-center mb-4 mt-4">
+          <i className={`fa-solid ${icon} text-3xl mb-3`} style={{ color: ADMIN_PRIMARY }} />
+          <div className="font-bold text-white text-sm">{title}</div>
+          {message && <div className="text-[12px] mt-1" style={{ color: "#9e9e9e" }}>{message}</div>}
+          {note && <div className="text-[11px] mt-2" style={{ color: ADMIN_PRIMARY }}>{note}</div>}
+        </div>
+        <div className="flex gap-2">
+          <button onClick={onClose} disabled={loading}
+            className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#9e9e9e] disabled:opacity-50"
+            style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>
+            ยกเลิก
+          </button>
+          <button onClick={onConfirm} disabled={loading}
+            className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50"
+            style={{ background: ADMIN_PRIMARY }}>
+            {loading ? <><i className="asia-spinner mr-1.5" />กำลังลบ...</> : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

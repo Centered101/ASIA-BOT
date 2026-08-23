@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { attachSessionCookie } from "@/lib/server/session";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -89,7 +90,18 @@ export async function POST(req: NextRequest) {
       }, { status: missingColumn ? 200 : 500 });
     }
 
-    return NextResponse.json({ status: "success", data: updated });
+    // ออกคุกกี้ session ให้ด้วย ไม่ใช่คืนแถวนักเรียนอย่างเดียว
+    //
+    // เดิมทางเข้าด้วย Google เก็บแต่ localStorage ฝั่งเบราว์เซอร์ ซึ่งพอมี Mycer
+    // ที่เรนเดอร์ฝั่งเซิร์ฟเวอร์และอ่านตัวตนจากคุกกี้อย่างเดียว คนที่ล็อกอินด้วย
+    // Google จะโดนเด้งกลับหน้าล็อกอินวนไปเรื่อย ๆ ทั้งที่เพิ่งล็อกอินสำเร็จ
+    //
+    // ทางเข้าด้วยรหัส+เบอร์โทร (/api/auth/login) ออกคุกกี้อยู่แล้ว ตรงนี้จึงแค่
+    // ทำให้สองทางเข้าเท่ากัน — attachSessionCookie เงียบเองถ้าบัญชียังไม่ถูกผูก
+
+    const res = NextResponse.json({ status: "success", data: updated });
+    await attachSessionCookie(res, req, "student", updated.student_id);
+    return res;
   } catch {
     return NextResponse.json({ status: "error", message: "เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์" }, { status: 500 });
   }

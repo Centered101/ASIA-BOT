@@ -3,7 +3,7 @@
 import { useState, use, useEffect, useCallback, useContext, createContext } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import type { CustomField } from "@/lib/config";
+import { SITE_NAME, type CustomField } from "@/lib/config";
 import { getStudentSession, type StudentSession } from "@/lib/session";
 
 type DBProject = { id: string; name: string; slug: string; project_date: string | null; poster_url: string | null; demo_url: string | null; primary_color: string | null; bg_image_url: string | null; bg_size: string | null; bg_color: string | null; bg_overlay: string | null; bg_repeat: string | null; logo_url: string | null; mascot_url: string | null; mascot_msg_welcome: string | null; mascot_msg_thanks: string | null; custom_fields: CustomField[] | null; };
@@ -250,7 +250,7 @@ async function buildReceiptBlobUrl(saved: SavedEval, slug: string, _accent: stri
 
   ctx.font = "13px Kanit";
   ctx.fillStyle = "rgba(255,255,255,0.80)";
-  ctx.fillText("ASIA BOT", W / 2, LOGO_CY + LOGO_R + 46);
+  ctx.fillText(SITE_NAME, W / 2, LOGO_CY + LOGO_R + 46);
 
   // ── body helpers ─────────────────────────────────────────────────────────────
   let y = HEADER_H + BODY_PAD;
@@ -367,7 +367,7 @@ async function buildReceiptBlobUrl(saved: SavedEval, slug: string, _accent: stri
   ctx.fillText("ขอบคุณที่ร่วมประเมิน", W / 2, y + 22);
   ctx.font = "11px Kanit";
   ctx.fillStyle = "#9ca3af";
-  ctx.fillText(`ออกโดยระบบอัตโนมัติ · ASIA BOT · /project/${slug}`, W / 2, y + 40);
+  ctx.fillText(`ออกโดยระบบอัตโนมัติ · ${SITE_NAME} · /project/${slug}`, W / 2, y + 40);
 
   return new Promise<string | null>(resolve => {
     canvas.toBlob(blob => {
@@ -390,7 +390,7 @@ function LightInput({ value, onChange, placeholder, maxLength }: {
       placeholder={placeholder}
       maxLength={maxLength}
       onChange={e => onChange(e.target.value)}
-      className="w-full px-4 py-3 rounded-xl text-sm focus:outline-none transition-all"
+      className="w-full px-4 py-3 rounded-xl text-sm focus:outline-hidden transition-all"
       style={{ background: C.card2, border: `1.5px solid ${C.border}`, color: C.text }}
       onFocus={e => (e.currentTarget.style.borderColor = accent)}
       onBlur={e => (e.currentTarget.style.borderColor = C.border)}
@@ -408,7 +408,7 @@ function LightSelect({ value, onChange, options, placeholder, disabled }: {
       value={value}
       onChange={e => onChange(e.target.value)}
       disabled={disabled}
-      className="w-full px-4 py-3 rounded-xl text-sm focus:outline-none transition-all appearance-none"
+      className="w-full px-4 py-3 rounded-xl text-sm focus:outline-hidden transition-all appearance-none"
       style={{
         background: disabled ? C.border + "55" : C.card2,
         border: `1.5px solid ${C.border}`,
@@ -599,7 +599,7 @@ function MascotBubble({ mascot, msg, accent, onDismiss }: {
       </div>
       {/* Mascot */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={mascot} alt="" className="h-24 w-auto object-contain flex-shrink-0"
+      <img src={mascot} alt="" className="h-24 w-auto object-contain shrink-0"
         loading="lazy" style={{ filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.25))" }} />
     </div>
   );
@@ -771,7 +771,7 @@ export default function ProjectFormClient({ params }: { params: Promise<{ slug: 
           <p className="text-sm" style={{ color: C.sub }}>slug: <code className="font-mono">{slug}</code></p>
         </div>
         <button onClick={() => router.push("/")}
-          className="px-6 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-opacity hover:opacity-80"
+          className="px-6 py-2.5 rounded-xl text-sm font-bold shadow-xs transition-opacity hover:opacity-80"
           style={{ background: C.red, color: "#fff" }}>
           กลับหน้าหลัก
         </button>
@@ -848,10 +848,14 @@ export default function ProjectFormClient({ params }: { params: Promise<{ slug: 
   if (submitted && savedEval) {
     return (
       <AccentCtx.Provider value={accent}>
+        {/* พรีวิวใบประเมิน — จัดกลางด้วย min-h-full ข้างในกล่องที่เลื่อนได้ ไม่ใช่
+            justify-center ที่ตัวกล่องเอง เพราะวิธีหลังจะตัดหัวใบหายเวลาจอเตี้ยกว่าตัวใบ
+            ส่วน justify-start (ของเดิม) ทำให้ใบลอยไปติดขอบบนเสมอแม้จอมีที่เหลือ */}
         {previewUrl && (
-          <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-start overflow-y-auto py-6 px-4 gap-4"
+          <div className="fixed inset-0 z-[9999] overflow-y-auto py-6 px-4"
             style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)" }}
             onClick={closePreview}>
+            <div className="min-h-full flex flex-col items-center justify-center gap-4">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={previewUrl} alt="ใบยืนยันการประเมิน" className="w-full max-w-sm rounded-2xl shadow-2xl" onClick={e => e.stopPropagation()} />
             <div className="flex gap-3 w-full max-w-sm" onClick={e => e.stopPropagation()}>
@@ -863,6 +867,7 @@ export default function ProjectFormClient({ params }: { params: Promise<{ slug: 
                 style={{ background: "#1e6fbf", color: "#fff" }}>
                 <i className="fa-solid fa-download text-xs" />ดาวน์โหลด
               </button>
+            </div>
             </div>
           </div>
         )}
@@ -964,7 +969,7 @@ export default function ProjectFormClient({ params }: { params: Promise<{ slug: 
                   <div className="absolute bottom-0 left-0 right-0 p-4"
                     style={{ paddingRight: project.mascot ? "5.5rem" : "1rem" }}>
                     <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-xl flex-shrink-0 overflow-hidden shadow-lg"
+                      <div className="w-9 h-9 rounded-xl shrink-0 overflow-hidden shadow-lg"
                         style={{ background: "rgba(255,255,255,0.2)", backdropFilter: "blur(10px)", border: "1px solid rgba(255,255,255,0.3)" }}>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={project.logo ?? "/school/school-logo.svg"} alt="" className="w-full h-full object-cover" loading="lazy" />
@@ -1000,7 +1005,7 @@ export default function ProjectFormClient({ params }: { params: Promise<{ slug: 
                 <div className="flex items-center gap-3 p-4"
                   style={{ paddingRight: project.mascot ? "5.5rem" : undefined }}>
                   {/* Logo */}
-                  <div className="w-12 h-12 rounded-2xl flex-shrink-0 overflow-hidden shadow-md"
+                  <div className="w-12 h-12 rounded-2xl shrink-0 overflow-hidden shadow-md"
                     style={{ background: accent }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={project.logo ?? "/school/school-logo.svg"} alt="" className="w-full h-full object-cover" loading="lazy" />
@@ -1046,7 +1051,7 @@ export default function ProjectFormClient({ params }: { params: Promise<{ slug: 
                       }}>
                       {section > s ? <i className="fa-solid fa-check text-[9px]" /> : s}
                     </div>
-                    {s < 2 && <div className="w-6 h-0.5 rounded" style={{ background: section > 1 ? accent : C.border }} />}
+                    {s < 2 && <div className="w-6 h-0.5 rounded-sm" style={{ background: section > 1 ? accent : C.border }} />}
                   </div>
                 ))}
               </div>
@@ -1054,7 +1059,7 @@ export default function ProjectFormClient({ params }: { params: Promise<{ slug: 
                 <div className="h-full rounded-full transition-all duration-500"
                   style={{ background: accent, width: section === 1 ? "50%" : "100%" }} />
               </div>
-              <span className="text-xs font-semibold flex-shrink-0" style={{ color: C.sub }}>
+              <span className="text-xs font-semibold shrink-0" style={{ color: C.sub }}>
                 {section === 1 ? "ข้อมูลทั่วไป" : "การประเมิน"}
               </span>
             </div>
@@ -1215,7 +1220,7 @@ export default function ProjectFormClient({ params }: { params: Promise<{ slug: 
                       onChange={e => setField("comments", e.target.value)}
                       rows={4} maxLength={450}
                       placeholder="แชร์ความคิดเห็นหรือข้อเสนอแนะ..."
-                      className="w-full px-4 py-3 rounded-2xl text-sm resize-none focus:outline-none transition-all"
+                      className="w-full px-4 py-3 rounded-2xl text-sm resize-none focus:outline-hidden transition-all"
                       style={{ background: C.card2, border: `1.5px solid ${C.border}`, color: C.text }}
                       onFocus={e => (e.currentTarget.style.borderColor = accent)}
                       onBlur={e => (e.currentTarget.style.borderColor = C.border)}
@@ -1245,7 +1250,7 @@ export default function ProjectFormClient({ params }: { params: Promise<{ slug: 
           </div>
 
           <p className="mt-5 text-xs text-center" style={{ color: C.muted }}>
-            ASIA-BOT&#160;โปรเจคที่&#160;
+            {SITE_NAME}&#160;โปรเจคที่&#160;
             {project.slug} · {project.year ?? "—"}
             {hasCustom && ` · คำถามพิเศษ ${project.customFields!.length} ข้อ`}
           </p>

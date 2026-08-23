@@ -44,6 +44,20 @@ export type AssetCondition = "new" | "good" | "fair" | "poor" | "broken";
 /** สถานะครุภัณฑ์ (assets.status) */
 export type AssetStatus = "in_use" | "in_storage" | "under_repair" | "disposed" | "lost";
 
+/** ประเภทเอกสารทำหน้าที่อะไร — นักเรียนส่งเข้าแฟ้ม หรือขอให้โรงเรียนออกให้ (document_types.kind) */
+export type DocumentKind = "upload" | "issue";
+
+/** สถานะเอกสารในแฟ้มนักเรียน (student_documents.status) */
+export type StudentDocumentStatus =
+  | "pending" | "reviewing" | "approved" | "rejected" | "revision_required";
+
+/**
+ * สถานะคำขอให้โรงเรียนออกเอกสาร (document_requests.status)
+ * ลำดับที่อนุญาตอยู่ใน DOCUMENT_REQUEST_TRANSITIONS — src/lib/server/documents.ts
+ */
+export type DocumentRequestStatus =
+  | "pending" | "reviewing" | "approved" | "processing" | "ready" | "completed" | "rejected";
+
 /** สิ่งที่แจ้งซ่อมชี้ไปหา (maintenance_requests.target_kind) */
 export type MaintenanceTargetKind = "asset" | "equipment_item" | "room" | "other";
 
@@ -2195,6 +2209,88 @@ export type Database = {
           created_at?: string;
         };
         // append-only ห้าม UPDATE ทับ
+        Update: Record<string, never>;
+        Relationships: [];
+      };
+      document_types: {
+        Row: {
+          key: string; label: string; kind: DocumentKind; description: string | null;
+          is_required: boolean; student_can_request: boolean; fee: number;
+          sort_order: number; active: boolean; created_at: string;
+        };
+        Insert: {
+          key: string; label: string; kind: DocumentKind; description?: string | null;
+          is_required?: boolean; student_can_request?: boolean; fee?: number;
+          sort_order?: number; active?: boolean; created_at?: string;
+        };
+        Update: {
+          label?: string; description?: string | null; is_required?: boolean;
+          student_can_request?: boolean; fee?: number; sort_order?: number; active?: boolean;
+        };
+        Relationships: [];
+      };
+      student_documents: {
+        Row: {
+          id: string; student_id: string; document_type: string;
+          file_url: string; file_name: string | null; note: string | null;
+          status: StudentDocumentStatus; review_note: string | null;
+          reviewed_by: string | null; reviewed_at: string | null;
+          source: RecordSource; uploaded_by: string | null;
+          created_at: string; updated_at: string;
+        };
+        Insert: {
+          id?: string; student_id: string; document_type: string;
+          file_url: string; file_name?: string | null; note?: string | null;
+          status?: StudentDocumentStatus; review_note?: string | null;
+          reviewed_by?: string | null; reviewed_at?: string | null;
+          source?: RecordSource; uploaded_by?: string | null;
+          created_at?: string; updated_at?: string;
+        };
+        Update: {
+          note?: string | null; status?: StudentDocumentStatus;
+          review_note?: string | null; reviewed_by?: string | null;
+          reviewed_at?: string | null; updated_at?: string;
+        };
+        Relationships: [];
+      };
+      document_requests: {
+        Row: {
+          id: string; request_code: string; student_id: string; document_type: string;
+          copies: number; purpose: string | null;
+          delivery_mode: "pickup" | "delivery"; delivery_note: string | null;
+          status: DocumentRequestStatus; fee: number; paid_at: string | null;
+          issued_file_url: string | null; verify_token: string | null;
+          admin_note: string | null; reviewed_by: string | null; reviewed_at: string | null;
+          completed_at: string | null; created_at: string; updated_at: string;
+        };
+        Insert: {
+          id?: string; request_code: string; student_id: string; document_type: string;
+          copies?: number; purpose?: string | null;
+          delivery_mode?: "pickup" | "delivery"; delivery_note?: string | null;
+          status?: DocumentRequestStatus; fee?: number; paid_at?: string | null;
+          issued_file_url?: string | null; verify_token?: string | null;
+          admin_note?: string | null; created_at?: string; updated_at?: string;
+        };
+        Update: {
+          status?: DocumentRequestStatus; fee?: number; paid_at?: string | null;
+          issued_file_url?: string | null; verify_token?: string | null;
+          admin_note?: string | null; reviewed_by?: string | null;
+          reviewed_at?: string | null; completed_at?: string | null; updated_at?: string;
+        };
+        Relationships: [];
+      };
+      document_request_history: {
+        Row: {
+          id: string; request_id: string;
+          from_status: DocumentRequestStatus | null; to_status: DocumentRequestStatus;
+          note: string | null; changed_by: string | null; created_at: string;
+        };
+        Insert: {
+          id?: string; request_id: string;
+          from_status?: DocumentRequestStatus | null; to_status: DocumentRequestStatus;
+          note?: string | null; changed_by?: string | null; created_at?: string;
+        };
+        // append-only เหมือน maintenance_status_history
         Update: Record<string, never>;
         Relationships: [];
       };

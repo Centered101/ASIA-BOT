@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import LoginGate from "@/components/LoginGate";
 import { toast } from "sonner";
 import { SESSION_KEY, SESSION_TIME_KEY, SESSION_TTL, SITE_NAME } from "@/lib/config";
 import { isDisplayableImageUrl, safeImageSrc } from "@/lib/image-url";
@@ -181,10 +181,11 @@ function rRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h
 
 // ══════════════════════════════════════════════════════════════════════
 export default function ShopPage() {
-  const router = useRouter();
-
   // ── Core state ────────────────────────────────────────────────────
   const [student, setStudent]         = useState<Student | null>(null);
+  // แยก "ยังอ่านไม่เสร็จ" ออกจาก "อ่านแล้วไม่มี" ไม่งั้นหน้ากั้นจะแวบขึ้นมา
+  // ให้คนที่ล็อกอินอยู่เห็นทุกครั้งที่เข้าหน้านี้
+  const [noSession, setNoSession]     = useState(false);
   const [products, setProducts]       = useState<Product[]>([]);
   const [cats, setCats]               = useState<string[]>(["ทั้งหมด"]);
   const [loading, setLoading]         = useState(true);
@@ -245,7 +246,7 @@ export default function ShopPage() {
       const raw  = localStorage.getItem(SESSION_KEY);
       const time = localStorage.getItem(SESSION_TIME_KEY);
       if (!raw || !time || Date.now() - new Date(time).getTime() > SESSION_TTL) {
-        router.replace("/login?next=/shop"); return;
+        setNoSession(true); return;
       }
       const s: Student = JSON.parse(raw);
       setStudent(s);
@@ -253,7 +254,7 @@ export default function ShopPage() {
         _welcomeShown = true;
         toast.success(`ยินดีต้อนรับ ${s.nickname || s.first_name} 🛒`);
       }
-    } catch { router.replace("/login?next=/shop"); }
+    } catch { setNoSession(true); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -796,7 +797,12 @@ export default function ShopPage() {
   }
 
   // ── Inits guard ────────────────────────────────────────────────────
-  if (!student) return null;
+  if (!student) {
+    return noSession ? (
+      <LoginGate path="/shop" subtitle="สหกรณ์โรงเรียน"
+        reason="คำสั่งซื้อผูกกับบัญชีนักเรียน เพื่อให้ตามสถานะการชำระเงินและรายการของตัวเองได้" />
+    ) : null;
+  }
 
   const sortLabels = ["ราคา ↑", "ราคา ↓", "ชื่อ A-Z"];
   const pendingLogCount = logs.filter(l => effectiveStatus(l) === "pending").length;
@@ -815,11 +821,11 @@ export default function ShopPage() {
 
         {/* ── Search bar ── */}
         <div data-aos="fade-down" className="flex items-center gap-2 mb-5">
-          <div className="flex items-center gap-2 flex-1 max-w-md bg-white/90 backdrop-blur-sm border border-slate-200 rounded-2xl px-3 py-2.5 focus-within:border-sky-300 focus-within:ring-2 focus-within:ring-sky-100 shadow-sm transition-all">
-            <i className="fa-solid fa-magnifying-glass text-slate-400 text-xs flex-shrink-0" />
+          <div className="flex items-center gap-2 flex-1 max-w-md bg-white/90 backdrop-blur-xs border border-slate-200 rounded-2xl px-3 py-2.5 focus-within:border-sky-300 focus-within:ring-2 focus-within:ring-sky-100 shadow-xs transition-all">
+            <i className="fa-solid fa-magnifying-glass text-slate-400 text-xs shrink-0" />
             <input value={searchQ} onChange={e => setSearchQ(e.target.value)}
               type="text" placeholder="ค้นหาสินค้า..."
-              className="w-full bg-transparent outline-none text-sm text-slate-700 placeholder:text-slate-400" />
+              className="w-full bg-transparent outline-hidden text-sm text-slate-700 placeholder:text-slate-400" />
             {searchQ && (
               <button onClick={() => setSearchQ("")} className="text-slate-300 hover:text-slate-500 transition">
                 <i className="fa-solid fa-xmark text-xs" />
@@ -828,13 +834,13 @@ export default function ShopPage() {
           </div>
           {/* mobile-only cart & history */}
           <div className="flex lg:hidden items-center gap-1">
-            <button onClick={() => setLogsOpen(true)} className="relative p-2.5 rounded-2xl bg-white/90 border border-slate-200 shadow-sm hover:bg-slate-50 transition text-slate-500">
+            <button onClick={() => setLogsOpen(true)} className="relative p-2.5 rounded-2xl bg-white/90 border border-slate-200 shadow-xs hover:bg-slate-50 transition text-slate-500">
               <i className="fa-solid fa-clock-rotate-left text-sm" />
               {pendingLogCount > 0 && (
                 <span className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 text-[9px] font-bold flex items-center justify-center">{pendingLogCount}</span>
               )}
             </button>
-            <button onClick={() => setCartOpen(true)} className="relative p-2.5 rounded-2xl bg-white/90 border border-slate-200 shadow-sm hover:bg-slate-50 transition text-slate-500">
+            <button onClick={() => setCartOpen(true)} className="relative p-2.5 rounded-2xl bg-white/90 border border-slate-200 shadow-xs hover:bg-slate-50 transition text-slate-500">
               <i className="fa-solid fa-cart-shopping text-sm" />
               {cartCount > 0 && (
                 <span className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 text-[9px] font-bold flex items-center justify-center">{cartCount}</span>
@@ -847,10 +853,10 @@ export default function ShopPage() {
         {pendingOrder && pendingBannerMs > 0 && (
           <div className="flex items-center gap-2 px-4 py-3 rounded-2xl mb-4 text-white font-bold text-sm"
             style={{ background: "linear-gradient(135deg,#F59E0B,#D97706)" }}>
-            <i className="fa-solid fa-clock flex-shrink-0" />
+            <i className="fa-solid fa-clock shrink-0" />
             <span className="flex-1">มีออเดอร์ค้างชำระ — <span className="text-base">{fmtTimer(pendingBannerMs)}</span></span>
             <button onClick={() => { setPendingBannerMs(0); setPayOpen(true); if (pendingOrder) { setQrUrl(pendingOrder.qr_url); setPayAmount(pendingOrder.total); setPayItems(pendingOrder.items); startCountdown(pendingOrder.expireAt - Date.now(), pendingOrder.orderId); } }}
-              className="bg-white/25 rounded-xl px-3 py-1.5 text-xs font-bold flex-shrink-0">
+              className="bg-white/25 rounded-xl px-3 py-1.5 text-xs font-bold shrink-0">
               กลับไปชำระ
             </button>
           </div>
@@ -858,7 +864,7 @@ export default function ShopPage() {
 
         <div className="flex flex-col lg:flex-row gap-6">
           {/* ── LEFT sidebar ── */}
-          <div className="w-full lg:w-80 flex-shrink-0 space-y-4">
+          <div className="w-full lg:w-80 shrink-0 space-y-4">
             {/* Profile card */}
             <div data-aos="fade-right" data-aos-delay="200"
               className={`rounded-2xl p-4 text-white relative overflow-hidden ${student.program === "ปวส" ? "bg-gradient-to-br from-red-500 to-red-400" : "bg-gradient-to-br from-sky-500 to-sky-400"}`}
@@ -866,7 +872,7 @@ export default function ShopPage() {
               <div className="absolute -top-8 -right-8 w-28 h-28 rounded-full bg-white/10 pointer-events-none" />
               <div className="flex items-center gap-3 relative">
                 {/* Avatar */}
-                <div className="w-12 h-12 rounded-2xl border-2 border-white/40 flex-shrink-0 overflow-hidden bg-white/20 flex items-center justify-center">
+                <div className="w-12 h-12 rounded-2xl border-2 border-white/40 shrink-0 overflow-hidden bg-white/20 flex items-center justify-center">
                   {safeImageSrc(student.photo_url) ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={safeImageSrc(student.photo_url) ?? ""} alt={student.first_name}
@@ -888,8 +894,8 @@ export default function ShopPage() {
             {/* Cart button */}
             <div data-aos="fade-right" data-aos-delay="250" className="hidden lg:block">
               <button onClick={() => setCartOpen(true)}
-                className="relative w-full flex items-center gap-3 px-4 py-3 bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-sky-200 transition-all text-left">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                className="relative w-full flex items-center gap-3 px-4 py-3 bg-white/80 backdrop-blur-xs rounded-2xl border border-slate-100 shadow-xs hover:shadow-md hover:border-sky-200 transition-all text-left">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
                   style={{ background: "linear-gradient(135deg,var(--primary-color),var(--primary-dark))" }}>
                   <i className="fa-solid fa-cart-shopping text-white text-sm" />
                 </div>
@@ -898,7 +904,7 @@ export default function ShopPage() {
                   <div className="text-xs text-slate-400">{cartCount > 0 ? `${cartCount} รายการ` : "ว่างเปล่า"}</div>
                 </div>
                 {cartCount > 0 && (
-                  <span className="bg-red-500 text-white rounded-full w-5 h-5 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                  <span className="bg-red-500 text-white rounded-full w-5 h-5 text-[10px] font-bold flex items-center justify-center shrink-0">
                     {cartCount}
                   </span>
                 )}
@@ -908,8 +914,8 @@ export default function ShopPage() {
             {/* Purchase history button */}
             <div data-aos="fade-right" data-aos-delay="270" className="hidden lg:block">
               <button onClick={() => setLogsOpen(true)}
-                className="relative w-full flex items-center gap-3 px-4 py-3 bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-amber-200 transition-all text-left">
-                <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0">
+                className="relative w-full flex items-center gap-3 px-4 py-3 bg-white/80 backdrop-blur-xs rounded-2xl border border-slate-100 shadow-xs hover:shadow-md hover:border-amber-200 transition-all text-left">
+                <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
                   <i className="fa-solid fa-clock-rotate-left text-amber-500 text-sm" />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -917,7 +923,7 @@ export default function ShopPage() {
                   <div className="text-xs text-slate-400">{logs.length > 0 ? `${logs.length} รายการ` : "ยังไม่มีรายการ"}</div>
                 </div>
                 {pendingLogCount > 0 && (
-                  <span className="bg-red-500 text-white rounded-full w-5 h-5 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                  <span className="bg-red-500 text-white rounded-full w-5 h-5 text-[10px] font-bold flex items-center justify-center shrink-0">
                     {pendingLogCount}
                   </span>
                 )}
@@ -927,7 +933,7 @@ export default function ShopPage() {
             {/* Category list (desktop) */}
             <div data-aos="fade-right" data-aos-delay="300" className="hidden lg:block">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">หมวดหมู่</p>
-              <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+              <div className="bg-white/80 backdrop-blur-xs rounded-2xl border border-slate-100 shadow-xs overflow-hidden">
                 {cats.map(c => {
                   const icon = CAT_ICONS[c] || "fa-solid fa-tag";
                   const cnt = c === "ทั้งหมด" ? products.length : products.filter(p => p.cat === c).length;
@@ -946,7 +952,7 @@ export default function ShopPage() {
             </div>
 
             {/* Stats (desktop) */}
-            <div data-aos="fade-right" data-aos-delay="400" className="hidden lg:block bg-white/80 backdrop-blur-sm rounded-2xl border border-slate-100 shadow-sm p-4">
+            <div data-aos="fade-right" data-aos-delay="400" className="hidden lg:block bg-white/80 backdrop-blur-xs rounded-2xl border border-slate-100 shadow-xs p-4">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">สรุปร้านค้า</p>
               <div className="space-y-2.5">
                 {[
@@ -1007,13 +1013,13 @@ export default function ShopPage() {
                 </button>
                 <button onClick={() => setViewMode("grid")}
                   className={`w-8 h-8 rounded-xl border flex items-center justify-center text-xs transition
-                    ${viewMode === "grid" ? "text-white shadow border-transparent" : "bg-white border-slate-200 text-slate-400 hover:border-sky-200"}`}
+                    ${viewMode === "grid" ? "text-white shadow-sm border-transparent" : "bg-white border-slate-200 text-slate-400 hover:border-sky-200"}`}
                   style={viewMode === "grid" ? { background: "var(--primary-color)" } : undefined}>
                   <i className="fa-solid fa-grip" />
                 </button>
                 <button onClick={() => setViewMode("table")}
                   className={`w-8 h-8 rounded-xl border flex items-center justify-center text-xs transition
-                    ${viewMode === "table" ? "text-white shadow border-transparent" : "bg-white border-slate-200 text-slate-400 hover:border-sky-200"}`}
+                    ${viewMode === "table" ? "text-white shadow-sm border-transparent" : "bg-white border-slate-200 text-slate-400 hover:border-sky-200"}`}
                   style={viewMode === "table" ? { background: "var(--primary-color)" } : undefined}>
                   <i className="fa-solid fa-table-list" />
                 </button>
@@ -1089,7 +1095,7 @@ export default function ShopPage() {
                       return (
                         <div key={p.id}
                           data-aos="fade-up" data-aos-delay={`${Math.min(i * 40, 200)}`}
-                          className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-200 h-full flex flex-col">
+                          className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-xs hover:shadow-md hover:-translate-y-1 transition-all duration-200 h-full flex flex-col">
                           <div className="relative aspect-square w-full flex items-center justify-center bg-gradient-to-br from-sky-50 to-slate-50">
                             {isImg ? (
                               <>
@@ -1132,14 +1138,14 @@ export default function ShopPage() {
                                         title={showColorStock ? `${color} เหลือ ${available}` : color}
                                         disabled={colorOut}
                                         onClick={() => selectColorAndAdd(p, color)}
-                                        className={`relative h-7 w-7 rounded-full border-2 transition flex-shrink-0 ${
+                                        className={`relative h-7 w-7 rounded-full border-2 transition shrink-0 ${
                                           colorOut
                                             ? "opacity-35 cursor-not-allowed"
-                                            : active ? "border-sky-500 ring-2 ring-sky-200" : "border-white shadow-sm hover:ring-2 hover:ring-sky-100"
+                                            : active ? "border-sky-500 ring-2 ring-sky-200" : "border-white shadow-xs hover:ring-2 hover:ring-sky-100"
                                         }`}
                                         style={{ background: colorSwatch(color) }}
                                       >
-                                        {active && <span className="absolute inset-0 flex items-center justify-center text-[9px] text-white drop-shadow"><i className="fa-solid fa-check" /></span>}
+                                        {active && <span className="absolute inset-0 flex items-center justify-center text-[9px] text-white drop-shadow-sm"><i className="fa-solid fa-check" /></span>}
                                         {showColorStock && (
                                           <span className={`absolute left-1/2 top-full mt-0.5 min-w-4 -translate-x-1/2 rounded-full px-1 py-px text-[9px] leading-none font-black flex items-center justify-center ${colorOut ? "bg-red-500 text-white" : "bg-white text-slate-700 border border-slate-200"}`}>
                                             {colorOut ? "0" : available}
@@ -1178,7 +1184,7 @@ export default function ShopPage() {
                                         value={qty}
                                         onChange={e => setCartQty(key, e.target.value)}
                                         aria-label={`จำนวน ${p.name}`}
-                                        className="w-9 h-8 rounded-lg border border-slate-200 bg-white text-center text-sm font-bold text-slate-700 tabular-nums outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+                                        className="w-9 h-8 rounded-lg border border-slate-200 bg-white text-center text-sm font-bold text-slate-700 tabular-nums outline-hidden focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
                                       />
                                       <button onClick={() => changeQty(key, 1)}
                                         className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-500 hover:bg-sky-50 hover:border-sky-200 hover:text-sky-500 transition">
@@ -1245,9 +1251,9 @@ export default function ShopPage() {
                   const isImg = !!imageSrc;
                   const selectedSummary = productColorSummary(cart, p);
                   return (
-                    <div key={p.id} className={`rounded-2xl border border-slate-100 bg-white p-3 shadow-sm ${out ? "opacity-60" : ""}`}>
+                    <div key={p.id} className={`rounded-2xl border border-slate-100 bg-white p-3 shadow-xs ${out ? "opacity-60" : ""}`}>
                       <div className="flex gap-3">
-                        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-sky-50 to-slate-50 flex items-center justify-center overflow-hidden flex-shrink-0">
+                        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-sky-50 to-slate-50 flex items-center justify-center overflow-hidden shrink-0">
                           {isImg ? (
                             <>
                               <img src={imageSrc} alt={p.name} className="w-full h-full aspect-square object-cover" loading="lazy"
@@ -1290,14 +1296,14 @@ export default function ShopPage() {
                                     title={showColorStock ? `${color} เหลือ ${available}` : color}
                                     disabled={colorOut}
                                     onClick={() => selectColorAndAdd(p, color)}
-                                    className={`relative h-7 w-7 rounded-full border-2 transition flex-shrink-0 ${
+                                    className={`relative h-7 w-7 rounded-full border-2 transition shrink-0 ${
                                       colorOut
                                         ? "opacity-35 cursor-not-allowed"
                                         : active ? "border-sky-500 ring-2 ring-sky-200" : "border-white shadow-sm"
                                     }`}
                                     style={{ background: colorSwatch(color) }}
                                   >
-                                    {active && <span className="absolute inset-0 flex items-center justify-center text-[9px] text-white drop-shadow"><i className="fa-solid fa-check" /></span>}
+                                    {active && <span className="absolute inset-0 flex items-center justify-center text-[9px] text-white drop-shadow-sm"><i className="fa-solid fa-check" /></span>}
                                     {showColorStock && (
                                       <span className={`absolute left-1/2 top-full mt-0.5 min-w-4 -translate-x-1/2 rounded-full px-1 py-px text-[9px] leading-none font-black flex items-center justify-center ${colorOut ? "bg-red-500 text-white" : "bg-white text-slate-700 border border-slate-200"}`}>
                                         {colorOut ? "0" : available}
@@ -1333,7 +1339,7 @@ export default function ShopPage() {
                                       value={qty}
                                       onChange={e => setCartQty(key, e.target.value)}
                                       aria-label={`จำนวน ${p.name}`}
-                                      className="w-9 h-8 rounded-lg border border-slate-200 bg-white text-center text-sm font-bold text-slate-700 tabular-nums outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+                                      className="w-9 h-8 rounded-lg border border-slate-200 bg-white text-center text-sm font-bold text-slate-700 tabular-nums outline-hidden focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
                                     />
                                     <button onClick={() => changeQty(key, 1)}
                                       className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-500 active:scale-95 transition">
@@ -1348,7 +1354,7 @@ export default function ShopPage() {
                 })}
               </div>
 
-              <div className="hidden sm:block overflow-x-auto rounded-2xl border border-slate-100 shadow-sm bg-white">
+              <div className="hidden sm:block overflow-x-auto rounded-2xl border border-slate-100 shadow-xs bg-white">
                 <table className="w-full min-w-[820px] text-sm border-collapse table-fixed">
                   <colgroup>
                     <col className="w-20" />
@@ -1409,14 +1415,14 @@ export default function ShopPage() {
                                       title={showColorStock ? `${color} เหลือ ${available}` : color}
                                       disabled={colorOut}
                                       onClick={() => selectColorAndAdd(p, color)}
-                                      className={`relative h-6 w-6 rounded-full border-2 transition flex-shrink-0 ${
+                                      className={`relative h-6 w-6 rounded-full border-2 transition shrink-0 ${
                                         colorOut
                                           ? "opacity-35 cursor-not-allowed"
-                                          : active ? "border-sky-500 ring-2 ring-sky-200" : "border-white shadow-sm hover:ring-2 hover:ring-sky-100"
+                                          : active ? "border-sky-500 ring-2 ring-sky-200" : "border-white shadow-xs hover:ring-2 hover:ring-sky-100"
                                       }`}
                                       style={{ background: colorSwatch(color) }}
                                     >
-                                      {active && <span className="absolute inset-0 flex items-center justify-center text-[8px] text-white drop-shadow"><i className="fa-solid fa-check" /></span>}
+                                      {active && <span className="absolute inset-0 flex items-center justify-center text-[8px] text-white drop-shadow-sm"><i className="fa-solid fa-check" /></span>}
                                       {showColorStock && (
                                         <span className={`absolute left-1/2 top-full mt-0.5 min-w-4 -translate-x-1/2 rounded-full px-1 py-px text-[9px] leading-none font-black flex items-center justify-center ${colorOut ? "bg-red-500 text-white" : "bg-white text-slate-700 border border-slate-200"}`}>
                                           {colorOut ? "0" : available}
@@ -1467,7 +1473,7 @@ export default function ShopPage() {
                                       value={qty}
                                       onChange={e => setCartQty(key, e.target.value)}
                                       aria-label={`จำนวน ${p.name}`}
-                                      className="w-9 h-8 rounded-lg border border-slate-200 bg-white text-center text-sm font-bold text-slate-700 tabular-nums outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+                                      className="w-9 h-8 rounded-lg border border-slate-200 bg-white text-center text-sm font-bold text-slate-700 tabular-nums outline-hidden focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
                                     />
                                     <button onClick={() => changeQty(key, 1)}
                                       className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-500 hover:bg-sky-50 hover:text-sky-500 transition">
@@ -1494,7 +1500,7 @@ export default function ShopPage() {
       {cartCount > 0 && (
         <div className="lg:hidden fixed bottom-0 left-0 right-0 z-[998] flex items-center gap-3 px-4 py-3"
           style={{ background: "linear-gradient(135deg,var(--primary-dark),#0284C7)", boxShadow: "0 -4px 20px rgba(14,165,233,.35)" }}>
-          <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
             <i className="fa-solid fa-cart-shopping text-white text-sm" />
           </div>
           <div className="flex-1 min-w-0">
@@ -1502,7 +1508,7 @@ export default function ShopPage() {
             <div className="text-white/70 text-xs">{fmt(cartTotal)}</div>
           </div>
           <button onClick={() => setCartOpen(true)}
-            className="bg-white font-bold text-sm px-5 py-2.5 rounded-xl flex items-center gap-1.5 active:scale-95 transition-transform flex-shrink-0"
+            className="bg-white font-bold text-sm px-5 py-2.5 rounded-xl flex items-center gap-1.5 active:scale-95 transition-transform shrink-0"
             style={{ color: "var(--primary-dark)" }}>
             ดูตะกร้า <i className="fa-solid fa-arrow-right text-xs" />
           </button>
@@ -1510,12 +1516,12 @@ export default function ShopPage() {
       )}
 
       {/* ════ MODAL: CART (bottom sheet) ════ */}
-      <div className={`fixed inset-0 z-[999] bg-black/40 backdrop-blur-sm flex items-end justify-center transition-all duration-300 ${cartOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+      <div className={`fixed inset-0 z-[999] bg-black/40 backdrop-blur-xs flex items-end justify-center transition-all duration-300 ${cartOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
         onClick={e => { if (e.target === e.currentTarget) setCartOpen(false); }}>
         <div className={`bg-white rounded-t-3xl w-full max-w-lg max-h-[92vh] flex flex-col transition-transform duration-300 ${cartOpen ? "translate-y-0" : "translate-y-full"}`}>
-          <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mt-3 mb-1 flex-shrink-0" />
-          <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-100 flex-shrink-0">
-            <div className="w-9 h-9 rounded-xl bg-sky-50 text-sky-500 flex items-center justify-center flex-shrink-0">
+          <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mt-3 mb-1 shrink-0" />
+          <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-100 shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-sky-50 text-sky-500 flex items-center justify-center shrink-0">
               <i className="fa-solid fa-cart-shopping text-sm" />
             </div>
             <div>
@@ -1529,7 +1535,7 @@ export default function ShopPage() {
           <div className="overflow-y-auto flex-1 px-5 py-4">
             {cartEntries.length === 0 ? (
               <div className="text-center py-12">
-                <div className="text-5xl mb-3">🛒</div>
+                <i className="fa-solid fa-cart-shopping text-5xl mb-3 block text-slate-300" />
                 <div className="text-slate-400 text-sm">ยังไม่มีสินค้าในตะกร้า</div>
               </div>
             ) : (
@@ -1544,17 +1550,17 @@ export default function ShopPage() {
                     <div key={key} className="flex items-center gap-3 py-3 border-b border-slate-50 last:border-0">
                       {isImg ? (
                         <>
-                          <img src={imageSrc} alt={p.name} className="w-10 h-10 aspect-square rounded-xl object-cover flex-shrink-0"
+                          <img src={imageSrc} alt={p.name} className="w-10 h-10 aspect-square rounded-xl object-cover shrink-0"
                             onError={e => { e.currentTarget.style.display = "none"; const fb = e.currentTarget.nextElementSibling as HTMLElement; if (fb) fb.style.display = "inline"; }} />
-                          <span className="text-2xl flex-shrink-0" style={{ display: "none" }}>{p.emoji}</span>
+                          <span className="text-2xl shrink-0" style={{ display: "none" }}>{p.emoji}</span>
                         </>
-                      ) : <span className="text-2xl flex-shrink-0">{p.emoji}</span>}
+                      ) : <span className="text-2xl shrink-0">{p.emoji}</span>}
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-bold text-slate-700 truncate">{p.name}</div>
                         {color && <div className="text-[10px] font-bold text-sky-500">{color}</div>}
                         <div className="text-xs text-slate-400">{fmt(p.price)} / {p.unit || ""}</div>
                       </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <div className="flex items-center gap-1.5 shrink-0">
                         <button onClick={() => changeQty(key, -1)}
                           className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-500 hover:bg-sky-50 hover:text-sky-500 transition">
                           <i className="fa-solid fa-minus text-[9px]" />
@@ -1566,14 +1572,14 @@ export default function ShopPage() {
                           value={qty}
                           onChange={e => setCartQty(key, e.target.value)}
                           aria-label={`จำนวน ${p.name}`}
-                          className="w-9 h-8 rounded-lg border border-slate-200 bg-white text-center text-sm font-bold text-slate-700 tabular-nums outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+                          className="w-9 h-8 rounded-lg border border-slate-200 bg-white text-center text-sm font-bold text-slate-700 tabular-nums outline-hidden focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
                         />
                         <button onClick={() => changeQty(key, 1)}
                           className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-500 hover:bg-sky-50 hover:text-sky-500 transition">
                           <i className="fa-solid fa-plus text-[9px]" />
                         </button>
                       </div>
-                      <div className="text-sm font-bold w-16 text-right flex-shrink-0" style={{ color: "var(--primary-dark)" }}>{fmt(p.price * qty)}</div>
+                      <div className="text-sm font-bold w-16 text-right shrink-0" style={{ color: "var(--primary-dark)" }}>{fmt(p.price * qty)}</div>
                     </div>
                   );
                 })}
@@ -1613,12 +1619,12 @@ export default function ShopPage() {
       </div>
 
       {/* ════ MODAL: DELIVERY ════ */}
-      <div className={`fixed inset-0 z-[1000] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 transition-all duration-300 ${deliveryOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+      <div className={`fixed inset-0 z-[1000] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 transition-all duration-300 ${deliveryOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
         onClick={e => { if (e.target === e.currentTarget) setDeliveryOpen(false); }}>
         <div className={`bg-white rounded-2xl w-full max-w-sm p-6 transition-all duration-300 ${deliveryOpen ? "scale-100" : "scale-90"}`}>
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-sky-50 flex items-center justify-center text-sky-500 flex-shrink-0">
+              <div className="w-9 h-9 rounded-xl bg-sky-50 flex items-center justify-center text-sky-500 shrink-0">
                 <i className="fa-solid fa-truck text-sm" />
               </div>
               <div>
@@ -1671,7 +1677,7 @@ export default function ShopPage() {
               {selectedLoc === "ห้องเรียน" && (
                 <input value={customLoc} onChange={e => { setCustomLoc(e.target.value); setDeliveryLoc(e.target.value ? "ห้องเรียน: " + e.target.value : ""); }}
                   placeholder="ระบุห้องเรียน เช่น ห้อง 201" maxLength={40}
-                  className="mt-2 w-full px-3 py-2 rounded-xl text-sm border-2 border-sky-400 outline-none focus:ring-2 focus:ring-sky-100 transition" />
+                  className="mt-2 w-full px-3 py-2 rounded-xl text-sm border-2 border-sky-400 outline-hidden focus:ring-2 focus:ring-sky-100 transition" />
               )}
             </div>
           )}
@@ -1703,15 +1709,15 @@ export default function ShopPage() {
       </div>
 
       {/* ════ MODAL: PAYMENT ════ */}
-      <div className={`fixed inset-0 z-[1000] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4 transition-all duration-300 ${payOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+      <div className={`fixed inset-0 z-[1000] bg-black/50 backdrop-blur-xs flex items-end sm:items-center justify-center sm:p-4 transition-all duration-300 ${payOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
         onClick={e => { if (e.target === e.currentTarget && payStatus === "expired") setPayOpen(false); }}>
         <div className={`bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md max-h-[92dvh] flex flex-col overflow-hidden shadow-2xl transition-all duration-300 ${payOpen ? "translate-y-0 sm:scale-100" : "translate-y-full sm:translate-y-0 sm:scale-90"}`}>
-          <div className="sm:hidden w-10 h-1 bg-slate-200 rounded-full mx-auto mt-3 flex-shrink-0" />
+          <div className="sm:hidden w-10 h-1 bg-slate-200 rounded-full mx-auto mt-3 shrink-0" />
 
-          <div className="px-5 pt-4 pb-3 border-b border-slate-100 flex-shrink-0">
+          <div className="px-5 pt-4 pb-3 border-b border-slate-100 shrink-0">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-11 h-11 rounded-2xl bg-sky-50 flex items-center justify-center text-sky-500 flex-shrink-0">
+                <div className="w-11 h-11 rounded-2xl bg-sky-50 flex items-center justify-center text-sky-500 shrink-0">
                 <i className="fa-solid fa-qrcode text-sm" />
               </div>
                 <div className="min-w-0">
@@ -1720,7 +1726,7 @@ export default function ShopPage() {
                   <div className="text-[11px] font-bold truncate mt-0.5" style={{ color: "var(--primary-dark)" }}>{payDeliveryTag}</div>
                 </div>
               </div>
-              <div className={`rounded-2xl px-3 py-2 min-w-20 text-center flex-shrink-0 ${timerUrgent ? "animate-pulse" : ""}`}
+              <div className={`rounded-2xl px-3 py-2 min-w-20 text-center shrink-0 ${timerUrgent ? "animate-pulse" : ""}`}
                 style={{ background: timerUrgent ? "linear-gradient(135deg,#EF4444,#F87171)" : "linear-gradient(135deg,var(--primary-dark),#0284C7)" }}>
                 <div className="text-white font-extrabold text-base leading-tight">{fmtTimer(timerMs)}</div>
                 <div className="text-white/75 text-[9px] font-bold">หมดเวลา</div>
@@ -1799,7 +1805,7 @@ export default function ShopPage() {
             </div>
           </div>
 
-          <div className="px-5 py-4 border-t border-slate-100 bg-white flex-shrink-0">
+          <div className="px-5 py-4 border-t border-slate-100 bg-white shrink-0">
             <button onClick={() => {
               const po = pendingOrder || (() => { try { return JSON.parse(localStorage.getItem(LS_PENDING) || "null"); } catch { return null; } })();
               if (!po) { setPayOpen(false); return; }
@@ -1816,12 +1822,12 @@ export default function ShopPage() {
       </div>
 
       {/* ════ MODAL: SLIP ════ */}
-      <div className={`fixed inset-0 z-[1000] bg-black/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 transition-all duration-300 ${slipOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+      <div className={`fixed inset-0 z-[1000] bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 transition-all duration-300 ${slipOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
         onClick={e => { if (e.target === e.currentTarget) setSlipOpen(false); }}>
         <div className={`bg-white rounded-3xl w-full max-w-md max-h-[92dvh] p-5 sm:p-6 flex flex-col transition-all duration-300 ${slipOpen ? "scale-100" : "scale-90"}`}>
-          <div className="flex items-center justify-between mb-4 flex-shrink-0">
+          <div className="flex items-center justify-between mb-4 shrink-0">
             <div className="flex items-center gap-2">
-              <div className="w-11 h-11 rounded-2xl bg-green-50 flex items-center justify-center flex-shrink-0 p-1.5">
+              <div className="w-11 h-11 rounded-2xl bg-green-50 flex items-center justify-center shrink-0 p-1.5">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/favicon.png" alt={SITE_NAME} className="w-full h-full object-contain" />
               </div>
@@ -1837,7 +1843,7 @@ export default function ShopPage() {
           <div className="overflow-auto rounded-2xl bg-slate-100 p-2 flex-1 min-h-0">
             <canvas ref={slipRef} className="rounded-2xl block mx-auto w-full h-auto max-w-[420px]" />
           </div>
-          <div className="grid grid-cols-2 gap-2 mt-4 flex-shrink-0">
+          <div className="grid grid-cols-2 gap-2 mt-4 shrink-0">
             <button onClick={downloadSlip} className="btn-primary flex items-center justify-center gap-1.5 text-sm py-2.5">
               <i className="fa-solid fa-download" /> ดาวน์โหลดสลิป
             </button>
@@ -1850,12 +1856,12 @@ export default function ShopPage() {
       </div>
 
       {/* ════ MODAL: LOGS (bottom sheet) ════ */}
-      <div className={`fixed inset-0 z-[999] bg-black/40 backdrop-blur-sm flex items-end justify-center transition-all duration-300 ${logsOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+      <div className={`fixed inset-0 z-[999] bg-black/40 backdrop-blur-xs flex items-end justify-center transition-all duration-300 ${logsOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
         onClick={e => { if (e.target === e.currentTarget) setLogsOpen(false); }}>
         <div className={`bg-white rounded-t-3xl w-full max-w-lg max-h-[92vh] flex flex-col transition-transform duration-300 ${logsOpen ? "translate-y-0" : "translate-y-full"}`}>
-          <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mt-3 mb-1 flex-shrink-0" />
-          <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-100 flex-shrink-0">
-            <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center flex-shrink-0">
+          <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mt-3 mb-1 shrink-0" />
+          <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-100 shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center shrink-0">
               <i className="fa-solid fa-clock-rotate-left text-sm" />
             </div>
             <div>
@@ -1867,7 +1873,7 @@ export default function ShopPage() {
             </button>
           </div>
 
-          <div className="flex gap-2 px-4 sm:px-5 pt-3 flex-shrink-0">
+          <div className="flex gap-2 px-4 sm:px-5 pt-3 shrink-0">
             {([
               { key: "active" as const, label: "ประวัติการสั่งซื้อ", count: logs.filter(l => !isCancelledStatus(effectiveStatus(l))).length },
               { key: "cancelled" as const, label: "ยกเลิก", count: logs.filter(l => isCancelledStatus(effectiveStatus(l))).length },
@@ -1887,7 +1893,7 @@ export default function ShopPage() {
               if (visibleLogs.length === 0) {
                 return (
                   <div className="text-center py-12">
-                    <div className="text-5xl mb-3">{historyTab === "cancelled" ? "🗑️" : "📋"}</div>
+                    <i className={`fa-solid ${historyTab === "cancelled" ? "fa-trash-can" : "fa-clipboard-list"} text-5xl mb-3 block text-slate-300`} />
                     <div className="text-slate-400 text-sm">
                       {historyTab === "cancelled" ? "ไม่มีรายการที่ยกเลิก" : "ยังไม่มีประวัติการสั่งซื้อ"}
                     </div>
@@ -1917,12 +1923,12 @@ export default function ShopPage() {
               const itemText = l.items.map(i => `${orderItemLabel(i)} x${i.qty}`).join(", ");
               const itemPreview = itemText.length > 92 ? `${itemText.slice(0, 92)}...` : itemText;
               return (
-                <div key={idx} className={`bg-white rounded-3xl p-3.5 shadow-sm border border-slate-100 ${borderCls}`}>
+                <div key={idx} className={`bg-white rounded-3xl p-3.5 shadow-xs border border-slate-100 ${borderCls}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="text-sm font-extrabold text-slate-800 truncate">{l.orderId}</span>
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full flex-shrink-0 ${badgeCls}`}>
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full shrink-0 ${badgeCls}`}>
                           <i className={`fa-solid ${badgeIcon} text-[9px]`} /> {badgeTxt}
                         </span>
                       </div>
@@ -1932,7 +1938,7 @@ export default function ShopPage() {
                         </span>
                       </div>
                     </div>
-                    <div className="text-base font-extrabold flex-shrink-0 leading-none" style={{ color: "var(--primary-dark)" }}>{fmt(l.total)}</div>
+                    <div className="text-base font-extrabold shrink-0 leading-none" style={{ color: "var(--primary-dark)" }}>{fmt(l.total)}</div>
                   </div>
 
                   <div className="mt-3 rounded-2xl bg-slate-50 px-3 py-2">
@@ -1949,7 +1955,7 @@ export default function ShopPage() {
                     </div>
                     {status === "paid" && (
                       <button onClick={() => { setLastOrder(l); generateSlip(l); setLogsOpen(false); setSlipOpen(true); }}
-                        className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-bold text-white shadow-sm active:scale-95 transition"
+                        className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-bold text-white shadow-xs active:scale-95 transition"
                         style={{ background: "linear-gradient(135deg,var(--primary-color),var(--primary-dark))" }}>
                         <i className="fa-solid fa-receipt" /> ดูสลิป
                       </button>

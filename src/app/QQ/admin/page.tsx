@@ -135,7 +135,7 @@ export default function AdminPage() {
       <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-4" style={{ backgroundColor: '#fff9e1' }}>
         <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
           <div className="text-center mb-6">
-            <div className="w-16 h-16 mx-auto mb-3 bg-green-50 rounded-2xl flex items-center justify-center shadow overflow-hidden">
+            <div className="w-16 h-16 mx-auto mb-3 bg-green-50 rounded-2xl flex items-center justify-center shadow-sm overflow-hidden">
               <img src="/qq/favicon.ico" alt="QQ" className="w-12 h-12 object-contain" />
             </div>
             <h1 className="text-2xl font-bold text-gray-800">
@@ -149,7 +149,7 @@ export default function AdminPage() {
               <select
                 value={loginStore}
                 onChange={(e) => setLoginStore(e.target.value)}
-                className="w-full border-2 border-green-400 rounded-xl px-4 py-3 focus:outline-none"
+                className="w-full border-2 border-green-400 rounded-xl px-4 py-3 focus:outline-hidden"
               >
                 <option value="">-- เลือกร้าน --</option>
                 {Object.entries(STORES).map(([id, s]) => (
@@ -165,7 +165,7 @@ export default function AdminPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && doLogin()}
                 placeholder="รหัสผ่าน (1234)"
-                className="w-full border-2 border-green-400 rounded-xl px-4 py-3 focus:outline-none"
+                className="w-full border-2 border-green-400 rounded-xl px-4 py-3 focus:outline-hidden"
               />
             </div>
             <button
@@ -194,11 +194,11 @@ export default function AdminPage() {
     <div className="min-h-screen" style={{ backgroundColor: '#fff9e1' }}>
       {/* Header */}
       <div
-        className="text-white px-4 py-4 flex items-center justify-between shadow"
+        className="text-white px-4 py-4 flex items-center justify-between shadow-sm"
         style={{ background: `linear-gradient(135deg, ${store.color}, #000000aa)` }}
       >
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center shadow overflow-hidden">
+          <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center shadow-sm overflow-hidden">
             <img src="/qq/favicon.ico" alt="QQ" className="w-7 h-7 object-contain" />
           </div>
           <div>
@@ -248,16 +248,16 @@ export default function AdminPage() {
         {tab === 'dashboard' && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="bg-white rounded-xl shadow p-4">
+              <div className="bg-white rounded-xl shadow-sm p-4">
                 <p className="text-gray-500 text-sm">รอดำเนินการ</p>
                 <p className="text-3xl font-bold text-orange-500">{pendingCount}</p>
               </div>
-              <div className="bg-white rounded-xl shadow p-4">
+              <div className="bg-white rounded-xl shadow-sm p-4">
                 <p className="text-gray-500 text-sm">จำนวนเมนู</p>
                 <p className="text-3xl font-bold text-green-600">{menu.length}</p>
               </div>
             </div>
-            <div className="bg-white rounded-xl shadow p-4">
+            <div className="bg-white rounded-xl shadow-sm p-4">
               <h2 className="font-bold text-lg mb-3">ออเดอร์ล่าสุด</h2>
               {myOrders.slice(0, 5).map((o) => {
                 const myItems = o.qq_order_items.filter((i) => i.store_id === currentStore)
@@ -295,7 +295,7 @@ export default function AdminPage() {
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {menu.map((item) => (
-                  <div key={item.id} className={`bg-white rounded-xl shadow p-4 ${!item.is_available ? 'opacity-60' : ''}`}>
+                  <div key={item.id} className={`bg-white rounded-xl shadow-sm p-4 ${!item.is_available ? 'opacity-60' : ''}`}>
                     <div className="text-4xl text-center mb-2">
                       {item.image?.startsWith('http')
                         ? <img src={item.image} alt={item.name} className="w-16 h-16 object-cover rounded-lg mx-auto" />
@@ -343,7 +343,7 @@ export default function AdminPage() {
                   const statusObj = o.qq_store_order_status.find((ss) => ss.store_id === currentStore)
                   const status = statusObj?.status || 'pending'
                   return (
-                    <div key={o.id} className={`bg-white rounded-2xl shadow p-4 ${status === 'delivered' ? 'opacity-60' : ''}`}>
+                    <div key={o.id} className={`bg-white rounded-2xl shadow-sm p-4 ${status === 'delivered' ? 'opacity-60' : ''}`}>
                       <div className="flex justify-between items-start mb-3">
                         <div>
                           <h3 className="font-bold text-xl">
@@ -373,7 +373,7 @@ export default function AdminPage() {
                       </div>
 
                       {o.notes && o.notes !== '-' && (
-                        <div className="bg-blue-50 border-l-4 border-blue-400 p-2 rounded mb-3 text-sm text-gray-700">
+                        <div className="bg-blue-50 border-l-4 border-blue-400 p-2 rounded-sm mb-3 text-sm text-gray-700">
                           <i className="fa-solid fa-note-sticky mr-2 text-blue-400" />{o.notes}
                         </div>
                       )}

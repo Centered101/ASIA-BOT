@@ -144,7 +144,7 @@ export default function QmanHomePage() {
       >
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow overflow-hidden">
+            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm overflow-hidden">
               <img src="/qman/favicon.ico" alt="Qman" className="w-8 h-8 object-contain" />
             </div>
             <div>
@@ -245,7 +245,7 @@ export default function QmanHomePage() {
                           <img
                             src={shop.logo_url}
                             alt={shop.name}
-                            className="w-16 h-16 rounded-xl object-cover border-2 border-white shadow"
+                            className="w-16 h-16 rounded-xl object-cover border-2 border-white shadow-sm"
                             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
                           />
                         ) : (
@@ -328,7 +328,7 @@ export default function QmanHomePage() {
                 <input
                   type="text" required value={form.customerName}
                   onChange={(e) => setForm((f) => ({ ...f, customerName: e.target.value }))}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-hidden"
                   placeholder="กรอกชื่อของคุณ"
                 />
               </div>
@@ -339,7 +339,7 @@ export default function QmanHomePage() {
                 <input
                   type="tel" required maxLength={10} value={form.customerPhone}
                   onChange={(e) => setForm((f) => ({ ...f, customerPhone: e.target.value.replace(/\D/g, '') }))}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-hidden"
                   placeholder="0812345678"
                 />
               </div>
@@ -351,7 +351,7 @@ export default function QmanHomePage() {
                   type="date" required value={form.bookingDate}
                   min={new Date().toISOString().split('T')[0]}
                   onChange={(e) => setForm((f) => ({ ...f, bookingDate: e.target.value }))}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-hidden"
                 />
               </div>
               <div>
@@ -361,7 +361,7 @@ export default function QmanHomePage() {
                 <input
                   type="time" required value={form.bookingTime}
                   onChange={(e) => setForm((f) => ({ ...f, bookingTime: e.target.value }))}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-hidden"
                 />
               </div>
               <div>
@@ -372,7 +372,7 @@ export default function QmanHomePage() {
                   value={form.notes}
                   onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
                   rows={2}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-none resize-none"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-orange-500 focus:outline-hidden resize-none"
                   placeholder="ระบุข้อมูลเพิ่มเติม..."
                 />
               </div>
@@ -546,7 +546,7 @@ export default function QmanHomePage() {
             </div>
             <div className="p-4 space-y-4">
               {showDetail.shop_logo && (
-                <img src={showDetail.shop_logo} alt="" className="w-20 h-20 rounded-xl object-cover mx-auto border-2 border-white shadow" />
+                <img src={showDetail.shop_logo} alt="" className="w-20 h-20 rounded-xl object-cover mx-auto border-2 border-white shadow-sm" />
               )}
               {showDetail.shop_map && (
                 <div className="bg-orange-100 rounded-xl overflow-hidden">
@@ -573,7 +573,7 @@ export default function QmanHomePage() {
                   </div>
                 ))}
                 {showDetail.notes && (
-                  <div className="bg-blue-50 border-l-4 border-blue-400 rounded p-2 text-gray-700">
+                  <div className="bg-blue-50 border-l-4 border-blue-400 rounded-sm p-2 text-gray-700">
                     <i className="fa-solid fa-comment mr-2 text-blue-400" />{showDetail.notes}
                   </div>
                 )}

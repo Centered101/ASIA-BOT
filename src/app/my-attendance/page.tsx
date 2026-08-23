@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { MascotState } from "@/components/Mascot";
+import LoginGate from "@/components/LoginGate";
 import { getStudentSession } from "@/lib/session";
 import type { ClassAttendanceStatus } from "@/types/database";
 
@@ -78,16 +78,8 @@ export default function MyAttendancePage() {
 
   if (needsLogin) {
     return (
-      <>
-        <Header subtitle="การเข้าเรียน" />
-        <main className="min-h-screen max-w-md mx-auto px-4 relative z-10">
-          <MascotState mood="help" title="ต้องเข้าสู่ระบบก่อน"
-            subtitle="ข้อมูลการเข้าเรียนเป็นข้อมูลส่วนตัว ดูได้เฉพาะของตัวเอง">
-            <Link href="/student" className="btn-primary px-6 py-2.5">เข้าสู่ระบบ</Link>
-          </MascotState>
-        </main>
-        <Footer />
-      </>
+      <LoginGate path="/my-attendance" subtitle="การเข้าเรียน"
+        reason="ข้อมูลการเข้าเรียนเป็นข้อมูลส่วนตัว ดูได้เฉพาะของตัวเอง" />
     );
   }
 
@@ -108,10 +100,10 @@ export default function MyAttendancePage() {
         </div>
 
         {loading ? (
-          <div className="text-sm text-slate-400 py-10 text-center">กำลังโหลด…</div>
+          <div className="text-sm text-slate-400 py-10 text-center"><i className="asia-spinner text-2xl block mb-2 mx-auto" style={{ color: "var(--primary-color)" }} />กำลังโหลด…</div>
         ) : !hasData ? (
-          <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-8 text-center">
-            <div className="text-4xl mb-3">📋</div>
+          <div className="bg-white border border-slate-100 rounded-2xl shadow-xs p-8 text-center">
+            <i className="fa-solid fa-clipboard-list text-4xl mb-3 block text-slate-300" />
             <div className="font-bold text-slate-700 mb-1">ยังไม่มีข้อมูลการเข้าเรียน</div>
             <p className="text-sm text-slate-400 leading-relaxed">
               ข้อมูลจะขึ้นเมื่อครูเริ่มเช็กชื่อรายวิชา
@@ -123,7 +115,7 @@ export default function MyAttendancePage() {
             {data.at_risk_subjects.length > 0 && (
               <div data-aos="fade-up" className="rounded-2xl border border-red-200 bg-red-50 p-4 mb-6" suppressHydrationWarning>
                 <div className="flex items-start gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center flex-shrink-0">
+                  <div className="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
                     <i className="fa-solid fa-triangle-exclamation text-red-500 text-sm" />
                   </div>
                   <div>
@@ -156,7 +148,7 @@ export default function MyAttendancePage() {
               <div className="lg:col-span-2 space-y-4">
                 {/* งานที่ค้างขึ้นก่อนสรุปวิชา เพราะมีเดดไลน์และทำอะไรได้ทันที */}
                 {data.missed_assignments.length > 0 && (
-                  <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4 sm:p-5">
+                  <div className="bg-white border border-slate-100 rounded-2xl shadow-xs p-4 sm:p-5">
                     <div className="flex items-center gap-2 mb-1">
                       <i className="fa-solid fa-clipboard-list text-amber-500" />
                       <h2 className="text-sm font-bold text-slate-800">งานที่ค้างจากวันที่ขาด</h2>
@@ -170,7 +162,7 @@ export default function MyAttendancePage() {
                           <div className="flex items-start justify-between gap-2 mb-1">
                             <div className="text-sm font-bold text-slate-800">{a.title}</div>
                             {a.due_date && (
-                              <span className="text-[10px] font-bold text-amber-600 bg-white border border-amber-200 rounded-full px-2 py-0.5 flex-shrink-0">
+                              <span className="text-[10px] font-bold text-amber-600 bg-white border border-amber-200 rounded-full px-2 py-0.5 shrink-0">
                                 ส่ง {fmt(a.due_date)}
                               </span>
                             )}
@@ -189,7 +181,7 @@ export default function MyAttendancePage() {
                   </div>
                 )}
 
-                <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4 sm:p-5">
+                <div className="bg-white border border-slate-100 rounded-2xl shadow-xs p-4 sm:p-5">
                   <h2 className="text-sm font-bold text-slate-800 mb-1">สรุปรายวิชา</h2>
                   <p className="text-xs text-slate-400 mb-4">
                     เกณฑ์ มส. คิดแยกรายวิชา ยอดรวมทั้งหมดจึงบอกอะไรไม่ได้
@@ -203,7 +195,7 @@ export default function MyAttendancePage() {
                             <div className="text-sm font-bold text-slate-800 truncate">{s.subject}</div>
                             {s.teacher && <div className="text-[10px] text-slate-400">{s.teacher}</div>}
                           </div>
-                          <div className="text-right flex-shrink-0">
+                          <div className="text-right shrink-0">
                             <div className={`text-lg font-extrabold ${s.at_risk ? "text-red-500" : "text-emerald-600"}`}>
                               {s.attend_rate}%
                             </div>
@@ -228,12 +220,12 @@ export default function MyAttendancePage() {
 
               <aside data-aos="fade-left" suppressHydrationWarning>
                 <div className="sticky top-24 space-y-4">
-                  <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
+                  <div className="bg-white border border-slate-100 rounded-2xl shadow-xs p-4">
                     <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">ล่าสุด</h3>
                     <div className="space-y-2.5">
                       {data.recent.slice(0, 10).map((r, i) => (
                         <div key={`${r.attend_date}-${i}`} className="flex items-start gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0"
+                          <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0"
                             style={{ background: STATUS[r.status].color }} />
                           <div className="min-w-0 flex-1">
                             <div className="text-[11px] font-bold text-slate-600 truncate">
@@ -248,11 +240,11 @@ export default function MyAttendancePage() {
                     </div>
                   </div>
 
-                  <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
+                  <div className="bg-white border border-slate-100 rounded-2xl shadow-xs p-4">
                     <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">ทางลัด</h3>
                     <Link href="/student"
                       className="flex items-center gap-2.5 text-[11px] text-slate-500 hover:text-sky-600 transition-colors">
-                      <span className="w-5 h-5 rounded-lg bg-sky-50 flex items-center justify-center flex-shrink-0">
+                      <span className="w-5 h-5 rounded-lg bg-sky-50 flex items-center justify-center shrink-0">
                         <i className="fa-solid fa-id-card text-[9px] text-sky-500" />
                       </span>
                       บัตรนักเรียนและข้อมูลของฉัน

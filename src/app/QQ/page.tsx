@@ -41,7 +41,7 @@ function IndexContent() {
         style={{ background: 'linear-gradient(135deg, #1ed760, #16a34a)' }}
       >
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow overflow-hidden">
+          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm overflow-hidden">
             <img src="/qq/favicon.ico" alt="QQ" className="w-8 h-8 object-contain" />
           </div>
           <div>
@@ -57,7 +57,7 @@ function IndexContent() {
           </a>
           <button
             onClick={viewCart}
-            className="relative bg-white text-green-600 font-bold px-4 py-2 rounded-xl shadow flex items-center gap-2"
+            className="relative bg-white text-green-600 font-bold px-4 py-2 rounded-xl shadow-sm flex items-center gap-2"
           >
             <i className="fa-solid fa-cart-shopping" />
             {cartCount > 0 && (

@@ -24,33 +24,51 @@ function ac(p: Project) { return p.primary_color ?? "var(--primary-color)"; }
 
 // ── Project Card ──────────────────────────────────────────────────────────────
 
+/**
+ * ทรงป้ายกระจกฝ้าที่ใช้ซ้ำทั้งป้ายโลโก้ ปุ่ม Demo และป้ายประเมิน
+ * ให้ของที่ลอยอยู่บนโปสเตอร์เป็นชุดเดียวกันหมด
+ */
+const CHIP = {
+  background: "rgba(255,255,255,0.18)",
+  backdropFilter: "blur(8px)",
+  border: "1.5px solid rgba(255,255,255,0.35)",
+} as const;
+
+/**
+ * การ์ดโปรเจค — โปสเตอร์เต็มใบ ไม่มีแถบปุ่มใต้รูป
+ *
+ * เหตุผลเดียวกับการ์ดในหน้าแรก (components/ProjectsGrid.tsx) และตั้งใจให้เหมือนกัน
+ * ทั้งสองที่:
+ *   - แถบ "ประเมินโปรเจคนี้" พื้นทึบสีประจำโปรเจค พอเรียงกันในกริดกลายเป็นแถบ
+ *     หลายสีตีกันเอง ดังกว่าตัวโปสเตอร์ที่ควรเป็นพระเอก
+ *   - ขอบสีรอบการ์ดซ้ำซ้อน เพราะโปสเตอร์กินเต็มใบจนไม่มีพื้นขาวให้ขอบไปคั่น
+ *   - h-auto ทำให้การ์ดสูงตามสัดส่วนรูปจริง โปสเตอร์ A4 แนวตั้งกับแบนเนอร์แนวนอน
+ *     ปนกันในแถวเดียวจึงสูงไม่เท่ากันจนเหลือช่องโหว่
+ */
 function ProjectCard({ project, isLatest }: { project: Project; isLatest: boolean }) {
   const color = ac(project);
   const [imgErr, setImgErr] = useState(false);
   const [logoErr, setLogoErr] = useState(false);
 
   return (
-    <div
-      className="group rounded-2xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
-      style={{ background: "#fff", border: `1.5px solid ${color}22` }}
-    >
-      {/* ── Poster (click → evaluate) ── */}
-      <Link href={`/project/${project.slug}`} className="block relative overflow-hidden">
+    <div className="group relative rounded-2xl overflow-hidden bg-white shadow-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
+      {/* ── Poster ── object-top เพราะโปสเตอร์วางชื่อเรื่องไว้บนสุดเสมอ
+          ตัดส่วนล่างทิ้งจึงเสียข้อมูลน้อยกว่าตัดตรงกลางแบบ object-center */}
+      <div className="relative aspect-[4/5] overflow-hidden">
         {project.poster_url && !imgErr ? (
           <Image
             src={project.poster_url}
             alt={project.name}
-            width={0}
-            height={0}
+            fill
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-            className="w-full h-auto object-contain transition-transform duration-500 group-hover:scale-[1.02]"
+            className="object-cover object-top transition-transform duration-500 group-hover:scale-[1.02]"
             style={{ background: `linear-gradient(135deg, ${color}18 0%, ${color}08 100%)` }}
             onError={() => setImgErr(true)}
             loading="lazy"
           />
         ) : (
-          <div className="w-full flex items-center justify-center"
-            style={{ minHeight: 140, background: `linear-gradient(135deg, ${color}22 0%, ${color}10 100%)` }}>
+          <div className="w-full h-full flex items-center justify-center"
+            style={{ background: `linear-gradient(135deg, ${color}22 0%, ${color}10 100%)` }}>
             <i className="fa-solid fa-folder-open text-3xl" style={{ color: color + "66" }} />
           </div>
         )}
@@ -67,9 +85,9 @@ function ProjectCard({ project, isLatest }: { project: Project; isLatest: boolea
           {pYear(project) ?? "—"}
         </span>
 
+        {/* แถบล่าง: โลโก้ + ชื่อ + Demo + ป้ายประเมิน */}
         <div className="absolute bottom-0 left-0 right-0 flex items-end gap-2.5 px-3 pb-3">
-          <div className="relative w-8 h-8 rounded-xl flex-shrink-0 overflow-hidden shadow-lg"
-            style={{ background: "rgba(255,255,255,0.18)", backdropFilter: "blur(8px)", border: "1.5px solid rgba(255,255,255,0.35)" }}>
+          <div className="relative w-8 h-8 rounded-xl shrink-0 overflow-hidden shadow-lg" style={CHIP}>
             {!logoErr ? (
               <Image src={project.logo_url ?? "/school/school-logo.svg"} alt=""
                 fill sizes="32px" className="object-contain"
@@ -78,79 +96,68 @@ function ProjectCard({ project, isLatest }: { project: Project; isLatest: boolea
               <i className="fa-solid fa-graduation-cap text-[10px] text-white m-auto block mt-2" />
             )}
           </div>
-          <p className="text-sm font-bold text-white leading-tight line-clamp-2 drop-shadow-sm flex-1 min-w-0">
+
+          <p className="text-sm font-bold text-white leading-tight line-clamp-2 drop-shadow-xs flex-1 min-w-0">
             {project.name}
           </p>
-        </div>
-      </Link>
 
-      {/* ── Footer: Demo | Evaluate ── */}
-      <div className="flex" style={{ borderTop: `1px solid ${color}15` }}>
-        {project.demo_url ? (
-          <>
+          {/* z-20 เพราะต้องลอยเหนือลิงก์ที่คลุมทั้งใบ ไม่งั้นกดแล้วไปหน้าประเมินแทน
+              (ห้ามวาง <a> ซ้อนใน <Link> ตรง ๆ — ลิงก์ซ้อนลิงก์เป็น HTML ที่ใช้ไม่ได้) */}
+          {project.demo_url && (
             <a
               href={project.demo_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-bold transition-all hover:opacity-75 active:scale-95"
-              style={{ color, borderRight: `1px solid ${color}18` }}
+              title="ดู Demo"
+              aria-label={`ดู Demo ของ ${project.name}`}
+              className="relative z-20 w-8 h-8 shrink-0 rounded-xl flex items-center justify-center text-white shadow-lg transition-opacity hover:opacity-75"
+              style={CHIP}
             >
               <i className="fa-solid fa-arrow-up-right-from-square text-[10px]" />
-              ดู Demo
             </a>
-            <Link
-              href={`/project/${project.slug}`}
-              className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95"
-              style={{ background: color }}
-            >
-              <i className="fa-solid fa-star text-[10px]" />
-              ประเมิน
-            </Link>
-          </>
-        ) : (
-          <Link
-            href={`/project/${project.slug}`}
-            className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95"
-            style={{ background: color }}
-          >
-            <i className="fa-solid fa-star text-[10px]" />
-            ประเมินโปรเจคนี้
-          </Link>
-        )}
+          )}
+
+          <span className="shrink-0 flex items-center gap-1 rounded-xl px-2.5 h-8 text-[11px] font-bold text-white shadow-lg"
+            style={CHIP}>
+            <i className="fa-solid fa-star text-[9px]" />
+            ประเมิน
+          </span>
+        </div>
       </div>
+
+      {/* ลิงก์คลุมทั้งใบ วางเป็นพี่น้องกับรูป ไม่ใช่ห่อรูปไว้ ปุ่ม Demo จึงยังกดได้ */}
+      <Link href={`/project/${project.slug}`} className="absolute inset-0 z-10">
+        <span className="sr-only">ประเมินโปรเจค {project.name}</span>
+      </Link>
     </div>
   );
 }
 
 // ── Featured Card ─────────────────────────────────────────────────────────────
 
+/** โครงเดียวกับ ProjectCard ต่างแค่ขนาดตัวอักษร/ป้าย และป้าย "โปรเจคล่าสุด" */
 function FeaturedCard({ project }: { project: Project }) {
   const color = ac(project);
   const [imgErr, setImgErr] = useState(false);
   const [logoErr, setLogoErr] = useState(false);
 
   return (
-    <div
-      className="group rounded-3xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
-      style={{ background: "#fff", border: `2px solid ${color}33` }}
-    >
-      {/* ── Poster ── */}
-      <Link href={`/project/${project.slug}`} className="block relative overflow-hidden">
+    <div className="group relative rounded-3xl overflow-hidden bg-white shadow-xl transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl">
+      <div className="relative aspect-[4/5] overflow-hidden">
         {project.poster_url && !imgErr ? (
           <Image
             src={project.poster_url}
             alt={project.name}
-            width={0}
-            height={0}
-            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 80vw, 1200px"
-            className="w-full h-auto object-contain"
+            fill
+            sizes="(max-width: 640px) 100vw, 50vw"
+            className="object-cover object-top"
             style={{ background: `linear-gradient(135deg, ${color}22 0%, ${color}0c 100%)` }}
             onError={() => setImgErr(true)}
             priority
           />
         ) : (
-          <div className="w-full"
-            style={{ minHeight: 180, background: `linear-gradient(135deg, ${color}30 0%, ${color}10 100%)` }} />
+          <div className="w-full h-full"
+            style={{ background: `linear-gradient(135deg, ${color}30 0%, ${color}10 100%)` }} />
         )}
 
         <div className="absolute inset-x-0 bottom-0 h-2/5 pointer-events-none"
@@ -166,8 +173,7 @@ function FeaturedCard({ project }: { project: Project }) {
         </span>
 
         <div className="absolute bottom-0 left-0 right-0 flex items-end gap-4 px-5 pb-5">
-          <div className="relative w-14 h-14 rounded-2xl flex-shrink-0 shadow-2xl overflow-hidden"
-            style={{ background: "rgba(255,255,255,0.22)", backdropFilter: "blur(12px)", border: "2px solid rgba(255,255,255,0.4)" }}>
+          <div className="relative w-14 h-14 rounded-2xl shrink-0 shadow-2xl overflow-hidden" style={CHIP}>
             {!logoErr ? (
               <Image src={project.logo_url ?? "/school/school-logo.svg"} alt=""
                 fill sizes="56px" className="object-contain"
@@ -176,51 +182,41 @@ function FeaturedCard({ project }: { project: Project }) {
               <i className="fa-solid fa-graduation-cap text-white text-xl m-auto block mt-3" />
             )}
           </div>
+
           <div className="flex-1 min-w-0">
             <p className="text-[11px] font-semibold mb-0.5" style={{ color: "rgba(255,255,255,0.7)" }}>
               แบบประเมินความพึงพอใจ
             </p>
-            <h2 className="text-lg sm:text-xl font-extrabold text-white leading-tight line-clamp-2 drop-shadow">
+            <h2 className="text-lg sm:text-xl font-extrabold text-white leading-tight line-clamp-2 drop-shadow-sm">
               {project.name}
             </h2>
           </div>
-        </div>
-      </Link>
 
-      {/* ── Footer: Demo | Evaluate ── */}
-      <div className="flex" style={{ borderTop: `1px solid ${color}18` }}>
-        {project.demo_url ? (
-          <>
+          {project.demo_url && (
             <a
               href={project.demo_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1 flex items-center justify-center gap-2 py-3.5 text-sm font-bold transition-all hover:opacity-75 active:scale-95"
-              style={{ color, borderRight: `1px solid ${color}18` }}
+              title="ดู Demo"
+              aria-label={`ดู Demo ของ ${project.name}`}
+              className="relative z-20 w-10 h-10 shrink-0 rounded-2xl flex items-center justify-center text-white shadow-lg transition-opacity hover:opacity-75"
+              style={CHIP}
             >
               <i className="fa-solid fa-arrow-up-right-from-square text-xs" />
-              ดู Demo
             </a>
-            <Link
-              href={`/project/${project.slug}`}
-              className="flex-1 flex items-center justify-center gap-2 py-3.5 text-sm font-bold text-white transition-all hover:opacity-90 active:scale-95"
-              style={{ background: color, boxShadow: `inset 0 1px 0 ${color}` }}
-            >
-              <i className="fa-solid fa-star text-xs" />
-              ประเมินเลย
-            </Link>
-          </>
-        ) : (
-          <Link
-            href={`/project/${project.slug}`}
-            className="flex-1 flex items-center justify-center gap-2 py-3.5 text-sm font-bold text-white transition-all hover:opacity-90 active:scale-95"
-            style={{ background: color }}
-          >
-            <i className="fa-solid fa-star text-xs" />
-            ประเมินโปรเจคนี้เลย
-          </Link>
-        )}
+          )}
+
+          <span className="shrink-0 flex items-center gap-1.5 rounded-2xl px-3 h-10 text-xs font-bold text-white shadow-lg"
+            style={CHIP}>
+            <i className="fa-solid fa-star text-[10px]" />
+            ประเมิน
+          </span>
+        </div>
       </div>
+
+      <Link href={`/project/${project.slug}`} className="absolute inset-0 z-10">
+        <span className="sr-only">ประเมินโปรเจค {project.name}</span>
+      </Link>
     </div>
   );
 }
@@ -305,7 +301,7 @@ export default function ProjectsPage() {
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                   placeholder="ค้นหาโปรเจค..."
-                  className="w-full pl-8 pr-3 py-2 rounded-xl text-sm focus:outline-none transition-all bg-white border border-slate-200"
+                  className="w-full pl-8 pr-3 py-2 rounded-xl text-sm focus:outline-hidden transition-all bg-white border border-slate-200"
                   onFocus={e => (e.currentTarget.style.borderColor = "var(--primary-color)")}
                   onBlur={e => (e.currentTarget.style.borderColor = "#e2e8f0")}
                 />

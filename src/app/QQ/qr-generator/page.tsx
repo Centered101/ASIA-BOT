@@ -75,14 +75,14 @@ export default function QRGeneratorPage() {
 
       <div className="p-4 max-w-2xl mx-auto space-y-4">
         {/* Config */}
-        <div className="bg-white rounded-2xl shadow p-4 space-y-3">
+        <div className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
           <div>
             <label className="text-sm font-semibold text-gray-700 block mb-1">URL หน้าสั่งอาหาร</label>
             <input
               type="text"
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
-              className="w-full border-2 border-gray-200 rounded-xl px-4 py-2 text-sm focus:border-green-500 focus:outline-none"
+              className="w-full border-2 border-gray-200 rounded-xl px-4 py-2 text-sm focus:border-green-500 focus:outline-hidden"
             />
           </div>
           <div>
@@ -93,7 +93,7 @@ export default function QRGeneratorPage() {
               max={50}
               value={tableCount}
               onChange={(e) => setTableCount(parseInt(e.target.value) || 1)}
-              className="w-full border-2 border-gray-200 rounded-xl px-4 py-2 text-sm focus:border-green-500 focus:outline-none"
+              className="w-full border-2 border-gray-200 rounded-xl px-4 py-2 text-sm focus:border-green-500 focus:outline-hidden"
             />
           </div>
           <button
@@ -127,9 +127,9 @@ export default function QRGeneratorPage() {
 
             <div className="grid grid-cols-2 gap-4">
               {qrList.map((entry) => (
-                <div key={entry.table} className="bg-white rounded-2xl shadow p-4 text-center">
+                <div key={entry.table} className="bg-white rounded-2xl shadow-sm p-4 text-center">
                   <p className="font-bold text-gray-800 mb-2">โต๊ะที่ {entry.table}</p>
-                  <img src={entry.dataUrl} alt={`QR Table ${entry.table}`} className="w-full max-w-[150px] mx-auto mb-2 rounded" />
+                  <img src={entry.dataUrl} alt={`QR Table ${entry.table}`} className="w-full max-w-[150px] mx-auto mb-2 rounded-sm" />
                   <p className="text-xs text-gray-400 break-all mb-2">{entry.url}</p>
                   <button
                     onClick={() => download(entry)}

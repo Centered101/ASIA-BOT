@@ -1,8 +1,76 @@
 /* Fonts are loaded non-render-blocking via <link> in app/layout.tsx (Kanit only). */
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+/* ธีมเดิมของ asia-bot ยังอยู่ใน tailwind.config.ts — v4 อ่านไฟล์ v3 ได้ผ่าน
+   @config การย้ายค่าสีทั้งชุดเข้ามาเป็น @theme เป็นงานคนละก้อน และไม่จำเป็น
+   ต่อการอัปเกรด ถ้าย้ายพร้อมกันจะแยกไม่ออกว่าสีที่เพี้ยนมาจากอะไร */
+@config "../../tailwind.config.ts";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* asia-bot ไม่มี font-heading อยู่แล้ว จึงเพิ่มได้โดยไม่ชนกับใคร
+     ส่วน font-sans ตั้งใจไม่แตะ เพราะ asia-bot ผูกไว้กับ Sarabun/Kanit */
+  --font-heading: var(--mycer-font-heading);
+}
+
+/**
+ * ค่าตั้งต้นของ asia-bot สำหรับสามชื่อที่ทับกัน
+ *
+ * ตรงกับ theme.extend.colors ใน tailwind.config.ts เวลาแก้สีแบรนด์ของ asia-bot
+ * ต้องแก้ทั้งสองที่ ไม่งั้น bg-primary กับ bg-primary-dark จะมาจากคนละชุดสี
+ */
+:root {
+  --primary: #84d4fa;
+  --secondary: #ff7070;
+  --accent: #fe4040;
+}
+
+/* ── ชิมความเข้ากันได้ v3 → v4 ─────────────────────────────
+   v4 เปลี่ยนสีปริยายของเส้นขอบจาก gray-200 เป็น currentColor ทุกที่ที่เขียน
+   แค่ "border" โดยไม่ระบุสี (ในโปรเจกต์นี้มีเยอะ) จะกลายเป็นเส้นสีเดียวกับ
+   ตัวอักษร คือดำทึบแทนที่จะเป็นเทาอ่อน — ตรึงกลับเป็นพฤติกรรมเดิมไว้ก่อน
+   เอาบล็อกนี้ออกได้เมื่อไล่ใส่สีขอบให้ครบทุกจุดแล้ว */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+}
 
 :root {
   --primary-color: #84D4FA;
@@ -57,7 +125,6 @@ html, select { cursor: url(/cursors/arrow-20.png), auto !important; }
 a, button, label, .cursor-pointer, [class^="btn-"] { cursor: url(/cursors/hand-20.png), pointer !important; }
 
 .bg-blob { position: fixed; border-radius: 50%; filter: blur(80px); opacity: 0.18; pointer-events: none; z-index: 0; }
-@keyframes pl-spin { to { transform: rotate(360deg); } }
 .bg-stripes-gray { background-size: 10px 10px; background-image: repeating-linear-gradient(45deg, var(--primary-color) 0, var(--primary-color) 1px, transparent 0, transparent 50%); }
 
 [class^="btn-"] {
@@ -132,21 +199,42 @@ a, button, label, .cursor-pointer, [class^="btn-"] { cursor: url(/cursors/hand-2
 }
 .btn-text:hover { background: rgba(14,165,233,0.08); color: #0284C7; }
 
-.spinner { border: 2.5px solid var(--primary-color); border-top-color: transparent; border-radius: 50%; display: inline-block; animation: spin 0.7s linear infinite; }
+/* ── สปินเนอร์กลางของทั้งโปรเจกต์ — เฟือง fa-gear หมุน ──────────────
+   ใช้ตัวอักษรของ Font Awesome 6 Free (solid) แทนการวาดวงแหวนเอง
+   ทุกจุดที่เคยเป็น .spinner / .asia-spinner จึงกลายเป็นเฟืองพร้อมกัน
+   โดยไม่ต้องแก้ markup ทีละที่
 
-/* ── สปินเนอร์กลางของทั้งโปรเจกต์ (วงแหวนเปิด) ใช้แทน fa-spinner ทุกจุด
-   ขนาดอิง font-size (1em) และสีอิง currentColor
-   จึงยังคุมด้วยคลาสเดิมได้ เช่น text-2xl / text-sky-400 / text-[#ff7070] ── */
+   - ขนาดอิง font-size จึงคุมด้วย text-* ได้ (เช่น text-2xl)
+   - สีอิง currentColor จึงคุมด้วย text-* / style={{color}} ได้
+   - ล้าง border/background ทิ้ง เพราะของเดิมหลายจุดส่งคลาสอย่าง
+     border-2 border-white border-t-transparent มาวาดวงแหวน
+     ถ้าไม่ล้างจะเหลือกรอบสี่เหลี่ยมค้างรอบเฟือง
+   กฎในไฟล์นี้ไม่ได้อยู่ใน @layer จึงชนะ utility ของ Tailwind อยู่แล้ว
+   ยกเว้น font-size ที่ตั้งใจไม่ประกาศ เพื่อให้ text-* ยังสั่งขนาดได้ ── */
+.spinner,
 .asia-spinner {
   display: inline-block;
   flex-shrink: 0;
-  width: 1em;
-  height: 1em;
-  border: 0.14em solid currentColor;
-  border-top-color: transparent;
-  border-radius: 50%;
+  width: auto;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  font-family: "Font Awesome 6 Free";
+  font-weight: 900;
+  font-style: normal;
+  font-variant: normal;
+  line-height: 1;
+  text-rendering: auto;
   vertical-align: -0.125em;
-  animation: spin 0.7s linear infinite;
+  -webkit-font-smoothing: antialiased;
+  animation: spin 1.6s linear infinite;
+}
+.spinner::before,
+.asia-spinner::before { content: "\f013"; }
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner, .asia-spinner { animation-duration: 4s; }
 }
 
 /* ── กล่องติ๊กกลางของทั้งโปรเจกต์ ──────────────────────────────
@@ -254,6 +342,25 @@ a, button, label, .cursor-pointer, [class^="btn-"] { cursor: url(/cursors/hand-2
   letter-spacing: 0;
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
+}
+
+/* กล่องติ๊กบนพื้นมืดของหลังบ้าน — คลาสเดียวกับฝั่งสว่าง แค่สลับสีให้เข้าธีม
+   ถ้าใช้ค่าเดิมจะกลายเป็นกล่องขาวสว่างโดดบนพื้นดำ
+
+   ฝั่งสว่างต้องใช้ขอบเฉดเข้มตอนติ๊ก เพราะพื้น primary เทียบกับพื้นขาวได้
+   contrast ไม่ถึงเกณฑ์ ส่วนที่นี่ #FF7070 บนพื้น #0c0c0c ได้ราว 7.2 อยู่แล้ว
+   จึงถมสีเดียวเต็มกล่องได้เลย ไม่ต้องพึ่งขอบมาช่วย */
+.admin-shell .asia-check {
+  background: #0c0c0c;
+  border-color: #3e3e3e;
+}
+.admin-shell .asia-check:hover:not(:disabled) { border-color: var(--secondary-color); }
+.admin-shell .asia-check:checked {
+  background: var(--secondary-color);
+  border-color: var(--secondary-color);
+}
+.admin-shell .asia-check:focus-visible {
+  outline-color: var(--secondary-color);
 }
 
 .admin-shell input,

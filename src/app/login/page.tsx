@@ -91,11 +91,11 @@ function LoginForm() {
       <Header subtitle="เข้าสู่ระบบ" />
 
       <main className="min-h-[calc(100vh-64px)] flex items-center justify-center p-2 sm:p-4">
-        <div data-aos="zoom-in-up" suppressHydrationWarning className="w-full max-w-lg relative bg-[color:var(--white-smoker)] border rounded-2xl shadow p-4 sm:p-6 md:p-8 z-10">
+        <div data-aos="zoom-in-up" suppressHydrationWarning className="w-full max-w-lg relative bg-[color:var(--white-smoker)] border rounded-2xl shadow-sm p-4 sm:p-6 md:p-8 z-10">
 
           {next !== "/student" && (
             <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 mb-5">
-              <i className="fa-solid fa-lock text-amber-500 flex-shrink-0" />
+              <i className="fa-solid fa-lock text-amber-500 shrink-0" />
               กรุณาเข้าสู่ระบบก่อนเข้าใช้งานหน้านี้
             </div>
           )}
@@ -165,7 +165,7 @@ function LoginForm() {
 
           <button onClick={handleLogin} disabled={loading} suppressHydrationWarning className="btn-primary w-full mb-4 overflow-hidden">
             {loading
-              ? <><span className="spinner w-4 h-4 border-2 border-white border-t-transparent" />&nbsp;กำลังตรวจสอบ...</>
+              ? <><span className="spinner" />&nbsp;กำลังตรวจสอบ...</>
               : <><i className="fa-solid fa-right-to-bracket text-sm" /> เข้าสู่ระบบ</>}
           </button>
 
@@ -180,10 +180,10 @@ function LoginForm() {
             onClick={handleGoogleLogin}
             disabled={googleLoading || loading}
             suppressHydrationWarning
-            className="w-full mb-4 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm hover:border-sky-200 hover:bg-sky-50 transition disabled:opacity-60 flex items-center justify-center gap-2"
+            className="w-full mb-4 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-xs hover:border-sky-200 hover:bg-sky-50 transition disabled:opacity-60 flex items-center justify-center gap-2"
           >
             {googleLoading
-              ? <><span className="spinner w-4 h-4 border-2 border-sky-400 border-t-transparent" /> กำลังเชื่อม Google...</>
+              ? <><span className="spinner" /> กำลังเชื่อม Google...</>
               : <><i className="fa-brands fa-google text-[#4285F4]" /> เข้าสู่ระบบด้วย Google</>}
           </button>
 

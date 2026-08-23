@@ -29,6 +29,9 @@ const TAB_ACCESS: Record<string, AdminRole[]> = {
   maintenance: ["superadmin", "admin"],
   assets: ["superadmin", "admin"],
   data_requests: ["superadmin", "admin"],
+  // ไม่เปิดให้ staff — document.view_all แปลว่าเห็นสำเนาบัตรประชาชนกับทะเบียนบ้าน
+  // ของนักเรียนทั้งโรงเรียน ซึ่งสภานักเรียนไม่ควรเห็น (ดู 0023 ที่ตั้งใจไม่ให้ ACADEMIC ด้วย)
+  documents: ["superadmin", "admin"],
   bookings: ["superadmin", "admin", "staff"],
   rooms: ["superadmin", "admin"],
   products: ["superadmin", "admin", "staff"],
@@ -68,15 +71,31 @@ export function normalizeAdminRole(role: string): AdminRole {
   return role === "superadmin" || role === "admin" || role === "staff" ? role : "staff";
 }
 
-/** ป้ายไทยของ role เดิม — เดิมเขียนซ้ำในหลายที่ ย้ายมาไว้กับการกรองเมนู */
+/**
+ * ป้ายไทยของ role เดิม — เดิมเขียนซ้ำในหลายที่ ย้ายมาไว้กับการกรองเมนู
+ *
+ * ป้ายตรงนี้เขียนตามคนที่ถือจริง ไม่ได้แปลจากคำในคอลัมน์: staff คือประธานและ
+ * สมาชิกสภานักเรียน (เป็นนักเรียน) ส่วน admin คือครู
+ */
 const ROLE_LABEL: Record<AdminRole, string> = {
   superadmin: "ผู้ดูแลสูงสุด",
-  admin: "ผู้ดูแลระบบ",
-  staff: "เจ้าหน้าที่",
+  admin: "ครู",
+  staff: "สภานักเรียน",
 };
 
 export function adminRoleLabel(role: string): string {
   return ROLE_LABEL[normalizeAdminRole(role)];
+}
+
+/**
+ * ใครสังกัดฝ่ายได้บ้าง
+ *
+ * ฝ่าย (ฝ่ายทะเบียน ฝ่ายวิชาการ ฝ่ายอาคารสถานที่ ฯลฯ) เป็นโครงสร้างของบุคลากร
+ * สภานักเรียนไม่ได้อยู่ในนั้น จึงตั้งฝ่ายให้ไม่ได้ ไม่ใช่แค่ "ตั้งแล้วไม่มีผล"
+ * แต่เป็นค่าที่ไม่ควรมีอยู่ในแถวตั้งแต่แรก
+ */
+export function canHaveDivision(role: string): boolean {
+  return normalizeAdminRole(role) !== "staff";
 }
 
 /**

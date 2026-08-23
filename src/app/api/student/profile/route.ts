@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getServiceClient } from "@/lib/server/supabase-server";
 import { withAuth } from "@/lib/server/with-auth";
+import { resolveOwnStudentId } from "@/lib/server/student-identity";
+import { withTimelineLabels } from "@/lib/server/student-timeline";
 import { parseBody } from "@/lib/server/validation";
 import {
   AchievementSchema, AchievementUpdateSchema,
@@ -70,7 +72,12 @@ function readKind(req: Request): { ok: true; kind: Kind } | { ok: false; respons
   return { ok: true, kind: parsed.data };
 }
 
-/** บัญชีที่ไม่ใช่นักเรียนไม่มีแฟ้มให้จัดการ — ครูใช้หน้าแอดมินแทน */
+/**
+ * บัญชีที่ไม่มีโปรไฟล์นักเรียนผูกอยู่ ไม่มีแฟ้มให้จัดการ — ครูใช้หน้าแอดมินแทน
+ *
+ * ไม่ได้ตัดสินจาก subjectType ตรง ๆ อีกแล้ว เพราะคนที่เป็นทั้งครูและนักเรียน
+ * resolve ออกมาเป็น admin เสมอ แล้วโดนกันออกจากแฟ้มของตัวเอง (ดู resolveOwnStudentId)
+ */
 function notAStudent() {
   return NextResponse.json(
     { status: "error", message: "บัญชีนี้ไม่ใช่บัญชีนักเรียน" },
@@ -86,8 +93,8 @@ function notAStudent() {
  */
 export const GET = withAuth(
   async (_req, { principal }) => {
-    if (principal.subjectType !== "student") return notAStudent();
-    const studentId = principal.subjectId;
+    const studentId = await resolveOwnStudentId(principal);
+    if (!studentId) return notAStudent();
     const supabase = getServiceClient();
 
     const [guardians, education, achievements, timeline] = await Promise.all([
@@ -112,8 +119,9 @@ export const GET = withAuth(
         guardians: guardians.data ?? [],
         education: education.data ?? [],
         achievements: achievements.data ?? [],
-        // อ่านอย่างเดียว ไม่มี endpoint ให้เขียน
-        timeline: timeline.data ?? [],
+        // อ่านอย่างเดียว ไม่มี endpoint ให้เขียน — แปลง uuid เป็นชื่อห้อง/ชื่อครู
+        // ก่อนส่งออก ไม่งั้นนักเรียนเห็นแต่ค่าดิบของคอลัมน์ (ดู withTimelineLabels)
+        timeline: await withTimelineLabels(timeline.data ?? []),
       },
     });
   },
@@ -122,7 +130,8 @@ export const GET = withAuth(
 
 export const POST = withAuth(
   async (req, { principal }) => {
-    if (principal.subjectType !== "student") return notAStudent();
+    const studentId = await resolveOwnStudentId(principal);
+    if (!studentId) return notAStudent();
     const k = readKind(req);
     if (!k.ok) return k.response;
     const spec = KINDS[k.kind];
@@ -131,7 +140,6 @@ export const POST = withAuth(
     if (!parsed.ok) return parsed.response;
     const body = parsed.data as Record<string, unknown>;
 
-    const studentId = principal.subjectId;
     const supabase = getServiceClient();
 
     // ผู้ปกครองหลักมีได้คนเดียว มี unique index กันอยู่ในชั้น DB ถ้าไม่ปลดคนเดิม
@@ -175,7 +183,8 @@ export const POST = withAuth(
 
 export const PATCH = withAuth(
   async (req, { principal }) => {
-    if (principal.subjectType !== "student") return notAStudent();
+    const studentId = await resolveOwnStudentId(principal);
+    if (!studentId) return notAStudent();
     const k = readKind(req);
     if (!k.ok) return k.response;
     const spec = KINDS[k.kind];
@@ -184,7 +193,6 @@ export const PATCH = withAuth(
     if (!parsed.ok) return parsed.response;
     const { id, ...rest } = parsed.data as { id: string } & Record<string, unknown>;
 
-    const studentId = principal.subjectId;
     const supabase = getServiceClient();
 
     // เงื่อนไขสามข้อพร้อมกัน: แถวนี้มีจริง เป็นของนักเรียนคนนี้ และนักเรียนกรอกเอง
@@ -237,7 +245,8 @@ export const PATCH = withAuth(
 
 export const DELETE = withAuth(
   async (req, { principal }) => {
-    if (principal.subjectType !== "student") return notAStudent();
+    const studentId = await resolveOwnStudentId(principal);
+    if (!studentId) return notAStudent();
     const k = readKind(req);
     if (!k.ok) return k.response;
     const spec = KINDS[k.kind];
@@ -247,7 +256,6 @@ export const DELETE = withAuth(
       return NextResponse.json({ status: "error", message: "ต้องระบุ id" }, { status: 400 });
     }
 
-    const studentId = principal.subjectId;
     const supabase = getServiceClient();
 
     const { data: before } = await supabase

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { QUICK_LINKS, SITE_NAME } from "@/lib/config";
+import { QUICK_LINKS, SITE_NAME, GITHUB_REPO, GITHUB_URL, copyrightLine } from "@/lib/config";
 
 export default function Footer() {
   const navLinks = QUICK_LINKS.filter(l => l.path && l.role !== "admin").slice(0, 7);
@@ -59,7 +59,7 @@ export default function Footer() {
             <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">ติดต่อ</div>
             <div className="space-y-3">
               <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-xl bg-slate-800 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <div className="w-9 h-9 rounded-xl bg-slate-800 flex items-center justify-center shrink-0 mt-0.5">
                   <i className="fa-solid fa-school text-sm text-sky-400" />
                 </div>
                 <div>
@@ -67,13 +67,13 @@ export default function Footer() {
                   <div className="text-xs text-slate-500 mt-0.5">ระบบบริหารจัดการนักเรียนครบวงจร</div>
                 </div>
               </div>
-              <Link href="https://github.com/Centered101/asia-bot" target="_blank" rel="noopener noreferrer"
+              <Link href={GITHUB_URL} target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-3 group">
-                <div className="w-9 h-9 rounded-xl bg-slate-800 group-hover:bg-slate-700 flex items-center justify-center flex-shrink-0 transition">
+                <div className="w-9 h-9 rounded-xl bg-slate-800 group-hover:bg-slate-700 flex items-center justify-center shrink-0 transition">
                   <i className="fa-brands fa-github text-sm text-slate-400 group-hover:text-white transition" />
                 </div>
                 <div>
-                  <div className="text-sm font-semibold text-slate-300 group-hover:text-white transition">GitHub: Centered101/ASIA-BOT</div>
+                  <div className="text-sm font-semibold text-slate-300 group-hover:text-white transition">GitHub: {GITHUB_REPO}</div>
                   <div className="text-xs text-slate-500">ซอร์สโค้ดและโปรเจกต์</div>
                 </div>
               </Link>
@@ -96,7 +96,7 @@ export default function Footer() {
           </div>
         </div>
         <div className="border-t border-slate-800 mt-6 pt-6 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span className="text-xs text-slate-500">Centered101 © 2024–2026 {SITE_NAME} — สงวนลิขสิทธิ์ทุกประการ</span>
+          <span className="text-xs text-slate-500">{copyrightLine(SITE_NAME)}</span>
           <div className="flex items-center gap-3 text-xs text-slate-600">
             <Link href="https://Centered101.com" target="_blank" rel="noopener noreferrer"
               className="hover:text-slate-400 transition flex items-center gap-1">

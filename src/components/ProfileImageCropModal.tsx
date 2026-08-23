@@ -59,7 +59,7 @@ export default function ProfileImageCropModal({
   if (!safeSrc) return null;
 
   return (
-    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/55 backdrop-blur-sm p-3 sm:p-4">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/55 backdrop-blur-xs p-3 sm:p-4">
       <div className="bg-white rounded-[28px] shadow-2xl w-full max-w-md max-h-[95dvh] overflow-y-auto flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
           <div>

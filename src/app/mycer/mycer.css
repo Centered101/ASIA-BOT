@@ -1,0 +1,156 @@
+/**
+ * หมายเหตุ: บล็อก @theme inline กับค่าตั้งต้นที่ :root ของธีมนี้ ย้ายไปอยู่ใน
+ * src/app/globals.css แล้ว
+ *
+ * Tailwind v4 สร้าง utility จาก @theme ที่อยู่ใน "ไฟล์เดียวกับ @import tailwindcss"
+ * เท่านั้น ตอนที่ @theme อยู่ในไฟล์นี้ คลาสอย่าง bg-card / text-muted-foreground
+ * จึงไม่ถูกสร้างขึ้นเลย — component ที่ก๊อปมาจาก asia-mycer เรนเดอร์ออกมาไม่มีสี
+ *
+ * ไฟล์นี้เหลือเฉพาะ "ค่าจริงของตัวแปรในขอบเขต .mycer-scope" ซึ่งเป็น CSS ธรรมดา
+ * จะอยู่ไฟล์ไหนก็ได้
+ */
+/**
+ * ธีมของ Mycer — ยกชุดสีมาจาก asia-mycer/app/globals.css
+ *
+ * component ที่ก๊อปมาจาก asia-mycer (src/components/ui/*) ใช้ชื่อคลาสเชิงความหมาย
+ * อย่าง bg-card, text-muted-foreground, border-border, bg-chart-2/15 ซึ่งไม่มีใน
+ * ธีมของ asia-bot ไฟล์นี้จึงทำสองอย่าง:
+ *
+ *   1. @theme inline — ประกาศ "ชื่อ utility" ให้ Tailwind รู้จัก (ทำได้ที่ระดับ
+ *      บนสุดเท่านั้น ไม่มีทางประกาศเฉพาะบางส่วนของหน้า)
+ *   2. .mycer-scope — ใส่ "ค่าจริง" ของตัวแปร เฉพาะในขอบเขตของ Mycer
+ *
+ * ผลคือ bg-card มีอยู่ทั้งเว็บ แต่ให้สีจริงเฉพาะใต้ .mycer-scope ส่วนหน้า
+ * asia-bot ไม่ได้ใช้ชื่อพวกนี้อยู่แล้วจึงไม่กระทบ
+ *
+ * ข้อควรระวัง: primary / secondary / accent เป็นชื่อที่ asia-bot ใช้อยู่จริง
+ * (tailwind.config.ts) จึงต้องตั้งค่าเดิมของ asia-bot ไว้ที่ :root ก่อน แล้วให้
+ * .mycer-scope ทับ ไม่งั้นปุ่มสีฟ้าทั้งเว็บจะกลายเป็นสีที่ยังไม่ได้กำหนด
+ */
+
+/**
+ * ขอบเขตของ Mycer — ชุดสีจริงจาก asia-mycer
+ *
+ * ทาพื้นหลังทับด้วย เพราะ asia-bot ไล่สีฟ้าไว้ที่ <body> ใน globals.css ซึ่งเป็น
+ * root layout ร่วมกันทั้งแอป ถ้าปล่อยโปร่งใส แฟ้มสะสมผลงานจะลอยอยู่บนพื้นของ
+ * อีกเว็บหนึ่ง
+ */
+.mycer-scope {
+  color-scheme: light;
+  --background: oklch(0.98 0.006 275);
+  --foreground: oklch(0.22 0.03 265);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.03 265);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.03 265);
+  --primary: oklch(0.58 0.19 265);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.96 0.012 275);
+  --secondary-foreground: oklch(0.3 0.04 265);
+  --muted: oklch(0.96 0.01 275);
+  --muted-foreground: oklch(0.55 0.03 265);
+  --accent: oklch(0.94 0.03 285);
+  --accent-foreground: oklch(0.35 0.08 285);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.91 0.012 275);
+  --input: oklch(0.91 0.012 275);
+  --ring: oklch(0.58 0.19 265);
+  --chart-1: oklch(0.58 0.19 265);
+  --chart-2: oklch(0.7 0.16 200);
+  --chart-3: oklch(0.72 0.18 145);
+  --chart-4: oklch(0.75 0.17 55);
+  --chart-5: oklch(0.65 0.22 15);
+  --radius: 0.9rem;
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.3 0.03 265);
+  --sidebar-primary: oklch(0.58 0.19 265);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.96 0.02 280);
+  --sidebar-accent-foreground: oklch(0.35 0.08 280);
+  --sidebar-border: oklch(0.92 0.012 275);
+  --sidebar-ring: oklch(0.58 0.19 265);
+  --brand-gradient: linear-gradient(
+    90deg,
+    #f97316 0%,
+    #ec4899 30%,
+    #8b5cf6 55%,
+    #3b82f6 78%,
+    #14b8a6 100%
+  );
+
+  /* ใช้กับคลาสค่าคงที่แบบ rounded-[min(var(--radius-md),12px)] ในปุ่มที่ก๊อปมา */
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+
+  --mycer-font-heading: var(--font-mycer-heading-face), "Prompt", "Kanit", sans-serif;
+
+  min-height: 100vh;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-mycer-sans), "IBM Plex Sans Thai", "Kanit", sans-serif;
+  font-weight: 400;
+  /* asia-bot บังคับเคอร์เซอร์ Roblox ทั้งเว็บด้วย !important — คืนของระบบให้
+     ในขอบเขตนี้ ไม่งั้น Mycer จะไม่รู้สึกว่าเป็นคนละเว็บ */
+  cursor: auto !important;
+}
+
+.mycer-scope a,
+.mycer-scope button,
+.mycer-scope label,
+.mycer-scope [role="button"] {
+  cursor: pointer !important;
+}
+
+/* asia-bot ตั้ง body { font-weight: 600 } ทั้งเว็บ ซึ่งหนาเกินไปสำหรับหน้าที่มี
+   ข้อความยาว ๆ อย่างรายละเอียดผลงาน */
+.mycer-scope :where(p, span, td, li, dd, input, textarea, select, button, a) {
+  font-weight: 400;
+}
+
+/* ─── มาจาก @layer base ของ asia-mycer ─────────────────────
+   ต้นฉบับใส่ให้ * ทั้งเอกสาร ที่นี่จำกัดไว้ในขอบเขตของ Mycer เท่านั้น */
+.mycer-scope * {
+  border-color: var(--border);
+}
+
+.mycer-scope :where(h1, h2, h3, h4) {
+  font-family: var(--mycer-font-heading);
+}
+
+/**
+ * มาตราความมนของ asia-mycer (--radius: 0.9rem)
+ *
+ * คลาสอย่าง rounded-xl ถูกคอมไพล์เป็นค่าคงที่ตั้งแต่ตอน build จึงกำหนดผ่าน
+ * ตัวแปรไม่ได้ ต้องเขียนทับในขอบเขตนี้ ใช้ :where() เพื่อให้ค่าความจำเพาะเป็น 0
+ * คลาสที่ระบุความมนเองในที่เกิดเหตุจึงยังชนะอยู่
+ */
+.mycer-scope :where(.rounded-sm) { border-radius: var(--radius-sm); }
+.mycer-scope :where(.rounded-md) { border-radius: var(--radius-md); }
+.mycer-scope :where(.rounded-lg) { border-radius: var(--radius-lg); }
+.mycer-scope :where(.rounded-xl) { border-radius: var(--radius-xl); }
+.mycer-scope :where(.rounded-2xl) { border-radius: var(--radius-2xl); }
+
+/* ─── มาจาก @layer utilities ของ asia-mycer ────────────────── */
+.brand-gradient {
+  background-image: var(--brand-gradient);
+}
+
+.brand-text {
+  background-image: var(--brand-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.glass {
+  background-color: color-mix(in oklch, var(--card) 72%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.h-13 {
+  height: 3.25rem;
+}

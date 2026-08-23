@@ -24,16 +24,33 @@ function AdminGoogleCallbackContent() {
       const supabase = getGoogleSupabase();
       try {
         const code = searchParams.get("code");
-        if (code) await supabase.auth.exchangeCodeForSession(code);
-        else if (window.location.hash.includes("access_token")) await supabase.auth.getSession();
+        if (code) {
+          // getGoogleSupabase() ตั้ง detectSessionInUrl: true ไว้ client จึงแลก code
+          // ให้เองตั้งแต่ตอนถูกสร้าง แล้ว "ลบ code verifier ทิ้ง" ตามสเปกของ PKCE
+          // (ใช้ได้ครั้งเดียว) พอโค้ดตรงนี้เรียกแลกซ้ำอีกรอบจึงได้
+          // AuthPKCECodeVerifierMissingError ทั้งที่ session ออกมาเรียบร้อยแล้ว
+          //
+          // exchangeCodeForSession คืน error มาใน object ไม่ได้ throw ของเดิมเลยทิ้ง
+          // ค่านั้นทั้งก้อนแล้วรอดมาได้โดยบังเอิญ — ที่นี่เช็กจาก session จริงแทน
+          // ถ้ามี session แล้วก็ถือว่าสำเร็จ ถ้าไม่มีค่อยโยน error ตัวจริงออกไป
+          const { error: exchangeErr } = await supabase.auth.exchangeCodeForSession(code);
+          if (exchangeErr) {
+            const { data: after } = await supabase.auth.getSession();
+            if (!after.session) throw exchangeErr;
+            console.warn("[admin-google] แลก code ซ้ำ ใช้ session ที่ client แลกไว้แล้ว");
+          }
+        } else if (window.location.hash.includes("access_token")) {
+          await supabase.auth.getSession();
+        }
 
-        const [{ data: userRes }, { data: sessionRes }] = await Promise.all([
+        const [{ data: userRes, error: userErr }, { data: sessionRes }] = await Promise.all([
           supabase.auth.getUser(),
           supabase.auth.getSession(),
         ]);
         const user = userRes.user ?? sessionRes.session?.user ?? null;
 
         if (!user?.email) {
+          console.error("[admin-google] Supabase ไม่คืน user กลับมา:", userErr);
           setError("ไม่สามารถดึงข้อมูลจาก Google ได้ กรุณาลองใหม่");
           return;
         }
@@ -76,7 +93,8 @@ function AdminGoogleCallbackContent() {
               setError(json.message ?? "เชื่อม Google ไม่สำเร็จ");
             }
             return;
-          } catch {
+          } catch (e) {
+            console.error("[admin-google] link mode ล้ม:", e);
             setError("Session หมดอายุ กรุณาลองเชื่อม Google ใหม่อีกครั้ง");
             await supabase.auth.signOut();
             return;
@@ -103,10 +121,14 @@ function AdminGoogleCallbackContent() {
           await supabase.auth.signOut();
           window.location.replace("/admin");
         } else {
-          setError(json.message ?? "ไม่มีสิทธิ์เข้าถึงพื้นที่ผู้ดูแล");
+          console.error("[admin-google] /api/admin/auth/google ตอบ", res.status, json);
+          setError(json.message ?? `ไม่มีสิทธิ์เข้าถึงพื้นที่ผู้ดูแล (HTTP ${res.status})`);
         }
-      } catch {
-        setError("เชื่อมต่อ Google ไม่สำเร็จ กรุณาลองใหม่");
+      } catch (e) {
+        // บอกสาเหตุจริงทั้งบนการ์ดและใน console — เดิมทุกความผิดพลาดถูกยุบเป็น
+        // ข้อความเดียว ไล่ต่อไม่ได้ว่าติดที่ Google ที่ Supabase หรือที่ API ของเราเอง
+        console.error("[admin-google] callback ล้ม:", e);
+        setError(`เชื่อมต่อ Google ไม่สำเร็จ: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
 

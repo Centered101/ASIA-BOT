@@ -54,7 +54,7 @@ export default function QmanLoginPage() {
             <img src="/qman/favicon.ico" alt="Qman" className="w-9 h-9 object-contain" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-white drop-shadow">Q-MAN</h1>
+            <h1 className="text-2xl font-bold text-white drop-shadow-sm">Q-MAN</h1>
             <p className="text-xs text-white/90">Queue Management System</p>
           </div>
         </div>
@@ -75,7 +75,7 @@ export default function QmanLoginPage() {
                 { icon: 'fa-mobile-screen',title: 'ใช้งานง่าย',          desc: 'จองผ่านมือถือได้ทุกที่ทุกเวลา' },
                 { icon: 'fa-bell',         title: 'แจ้งเตือนอัตโนมัติ', desc: 'รับการแจ้งเตือนเมื่อถึงคิว' },
               ].map((f) => (
-                <div key={f.title} className="flex items-start gap-4 bg-white/10 backdrop-blur rounded-2xl p-4">
+                <div key={f.title} className="flex items-start gap-4 bg-white/10 backdrop-blur-sm rounded-2xl p-4">
                   <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
                     <i className={`fa-solid ${f.icon} text-white text-lg`} />
                   </div>
@@ -108,7 +108,7 @@ export default function QmanLoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-none transition"
+                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-hidden transition"
                   placeholder="TESTBOT@ASIA-BOT.XYZ"
                 />
               </div>
@@ -121,7 +121,7 @@ export default function QmanLoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-none transition"
+                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-hidden transition"
                   placeholder="••••••"
                 />
               </div>
@@ -155,7 +155,7 @@ export default function QmanLoginPage() {
       {/* Why Q-MAN */}
       <section className="container mx-auto px-4 py-12">
         <h2
-          className="text-3xl font-bold text-white text-center mb-8 drop-shadow"
+          className="text-3xl font-bold text-white text-center mb-8 drop-shadow-sm"
           data-aos="fade-up"
         >
           ทำไมต้อง Q-MAN?
@@ -171,7 +171,7 @@ export default function QmanLoginPage() {
           ].map((f, i) => (
             <div
               key={f.title}
-              className="bg-white/10 backdrop-blur rounded-2xl p-6 text-white"
+              className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 text-white"
               data-aos="zoom-in"
               data-aos-delay={i * 60}
             >

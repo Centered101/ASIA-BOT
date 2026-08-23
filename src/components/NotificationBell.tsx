@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 
 /**
@@ -12,6 +12,10 @@ import Link from "next/link";
  * แจ้งเตือนต้องไม่ทำให้ทั้งหน้าดูพัง
  *
  * ใช้:  <NotificationBell />
+ *
+ * หน้าตาปรับได้ด้วย buttonClassName กับ icon เพราะ Mycer ใช้ชุดไอคอน lucide
+ * และปุ่มทรงกลม ส่วน asia-bot ใช้ Font Awesome กับปุ่มมุมมน ค่าปริยายคือของ
+ * asia-bot ทั้งคู่ หน้าเดิมจึงไม่ต้องแก้อะไร
  */
 
 type Item = {
@@ -25,7 +29,14 @@ type Item = {
   created_at: string;
 };
 
-const PRIMARY = "#84D4FA";
+/**
+ * สีจุดหน้ารายการที่ยังไม่อ่าน
+ *
+ * อ่านจากตัวแปร --primary ที่ทั้งสองธีมประกาศไว้ (asia-bot ที่ :root ใน
+ * globals.css, Mycer ที่ .mycer-scope) กระดิ่งตัวเดียวจึงกลมกลืนได้ทั้งสองเว็บ
+ * โดยไม่ต้องส่งสีเข้ามาเอง
+ */
+const UNREAD_DOT = "var(--primary)";
 const POLL_MS = 60_000;
 
 function timeAgo(iso: string): string {
@@ -40,7 +51,15 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString("th-TH", { day: "numeric", month: "short" });
 }
 
-export default function NotificationBell({ className = "" }: { className?: string }) {
+export default function NotificationBell({
+  className = "",
+  buttonClassName = "relative grid size-9 place-content-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-700",
+  icon = <i className="fa-regular fa-bell text-base" />,
+}: {
+  className?: string;
+  buttonClassName?: string;
+  icon?: ReactNode;
+}) {
   const [available, setAvailable] = useState(true);
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Item[]>([]);
@@ -127,9 +146,9 @@ export default function NotificationBell({ className = "" }: { className?: strin
         onClick={() => setOpen(o => !o)}
         aria-label={unread > 0 ? `แจ้งเตือน ${unread} รายการที่ยังไม่อ่าน` : "แจ้งเตือน"}
         aria-expanded={open}
-        className="relative grid size-9 place-content-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+        className={buttonClassName}
       >
-        <i className="fa-regular fa-bell text-base" />
+        {icon}
         {unread > 0 && (
           <span
             className="absolute -right-0.5 -top-0.5 grid min-w-[18px] place-content-center rounded-full px-1 text-[10px] font-bold text-white"
@@ -181,7 +200,7 @@ export default function NotificationBell({ className = "" }: { className?: strin
                     {unreadRow && (
                       <span
                         className="mt-1.5 size-2 shrink-0 rounded-full"
-                        style={{ background: PRIMARY }}
+                        style={{ background: UNREAD_DOT }}
                         aria-hidden
                       />
                     )}

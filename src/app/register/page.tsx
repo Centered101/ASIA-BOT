@@ -474,7 +474,7 @@ function RegisterForm() {
 
       <main className="min-h-[calc(100vh-64px)] flex items-center justify-center px-3 sm:px-4 py-6">
         <div data-aos="zoom-in-up" suppressHydrationWarning
-          className={`w-full max-w-lg relative bg-[color:var(--white-smoker)] border rounded-2xl shadow p-4 sm:p-6 md:p-8 z-10 transition-all duration-500 origin-center overflow-visible ${zoomOut ? "scale-0 opacity-0" : "scale-100 opacity-100"}`}>
+          className={`w-full max-w-lg relative bg-[color:var(--white-smoker)] border rounded-2xl shadow-sm p-4 sm:p-6 md:p-8 z-10 transition-all duration-500 origin-center overflow-visible ${zoomOut ? "scale-0 opacity-0" : "scale-100 opacity-100"}`}>
 
           {/* Header */}
           <div className="text-center mb-8">
@@ -544,10 +544,10 @@ function RegisterForm() {
                           alt="รูปจาก Google"
                           referrerPolicy="no-referrer"
                           onError={handleGoogleAvatarError}
-                          className="w-11 h-11 rounded-xl object-cover flex-shrink-0"
+                          className="w-11 h-11 rounded-xl object-cover shrink-0"
                         />
                       ) : (
-                        <div className="w-11 h-11 rounded-xl bg-white flex items-center justify-center flex-shrink-0">
+                        <div className="w-11 h-11 rounded-xl bg-white flex items-center justify-center shrink-0">
                           <i className="fa-brands fa-google text-[#4285F4]" />
                         </div>
                       )}
@@ -567,12 +567,12 @@ function RegisterForm() {
                       className="w-full rounded-2xl border border-sky-100 bg-sky-50 px-3 py-3 text-sm font-bold text-slate-700 hover:bg-sky-100 transition disabled:opacity-60 flex items-center justify-center gap-2"
                     >
                       {googleLoading
-                        ? <><span className="spinner w-4 h-4 border-2 border-sky-400 border-t-transparent" /> กำลังเชื่อม Google...</>
+                        ? <><span className="spinner" /> กำลังเชื่อม Google...</>
                         : <><i className="fa-brands fa-google text-[#4285F4]" /> เชื่อม Google ก่อนสมัคร</>}
                     </button>
                     <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3">
                       <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center flex-shrink-0">
+                        <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center shrink-0">
                           <i className="fa-solid fa-forward text-slate-400 text-sm" />
                         </div>
                         <div>
@@ -835,7 +835,7 @@ function RegisterForm() {
                   </>
                 ) : (
                   <div className="flex flex-col items-center gap-3 py-8 px-4 text-center">
-                    <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200 flex items-center justify-center shadow-sm">
+                    <div className="w-16 h-16 rounded-2xl bg-white border border-slate-200 flex items-center justify-center shadow-xs">
                       <i className="fa-solid fa-cloud-arrow-up text-2xl text-slate-300" />
                     </div>
                     <div>
@@ -885,7 +885,7 @@ function RegisterForm() {
                     onError={() => {
                       if (photoPreview === googleAvatar) handleGoogleAvatarError();
                     }}
-                    className="w-10 h-10 rounded-xl object-cover flex-shrink-0 border border-sky-200"
+                    className="w-10 h-10 rounded-xl object-cover shrink-0 border border-sky-200"
                   />
                   <div className="min-w-0">
                     <div className="text-xs font-semibold text-sky-700">รูปโปรไฟล์</div>
@@ -909,7 +909,7 @@ function RegisterForm() {
                       ? <span className={`flex-1 font-medium text-xs ${r.computed ? "text-emerald-700" : "text-gray-600"}`}>{r.val}</span>
                       : <span className="flex-1 italic font-medium text-xs text-gray-300">ไม่ระบุ</span>}
                     {r.computed && (
-                      <span className="flex-shrink-0 text-[9px] font-semibold text-emerald-500 bg-emerald-100 rounded-full px-1.5 py-0.5">
+                      <span className="shrink-0 text-[9px] font-semibold text-emerald-500 bg-emerald-100 rounded-full px-1.5 py-0.5">
                         คำนวณอัตโนมัติ
                       </span>
                     )}
@@ -924,7 +924,7 @@ function RegisterForm() {
                 <button onClick={handleSubmit} disabled={loading}
                   className="btn-success w-full flex items-center justify-center gap-1 text-sm overflow-hidden">
                   {loading
-                    ? <><span className="spinner w-4 h-4 border-2 border-white border-t-transparent" />&nbsp;กำลังส่ง...</>
+                    ? <><span className="spinner" />&nbsp;กำลังส่ง...</>
                     : <><i className="fa-solid fa-paper-plane" /><span>ยืนยันส่งข้อมูล</span></>}
                 </button>
               </div>

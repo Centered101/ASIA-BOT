@@ -302,7 +302,7 @@ function BecomeTeacherForm() {
           <div className="bg-blob" style={{ width: 380, height: 380, background: P_DARK, bottom: -100, left: -120 }} />
           <Header subtitle="สมัครเป็นครู" />
           <main className="min-h-[calc(100vh-64px)] flex items-center justify-center px-3 py-6">
-            <div className="w-full max-w-md bg-[color:var(--white-smoker)] border rounded-2xl shadow p-6 sm:p-8 text-center z-10 relative">
+            <div className="w-full max-w-md bg-[color:var(--white-smoker)] border rounded-2xl shadow-sm p-6 sm:p-8 text-center z-10 relative">
               <div className="w-20 h-20 rounded-3xl mx-auto mb-5 flex items-center justify-center"
                 style={{ background: `linear-gradient(135deg,${P},${P_DARK})`, boxShadow: "0 8px 28px rgba(197,48,48,0.35)" }}>
                 <i className="fa-solid fa-paper-plane text-white text-3xl" />
@@ -344,7 +344,7 @@ function BecomeTeacherForm() {
         <Header subtitle="สมัครเป็นครู" />
 
         <main className="min-h-[calc(100vh-64px)] flex items-center justify-center px-3 sm:px-4 py-6">
-          <div className="w-full max-w-lg relative bg-[color:var(--white-smoker)] border rounded-2xl shadow p-4 sm:p-6 md:p-8 z-10">
+          <div className="w-full max-w-lg relative bg-[color:var(--white-smoker)] border rounded-2xl shadow-sm p-4 sm:p-6 md:p-8 z-10">
 
             {/* ── Card Header ── */}
             <div className="text-center mb-8">
@@ -407,9 +407,9 @@ function BecomeTeacherForm() {
                         {googleAvatar ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={googleAvatar} alt="google" referrerPolicy="no-referrer"
-                            className="w-11 h-11 rounded-xl object-cover flex-shrink-0" />
+                            className="w-11 h-11 rounded-xl object-cover shrink-0" />
                         ) : (
-                          <div className="w-11 h-11 rounded-xl bg-white border border-slate-100 flex items-center justify-center flex-shrink-0">
+                          <div className="w-11 h-11 rounded-xl bg-white border border-slate-100 flex items-center justify-center shrink-0">
                             <i className="fa-brands fa-google text-[#4285F4]" />
                           </div>
                         )}
@@ -426,12 +426,12 @@ function BecomeTeacherForm() {
                         className="w-full rounded-2xl border px-3 py-3 text-sm font-bold text-slate-700 hover:opacity-90 transition disabled:opacity-60 flex items-center justify-center gap-2"
                         style={{ borderColor: `${P}44`, background: "#fff8f8" }}>
                         {googleLoading
-                          ? <><span className="spinner w-4 h-4" style={{ borderColor: `${P}66`, borderTopColor: "transparent" }} /> กำลังเชื่อม Google...</>
+                          ? <><span className="spinner" style={{ color: P }} /> กำลังเชื่อม Google...</>
                           : <><i className="fa-brands fa-google text-[#4285F4]" /> เชื่อม Google ก่อนสมัคร</>}
                       </button>
                       <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3">
                         <div className="flex items-start gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center flex-shrink-0">
+                          <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
                             <i className="fa-solid fa-forward text-slate-400 text-sm" />
                           </div>
                           <div>
@@ -452,7 +452,7 @@ function BecomeTeacherForm() {
                     { icon: "fa-user-shield",    title: "Superadmin ตรวจก่อน", desc: "ใบสมัครจะถูกตรวจสอบก่อนอนุมัติทุกครั้ง" },
                   ].map(c => (
                     <div key={c.title} className="rounded-xl border border-slate-100 bg-white px-3 py-2.5 flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-sm"
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-sm"
                         style={{ background: "#fff0f0", color: P }}>
                         <i className={`fa-solid ${c.icon}`} />
                       </div>
@@ -719,7 +719,7 @@ function BecomeTeacherForm() {
                   <button onClick={handleSubmit} disabled={loading}
                     className="btn-success w-full flex items-center justify-center gap-1 text-sm">
                     {loading
-                      ? <><span className="spinner w-4 h-4 border-2 border-white border-t-transparent" />&nbsp;กำลังส่ง...</>
+                      ? <><span className="spinner" />&nbsp;กำลังส่ง...</>
                       : <><i className="fa-solid fa-paper-plane" /><span>ส่งใบสมัคร</span></>}
                   </button>
                 </div>

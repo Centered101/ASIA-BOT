@@ -195,7 +195,7 @@ function Topbar({
       <div className="flex items-center gap-2 min-w-0 text-[13px]">
         <button
           onClick={onOpenMenu}
-          className="lg:hidden w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0"
+          className="lg:hidden w-9 h-9 rounded-md flex items-center justify-center shrink-0"
           style={{ color: T.text, background: T.card2, border: `1px solid ${T.line}` }}
           aria-label="เปิดเมนู"
         >
@@ -208,7 +208,7 @@ function Topbar({
             return (
               <div key={`${c}-${i}`} className="min-w-0 flex items-center gap-1.5">
                 {i > 0 && (
-                  <i className="fa-solid fa-chevron-right text-[9px] flex-shrink-0" style={{ color: "#333" }} />
+                  <i className="fa-solid fa-chevron-right text-[9px] shrink-0" style={{ color: "#333" }} />
                 )}
                 <span
                   className={`min-w-0 truncate ${last ? "font-bold text-[13px] sm:text-sm" : "text-[11px] font-semibold"}`}
@@ -223,7 +223,7 @@ function Topbar({
         </div>
       </div>
 
-      <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
         <button
           type="button"
           onClick={() => setSearchOpen(true)}
@@ -233,7 +233,7 @@ function Topbar({
         >
           <i className="fa-solid fa-magnifying-glass text-[11px]" />
           <span className="min-w-0 flex-1 truncate">ค้นหาเมนู...</span>
-          <span className="hidden lg:inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold"
+          <span className="hidden lg:inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] font-bold"
             style={{ color: "#777", background: T.bg, border: `1px solid ${T.line}` }}>
             Ctrl+K
           </span>
@@ -286,7 +286,7 @@ function Topbar({
         {me && (
           <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md"
             style={{ background: T.card2, border: `1px solid ${T.line}` }}>
-            <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: T.accent }} />
+            <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: T.accent }} />
             <span className="text-[11px]" style={{ color: "#888" }}>{adminRoleLabel(me.role)}</span>
           </div>
         )}
@@ -363,7 +363,7 @@ function NavSearch({
               if (e.key === "Enter" && results[0]) go(results[0].item);
             }}
             placeholder="พิมพ์ชื่อเมนู เช่น นักเรียน แจ้งซ่อม เช็กชื่อ"
-            className="flex-1 bg-transparent outline-none text-[14px]"
+            className="flex-1 bg-transparent outline-hidden text-[14px]"
             style={{ color: T.text, fontFamily: "inherit" }}
           />
           <button onClick={onClose} aria-label="ปิด"
@@ -387,10 +387,10 @@ function NavSearch({
               onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
             >
-              <i className={`fa-solid ${item.icon} text-[12px] w-4 text-center flex-shrink-0`}
+              <i className={`fa-solid ${item.icon} text-[12px] w-4 text-center shrink-0`}
                 style={{ color: T.muted }} />
               <span className="flex-1 min-w-0 truncate text-[13px]">{item.label}</span>
-              <span className="text-[10px] flex-shrink-0" style={{ color: "#555" }}>
+              <span className="text-[10px] shrink-0" style={{ color: "#555" }}>
                 {parent ? `${section} · ${parent}` : section}
               </span>
             </button>
@@ -581,5 +581,5 @@ export function Field({
 
 /** ป้ายบอกว่ากำลังโหลด ใช้แทนการเขียน "กำลังโหลด…" ซ้ำทุกหน้า */
 export function Loading({ children = "กำลังโหลด…" }: { children?: ReactNode }) {
-  return <p style={{ color: T.muted, fontSize: 13 }}>{children}</p>;
+  return <p style={{ color: T.muted, fontSize: 13 }}><i className="asia-spinner mr-1.5" />{children}</p>;
 }

@@ -1,4 +1,7 @@
 import { z } from "zod";
+import {
+  ACHIEVEMENT_KINDS, ACHIEVEMENT_LEVELS, GUARDIAN_RELATIONSHIPS,
+} from "@/lib/student-record-options";
 
 /**
  * รูปร่างข้อมูลของแฟ้มนักเรียน — ใช้ร่วมกันระหว่างฝั่งแอดมินกับฝั่งนักเรียน
@@ -7,8 +10,6 @@ import { z } from "zod";
  * กรอกเองได้ ถ้าก๊อปไปไว้อีกฝั่งจะกลายเป็นสองชุดที่ต้องแก้พร้อมกัน แล้ววันหนึ่ง
  * กฎจะเพี้ยนกัน เช่นแอดมินบังคับ GPA 0-4 แต่ฝั่งนักเรียนไม่บังคับ
  */
-
-export const GUARDIAN_RELATIONSHIPS = ["บิดา", "มารดา", "ผู้ปกครอง", "ญาติ", "อื่นๆ"] as const;
 
 export const GuardianSchema = z.object({
   full_name: z.string().trim().min(1, "ต้องระบุชื่อผู้ปกครอง"),
@@ -37,9 +38,6 @@ export const EducationSchema = z.object({
   document_url: z.string().trim().url("ลิงก์เอกสารไม่ถูกต้อง").nullable().optional().or(z.literal("")),
   note: z.string().trim().nullable().optional(),
 });
-
-export const ACHIEVEMENT_KINDS = ["competition", "award", "certificate", "performance", "publication"] as const;
-export const ACHIEVEMENT_LEVELS = ["school", "district", "province", "region", "national", "international"] as const;
 
 export const AchievementSchema = z.object({
   kind: z.enum(ACHIEVEMENT_KINDS).optional(),

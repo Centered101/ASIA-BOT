@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Image from "next/image";
+import { SITE_NAME } from "@/lib/config";
 
 /** Semantic moods → ASIA-BOT mascot artwork in /public/bot. */
 export type MascotMood =
@@ -47,7 +48,7 @@ export function Mascot({
     <>
       <Image
         src={MASCOT_SRC[mood]}
-        alt="ASIA-BOT"
+        alt={SITE_NAME}
         width={size}
         height={size}
         draggable={false}

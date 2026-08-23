@@ -101,23 +101,23 @@ export function AdminSidebar({
           ตอนที่มันลอยอยู่มุมจอ มันทับหัวข้อหน้าและอยู่คนละที่กับของหน้าเดิม */}
       <div
         onClick={() => setOpen(false)}
-        className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity lg:hidden ${
+        className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-xs transition-opacity lg:hidden ${
           open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
         }`}
       />
 
       <aside
-        className={`fixed lg:sticky lg:top-0 inset-y-0 left-0 z-50 flex flex-col w-[280px] lg:w-[240px] flex-shrink-0 h-[100dvh] overflow-hidden transition-transform duration-300 ease-out lg:translate-x-0 ${
+        className={`fixed lg:sticky lg:top-0 inset-y-0 left-0 z-50 flex flex-col w-[280px] lg:w-[240px] shrink-0 h-[100dvh] overflow-hidden transition-transform duration-300 ease-out lg:translate-x-0 ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
         style={{ background: "#111111", borderRight: "1px solid #1f1f1f" }}
       >
         <div
-          className="flex items-center gap-2.5 px-4 h-[52px] flex-shrink-0"
+          className="flex items-center gap-2.5 px-4 h-[52px] shrink-0"
           style={{ borderBottom: "1px solid #1f1f1f" }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/admin/favicon.ico" alt="logo" className="w-6 h-6 rounded-md object-contain flex-shrink-0" />
+          <img src="/admin/favicon.ico" alt="logo" className="w-6 h-6 rounded-md object-contain shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="text-[13px] font-semibold text-white truncate leading-tight">{SITE_NAME}</div>
             <div className="text-[10px] truncate leading-tight" style={{ color: "#636363" }}>
@@ -167,10 +167,10 @@ export function AdminSidebar({
                           style={{ background: T.accent }}
                         />
                       )}
-                      <i className={`fa-solid ${item.icon} text-[12px] w-4 text-center flex-shrink-0`} />
+                      <i className={`fa-solid ${item.icon} text-[12px] w-4 text-center shrink-0`} />
                       <span className="truncate flex-1">{item.label}</span>
                       {item.children && (
-                        <i className={`fa-solid fa-chevron-${active ? "down" : "right"} text-[8px] flex-shrink-0`} style={{ color: "#555" }} />
+                        <i className={`fa-solid fa-chevron-${active ? "down" : "right"} text-[8px] shrink-0`} style={{ color: "#555" }} />
                       )}
                     </Link>
                     {item.children && active && item.children.map((child) => {
@@ -186,7 +186,7 @@ export function AdminSidebar({
                             background: childActive ? "rgba(255,255,255,0.04)" : "transparent",
                           }}
                         >
-                          <i className={`fa-solid ${child.icon} text-[10px] w-3 text-center flex-shrink-0`} />
+                          <i className={`fa-solid ${child.icon} text-[10px] w-3 text-center shrink-0`} />
                           <span className="truncate">{child.label}</span>
                         </Link>
                       );
@@ -202,7 +202,7 @@ export function AdminSidebar({
             หน้า /admin มีแถบนี้อยู่ท้าย sidebar แต่หน้าที่อยู่นอกไฟล์นั้นไม่มี
             พอย้ายมาทำงานที่หน้าใหม่จึงออกจากระบบไม่ได้ ต้องกดกลับไป /admin ก่อน */}
         {me && timeLeft && (
-          <div className="px-3 pt-2 flex-shrink-0">
+          <div className="px-3 pt-2 shrink-0">
             <div className="flex items-center justify-between mb-1">
               <span className="text-[9px] uppercase tracking-widest" style={{ color: "#3a3a3a" }}>
                 เซสชันหมดอายุใน
@@ -223,19 +223,19 @@ export function AdminSidebar({
         )}
 
         {me && (
-          <div className="px-3 py-3 flex-shrink-0" style={{ borderTop: "1px solid #1f1f1f" }}>
+          <div className="px-3 py-3 shrink-0" style={{ borderTop: "1px solid #1f1f1f" }}>
             <div className="flex items-center gap-2.5">
               {me.avatar ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={me.avatar}
                   alt=""
-                  className="w-8 h-8 rounded-xl object-cover flex-shrink-0"
+                  className="w-8 h-8 rounded-xl object-cover shrink-0"
                   style={{ border: "1px solid #252525" }}
                 />
               ) : (
                 <div
-                  className="w-8 h-8 rounded-xl flex items-center justify-center text-[11px] font-bold flex-shrink-0"
+                  className="w-8 h-8 rounded-xl flex items-center justify-center text-[11px] font-bold shrink-0"
                   style={{ background: "#1a1a1a", color: "#888", border: "1px solid #252525" }}
                 >
                   {(me.nickname ?? me.first_name ?? me.username ?? "?").slice(0, 1)}
@@ -256,7 +256,7 @@ export function AdminSidebar({
                 onClick={logout}
                 title="ออกจากระบบ"
                 aria-label="ออกจากระบบ"
-                className="w-6 h-6 flex items-center justify-center rounded-lg transition-colors flex-shrink-0"
+                className="w-6 h-6 flex items-center justify-center rounded-lg transition-colors shrink-0"
                 style={{ color: "#636363" }}
                 onMouseEnter={(e) => { e.currentTarget.style.color = T.accent; }}
                 onMouseLeave={(e) => { e.currentTarget.style.color = "#636363"; }}

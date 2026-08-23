@@ -1,0 +1,14 @@
+{
+  // ใช้ตรวจชนิดเฉพาะโค้ดใน src/
+  //
+  // `npm run typecheck` กิน .next/types, ASIA-BOT-main-Demo และไฟล์ .ts นอก src
+  // ทั้งหมดเข้าไปด้วย ซึ่งบนเครื่องที่รัน dev server ค้างไว้จะ OOM ก่อนตรวจเสร็จ
+  // ไฟล์นี้ตัดของพวกนั้นออกเพื่อให้ตรวจงานที่กำลังแก้ได้จริง — ไม่ใช่ตัวแทน
+  // ของ typecheck เต็ม ก่อน deploy ให้รันของเดิม
+  //
+  //   npx tsc -p tsconfig.mycer-check.json --noEmit
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "incremental": false },
+  "include": ["next-env.d.ts", "src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["node_modules", "asia-mycer", "ASIA-BOT-main-Demo", ".next", ".next-test"]
+}

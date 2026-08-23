@@ -180,7 +180,7 @@ export default function RfidConsole() {
             <label className="mb-1 block text-xs font-bold text-[#9e9e9e]">UID จาก RFID</label>
             <input value={uid} onChange={e => setUid(e.target.value)} onKeyDown={e => { if (e.key === "Enter") sendScan(); }}
               placeholder="เช่น 04 A1 B2 C3 D4"
-              className="w-full rounded-xl px-3 py-3 font-mono text-sm text-white outline-none transition-colors placeholder:text-[#636363]"
+              className="w-full rounded-xl px-3 py-3 font-mono text-sm text-white outline-hidden transition-colors placeholder:text-[#636363]"
               style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }}
               onFocus={e => { e.currentTarget.style.borderColor = "#ff7070"; }}
               onBlur={e => { e.currentTarget.style.borderColor = "#3e3e3e"; }} />
@@ -204,14 +204,14 @@ export default function RfidConsole() {
               <div>
                 <label className="mb-1 block text-xs font-bold text-[#9e9e9e]">Device ID</label>
                 <input value={deviceId} onChange={e => setDeviceId(e.target.value)}
-                  className="w-full rounded-xl px-3 py-2.5 text-sm text-white outline-none placeholder:text-[#636363]"
+                  className="w-full rounded-xl px-3 py-2.5 text-sm text-white outline-hidden placeholder:text-[#636363]"
                   style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }} />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-bold text-[#9e9e9e]">Station Secret</label>
                 <input value={stationSecret} onChange={e => setStationSecret(e.target.value)} type="password"
                   placeholder="ถ้าตั้ง RFID_STATION_SECRET"
-                  className="w-full rounded-xl px-3 py-2.5 text-sm text-white outline-none placeholder:text-[#636363]"
+                  className="w-full rounded-xl px-3 py-2.5 text-sm text-white outline-hidden placeholder:text-[#636363]"
                   style={{ background: "#0c0c0c", border: "1px solid #3e3e3e" }} />
               </div>
             </div>

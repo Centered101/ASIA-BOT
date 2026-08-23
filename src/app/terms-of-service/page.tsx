@@ -85,7 +85,7 @@ export default function TermsOfServicePage() {
       <Header subtitle="เงื่อนไขการใช้งาน" />
 
       <main className="min-h-screen max-w-4xl mx-auto px-3 sm:px-6 pt-10 pb-16 relative z-10">
-        <section className="rounded-[1.75rem] border border-slate-200 bg-white/90 backdrop-blur-sm shadow-[0_18px_50px_rgba(15,23,42,0.06)] overflow-hidden">
+        <section className="rounded-[1.75rem] border border-slate-200 bg-white/90 backdrop-blur-xs shadow-[0_18px_50px_rgba(15,23,42,0.06)] overflow-hidden">
           <div className="relative p-5 sm:p-8 border-b border-slate-100">
             <div className="absolute inset-x-0 top-0 h-1 bg-[var(--primary-color)]" />
             <div className="flex items-start gap-4">

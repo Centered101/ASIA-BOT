@@ -1,0 +1,25 @@
+-- ============================================================
+-- Supabase Seed - asia-bot
+-- ไฟล์นี้ไว้ใส่ข้อมูลเริ่มต้น (INSERT / UPSERT) ลงตารางเท่านั้น
+-- แยกออกจาก supabase/schema.sql ที่เก็บแค่ tables / functions /
+-- indexes / RLS policies และ supabase/storage.sql ที่เก็บ bucket
+-- กับ storage.objects policies
+--
+-- ตอนนี้ตั้งใจปล่อยว่างไว้ เพราะระบบเริ่มจาก DB เปล่า แล้วกรอก
+-- ข้อมูลผ่านหน้า admin ได้ทั้งหมด
+--
+-- ข้อควรรู้: ข้อมูลตั้งต้นของ RBAC (roles / permissions /
+-- role_permissions) และ line_notification_categories ถูก seed ไว้ใน
+-- supabase/migrations/ อยู่แล้ว (0003_rbac.sql, 0016, 0022, 0023)
+-- ไม่ต้องมาใส่ซ้ำที่นี่
+--
+-- เวลาจะเพิ่มข้อมูลเริ่มต้นใหม่ ให้เขียนแบบรันซ้ำได้ (มี ON CONFLICT)
+-- เพราะไฟล์นี้อาจถูกรันหลายรอบ ตัวอย่าง:
+--
+-- INSERT INTO public.rooms (name, capacity)
+-- VALUES
+--   ('ห้องประชุม 1', 20),
+--   ('ห้องประชุม 2', 40)
+-- ON CONFLICT (name) DO UPDATE
+-- SET capacity = EXCLUDED.capacity;
+-- ============================================================

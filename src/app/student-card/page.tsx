@@ -129,7 +129,7 @@ export default function StudentCardPage() {
                   }}>
                   {i + 1}
                 </span>
-                {i < 2 && <span className="w-8 h-0.5 rounded" style={{ background: order.indexOf(step) > i ? "#4DB8F5" : "#E2E8F0" }} />}
+                {i < 2 && <span className="w-8 h-0.5 rounded-sm" style={{ background: order.indexOf(step) > i ? "#4DB8F5" : "#E2E8F0" }} />}
               </div>
             );
           })}
@@ -166,7 +166,7 @@ export default function StudentCardPage() {
 
             <button onClick={handleIdentify} disabled={loading} suppressHydrationWarning className="btn-primary w-full">
               {loading
-                ? <><span className="spinner w-4 h-4 border-2 border-white border-t-transparent" />&nbsp;กำลังตรวจสอบ...</>
+                ? <><span className="spinner" />&nbsp;กำลังตรวจสอบ...</>
                 : <><i className="fa-solid fa-arrow-right text-sm" /> ถัดไป</>}
             </button>
           </div>
@@ -175,18 +175,18 @@ export default function StudentCardPage() {
         {/* ── ขั้นที่ 2 กรอกข้อมูล ── */}
         {step === "form" && lookup && (
           <div className="space-y-4">
-            <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-4 flex items-center gap-3">
+            <div className="rounded-2xl bg-white border border-slate-200 shadow-xs p-4 flex items-center gap-3">
               {lookup.photo_url
                 // eslint-disable-next-line @next/next/no-img-element
-                ? <img src={lookup.photo_url} alt="" className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />
-                : <div className="w-12 h-12 rounded-xl bg-sky-50 flex items-center justify-center flex-shrink-0">
+                ? <img src={lookup.photo_url} alt="" className="w-12 h-12 rounded-xl object-cover shrink-0" />
+                : <div className="w-12 h-12 rounded-xl bg-sky-50 flex items-center justify-center shrink-0">
                     <i className="fa-solid fa-user text-sky-400" />
                   </div>}
               <div className="min-w-0 flex-1">
                 <div className="font-bold text-slate-800 text-sm truncate">{lookup.full_name || lookup.student_id}</div>
                 <div className="text-xs text-slate-400 font-mono">{lookup.student_id}</div>
               </div>
-              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full flex-shrink-0"
+              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full shrink-0"
                 style={{
                   background: lookup.card_status === "active" ? "#ECFDF5" : "#F1F5F9",
                   color: lookup.card_status === "active" ? "#059669" : "#64748B",
@@ -319,7 +319,7 @@ export default function StudentCardPage() {
               </button>
               <button onClick={handleSubmit} disabled={loading} suppressHydrationWarning className="btn-primary flex-1">
                 {loading
-                  ? <><span className="spinner w-4 h-4 border-2 border-white border-t-transparent" />&nbsp;กำลังส่ง...</>
+                  ? <><span className="spinner" />&nbsp;กำลังส่ง...</>
                   : <><i className="fa-solid fa-paper-plane text-sm" /> ส่งคำขอทำบัตร</>}
               </button>
             </div>
@@ -357,7 +357,7 @@ export default function StudentCardPage() {
 
 function Section({ title, icon, children }: { title: string; icon: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5">
+    <div className="rounded-2xl bg-white border border-slate-200 shadow-xs p-5">
       <h2 className="flex items-center gap-2 font-bold text-slate-800 text-sm mb-4">
         <i className={`fa-solid ${icon} text-sky-400`} /> {title}
       </h2>

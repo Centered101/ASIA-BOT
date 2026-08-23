@@ -45,7 +45,7 @@ export default function GoogleLinkIcon({
   return (
     <div className={`flex items-center justify-center ${className}`}>
       {/* ASIA-BOT */}
-      <div className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0"
+      <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0"
         style={{
           background: t.botBg,
           border: t.botBorder,
@@ -75,7 +75,7 @@ export default function GoogleLinkIcon({
       </div>
 
       {/* Google — SVG จาก thesvg */}
-      <div className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0"
+      <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0"
         style={{ background: t.tileBg, border: t.tileBorder, opacity: failed ? 0.45 : 1 }}>
         <div className="asia-link-glyph w-7 h-7" dangerouslySetInnerHTML={{ __html: googleSvg }} />
       </div>

@@ -22,12 +22,13 @@ import { toast } from "sonner";
 
 import { AdminPage, T as C } from "@/components/admin/ui";
 import {
-  ADMIN_PRIMARY, Avatar, CARD_STATUS, DarkAction, DarkEmpty, DarkSectionHeader, DarkSpinner, ViewToggle,
+  AdminConfirmModal, AdminModal, ADMIN_PRIMARY, Avatar, CARD_STATUS, DarkAction, DarkEmpty, DarkSectionHeader, DarkSpinner, ViewToggle,
   ADMIN_VIEW_MODE_KEY, formatDate, isString, isViewMode, useLocalStorageState,
   type ViewMode,
 } from "@/components/admin/dark-ui";
 import { uniqueTextOptions } from "@/components/admin/media";
 import { adminFetch, readAdminSession } from "@/lib/modules/admin-session";
+import { adminRoleLabel } from "@/lib/modules/nav-access";
 import { birthDateBounds } from "@/lib/student-grade";
 import { GENDER_LABELS, checkBirthDate, checkNationalId } from "@/lib/student-validate";
 
@@ -38,6 +39,8 @@ type Student = {
   nickname: string | null; student_phone: string; entry_year: string;
   program: string; department: string | null; photo_url: string | null;
   card_status: string; created_at: string; updated_at?: string | null;
+  /** อีเมล Google ที่ผูกไว้ — null คือยังไม่ได้เชื่อม */
+  google_email?: string | null;
 };
 
 type RosterStudent = {
@@ -47,11 +50,118 @@ type RosterStudent = {
 };
 
 type Teacher = { id: string; full_name: string; nickname: string | null };
-type AdminRecord = { linked_student_id?: string | null };
+type AdminRecord = { linked_student_id?: string | null; role?: string | null };
 
 const STATUS_TH: Record<string, string> = {
   studying: "กำลังเรียน", on_leave: "พักการเรียน", transferred: "ย้ายสถานศึกษา",
   graduated: "จบการศึกษา", resigned: "ลาออก", expelled: "ให้ออก",
+};
+
+/**
+ * เชื่อม Google แล้วหรือยัง
+ *
+ * ขึ้นทั้งสองสถานะ ไม่ใช่ติดป้ายเฉพาะคนที่เชื่อมแล้ว เพราะ "ไม่มีป้าย" อ่านได้สองแบบ
+ * คือยังไม่เชื่อม กับหน้านี้ไม่ได้ดึงข้อมูลมา ซึ่งคนละเรื่องกัน — คนที่กำลังไล่ดูว่า
+ * ใครยังไม่เชื่อมต้องเห็นคำตอบ ไม่ใช่ต้องเดาจากช่องว่าง
+ */
+function GoogleTag({ email, showEmail = true }: { email?: string | null; showEmail?: boolean }) {
+  if (!email) {
+    return (
+      <span className="inline-flex items-center gap-1 whitespace-nowrap" style={{ color: "#555" }}>
+        <i className="fa-brands fa-google" />ยังไม่เชื่อม Google
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 min-w-0 max-w-full" title={email}>
+      <i className="fa-brands fa-google shrink-0" style={{ color: "#3fb950" }} />
+      <span className="truncate">{showEmail ? email : "เชื่อม Google แล้ว"}</span>
+    </span>
+  );
+}
+
+/**
+ * รูปโปรไฟล์นักเรียน — เห็นตัวอย่าง อัปโหลดทับ หรือลบทิ้งได้ในที่เดียว
+ *
+ * เดิมมีแต่ช่องกรอก URL ซึ่งแปลว่าต้องไปหาลิงก์รูปมาจากที่อื่นเองก่อน และไม่มีทาง
+ * รู้ว่าค่าที่กรอกไว้คือรูปอะไรจนกว่าจะบันทึกแล้วกลับมาดูในรายการ
+ *
+ * จังหวะการบันทึกของสองปุ่มไม่เท่ากันโดยตั้งใจ:
+ *   อัปโหลด — เขียน students.photo_url ทันที เพราะ /api/auth/upload-photo ทำให้
+ *             ในตัว (และลบไฟล์เก่าใน storage ให้ด้วย) ช่อง URL จึงอัปเดตตาม
+ *   ลบรูป   — แค่ล้างค่าในฟอร์ม มีผลจริงตอนกดบันทึก ถ้าลบไฟล์ทิ้งทันทีแล้วผู้ใช้
+ *             กดยกเลิก จะเอารูปคืนไม่ได้เลย
+ */
+function StudentPhotoField({ studentId, name, value, onChange }: {
+  studentId: string; name: string; value: string; onChange: (v: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function upload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy(true); setErr("");
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("student_id", studentId);
+      if (value) fd.append("old_url", value);
+      const res = await adminFetch("/api/auth/upload-photo", { method: "POST", body: fd });
+      const j = await res.json();
+      if (j.status === "success") onChange(j.photo_url);
+      else setErr(j.message ?? "อัปโหลดไม่สำเร็จ");
+    } catch {
+      setErr("เชื่อมต่อไม่ได้");
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  return (
+    <div>
+      <label className="block text-[11px] text-[#636363] mb-1">รูปโปรไฟล์</label>
+      <div className="flex items-center gap-3 mb-2">
+        <Avatar name={name.trim() || studentId} url={value || null} size={56} rounded="xl" />
+        <div className="flex gap-1.5 flex-wrap">
+          <input ref={fileRef} type="file" accept="image/*" hidden onChange={upload} />
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={busy}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
+            style={{ background: "#2a2a2a", border: "1px solid #3e3e3e", color: "#9e9e9e" }}>
+            {busy
+              ? <><i className="asia-spinner mr-1.5" />กำลังอัปโหลด</>
+              : <><i className="fa-solid fa-upload mr-1.5" />{value ? "เปลี่ยนรูป" : "อัปโหลดรูป"}</>}
+          </button>
+          {value && (
+            <button type="button" onClick={() => onChange("")} disabled={busy}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
+              style={{ background: "rgba(255,112,112,0.1)", border: "1px solid rgba(255,112,112,0.3)", color: "#ff7070" }}>
+              <i className="fa-solid fa-trash mr-1.5" />ลบรูป
+            </button>
+          )}
+        </div>
+      </div>
+      <input value={value} onChange={e => onChange(e.target.value)}
+        placeholder="https://... หรือกดอัปโหลดรูป"
+        className="w-full px-3 py-2 rounded-xl text-sm text-white focus:outline-hidden"
+        style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }} />
+      {err && <p className="text-[11px] mt-1" style={{ color: "#ff7070" }}>{err}</p>}
+    </div>
+  );
+}
+
+/**
+ * สีป้ายบทบาทหลังบ้าน — คนละชุดกับสถานะบัตร
+ *
+ * ให้สามระดับดูต่างกันชัด ๆ เพราะเป็นคนละอำนาจกัน ไม่ใช่ระดับความเข้มของสิ่งเดียวกัน
+ * ป้ายชื่อดึงจาก adminRoleLabel() ที่เดียวกับ sidebar และหน้าจัดการผู้ดูแล
+ */
+const BACKOFFICE_ROLE_STYLE: Record<string, { bg: string; text: string; icon: string }> = {
+  superadmin: { bg: "rgba(255,112,112,0.15)", text: "#ff7070", icon: "fa-shield-halved" },
+  admin:      { bg: "rgba(56,139,253,0.15)",  text: "#388bfd", icon: "fa-chalkboard-user" },
+  staff:      { bg: "rgba(240,136,62,0.15)",  text: "#f0883e", icon: "fa-user-tie" },
 };
 
 const CARD_STYLE: Record<string, { bg: string; text: string }> = {
@@ -164,7 +274,9 @@ function InfoTab({ role, search, refreshKey }: { role: string; search: string; r
   const [cardFilter, setCardFilter] = useState("all");
   const [updating, setUpdating] = useState<string | null>(null);
   const [viewMode, setViewMode] = useLocalStorageState<ViewMode>(ADMIN_VIEW_MODE_KEY, "grid", isViewMode);
-  const [adminStudentIds, setAdminStudentIds] = useState<Set<string>>(new Set());
+  // student_id -> role ของบัญชีหลังบ้านที่ผูกไว้ ไม่ใช่แค่ "มี/ไม่มี" เพราะสามระดับ
+  // ให้สิทธิ์ต่างกันคนละเรื่อง คนอ่านรายชื่อต้องแยกครูออกจากสภานักเรียนได้ทันที
+  const [adminRoleByStudent, setAdminRoleByStudent] = useState<Map<string, string>>(new Map());
 
   type EditForm = {
     first_name: string; last_name: string; nickname: string;
@@ -195,13 +307,13 @@ function InfoTab({ role, search, refreshKey }: { role: string; search: string; r
   useEffect(() => {
     void fetch_();
     void adminFetch("/api/admin/admins").then(r => r.json()).then(j => {
-      const ids = new Set<string>(
+      const byStudent = new Map<string, string>(
         (j.data ?? [])
           .filter((a: AdminRecord) => a.linked_student_id)
-          .map((a: AdminRecord) => a.linked_student_id as string)
+          .map((a: AdminRecord) => [a.linked_student_id as string, a.role ?? "staff"] as const)
       );
-      setAdminStudentIds(ids);
-    }).catch(() => { /* ป้าย "ผู้ดูแล" หายไปเฉย ๆ ไม่ควรทำให้รายชื่อพัง */ });
+      setAdminRoleByStudent(byStudent);
+    }).catch(() => { /* ป้ายบทบาทหายไปเฉย ๆ ไม่ควรทำให้รายชื่อพัง */ });
   }, [fetch_, refreshKey]);
 
   function openEdit(s: Student) {
@@ -268,11 +380,24 @@ function InfoTab({ role, search, refreshKey }: { role: string; search: string; r
     </>
   );
 
-  const adminBadge = (s: Student) => adminStudentIds.has(s.student_id) && (
-    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ background: "rgba(255,112,112,0.15)", color: "#ff7070" }}>
-      <i className="fa-solid fa-shield-halved mr-0.5" />ผู้ดูแล
-    </span>
-  );
+  /**
+   * ป้ายบอกว่าคนนี้ถือบัญชีหลังบ้านระดับไหน
+   *
+   * เดิมเขียนว่า "ผู้ดูแล" เหมือนกันหมด ทั้งที่สามระดับต่างกันคนละเรื่อง —
+   * ประธานสภานักเรียนกับครูประจำฝ่ายไม่ใช่สิ่งเดียวกัน และคนที่ไล่ตรวจรายชื่อ
+   * ต้องรู้ว่าใครถือสิทธิ์ระดับไหนโดยไม่ต้องไปเปิดหน้าจัดการผู้ดูแลอีกที
+   */
+  const adminBadge = (s: Student) => {
+    const role = adminRoleByStudent.get(s.student_id);
+    if (!role) return null;
+    const st = BACKOFFICE_ROLE_STYLE[role] ?? BACKOFFICE_ROLE_STYLE.staff;
+    return (
+      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold whitespace-nowrap"
+        style={{ background: st.bg, color: st.text }} title="บัญชีหลังบ้านที่ผูกกับนักเรียนคนนี้">
+        <i className={`fa-solid ${st.icon} mr-0.5`} />{adminRoleLabel(role)}
+      </span>
+    );
+  };
 
   return (
     <div>
@@ -312,6 +437,7 @@ function InfoTab({ role, search, refreshKey }: { role: string; search: string; r
                       <div><i className="fa-solid fa-id-card mr-1.5 text-[#636363]" />{s.student_id}</div>
                       <div><i className="fa-solid fa-graduation-cap mr-1.5 text-[#636363]" />{s.program}{s.department ? ` · ${s.department}` : ""}</div>
                       <div><i className="fa-solid fa-calendar mr-1.5 text-[#636363]" />ปีที่เข้า {s.entry_year}</div>
+                      <div className="min-w-0"><GoogleTag email={s.google_email} /></div>
                       <div className="text-[10px]" style={{ color: "#555" }}><i className="fa-solid fa-clock mr-1.5" />เพิ่ม {formatDate(s.created_at)}</div>
                     </div>
                     <div className="flex gap-1.5 flex-wrap">{cardActions(s, true)}</div>
@@ -324,14 +450,14 @@ function InfoTab({ role, search, refreshKey }: { role: string; search: string; r
           {viewMode === "list" && (
             <div className="rounded-2xl overflow-hidden" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
               <div className="overflow-x-auto">
-                <table className="w-full text-xs" style={{ minWidth: 1180, tableLayout: "fixed" }}>
+                <table className="w-full text-xs" style={{ minWidth: 1400, tableLayout: "fixed" }}>
                   <colgroup>
                     <col style={{ width: 340 }} /><col style={{ width: 110 }} /><col style={{ width: 280 }} />
-                    <col style={{ width: 130 }} /><col style={{ width: 140 }} /><col style={{ width: 190 }} />
+                    <col style={{ width: 130 }} /><col style={{ width: 220 }} /><col style={{ width: 140 }} /><col style={{ width: 190 }} />
                   </colgroup>
                   <thead>
                     <tr style={{ borderBottom: "1px solid #3e3e3e" }}>
-                      {["นักเรียน", "รหัส", "ประเภท/สาขา", "บัตร", "เพิ่มเมื่อ", ""].map(h => (
+                      {["นักเรียน", "รหัส", "ประเภท/สาขา", "บัตร", "Google", "เพิ่มเมื่อ", ""].map(h => (
                         <th key={h} className="px-3 py-2.5 text-left font-semibold whitespace-nowrap" style={{ color: "#636363" }}>{h}</th>
                       ))}
                     </tr>
@@ -346,13 +472,14 @@ function InfoTab({ role, search, refreshKey }: { role: string; search: string; r
                               <Avatar name={`${s.first_name} ${s.last_name}`} url={s.photo_url} size={28} rounded="lg" />
                               <div className="min-w-0">
                                 <div className="font-semibold text-white whitespace-nowrap truncate">{s.first_name} {s.last_name} {s.nickname ? `(${s.nickname})` : ""}</div>
-                                {adminStudentIds.has(s.student_id) && <span className="text-[9px] px-1 py-0.5 rounded font-bold" style={{ background: "rgba(255,112,112,0.15)", color: "#ff7070" }}>ผู้ดูแล</span>}
+                                {adminBadge(s)}
                               </div>
                             </Link>
                           </td>
                           <td className="px-3 py-2 text-[#9e9e9e] whitespace-nowrap font-mono">{s.student_id}</td>
                           <td className="px-3 py-2 text-[#9e9e9e] whitespace-nowrap truncate">{s.program}{s.department ? ` · ${s.department}` : ""}</td>
                           <td className="px-3 py-2 whitespace-nowrap"><span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: cs.bg, color: cs.text }}>{CARD_STATUS[s.card_status]}</span></td>
+                          <td className="px-3 py-2 text-[#9e9e9e]"><GoogleTag email={s.google_email} /></td>
                           <td className="px-3 py-2 text-[#636363] whitespace-nowrap">{formatDate(s.created_at)}</td>
                           <td className="px-3 py-2 whitespace-nowrap"><div className="flex gap-1 justify-end">{cardActions(s, false)}</div></td>
                         </tr>
@@ -370,7 +497,7 @@ function InfoTab({ role, search, refreshKey }: { role: string; search: string; r
                 const cs = CARD_STYLE[s.card_status] ?? { bg: "#2a2a2a", text: "#9e9e9e" };
                 return (
                   <div key={s.id} className="rounded-2xl p-4 flex flex-col sm:flex-row gap-4" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-                    <Link href={studentHref(s.student_id)} className="flex-shrink-0 no-underline">
+                    <Link href={studentHref(s.student_id)} className="shrink-0 no-underline">
                       <Avatar name={`${s.first_name} ${s.last_name}`} url={s.photo_url} size={56} rounded="xl" />
                     </Link>
                     <div className="flex-1 min-w-0">
@@ -386,6 +513,7 @@ function InfoTab({ role, search, refreshKey }: { role: string; search: string; r
                         {s.department && <div className="whitespace-nowrap"><i className="fa-solid fa-building mr-1 text-[#636363]" />{s.department}</div>}
                         <div className="whitespace-nowrap"><i className="fa-solid fa-calendar mr-1 text-[#636363]" />รุ่น {s.entry_year}</div>
                         <div className="whitespace-nowrap"><i className="fa-solid fa-phone mr-1 text-[#636363]" />{s.student_phone}</div>
+                        <div className="min-w-0"><GoogleTag email={s.google_email} /></div>
                         <div className="whitespace-nowrap"><i className="fa-solid fa-clock mr-1 text-[#636363]" />เพิ่ม {formatDate(s.created_at)}</div>
                         {s.updated_at && s.updated_at !== s.created_at && <div className="whitespace-nowrap"><i className="fa-solid fa-rotate mr-1 text-[#636363]" />อัพเดต {formatDate(s.updated_at)}</div>}
                       </div>
@@ -401,72 +529,55 @@ function InfoTab({ role, search, refreshKey }: { role: string; search: string; r
 
       {/* ── แก้ไขข้อมูลนักเรียน ── */}
       {editStudent && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }} onClick={() => setEditStudent(null)} />
-          <div className="relative w-full sm:max-w-lg sm:mx-4 sm:rounded-2xl rounded-t-2xl overflow-y-auto max-h-[90vh]"
-            style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-            <div className="flex items-center justify-between px-5 pt-5 pb-4 sticky top-0 z-10"
-              style={{ background: "#1c1c1c", borderBottom: "1px solid #3e3e3e" }}>
-              <div>
-                <div className="font-bold text-white text-sm">แก้ไขข้อมูลนักเรียน</div>
-                <div className="text-[11px] text-[#636363] mt-0.5">{editStudent.student_id}</div>
-              </div>
-              <button onClick={() => setEditStudent(null)} className="text-[#636363] hover:text-white transition-colors">
-                <i className="fa-solid fa-xmark text-lg" />
+        <AdminModal onClose={() => setEditStudent(null)}
+          title="แก้ไขข้อมูลนักเรียน" subtitle={editStudent.student_id} icon="fa-pen-to-square"
+          footer={
+            <>
+              <button onClick={() => setEditStudent(null)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#9e9e9e] transition-colors"
+                style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>ยกเลิก</button>
+              <button onClick={saveEdit} disabled={editSaving}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors"
+                style={{ background: editSaving ? "#555" : "#388bfd" }}>
+                {editSaving ? <><i className="asia-spinner mr-1.5" />กำลังบันทึก...</> : "บันทึก"}
               </button>
-            </div>
-            <div className="px-5 py-4 space-y-3">
+            </>
+          }>
+            <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                {([["ชื่อ *", "first_name"], ["นามสกุล *", "last_name"], ["ชื่อเล่น", "nickname"], ["เบอร์โทร", "student_phone"], ["รุ่นปีที่เข้า", "entry_year"], ["ประเภท", "program"], ["สาขา", "department"], ["รูปโปรไฟล์ URL", "photo_url"]] as const).map(([label, key]) => (
-                  <div key={key} className={key === "photo_url" ? "col-span-2" : ""}>
+                {([["ชื่อ *", "first_name"], ["นามสกุล *", "last_name"], ["ชื่อเล่น", "nickname"], ["เบอร์โทร", "student_phone"], ["รุ่นปีที่เข้า", "entry_year"], ["ประเภท", "program"], ["สาขา", "department"]] as const).map(([label, key]) => (
+                  <div key={key}>
                     <label className="block text-[11px] text-[#636363] mb-1">{label}</label>
                     <input value={editForm[key]} onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}
-                      className="w-full px-3 py-2 rounded-xl text-sm text-white focus:outline-none"
+                      className="w-full px-3 py-2 rounded-xl text-sm text-white focus:outline-hidden"
                       style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }} />
                   </div>
                 ))}
+                <div className="col-span-2">
+                  <StudentPhotoField
+                    studentId={editStudent.student_id}
+                    name={`${editForm.first_name} ${editForm.last_name}`}
+                    value={editForm.photo_url}
+                    onChange={(v) => setEditForm(f => ({ ...f, photo_url: v }))}
+                  />
+                </div>
               </div>
               {editError && <div className="text-[12px] text-[#ff7070]">{editError}</div>}
-              <div className="flex gap-2 pt-1">
-                <button onClick={() => setEditStudent(null)}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#9e9e9e] transition-colors"
-                  style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>ยกเลิก</button>
-                <button onClick={saveEdit} disabled={editSaving}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors"
-                  style={{ background: editSaving ? "#555" : "#388bfd" }}>
-                  {editSaving ? "กำลังบันทึก..." : "บันทึก"}
-                </button>
-              </div>
             </div>
-          </div>
-        </div>
+        </AdminModal>
       )}
 
       {/* ── ยืนยันการลบ ── */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }} onClick={() => setConfirmDelete(null)} />
-          <div className="relative w-full max-w-sm mx-4 rounded-2xl p-6" style={{ background: "#1c1c1c", border: "1px solid #ff7070" }}>
-            <div className="text-center mb-4">
-              <i className="fa-solid fa-triangle-exclamation text-[#ff7070] text-3xl mb-3" />
-              <div className="font-bold text-white text-sm">ยืนยันการลบนักเรียน</div>
-              <div className="text-[12px] text-[#9e9e9e] mt-1">
-                {confirmDelete.first_name} {confirmDelete.last_name} ({confirmDelete.student_id})
-              </div>
-              <div className="text-[11px] text-[#ff7070] mt-2">การกระทำนี้ไม่สามารถย้อนกลับได้</div>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => setConfirmDelete(null)} disabled={deleting}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#9e9e9e]"
-                style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>ยกเลิก</button>
-              <button onClick={doDelete} disabled={deleting}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white"
-                style={{ background: deleting ? "#555" : "#ff7070" }}>
-                {deleting ? "กำลังลบ..." : "ลบนักเรียน"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <AdminConfirmModal
+          onClose={() => setConfirmDelete(null)}
+          onConfirm={doDelete}
+          loading={deleting}
+          title="ยืนยันการลบนักเรียน"
+          message={`${confirmDelete.first_name} ${confirmDelete.last_name} (${confirmDelete.student_id})`}
+          note="การกระทำนี้ไม่สามารถย้อนกลับได้"
+          confirmLabel="ลบนักเรียน"
+        />
       )}
     </div>
   );
@@ -632,9 +743,8 @@ function RosterTab({ search, refreshKey }: { search: string; refreshKey: number 
             <div key={s.student_id}
               style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px",
                 borderTop: i === 0 ? "none" : `1px solid ${C.card2}` }}>
-              <input type="checkbox" checked={selected.has(s.student_id)}
-                onChange={() => toggle(s.student_id)}
-                style={{ width: 17, height: 17, accentColor: C.accent, flexShrink: 0 }} />
+              <input type="checkbox" className="asia-check text-xs" checked={selected.has(s.student_id)}
+                onChange={() => toggle(s.student_id)} />
               <Link href={studentHref(s.student_id)}
                 style={{ color: C.text, textDecoration: "none", flex: 1, minWidth: 0 }}>
                 <strong style={{ fontSize: 14 }}>
@@ -678,7 +788,7 @@ function AddStudentModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
   const fi = (k: keyof typeof BLANK_STD) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
 
-  const inputCls = "w-full px-3 py-2.5 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-none transition-colors";
+  const inputCls = "w-full px-3 py-2.5 rounded-xl text-sm text-white placeholder:text-[#636363] focus:outline-hidden transition-colors";
   const darkInput = { background: "#0c0c0c", border: "1px solid #3e3e3e" };
 
   async function handleSave() {
@@ -706,17 +816,20 @@ function AddStudentModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }} onClick={onClose} />
-      <div className="relative w-full sm:max-w-lg sm:mx-4 sm:rounded-2xl rounded-t-2xl overflow-y-auto max-h-[90vh]"
-        style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-        <div className="flex items-center justify-between px-5 pt-5 pb-4 sticky top-0 z-10" style={{ background: "#1c1c1c", borderBottom: "1px solid #3e3e3e" }}>
-          <h3 className="font-bold text-white text-lg"><i className="fa-solid fa-user-plus mr-2 text-red-400" />เพิ่มนักเรียนใหม่</h3>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#2a2a2a] text-[#9e9e9e] hover:text-white transition-colors">
-            <i className="fa-solid fa-xmark" />
+    <AdminModal onClose={onClose} title="เพิ่มนักเรียนใหม่" icon="fa-user-plus"
+      footer={
+        <>
+          <button onClick={onClose} className="flex-1 py-3 text-sm font-bold rounded-xl transition-all text-[#9e9e9e] hover:text-white" style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>
+            ยกเลิก
           </button>
-        </div>
-        <div className="p-5 space-y-4">
+          <button onClick={handleSave} disabled={saving}
+            className="flex-1 py-3 text-sm font-bold rounded-xl text-white transition-all disabled:opacity-50"
+            style={{ background: ADMIN_PRIMARY }}>
+            {saving ? <><i className="asia-spinner mr-1.5" />กำลังบันทึก...</> : <><i className="fa-solid fa-floppy-disk mr-1.5" />เพิ่มนักเรียน</>}
+          </button>
+        </>
+      }>
+        <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-[#ededed] mb-1.5">รหัสนักเรียน *</label>
@@ -800,18 +913,7 @@ function AddStudentModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
             </div>
           )}
         </div>
-        <div className="px-5 pb-6 flex gap-3 sticky bottom-0 pt-4" style={{ borderTop: "1px solid #3e3e3e", background: "#1c1c1c" }}>
-          <button onClick={onClose} className="flex-1 py-3 text-sm font-bold rounded-xl transition-all text-[#9e9e9e] hover:text-white" style={{ background: "#2a2a2a", border: "1px solid #3e3e3e" }}>
-            ยกเลิก
-          </button>
-          <button onClick={handleSave} disabled={saving}
-            className="flex-1 py-3 text-sm font-bold rounded-xl text-white transition-all disabled:opacity-50"
-            style={{ background: "#ff7070" }}>
-            {saving ? <><i className="asia-spinner mr-1.5" />กำลังบันทึก...</> : <><i className="fa-solid fa-floppy-disk mr-1.5" />เพิ่มนักเรียน</>}
-          </button>
-        </div>
-      </div>
-    </div>
+    </AdminModal>
   );
 }
 
@@ -842,13 +944,15 @@ function ClassGroupsTab() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
+  // ฟอร์มย้ายจากการ์ดที่แปะอยู่กลางหน้ามาเป็น sheet ตอนกดเพิ่ม/แก้ไข
+  const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState(BLANK_GROUP);
   const [msg, setMsg] = useState("");
   const [search, setSearch] = useLocalStorageState<string>("asia_admin_class_groups_search", "", isString);
 
   const previewName = autoGroupName(form.program, form.grade, form.section);
 
-  const inp = { className: "w-full px-3 py-2 rounded-lg text-sm outline-none", style: { background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" } };
+  const inp = { className: "w-full px-3 py-2 rounded-lg text-sm outline-hidden", style: { background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" } };
 
   function setSection(sec: number) {
     setForm(f => ({
@@ -871,8 +975,10 @@ function ClassGroupsTab() {
     setEditId(g.id);
     setForm({ program: g.program ?? "ปวช", grade: g.grade ?? 1, section: g.section ?? 1, department: g.department ?? "", color: g.color ?? "#6366f1" });
     setMsg("");
+    setFormOpen(true);
   }
-  function reset() { setEditId(null); setForm({ ...BLANK_GROUP, department: DEPT_BY_SECTION[1] }); setMsg(""); }
+  function reset() { setEditId(null); setForm({ ...BLANK_GROUP, department: DEPT_BY_SECTION[1] }); setMsg(""); setFormOpen(false); }
+  function startCreate() { reset(); setFormOpen(true); }
 
   async function save() {
     setSaving(true); setMsg("");
@@ -934,19 +1040,44 @@ function ClassGroupsTab() {
         ))}
       </div>
 
-      {/* Form */}
-      <div className="rounded-xl p-4 space-y-3" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
-        <div className="flex items-center justify-between">
-          <div className="text-xs font-bold text-white">{editId ? "แก้ไขกลุ่ม" : "เพิ่มกลุ่มใหม่"}</div>
-          {/* Preview badge */}
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold"
-            style={{ background: form.color + "22", color: form.color, border: `1px solid ${form.color}44` }}>
-            <span className="w-2 h-2 rounded-full" style={{ background: form.color }} />
-            {previewName}
-            {form.department && <span className="font-normal" style={{ color: form.color + "bb" }}>· {form.department}</span>}
-          </div>
-        </div>
+      {/* ปุ่มเปิดฟอร์ม — ตัวฟอร์มอยู่ใน sheet ไม่ได้แปะค้างกลางหน้าแล้ว */}
+      <button onClick={startCreate}
+        className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-bold text-white transition-opacity hover:opacity-80"
+        style={{ background: ADMIN_PRIMARY }}>
+        <i className="fa-solid fa-plus mr-1.5" />เพิ่มกลุ่มใหม่
+      </button>
 
+      {formOpen && (
+      <AdminModal onClose={reset} size="lg"
+        header={
+          <div className="flex items-center gap-2.5 min-w-0">
+            <i className="fa-solid fa-layer-group text-base" style={{ color: ADMIN_PRIMARY }} />
+            <div className="min-w-0">
+              <div className="font-bold text-white text-base truncate">{editId ? "แก้ไขกลุ่ม" : "เพิ่มกลุ่มใหม่"}</div>
+              <div className="flex items-center gap-1.5 mt-1 text-[11px] font-bold" style={{ color: form.color }}>
+                <span className="w-2 h-2 rounded-full" style={{ background: form.color }} />
+                {previewName}
+                {form.department && <span className="font-normal" style={{ color: form.color + "bb" }}>· {form.department}</span>}
+              </div>
+            </div>
+          </div>
+        }
+        footer={
+          <>
+            <button onClick={reset}
+              className="flex-1 py-3 rounded-xl text-sm font-bold transition-opacity hover:opacity-80"
+              style={{ background: "#2a2a2a", color: "#9e9e9e", border: "1px solid #3e3e3e" }}>
+              ยกเลิก
+            </button>
+            <button onClick={save} disabled={saving}
+              className="flex-1 py-3 rounded-xl text-sm font-bold text-white transition-opacity hover:opacity-80 disabled:opacity-50"
+              style={{ background: ADMIN_PRIMARY }}>
+              {saving
+                ? <><i className="asia-spinner mr-1.5" />กำลังบันทึก...</>
+                : editId ? "บันทึกการแก้ไข" : `เพิ่ม ${previewName}`}
+            </button>
+          </>
+        }>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {/* Program */}
           <div>
@@ -1014,22 +1145,15 @@ function ClassGroupsTab() {
             <label className="block text-[11px] text-[#9e9e9e] mb-1">สี</label>
             <div className="flex items-center gap-2">
               <input type="color" value={form.color} onChange={e => setForm(f => ({ ...f, color: e.target.value }))}
-                className="w-8 h-8 rounded cursor-pointer border-0 bg-transparent" />
+                className="w-8 h-8 rounded-sm cursor-pointer border-0 bg-transparent" />
               <span className="text-xs font-mono" style={{ color: "#9e9e9e" }}>{form.color}</span>
             </div>
           </div>
         </div>
 
-        {msg && <p className="text-xs text-red-400">{msg}</p>}
-        <div className="flex gap-2 pt-1">
-          <button onClick={save} disabled={saving}
-            className="px-4 py-2 rounded-lg text-xs font-bold text-white transition-opacity hover:opacity-80"
-            style={{ background: "#ff7070" }}>
-            {saving ? "กำลังบันทึก..." : editId ? "บันทึกการแก้ไข" : `เพิ่ม ${previewName}`}
-          </button>
-          {editId && <button onClick={reset} className="px-4 py-2 rounded-lg text-xs font-bold transition-opacity hover:opacity-80" style={{ background: "#2a2a2a", color: "#9e9e9e" }}>ยกเลิก</button>}
-        </div>
-      </div>
+        {msg && <p className="text-xs text-red-400 mt-3">{msg}</p>}
+      </AdminModal>
+      )}
 
       <div className="rounded-xl p-3" style={{ background: "#1c1c1c", border: "1px solid #3e3e3e" }}>
         <div className="flex flex-col md:flex-row gap-3 md:items-center">
@@ -1037,7 +1161,7 @@ function ClassGroupsTab() {
             <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-[11px]" style={{ color: "#636363" }} />
             <input value={search} onChange={e => setSearch(e.target.value)}
               placeholder="ค้นหากลุ่มเรียน, ระดับ, ชั้นปี, สาขา..."
-              className="w-full pl-8 pr-3 py-2.5 rounded-lg text-sm outline-none"
+              className="w-full pl-8 pr-3 py-2.5 rounded-lg text-sm outline-hidden"
               style={{ background: "#0c0c0c", border: "1px solid #3e3e3e", color: "#ededed" }} />
           </div>
           <span className="text-[11px] px-3 py-2 rounded-lg" style={{ background: "#0c0c0c", border: "1px solid #2a2a2a", color: "#9e9e9e" }}>
@@ -1061,7 +1185,7 @@ function ClassGroupsTab() {
             <div key={g.id} className="rounded-xl p-4"
               style={{ background: "#1c1c1c", border: `1px solid ${color}44` }}>
               <div className="flex items-start gap-3">
-                <div className="w-11 h-11 rounded-lg flex items-center justify-center font-black text-white flex-shrink-0" style={{ background: color }}>
+                <div className="w-11 h-11 rounded-lg flex items-center justify-center font-black text-white shrink-0" style={{ background: color }}>
                   {g.section ? `/${g.section}` : g.name.charAt(0)}
                 </div>
                 <div className="flex-1 min-w-0">

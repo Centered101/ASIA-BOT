@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import Markdown from "./Markdown";
 import { SITE_NAME } from "@/lib/config";
+import { isMycerHost } from "@/lib/mycer";
 
 type NavButton = { path: string; label: string };
 type RichCard = { type: string; payload: Record<string, unknown> };
@@ -27,7 +28,7 @@ type UserContext = {
 const STUDENT_SESSION_KEY  = "asia_lb_session";
 const STUDENT_TIME_KEY     = "asia_lb_session_time";
 const STUDENT_SESSION_TTL  = 7 * 24 * 60 * 60 * 1000;
-const CHAT_HIDDEN_PATH_PREFIXES = ["/login", "/register", "/project", "/QQ", "/Qman"];
+const CHAT_HIDDEN_PATH_PREFIXES = ["/login", "/register", "/project", "/QQ", "/Qman", "/mycer"];
 
 function isChatHiddenPath(pathname: string) {
   return CHAT_HIDDEN_PATH_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`));
@@ -508,7 +509,12 @@ export default function ChatBubble() {
 
   const clearChat = () => { abortRef.current?.abort(); setMessages([]); setStreaming(false); };
 
+  // เช็ก host ด้วย ไม่ใช่แค่ path เพราะบนซับโดเมน Mycer เบราว์เซอร์เห็น URL
+  // เป็น /portfolio (middleware เติม /mycer ให้ฝั่งเซิร์ฟเวอร์) prefix ในลิสต์
+  // ข้างบนจึงไม่มีทางตรง — อ่าน window ได้เพราะบรรทัดนี้ผ่าน ctx! มาแล้ว
+  // ซึ่งเป็น null เสมอตอน SSR และตอน hydrate รอบแรก
   if (!ctx || loggedIn !== true || isChatHiddenPath(pathname)) return null;
+  if (isMycerHost(window.location.host)) return null;
 
   // Admin chat mirrors the admin panel's dark + red theme; students keep the light/blue theme.
   const T = ctx.isAdmin

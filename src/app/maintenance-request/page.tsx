@@ -4,13 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { MascotState } from "@/components/Mascot";
 import {
   MAINTENANCE_FLOW, MAINTENANCE_STATUS_TH, MAINTENANCE_URGENCY_TH, OPEN_STATUSES,
 } from "@/lib/server/maintenance";
 import type { MaintenanceStatus, MaintenanceUrgency } from "@/types/database";
-import StudentAvatar from "@/components/StudentAvatar";
-import { getStudentSession } from "@/lib/session";
+import StudentIdentityCard from "@/components/student/StudentIdentityCard";
+import { quickLinkFor } from "@/lib/config";
+import LoginGate from "@/components/LoginGate";
 
 /**
  * ฟอร์มแจ้งซ่อมสำหรับทุกคน — นักเรียน ครู เจ้าหน้าที่
@@ -88,11 +88,6 @@ export default function MaintenanceRequestPage() {
   const [equipment, setEquipment] = useState<EquipmentItem[]>([]);
   const [assetSearch, setAssetSearch] = useState("");
   const [mine, setMine] = useState<MyRequest[]>([]);
-
-  // อ่านผ่าน getStudentSession ตัวเดียวกับ /feedback แทนที่จะ parse localStorage เอง
-  // ตอน parse เองเคยหลุด program/department จนการ์ดโชว์แต่รหัส
-  const [session, setSession] = useState<ReturnType<typeof getStudentSession>>(null);
-  useEffect(() => { setSession(getStudentSession()); }, []);
 
   // ภาพรวมทั้งระบบ ไม่ใช่ของคนเดียว — คนที่ยังไม่เคยแจ้งจะได้เห็นว่าระบบมีคนใช้จริง
   // และรู้ว่างานที่ค้างอยู่เยอะแค่ไหน ส่วนตัวเลขของตัวเองอยู่ในการ์ด "งานที่ฉันแจ้ง"
@@ -228,16 +223,8 @@ export default function MaintenanceRequestPage() {
 
   if (needsLogin) {
     return (
-      <>
-        <Header subtitle="แจ้งซ่อม" />
-        <main className="min-h-screen max-w-md mx-auto px-4 relative z-10">
-          <MascotState mood="help" title="ต้องเข้าสู่ระบบก่อนแจ้งซ่อม"
-            subtitle="ระบบบันทึกว่าใครเป็นผู้แจ้ง เพื่อให้ฝ่ายอาคารติดต่อกลับได้ และให้คุณตามสถานะงานของตัวเองได้">
-            <Link href="/student" className="btn-primary px-6 py-2.5">เข้าสู่ระบบ</Link>
-          </MascotState>
-        </main>
-        <Footer />
-      </>
+      <LoginGate path="/maintenance-request" subtitle="แจ้งซ่อม"
+        reason="ระบบบันทึกว่าใครเป็นผู้แจ้ง เพื่อให้ฝ่ายอาคารติดต่อกลับได้ และให้คุณตามสถานะงานของตัวเองได้" />
     );
   }
 
@@ -247,7 +234,7 @@ export default function MaintenanceRequestPage() {
         <div className="bg-blob" style={{ width: 520, height: 520, background: "var(--primary-color)", top: -120, right: -170 }} />
         <Header subtitle="แจ้งซ่อม" />
         <main className="min-h-screen max-w-md mx-auto px-4 pt-10 relative z-10">
-          <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-6 text-center">
+          <div className="bg-white border border-slate-100 rounded-2xl shadow-xs p-6 text-center">
             <div className="w-14 h-14 rounded-2xl bg-emerald-50 flex items-center justify-center mx-auto mb-3">
               <i className="fa-solid fa-check text-emerald-500 text-xl" />
             </div>
@@ -300,7 +287,7 @@ export default function MaintenanceRequestPage() {
             ].map((s) => (
               <div key={s.label} className="rounded-2xl border p-3 sm:p-4 flex items-center gap-3"
                 style={{ background: s.bg, borderColor: s.color + "30" }}>
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: s.color + "20" }}>
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: s.color + "20" }}>
                   <i className={`fa-solid ${s.icon} text-xs`} style={{ color: s.color }} />
                 </div>
                 <div>
@@ -316,7 +303,7 @@ export default function MaintenanceRequestPage() {
 
           {/* ── ฟอร์ม ── */}
           <div className="lg:col-span-2">
-            <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4 sm:p-6 space-y-5">
+            <div className="bg-white border border-slate-100 rounded-2xl shadow-xs p-4 sm:p-6 space-y-5">
 
               {/* หัวการ์ดทรงเดียวกับ /feedback — ไอคอน หัวข้อ คำอธิบาย */}
               <div className="text-center">
@@ -368,15 +355,18 @@ export default function MaintenanceRequestPage() {
                         value={assetSearch} onChange={(e) => setAssetSearch(e.target.value)}
                         onKeyDown={(e) => { if (e.key === "Enter") void loadTargets(assetSearch); }} />
                     </div>
-                    <select className="form-input text-xs sm:text-sm" value={form.asset_id}
-                      onChange={(e) => setForm({ ...form, asset_id: e.target.value })}>
-                      <option value="">— เลือกครุภัณฑ์ —</option>
-                      {assets.map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.asset_code ? `[${a.asset_code}] ` : ""}{a.name}{a.location_note ? ` · ${a.location_note}` : ""}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="field-wrap">
+                      <i className="fa-solid fa-barcode field-icon" />
+                      <select className="form-input text-xs sm:text-sm" value={form.asset_id}
+                        onChange={(e) => setForm({ ...form, asset_id: e.target.value })}>
+                        <option value="">— เลือกครุภัณฑ์ —</option>
+                        {assets.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.asset_code ? `[${a.asset_code}] ` : ""}{a.name}{a.location_note ? ` · ${a.location_note}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                     {assets.length === 0 && (
                       <p className="text-[11px] text-slate-400">ยังไม่มีครุภัณฑ์ในระบบ ใช้ &quot;พิมพ์เอง&quot; แทนได้</p>
                     )}
@@ -385,13 +375,16 @@ export default function MaintenanceRequestPage() {
 
                 {kind === "equipment_item" && (
                   <div className="space-y-2">
-                    <select className="form-input text-xs sm:text-sm" value={form.equipment_item_id}
-                      onChange={(e) => setForm({ ...form, equipment_item_id: e.target.value })}>
-                      <option value="">— เลือกอุปกรณ์ —</option>
-                      {equipment.map((e) => (
-                        <option key={e.id} value={e.id}>{e.name} · คงเหลือ {e.available_quantity} {e.unit}</option>
-                      ))}
-                    </select>
+                    <div className="field-wrap">
+                      <i className="fa-solid fa-toolbox field-icon" />
+                      <select className="form-input text-xs sm:text-sm" value={form.equipment_item_id}
+                        onChange={(e) => setForm({ ...form, equipment_item_id: e.target.value })}>
+                        <option value="">— เลือกอุปกรณ์ —</option>
+                        {equipment.map((e) => (
+                          <option key={e.id} value={e.id}>{e.name} · คงเหลือ {e.available_quantity} {e.unit}</option>
+                        ))}
+                      </select>
+                    </div>
                     {/* ป้ายบรรทัดบนแบบเดียวกับช่องอื่นในฟอร์ม ของเดิมเป็น span วางซ้ายช่อง
                         พอจอแคบคำว่า "เสียกี่ชิ้น" ตัดบรรทัดกลางคำ อ่านไม่รู้เรื่อง */}
                     <div>
@@ -408,10 +401,10 @@ export default function MaintenanceRequestPage() {
                       <div className="flex items-center gap-2">
                         <button type="button" onClick={() => setAffectedQty(affectedQty - 1)}
                           disabled={affectedQty <= 1} aria-label="ลดจำนวน"
-                          className="w-10 h-10 rounded-xl border-2 border-slate-200 bg-slate-50 text-slate-500 flex items-center justify-center flex-shrink-0 transition-colors hover:border-sky-300 hover:text-sky-500 disabled:opacity-40 disabled:hover:border-slate-200 disabled:hover:text-slate-500">
+                          className="w-10 h-10 rounded-xl border-2 border-slate-200 bg-slate-50 text-slate-500 flex items-center justify-center shrink-0 transition-colors hover:border-sky-300 hover:text-sky-500 disabled:opacity-40 disabled:hover:border-slate-200 disabled:hover:text-slate-500">
                           <i className="fa-solid fa-minus text-xs" />
                         </button>
-                        <div className="field-wrap w-24 flex-shrink-0">
+                        <div className="field-wrap w-24 shrink-0">
                           <i className="fa-solid fa-hashtag field-icon" />
                           <input type="number" min={1} inputMode="numeric"
                             className="form-input no-spinner text-xs sm:text-sm font-bold tabular-nums"
@@ -421,7 +414,7 @@ export default function MaintenanceRequestPage() {
                         </div>
                         <button type="button" onClick={() => setAffectedQty(affectedQty + 1)}
                           aria-label="เพิ่มจำนวน"
-                          className="w-10 h-10 rounded-xl border-2 border-slate-200 bg-slate-50 text-slate-500 flex items-center justify-center flex-shrink-0 transition-colors hover:border-sky-300 hover:text-sky-500">
+                          className="w-10 h-10 rounded-xl border-2 border-slate-200 bg-slate-50 text-slate-500 flex items-center justify-center shrink-0 transition-colors hover:border-sky-300 hover:text-sky-500">
                           <i className="fa-solid fa-plus text-xs" />
                         </button>
                         <span className="text-sm text-slate-400 whitespace-nowrap">{pickedEquipment?.unit ?? "ชิ้น"}</span>
@@ -434,11 +427,14 @@ export default function MaintenanceRequestPage() {
                 )}
 
                 {kind === "room" && (
-                  <select className="form-input text-xs sm:text-sm" value={form.room_id}
-                    onChange={(e) => setForm({ ...form, room_id: e.target.value })}>
-                    <option value="">— เลือกห้อง —</option>
-                    {rooms.map((r) => <option key={r.id} value={r.id}>{r.name}{r.location ? ` · ${r.location}` : ""}</option>)}
-                  </select>
+                  <div className="field-wrap">
+                    <i className="fa-solid fa-door-open field-icon" />
+                    <select className="form-input text-xs sm:text-sm" value={form.room_id}
+                      onChange={(e) => setForm({ ...form, room_id: e.target.value })}>
+                      <option value="">— เลือกห้อง —</option>
+                      {rooms.map((r) => <option key={r.id} value={r.id}>{r.name}{r.location ? ` · ${r.location}` : ""}</option>)}
+                    </select>
+                  </div>
                 )}
               </div>
 
@@ -470,7 +466,7 @@ export default function MaintenanceRequestPage() {
                 <textarea rows={4} maxLength={500} value={form.symptom}
                   onChange={(e) => setForm({ ...form, symptom: e.target.value })}
                   placeholder="อธิบายว่าเสียยังไง เช่น แอร์ไม่เย็น มีน้ำหยด เปิดแล้วมีเสียงดัง"
-                  className="w-full text-xs sm:text-sm bg-gray-50 border-2 border-slate-200 rounded-xl p-3 resize-none transition-colors focus:outline-none focus:border-[color:var(--primary-color)]" />
+                  className="w-full text-xs sm:text-sm bg-gray-50 border-2 border-slate-200 rounded-xl p-3 resize-none transition-colors focus:outline-hidden focus:border-[color:var(--primary-color)]" />
                 <p className="text-xs text-slate-400 text-right mt-1">{form.symptom.length}/500</p>
               </div>
 
@@ -522,7 +518,7 @@ export default function MaintenanceRequestPage() {
                 className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-3 rounded-xl text-white transition-all disabled:opacity-70"
                 style={{ background: !canSubmit || busy ? "#94a3b8" : urgencyColor, boxShadow: `0 4px 14px ${urgencyColor}44` }}>
                 {busy
-                  ? <><span className="spinner w-4 h-4 border-2 border-white border-t-transparent" /> กำลังส่ง...</>
+                  ? <><span className="spinner" /> กำลังส่ง...</>
                   : <><i className="fa-solid fa-screwdriver-wrench" /> ส่งคำขอแจ้งซ่อม</>}
               </button>
             </div>
@@ -535,27 +531,19 @@ export default function MaintenanceRequestPage() {
               {/* ข้อมูลผู้แจ้งมาจากบัญชีทั้งหมด ไม่มีช่องให้กรอก — ฝั่ง server ก็อ่าน
                   จาก session ไม่ใช่จากค่าที่หน้าเว็บส่งไป จึงแจ้งในนามคนอื่นไม่ได้
                   วางไว้ด้านข้างทรงเดียวกับ /feedback เพื่อให้ฟอร์มเหลือแต่ช่องที่ต้องกรอกจริง */}
-              {session && (
-                <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">บัญชีของคุณ</h3>
-                  <div className="flex items-center gap-3">
-                    <StudentAvatar src={session.photo_url} name={`${session.first_name} ${session.last_name}`} size={48} rounded="xl" />
-                    <div className="min-w-0">
-                      <div className="text-sm font-bold text-slate-800 truncate">{session.first_name} {session.last_name}</div>
-                      <div className="text-[10px] text-slate-400">{session.student_id} · {session.program}</div>
-                      <div className="text-[10px] text-slate-400">{session.department}</div>
-                    </div>
-                  </div>
-                  <div className="mt-3 pt-3 border-t border-slate-100 text-[11px] text-slate-500 flex items-center gap-1.5">
-                    <i className="fa-solid fa-id-card text-sky-400" />
-                    แจ้งในนาม <strong>บัญชีนี้</strong>{session.student_phone ? ` · ช่างติดต่อกลับที่ ${session.student_phone}` : ""}
-                  </div>
-                </div>
-              )}
+              <StudentIdentityCard
+                accent={quickLinkFor("/maintenance-request")?.color}
+                footer={
+                  <span className="flex items-center gap-1.5">
+                    <i className="fa-solid fa-id-card" style={{ color: quickLinkFor("/maintenance-request")?.color }} />
+                    แจ้งในนาม <strong>บัญชีนี้</strong> — ช่างจะติดต่อกลับตามเบอร์ด้านบน
+                  </span>
+                }
+              />
 
               {mine.length > 0 && (
                 <button onClick={() => setHistoryOpen(true)}
-                  className="w-full text-left bg-white border border-slate-100 rounded-2xl shadow-sm p-4 hover:shadow-md hover:border-violet-200 transition-all">
+                  className="w-full text-left bg-white border border-slate-100 rounded-2xl shadow-xs p-4 hover:shadow-md hover:border-violet-200 transition-all">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">งานที่ฉันแจ้ง</h3>
                     <span className="text-[10px] font-bold text-violet-500">ดูทั้งหมด →</span>
@@ -563,7 +551,7 @@ export default function MaintenanceRequestPage() {
                   <div className="space-y-2">
                     {mine.slice(0, 3).map((m) => (
                       <div key={m.id} className="flex items-start gap-2">
-                        <span className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${OPEN.includes(m.status) ? "bg-amber-400" : "bg-emerald-400"}`} />
+                        <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${OPEN.includes(m.status) ? "bg-amber-400" : "bg-emerald-400"}`} />
                         <div className="min-w-0">
                           <div className="text-[11px] font-bold text-slate-600 truncate">{targetOf(m)}</div>
                           <div className="text-[10px] text-slate-400">{MAINTENANCE_STATUS_TH[m.status]}</div>
@@ -579,7 +567,7 @@ export default function MaintenanceRequestPage() {
                 </button>
               )}
 
-              <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
+              <div className="bg-white border border-slate-100 rounded-2xl shadow-xs p-4">
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">เคล็ดลับการแจ้ง</h3>
                 <ul className="space-y-2.5">
                   {[
@@ -589,7 +577,7 @@ export default function MaintenanceRequestPage() {
                     { icon: "fa-triangle-exclamation", color: "#EF4444", text: "เลือกวิกฤตเฉพาะกรณีอันตรายจริง" },
                   ].map((t) => (
                     <li key={t.text} className="flex items-start gap-2.5">
-                      <span className="w-5 h-5 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
+                      <span className="w-5 h-5 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
                         style={{ background: t.color + "18" }}>
                         <i className={`fa-solid ${t.icon} text-[9px]`} style={{ color: t.color }} />
                       </span>
@@ -599,11 +587,11 @@ export default function MaintenanceRequestPage() {
                 </ul>
               </div>
 
-              <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
+              <div className="bg-white border border-slate-100 rounded-2xl shadow-xs p-4">
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">ทางลัด</h3>
                 <Link href="/equipment-request"
                   className="flex items-center gap-2.5 text-[11px] text-slate-500 hover:text-emerald-600 transition-colors">
-                  <span className="w-5 h-5 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                  <span className="w-5 h-5 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
                     <i className="fa-solid fa-toolbox text-[9px] text-emerald-500" />
                   </span>
                   เบิกคุรุภัณฑ์
@@ -618,10 +606,10 @@ export default function MaintenanceRequestPage() {
           ขั้นตอนที่งานเดินไปถึง ไม่ใช่แค่สถานะปัจจุบันเป็นคำเดียว */}
       {historyOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs"
             onClick={() => setHistoryOpen(false)} />
           <div className="relative w-full sm:max-w-2xl max-h-[85vh] bg-white rounded-t-3xl sm:rounded-3xl shadow-xl flex flex-col">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
               <div>
                 <div className="font-bold text-slate-800">ประวัติการแจ้งซ่อม</div>
                 <div className="text-[11px] text-slate-400">
@@ -648,7 +636,7 @@ export default function MaintenanceRequestPage() {
                         <div className="text-sm font-bold text-slate-800 truncate">{targetOf(m)}</div>
                         <div className="text-[11px] text-slate-400 font-mono">{m.request_code}</div>
                       </div>
-                      <span className={`text-[10px] font-bold rounded-full px-2.5 py-1 flex-shrink-0 ${
+                      <span className={`text-[10px] font-bold rounded-full px-2.5 py-1 shrink-0 ${
                         cancelled ? "bg-slate-100 text-slate-500"
                         : done ? "bg-emerald-50 text-emerald-600"
                         : "bg-amber-50 text-amber-600"

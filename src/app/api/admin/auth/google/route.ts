@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { attachSessionCookie } from "@/lib/server/session";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest) {
     });
   } catch { /* silent */ }
 
-  return NextResponse.json({
+  const res = NextResponse.json({
     ok: true,
     admin: {
       admin_id:   admin.admin_id,
@@ -63,4 +64,11 @@ export async function POST(req: NextRequest) {
       google_email: admin.google_email ?? email,
     },
   });
+
+  // ล็อกอินด้วย Google ต้องได้คุกกี้เหมือนล็อกอินด้วยรหัสผ่าน (ดู /api/admin/auth)
+  // ที่นี่เคยตกหล่น แอดมินที่เข้าด้วย Google จึงมีแต่ session ใน localStorage
+  // ทำงานได้เพราะ x-admin-id ตัวเก่ายังเปิดอยู่ แต่วันที่ Phase 14 ปิดมัน
+  // คนกลุ่มนี้จะเข้าไม่ได้ทั้งหมด และตอนนี้ก็เรียก API ที่อ่านคุกกี้อย่างเดียวไม่ได้
+  await attachSessionCookie(res, req, "admin", admin.admin_id);
+  return res;
 }

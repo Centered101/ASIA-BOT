@@ -29,6 +29,13 @@ const BUCKETS = {
     permission: "asset.manage",
     ext: ["jpg", "jpeg", "png", "webp"],
   },
+  // แฟ้มเอกสารนักเรียน (0023) — สิทธิ์เป็นของนักเรียนเอง ไม่ใช่ฝ่ายทะเบียน
+  // เพราะคนที่อัปโหลดคือเจ้าของเอกสาร ส่วนการตรวจใช้ document.review คนละตัว
+  // รับ pdf ด้วยเพราะสำเนา ปพ. กับใบจบส่วนใหญ่มาเป็น pdf ไม่ใช่รูปถ่าย
+  "student-documents": {
+    permission: "document.upload_own",
+    ext: ["jpg", "jpeg", "png", "webp", "pdf"],
+  },
 } as const;
 
 type BucketName = keyof typeof BUCKETS;

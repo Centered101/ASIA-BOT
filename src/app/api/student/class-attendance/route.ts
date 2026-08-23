@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServiceClient } from "@/lib/server/supabase-server";
 import { withAuth } from "@/lib/server/with-auth";
+import { resolveOwnStudentId } from "@/lib/server/student-identity";
 import { hasPermission } from "@/lib/rbac/definitions";
 import type { ClassAttendanceStatus } from "@/types/database";
 
@@ -50,9 +51,12 @@ export const GET = withAuth(
     // ดูของคนอื่นได้เฉพาะคนที่มีสิทธิ์ ไม่งั้นบังคับเป็นของตัวเองเสมอ
     // ไม่ใช้ค่าจาก query โดยไม่ตรวจ ไม่งั้นนักเรียนเปลี่ยนรหัสใน URL แล้วดูของเพื่อนได้
     const canSeeOthers = hasPermission(principal.permissions, "attendance.view_all");
-    const studentId = canSeeOthers && requested ? requested : principal.subjectId;
+    // คนที่เป็นทั้งครูและนักเรียน resolve เป็น admin ตัว subjectId จึงเป็น admin_id
+    // ไม่ใช่รหัสนักเรียน ต้องแปลงก่อน ไม่งั้นเขาเปิดของตัวเองไม่ได้ (ดู resolveOwnStudentId)
+    const own = await resolveOwnStudentId(principal);
+    const studentId = canSeeOthers && requested ? requested : own;
 
-    if (!canSeeOthers && principal.subjectType !== "student") {
+    if (!studentId) {
       return NextResponse.json(
         { status: "error", message: "บัญชีนี้ไม่มีข้อมูลการเข้าเรียน" },
         { status: 403 }

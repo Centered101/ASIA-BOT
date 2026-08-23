@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import bcrypt from "bcryptjs";
 import { ADMIN_DIVISIONS } from "@/lib/modules/nav";
+import { canHaveDivision } from "@/lib/modules/nav-access";
 
 /**
  * ฝ่ายที่รับได้ต้องตรงกับ CHECK ใน 0019_admin_division.sql
@@ -85,7 +86,9 @@ export async function POST(req: NextRequest) {
     phone: phone?.trim() || null,
     entry_year: entry_year?.trim() || null,
     department: department?.trim() || null,
-    division: cleanDivision(division),
+    // สภานักเรียนไม่สังกัดฝ่าย ต่อให้ฟอร์มส่งค่ามาก็ไม่รับ — ฟอร์มปิดช่องนี้ไว้แล้ว
+    // แต่ API ต้องกันเองด้วย ไม่งั้นยิงตรงเข้ามาก็เขียนได้
+    division: canHaveDivision(role) ? cleanDivision(division) : null,
     avatar: avatar?.trim() || null,
     linked_student_id: linked_student_id?.trim() || null,
   };

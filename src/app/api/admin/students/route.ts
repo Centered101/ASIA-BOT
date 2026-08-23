@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase.from("students") as any)
-    .select("id, student_id, first_name, last_name, nickname, program, department, entry_year, student_phone, uid, photo_url, card_status, created_at, updated_at")
+    .select("id, student_id, first_name, last_name, nickname, program, department, entry_year, student_phone, uid, photo_url, card_status, created_at, updated_at, google_email")
     .order("created_at", { ascending: false })
     .limit(300);
 

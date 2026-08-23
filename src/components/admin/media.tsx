@@ -138,16 +138,16 @@ export function ImgUpload({ value, onChange, placeholder, endpoint = "/api/admin
       <div className="flex gap-2 items-center">
         <input value={value} onChange={e => onChange(e.target.value)}
           placeholder={placeholder ?? "https://... หรืออัปโหลดไฟล์"}
-          className="flex-1 px-3 py-2 rounded-lg text-sm focus:outline-none min-w-0"
+          className="flex-1 px-3 py-2 rounded-lg text-sm focus:outline-hidden min-w-0"
           style={inp} />
         {previewSrc && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={previewSrc} alt="" className="w-9 h-9 rounded-lg object-cover flex-shrink-0"
+          <img src={previewSrc} alt="" className="w-9 h-9 rounded-lg object-cover shrink-0"
             style={{ border: "1px solid #3e3e3e" }}
             onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
         )}
         <button type="button" onClick={() => { (window as any).__asiaAdminFilePickerAt = Date.now(); ref.current?.click(); }} disabled={uploading || deleting}
-          className="flex-shrink-0 px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50 transition-colors"
+          className="shrink-0 px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50 transition-colors"
           style={{ background: "#2a2a2a", border: "1px solid #3e3e3e", color: "#9e9e9e" }}>
           {uploading
             ? <><i className="asia-spinner" /><span className="hidden sm:inline">กำลังอัปโหลด</span></>
@@ -156,7 +156,7 @@ export function ImgUpload({ value, onChange, placeholder, endpoint = "/api/admin
         {value && (
           <button type="button" onClick={onDelete} disabled={uploading || deleting}
             title={isOwned ? "ลบไฟล์จาก Storage" : "ล้างค่า"}
-            className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center disabled:opacity-50 transition-colors"
+            className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center disabled:opacity-50 transition-colors"
             style={{ background: "#2a2a2a", border: "1px solid #3e3e3e", color: deleting ? "#ff7070" : "#9e9e9e" }}>
             {deleting ? <i className="asia-spinner text-xs" /> : <i className="fa-solid fa-trash text-xs" />}
           </button>

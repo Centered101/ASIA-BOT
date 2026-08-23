@@ -17,6 +17,13 @@ import Image from "next/image";
 
 import { AdminPage, T as C } from "@/components/admin/ui";
 import { adminFetch, readAdminSession } from "@/lib/modules/admin-session";
+import { AdminModal } from "@/components/admin/dark-ui";
+import {
+  CHANGE_TH, KIND_TH, LEVEL_TH, SCOPE_TH, STATUS_TH,
+} from "@/lib/student-record-options";
+import { GENDER_LABELS } from "@/lib/student-validate";
+import { ageFrom, thaiDate } from "@/lib/format-th";
+import { ROLE_LABELS, type Role } from "@/lib/rbac/definitions";
 
 type Guardian = {
   id: string; full_name: string; relationship: string;
@@ -33,12 +40,16 @@ type Achievement = {
   organizer: string | null; event_name: string | null; event_date: string | null;
   academic_year: string | null; description: string | null;
 };
+/** ตำแหน่งในโรงเรียน = role ที่บัญชีนี้ถืออยู่ (ตาราง user_roles) */
 type Position = {
-  id: string; position: string; scope: string; scope_ref: string | null;
-  academic_year: string | null; started_on: string; ended_on: string | null;
+  id: string; role_key: string;
+  scope_type: string | null; scope_id: string | null;
+  created_at: string;
 };
 type TimelineRow = {
   id: string; change_type: string; from_value: string | null; to_value: string | null;
+  /** ค่าที่ API แปลเป็นชื่อห้อง/ชื่อครูให้แล้ว — ดู withTimelineLabels */
+  from_label?: string | null; to_label?: string | null;
   effective_date: string; reason: string | null; recorded_by: string | null;
 };
 type Profile = {
@@ -48,6 +59,8 @@ type Profile = {
     entry_year: string; student_status: string; photo_url: string | null;
     student_phone: string | null; birth_date: string | null; gender: string | null;
     address: string | null; card_status: string;
+    /** ช่องทางติดต่อออนไลน์ — API คืนมาด้วย select("*") อยู่แล้ว แค่ไม่เคยประกาศไว้ */
+    google_email: string | null; line_user_id: string | null;
   };
   class_group: { id: string; name: string; department: string | null } | null;
   advisor: { id: string; full_name: string; nickname: string | null; phone: string | null } | null;
@@ -59,26 +72,8 @@ type Profile = {
   summary: { guardian_count: number; achievement_count: number; active_positions: number };
 };
 
-const STATUS_TH: Record<string, string> = {
-  studying: "กำลังเรียน", on_leave: "พักการเรียน", transferred: "ย้ายสถานศึกษา",
-  graduated: "จบการศึกษา", resigned: "ลาออก", expelled: "ให้ออก",
-};
-const LEVEL_TH: Record<string, string> = {
-  school: "ระดับโรงเรียน", district: "ระดับอำเภอ", province: "ระดับจังหวัด",
-  region: "ระดับภาค", national: "ระดับชาติ", international: "ระดับนานาชาติ",
-};
-const KIND_TH: Record<string, string> = {
-  competition: "การแข่งขัน", award: "รางวัล", certificate: "เกียรติบัตร",
-  performance: "การแสดง", publication: "ผลงานเผยแพร่",
-};
-const SCOPE_TH: Record<string, string> = {
-  class: "ระดับห้อง", department: "ระดับสาขา", school: "ระดับโรงเรียน",
-  club: "ชมรม", other: "อื่นๆ",
-};
-const CHANGE_TH: Record<string, string> = {
-  status: "เปลี่ยนสถานะ", department: "ย้ายสาขา", class_group: "ย้ายห้อง",
-  advisor: "เปลี่ยนครูที่ปรึกษา", program: "เปลี่ยนหลักสูตร",
-};
+// ป้ายไทยอยู่ที่ src/lib/student-record-options.ts เพราะหน้าฝั่งนักเรียน
+// ใช้ชุดเดียวกัน ตอนแยกกันเคยแปล national ไม่ตรงกันระหว่างสองหน้า
 
 /** ช่องกรอกของฟอร์มเพิ่มระเบียน กำหนดเป็นข้อมูลเพื่อไม่ต้องเขียนฟอร์มซ้ำ 4 ชุด */
 type Field = {
@@ -132,18 +127,6 @@ const FORMS: Record<string, { path: string; title: string; fields: Field[] }> = 
       { key: "description", label: "รายละเอียด", type: "textarea" },
     ],
   },
-  positions: {
-    path: "positions", title: "เพิ่มตำแหน่ง",
-    fields: [
-      { key: "position", label: "ชื่อตำแหน่ง", required: true },
-      { key: "scope", label: "ขอบเขต", type: "select", options:
-        Object.entries(SCOPE_TH).map(([value, label]) => ({ value, label })) },
-      { key: "scope_ref", label: "สังกัด (ห้อง/สาขา/ชมรม)" },
-      { key: "academic_year", label: "ปีการศึกษา" },
-      { key: "started_on", label: "วันเริ่ม", type: "date" },
-      { key: "ended_on", label: "วันสิ้นสุด (เว้นว่าง = ยังอยู่)", type: "date" },
-    ],
-  },
 };
 
 export default function Student360Page() {
@@ -157,6 +140,8 @@ export default function Student360Page() {
   const [error, setError] = useState<string | null>(null);
   const [partial, setPartial] = useState<string[]>([]);
   const [openForm, setOpenForm] = useState<string | null>(null);
+  const [roleOpen, setRoleOpen] = useState(false);
+  const [newRole, setNewRole] = useState("");
   const [form, setForm] = useState<Record<string, unknown>>({});
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -231,6 +216,49 @@ export default function Student360Page() {
     }
   }
 
+  /**
+   * ตำแหน่งใช้ endpoint แยกจากระเบียนอื่น เพราะเป็นการเปลี่ยน "สิทธิ์"
+   * ไม่ใช่การแก้ข้อมูลประวัติ — ฝั่ง API จึงขอ system.manage ไม่ใช่ student.update
+   */
+  async function addRole() {
+    if (!newRole) return;
+    setSaving(true);
+    setFormError(null);
+    try {
+      const res = await adminFetch(
+        `/api/admin/students/${encodeURIComponent(studentId)}/roles`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role_key: newRole }),
+        }
+      );
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.status !== "success") {
+        setFormError(json.message ?? "เพิ่มตำแหน่งไม่สำเร็จ");
+      } else {
+        setRoleOpen(false);
+        setNewRole("");
+        await load();
+      }
+    } catch {
+      setFormError("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeRole(roleRowId: string) {
+    if (!confirm("ยืนยันการถอนตำแหน่งนี้? สิทธิ์ที่มากับตำแหน่งจะถูกถอนด้วย")) return;
+    const res = await adminFetch(
+      `/api/admin/students/${encodeURIComponent(studentId)}/roles?role_id=${roleRowId}`,
+      { method: "DELETE" }
+    );
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) alert(json.message ?? "ถอนตำแหน่งไม่สำเร็จ");
+    await load();
+  }
+
   async function removeRecord(path: string, param: string, id: string) {
     if (!adminId) return;
     if (!confirm("ยืนยันการลบรายการนี้?")) return;
@@ -244,7 +272,7 @@ export default function Student360Page() {
   }
 
   if (loading) {
-    return <Shell><p style={{ color: C.muted }}>กำลังโหลด…</p></Shell>;
+    return <Shell><p style={{ color: C.muted }}><i className="asia-spinner text-2xl block mb-2" />กำลังโหลด…</p></Shell>;
   }
   if (error || !profile) {
     return (
@@ -296,8 +324,14 @@ export default function Student360Page() {
 
         <Section title="ข้อมูลส่วนตัว" icon="fa-id-card">
           <Row k="เบอร์โทร" v={s.student_phone} />
-          <Row k="วันเกิด" v={s.birth_date} />
-          <Row k="เพศ" v={s.gender} />
+          <Row k="อีเมล (Google)" v={s.google_email} />
+          {/* ไม่โชว์ line_user_id ดิบ ๆ — เป็นรหัสยาวที่ไม่มีความหมายกับคนอ่าน
+              เหมือน uuid ในไทม์ไลน์ สิ่งที่คนถามคือ "เชื่อมแล้วหรือยัง" */}
+          <Row k="LINE" v={s.line_user_id ? "เชื่อมแล้ว" : null} />
+          <Row k="วันเกิด" v={s.birth_date
+            ? `${thaiDate(s.birth_date)}${ageFrom(s.birth_date) != null ? ` (${ageFrom(s.birth_date)} ปี)` : ""}`
+            : null} />
+          <Row k="เพศ" v={s.gender ? GENDER_LABELS[s.gender] ?? s.gender : null} />
           <Row k="ที่อยู่" v={s.address} />
         </Section>
 
@@ -339,24 +373,32 @@ export default function Student360Page() {
               <strong>{a.title}</strong>
               {a.level && <Badge text={LEVEL_TH[a.level] ?? a.level} tone="accent" />}
               <div style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>
-                {[KIND_TH[a.kind] ?? a.kind, a.rank, a.organizer, a.event_date]
+                {[KIND_TH[a.kind] ?? a.kind, a.rank, a.organizer, a.event_date ? thaiDate(a.event_date) : null]
                   .filter(Boolean).join(" · ")}
               </div>
             </Item>
           ))}
         </Section>
 
-        <Section title={`ตำแหน่งในโรงเรียน (ปัจจุบัน ${profile.summary.active_positions})`} icon="fa-user-tie"
-          onAdd={() => { setOpenForm("positions"); setForm({}); }}>
+        {/* ตำแหน่ง = role ใน user_roles ไม่ใช่ข้อความที่พิมพ์เอง
+            ตำแหน่งที่ไม่มีผลกับสิ่งที่ทำได้จริงคือข้อความประดับ ไม่ใช่ตำแหน่ง */}
+        <Section title={`ตำแหน่งในโรงเรียน (${profile.summary.active_positions})`} icon="fa-user-tie"
+          onAdd={() => setRoleOpen(true)}>
           {profile.positions.length === 0 && <Empty text="ยังไม่มีตำแหน่ง" />}
           {profile.positions.map((p) => (
-            <Item key={p.id} onDelete={() => removeRecord("positions", "record_id", p.id)}>
-              <strong>{p.position}</strong>
-              {!p.ended_on && <Badge text="ปัจจุบัน" tone="accent" />}
+            <Item
+              key={p.id}
+              // STUDENT เป็นสิทธิ์พื้นฐานของบัญชี ถอนแล้วเข้าระบบไม่ได้เลย
+              // ฝั่ง API ปฏิเสธอยู่แล้ว ตรงนี้ซ่อนปุ่มไม่ให้กดตั้งแต่แรก
+              onDelete={p.role_key === "STUDENT" ? undefined : () => removeRole(p.id)}
+            >
+              <strong>{ROLE_LABELS[p.role_key as Role] ?? p.role_key}</strong>
+              {p.role_key === "STUDENT" && <Badge text="สิทธิ์พื้นฐาน" />}
               <div style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>
-                {[SCOPE_TH[p.scope] ?? p.scope, p.scope_ref, p.academic_year,
-                  `${p.started_on}${p.ended_on ? ` – ${p.ended_on}` : " – ปัจจุบัน"}`]
-                  .filter(Boolean).join(" · ")}
+                {[
+                  p.scope_type ? `${SCOPE_TH[p.scope_type] ?? p.scope_type}${p.scope_id ? `: ${p.scope_id}` : ""}` : "ทั้งโรงเรียน",
+                  `ได้รับ ${thaiDate(p.created_at)}`,
+                ].filter(Boolean).join(" · ")}
               </div>
             </Item>
           ))}
@@ -367,9 +409,9 @@ export default function Student360Page() {
           {profile.status_timeline.map((t) => (
             <Item key={t.id}>
               <strong>{CHANGE_TH[t.change_type] ?? t.change_type}</strong>
-              <span style={{ color: C.muted }}> · {t.effective_date}</span>
+              <span style={{ color: C.muted }}> · {thaiDate(t.effective_date)}</span>
               <div style={{ color: C.muted, fontSize: 12, marginTop: 2 }}>
-                {(t.from_value ?? "—")} → {(t.to_value ?? "—")}
+                {(t.from_label ?? t.from_value ?? "—")} → {(t.to_label ?? t.to_value ?? "—")}
                 {t.reason ? ` · ${t.reason}` : ""}
               </div>
             </Item>
@@ -379,13 +421,16 @@ export default function Student360Page() {
 
       {/* ฟอร์มเพิ่มระเบียน ใช้ตัวเดียวกับทุกหมวด ต่างกันแค่ FORMS spec */}
       {openForm && (
-        <div onClick={() => !saving && setOpenForm(null)}
-          style={{ position: "fixed", inset: 0, background: "#000a", display: "grid",
-            placeItems: "center", padding: 16, zIndex: 50 }}>
-          <div onClick={(e) => e.stopPropagation()}
-            style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 16,
-              padding: 20, width: "min(560px, 100%)", maxHeight: "85vh", overflowY: "auto" }}>
-            <h2 style={{ margin: "0 0 14px", fontSize: 17 }}>{FORMS[openForm].title}</h2>
+        <AdminModal onClose={() => !saving && setOpenForm(null)}
+          title={FORMS[openForm].title} icon="fa-plus" size="lg"
+          footer={
+            <>
+              <button onClick={() => setOpenForm(null)} disabled={saving} style={{ ...btnGhost, flex: 1 }}>ยกเลิก</button>
+              <button onClick={submitForm} disabled={saving} style={{ ...btnPrimary, flex: 1 }}>
+                {saving ? <><i className="asia-spinner" style={{ marginInlineEnd: 6 }} />กำลังบันทึก…</> : "บันทึก"}
+              </button>
+            </>
+          }>
             <div style={{ display: "grid", gap: 10 }}>
               {FORMS[openForm].fields.map((f) => (
                 <label key={f.key} style={{ display: "grid", gap: 4 }}>
@@ -393,9 +438,8 @@ export default function Student360Page() {
                     {f.label}{f.required && <span style={{ color: C.accent }}> *</span>}
                   </span>
                   {f.type === "checkbox" ? (
-                    <input type="checkbox" checked={Boolean(form[f.key])}
-                      onChange={(e) => setForm((p) => ({ ...p, [f.key]: e.target.checked }))}
-                      style={{ width: 18, height: 18, accentColor: C.accent }} />
+                    <input type="checkbox" className="asia-check" checked={Boolean(form[f.key])}
+                      onChange={(e) => setForm((p) => ({ ...p, [f.key]: e.target.checked }))} />
                   ) : f.type === "select" ? (
                     <select value={String(form[f.key] ?? "")}
                       onChange={(e) => setForm((p) => ({ ...p, [f.key]: e.target.value }))}
@@ -418,18 +462,56 @@ export default function Student360Page() {
               ))}
             </div>
             {formError && <p style={{ color: C.accent, fontSize: 13, marginTop: 10 }}>{formError}</p>}
-            <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
-              <button onClick={() => setOpenForm(null)} disabled={saving} style={btnGhost}>ยกเลิก</button>
-              <button onClick={submitForm} disabled={saving} style={btnPrimary}>
-                {saving ? "กำลังบันทึก…" : "บันทึก"}
+        </AdminModal>
+      )}
+
+      {/* กล่องตั้งตำแหน่ง — เลือกจาก role ที่มีจริงในระบบ ไม่ใช่ช่องพิมพ์
+          ตัวเลือกตัดสิทธิ์ระดับผู้ดูแลออก และฝั่ง API ปฏิเสธซ้ำอีกชั้น
+          ไม่ได้พึ่งการซ่อนใน dropdown อย่างเดียว */}
+      {roleOpen && (
+        <AdminModal onClose={() => !saving && setRoleOpen(false)}
+          title="ตั้งตำแหน่งในโรงเรียน" icon="fa-user-shield"
+          footer={
+            <>
+              <button onClick={() => setRoleOpen(false)} disabled={saving} style={{ ...btnGhost, flex: 1 }}>ยกเลิก</button>
+              <button onClick={addRole} disabled={saving || !newRole} style={{ ...btnPrimary, flex: 1 }}>
+                {saving ? <><i className="asia-spinner" style={{ marginInlineEnd: 6 }} />กำลังบันทึก…</> : "ตั้งตำแหน่ง"}
               </button>
-            </div>
-          </div>
-        </div>
+            </>
+          }>
+            <p style={{ margin: "0 0 14px", fontSize: 12, color: C.muted, lineHeight: 1.7 }}>
+              ตำแหน่งคือสิทธิ์จริงในระบบ ไม่ใช่ข้อความประดับ —
+              เลือกแล้วนักเรียนจะเข้าถึงเมนูและข้อมูลของตำแหน่งนั้นได้ทันที
+            </p>
+
+            <label style={{ display: "block", fontSize: 12, color: C.muted, marginBottom: 6 }}>
+              ตำแหน่ง
+            </label>
+            <select value={newRole} onChange={(e) => setNewRole(e.target.value)} style={inputStyle}>
+              <option value="">— เลือกตำแหน่ง —</option>
+              {ASSIGNABLE_ROLES.map((r) => (
+                <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+              ))}
+            </select>
+
+            {formError && (
+              <p style={{ color: C.accent, fontSize: 13, marginTop: 10 }}>{formError}</p>
+            )}
+        </AdminModal>
       )}
     </Shell>
   );
 }
+
+/**
+ * ตำแหน่งที่ตั้งให้นักเรียนได้
+ *
+ * ตัดสิทธิ์ระดับผู้ดูแลออกจากรายการ เพราะไม่มีเหตุผลให้นักเรียนเป็น
+ * ผู้ดูแลระบบผ่านหน้าแฟ้มนักเรียน ถ้าจำเป็นจริงต้องไปทำที่หน้าผู้ดูแลระบบ
+ * ซึ่งเห็นชัดว่ากำลังตั้งบัญชีผู้ดูแล — ฝั่ง API ปฏิเสธซ้ำอีกชั้นด้วย
+ */
+const ASSIGNABLE_ROLES: Role[] = (Object.keys(ROLE_LABELS) as Role[])
+  .filter((r) => !["SUPER_ADMIN", "ADMIN", "EXECUTIVE", "STUDENT", "PARENT", "GUEST"].includes(r));
 
 const inputStyle: React.CSSProperties = {
   background: C.card2, border: `1px solid ${C.line}`, borderRadius: 8,

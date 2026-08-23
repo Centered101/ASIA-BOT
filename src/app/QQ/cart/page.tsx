@@ -198,20 +198,20 @@ function CartContent() {
             })}
 
             {/* Customer Info */}
-            <div className="bg-white rounded-2xl shadow p-4 space-y-3">
+            <div className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
               <input
                 type="text"
                 placeholder="ชื่อลูกค้า (ไม่บังคับ)"
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
-                className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-green-500 focus:outline-none"
+                className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-green-500 focus:outline-hidden"
               />
               <textarea
                 placeholder="หมายเหตุ (ไม่บังคับ)"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 rows={2}
-                className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-green-500 focus:outline-none resize-none"
+                className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:border-green-500 focus:outline-hidden resize-none"
               />
             </div>
           </>

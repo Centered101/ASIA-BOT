@@ -76,7 +76,7 @@ const toasterOptions = {
     toast: "slide-up flex items-center gap-2 bg-[color:var(--white-smoker)] border border-slate-200 rounded-xl shadow-xl px-3 py-2 w-full cursor-grab active:cursor-grabbing font-['Kanit']",
     content: "flex-1 min-w-0",
     title: "font-['Kanit'] font-medium text-sm text-slate-700 line-clamp-2",
-    icon: "flex-shrink-0",
+    icon: "shrink-0",
   },
 } as const;
 
@@ -92,9 +92,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="th" suppressHydrationWarning>
       <head>
-        <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-        <link rel="icon" type="image/png" href="/favicon.png" />
-        <link rel="apple-touch-icon" href="/favicon.png" />
+        {/* ไอคอนแท็บมาจาก metadata.icons ข้างบนอย่างเดียว ไม่ฮาร์ดโค้ดซ้ำที่นี่
+            แท็กที่เขียนตรง ๆ ใน <head> ของ root layout จะติดไปทุกหน้ารวมถึง
+            /mycer ซึ่ง layout ชั้นในตั้ง icons เป็นโลโก้ของตัวเองไว้ แล้วทับ
+            ของที่ฮาร์ดโค้ดไม่ได้ — แท็บ Mycer ก็จะได้ไอคอนสองชุดซ้อนกัน */}
 
         {/* Preconnect to font/icon CDNs so non-blocking loads start ASAP */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />

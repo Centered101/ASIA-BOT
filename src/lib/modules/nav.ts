@@ -64,6 +64,10 @@ export const NAV_SECTIONS: NavSection[] = [
         keywords: ["นำเข้านักเรียน", "อัปโหลด csv", "excel"] },
       { id: "data_requests", label: "คำขอแก้ไขข้อมูล",   icon: "fa-id-card", badge: "pendingDataRequests",
         keywords: ["คำขอทำบัตร", "อนุมัติข้อมูล", "เปลี่ยนชื่อ"] },
+      // ศูนย์เอกสาร (0023) — สองคิวในหน้าเดียว: ตรวจไฟล์ที่นักเรียนส่งเข้าแฟ้ม
+      // กับออกเอกสารตามคำขอ ทั้งคู่เป็นงานฝ่ายทะเบียนและเริ่มจากรายชื่อชุดเดียวกัน
+      { id: "documents",     label: "ศูนย์เอกสาร",        icon: "fa-file-lines", href: "/admin/documents",
+        keywords: ["ปพ", "transcript", "ใบรับรอง", "ขอเอกสาร", "คัดสำเนา", "ใบจบ", "เอกสารนักเรียน"] },
     ],
   },
   {

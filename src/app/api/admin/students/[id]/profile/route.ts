@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServiceClient } from "@/lib/server/supabase-server";
 import { withAuth } from "@/lib/server/with-auth";
+import { withTimelineLabels } from "@/lib/server/student-timeline";
 
 /**
  * Student 360 — ดึงข้อมูลนักเรียนหนึ่งคนแบบครบทุกด้านในครั้งเดียว
@@ -38,7 +39,7 @@ export const GET = withAuth<{ id: string }>(
     }
 
     // ดึงส่วนที่เหลือพร้อมกัน แต่ละอันไม่ขึ้นต่อกัน
-    const [guardians, education, timeline, achievements, positions, classGroup, advisor] =
+    const [guardians, education, timeline, achievements, roles, classGroup, advisor] =
       await Promise.all([
         supabase
           .from("guardians")
@@ -62,11 +63,16 @@ export const GET = withAuth<{ id: string }>(
           .select("*")
           .eq("student_id", studentId)
           .order("event_date", { ascending: false }),
-        supabase
-          .from("student_positions")
-          .select("*")
-          .eq("student_id", studentId)
-          .order("started_on", { ascending: false }),
+        // ตำแหน่งในโรงเรียนอ่านจาก user_roles ไม่ใช่ตารางแยก — role คือสิ่งที่
+        // ตัดสินว่าคนนี้ทำอะไรได้จริง ถ้าเก็บตำแหน่งไว้อีกที่ วันหนึ่งจะเจอ
+        // "ประธานนักเรียน" ในแฟ้มแต่ระบบไม่ให้สิทธิ์อะไรเลย เพราะไม่มีใครไปเพิ่ม role ให้
+        student.account_id
+          ? supabase
+              .from("user_roles")
+              .select("id, role_key, scope_type, scope_id, created_at")
+              .eq("account_id", student.account_id)
+              .order("created_at")
+          : Promise.resolve({ data: [] }),
         // ห้องเรียนกับครูที่ปรึกษายังว่างทั้งระบบจนกว่าจะจัดรายชื่อ
         // จึงต้องรองรับกรณี null ไม่ใช่ถือว่าต้องมีเสมอ
         student.class_group_id
@@ -85,7 +91,7 @@ export const GET = withAuth<{ id: string }>(
           : Promise.resolve({ data: null }),
       ]);
 
-    const positionRows = positions.data ?? [];
+    const roleRows = roles.data ?? [];
 
     // ถ้า query ตารางลูกตัวใดล้ม ต้องไม่ปล่อยให้กลายเป็น "ไม่มีข้อมูล" เงียบ ๆ
     // เพราะหน้าจอจะแสดงว่ายังไม่มีผู้ปกครองทั้งที่จริงคือตารางหาย/สิทธิ์ไม่พอ
@@ -95,7 +101,7 @@ export const GET = withAuth<{ id: string }>(
         ["education_history", education],
         ["status_timeline", timeline],
         ["achievements", achievements],
-        ["positions", positions],
+        ["roles", roles],
       ] as const
     )
       .filter(([, r]) => "error" in r && r.error)
@@ -110,14 +116,16 @@ export const GET = withAuth<{ id: string }>(
         advisor: advisor.data ?? null,
         guardians: guardians.data ?? [],
         education_history: education.data ?? [],
-        status_timeline: timeline.data ?? [],
+        status_timeline: await withTimelineLabels(timeline.data ?? []),
         achievements: achievements.data ?? [],
-        positions: positionRows,
+        // ชื่อ positions คงไว้เพื่อไม่ให้หน้าที่เรียกอยู่พังทันที แต่เนื้อในมาจาก
+        // user_roles แล้ว — ตาราง student_positions ยังอยู่ในฐาน ไม่ได้ลบทิ้ง
+        positions: roleRows,
         // นับให้ฝั่ง UI ใช้แสดงหัวข้อได้เลย โดยไม่ต้องดึงข้อมูลทั้งก้อนมานับเอง
         summary: {
           guardian_count: guardians.data?.length ?? 0,
           achievement_count: achievements.data?.length ?? 0,
-          active_positions: positionRows.filter((p) => !p.ended_on).length,
+          active_positions: roleRows.length,
         },
       },
     });

@@ -130,14 +130,162 @@ export async function issueSession({
 }
 
 /**
+ * หา account จาก login แบบไม่สนตัวพิมพ์เล็กใหญ่
+ *
+ * 0001 สร้าง unique index ไว้บน lower(login) การเทียบจึงต้องเทียบแบบเดียวกัน
+ * ส่วน ilike ฝั่ง PostgREST มอง % กับ _ เป็น wildcard และ username ที่ตั้งเอง
+ * มีอักษรพวกนั้นได้ จึงกรองซ้ำในโค้ดให้เหลือเฉพาะแถวที่ตรงกันจริง
+ */
+async function findAccountIdByLogin(login: string): Promise<string | null> {
+  const { data } = await getServiceClient()
+    .from("user_accounts")
+    .select("id, login")
+    .ilike("login", login)
+    .limit(5);
+
+  const target = login.toLowerCase();
+  return data?.find((row) => row.login.toLowerCase() === target)?.id ?? null;
+}
+
+/** แอดมินที่ใช้ username เดียวกับ login นี้ — คือ "อีกบทบาทหนึ่ง" ของคนเดียวกัน */
+async function findAdminByUsername(
+  login: string
+): Promise<{ admin_id: string; role: string } | null> {
+  const { data } = await getServiceClient()
+    .from("admins")
+    .select("admin_id, username, role")
+    .ilike("username", login)
+    .limit(5);
+
+  const target = login.toLowerCase();
+  const match = data?.find((row) => row.username?.toLowerCase() === target);
+  return match ? { admin_id: match.admin_id, role: match.role } : null;
+}
+
+/** ผูก account เข้ากับแถว profile ตามชนิดของมัน */
+async function linkProfileToAccount(
+  subjectType: SubjectType,
+  subjectId: string,
+  accountId: string
+): Promise<boolean> {
+  const supabase = getServiceClient();
+
+  if (subjectType === "admin") {
+    const { error } = await supabase
+      .from("admins")
+      .update({ account_id: accountId })
+      .eq("admin_id", subjectId);
+    return !error;
+  }
+  if (subjectType === "student") {
+    const { error } = await supabase
+      .from("students")
+      .update({ account_id: accountId })
+      .eq("student_id", subjectId);
+    return !error;
+  }
+  if (subjectType === "teacher") {
+    const { error } = await supabase
+      .from("teachers")
+      .update({ account_id: accountId })
+      .eq("id", subjectId);
+    return !error;
+  }
+  return false;
+}
+
+/**
+ * ให้ profile ที่ยังไม่มี account ได้ account — ใช้ของเดิมที่ login ตรงกัน หรือสร้างใหม่
+ *
+ * 0002 สร้าง user_accounts ให้เฉพาะคนที่มีอยู่ ณ วันที่รัน ส่วนแอดมิน/นักเรียนที่ถูก
+ * สร้างหลังจากนั้นไม่มีใครสร้าง account ให้เลย คุกกี้จึงออกไม่ได้ แล้วทุก route ที่
+ * ผ่าน withAuth ตอบ 401 ทั้งที่ล็อกอินผ่านแล้ว ฝั่งแอดมินมองไม่เห็นปัญหานี้เพราะยังมี
+ * x-admin-id รับไว้ ส่วนนักเรียนไม่มีทางอื่นเลย หน้าแจ้งซ่อมและหน้าอื่นที่เรียก API
+ * จึงพังเงียบ ๆ ตั้งแต่ล็อกอินสำเร็จ
+ *
+ * ถ้ามี account ที่ login ตรงกันอยู่แล้วต้องใช้ตัวนั้น ห้ามสร้างใหม่ — คนที่เป็นทั้ง
+ * แอดมินและนักเรียน (admins.username = students.student_id) คือคนคนเดียว และต้องมี
+ * account เดียวตามที่ 0010 วางไว้ ไม่งั้น audit log จะแตกเป็นสองสาย
+ *
+ * ตรรกะเดียวกับ 0002 ทุกประการ ต่างแค่ทำตอนล็อกอินแทนตอน migrate
+ */
+export async function ensureAccountForProfile(
+  subjectType: SubjectType,
+  subjectId: string,
+  login: string
+): Promise<string | null> {
+  const supabase = getServiceClient();
+  let accountId = await findAccountIdByLogin(login);
+
+  if (!accountId) {
+    // 0002 สร้างบัญชีฝั่งแอดมินก่อนฝั่งนักเรียนเสมอ ตรงนี้ต้องเรียงเหมือนกัน
+    // ถ้าปล่อยให้ฝั่งนักเรียนสร้างก่อน account จะเป็น subject_type 'student'
+    // แล้ว resolveFromCookie จะ resolve คนสองบทบาทเป็นนักเรียนทุกครั้ง ซึ่งร้ายกว่า
+    // ที่คิด เพราะคุกกี้ถูกอ่านก่อน x-admin-id เขาจึงเสียสิทธิ์แอดมินทั้งที่ยังส่ง
+    // header ตัวเก่าอยู่
+    const twinAdmin = subjectType === "student" ? await findAdminByUsername(login) : null;
+
+    const { data, error } = await supabase
+      .from("user_accounts")
+      .insert({
+        login,
+        subject_type: twinAdmin ? "admin" : subjectType,
+        status: "active",
+      })
+      .select("id")
+      .single();
+
+    // 23505 = มีคนสร้าง login นี้แทรกเข้ามาระหว่างทาง อ่านซ้ำแล้วใช้ของเขา
+    accountId = data?.id ?? (error?.code === "23505" ? await findAccountIdByLogin(login) : null);
+
+    if (!accountId) {
+      console.warn(
+        `[session] สร้าง user_accounts ให้ ${subjectType}:${subjectId} ไม่สำเร็จ:`,
+        error?.message
+      );
+      return null;
+    }
+
+    if (twinAdmin && data?.id) {
+      // account เกิดใหม่ยังไม่มี grant เลย ซึ่งพอสำหรับคนที่มี profile เดียว
+      // (loadRolesForAccount ตกไปใช้ค่า default ตาม subject_type ให้เอง) แต่คน
+      // สองบทบาทต้องได้ทั้งสอง role และต้องใส่พร้อมกัน — ใส่แค่ STUDENT อย่างเดียว
+      // จะไปปิด fallback ฝั่งแอดมินทิ้ง แล้วเขาจะเหลือแค่สิทธิ์นักเรียน
+      // (บทเรียนเดียวกับที่ 0009 บันทึกไว้)
+      const { error: grantError } = await supabase.from("user_roles").insert([
+        { account_id: accountId, role_key: LEGACY_ADMIN_ROLE_MAP[twinAdmin.role] ?? "ACADEMIC" },
+        { account_id: accountId, role_key: "STUDENT" },
+      ]);
+      if (grantError) {
+        console.warn(`[session] ให้ role กับ ${twinAdmin.admin_id} ไม่สำเร็จ:`, grantError.message);
+      }
+
+      // ผูก profile ฝั่งแอดมินด้วย ไม่งั้นรอบหน้าที่เขาล็อกอินฝั่งแอดมินจะสร้างซ้ำ
+      // แล้วชน unique index บน lower(login) — งานเดียวกับที่ 0010 ทำให้
+      const { error: linkError } = await supabase
+        .from("admins")
+        .update({ account_id: accountId })
+        .eq("admin_id", twinAdmin.admin_id);
+      if (linkError) {
+        console.warn(`[session] ผูก ${twinAdmin.admin_id} เข้ากับ account ไม่สำเร็จ:`, linkError.message);
+      }
+    }
+  }
+
+  return (await linkProfileToAccount(subjectType, subjectId, accountId)) ? accountId : null;
+}
+
+/**
  * Best-effort: look up the account for a profile, issue a session, and set the
  * cookie on `res`.
  *
  * Deliberately swallows every error. The app is deployed before the Phase 1
  * migrations run against production, so `user_accounts` may not exist yet and
- * `account_id` may still be NULL — neither may be allowed to break login. When
- * this no-ops the caller simply keeps the existing localStorage session, which
- * still works via the legacy header path.
+ * `account_id` may still be NULL — neither may be allowed to break login.
+ *
+ * โปรไฟล์ที่ยังไม่มี account จะถูกสร้างให้ตรงนี้ ไม่ใช่ปล่อยผ่านเป็น no-op เหมือนเดิม
+ * เพราะ "ปล่อยผ่าน" แปลว่านักเรียนล็อกอินได้แต่เรียก API อะไรไม่ได้เลย (401 ทุกเส้น)
+ * ซึ่งแย่กว่าล็อกอินไม่ผ่านเสียอีก เพราะหน้าเว็บดูเหมือนใช้งานได้ปกติ
  */
 export async function attachSessionCookie(
   res: { cookies: { set: (opts: ReturnType<typeof sessionCookieOptions> & { value: string }) => unknown } },
@@ -150,31 +298,47 @@ export async function attachSessionCookie(
 
     const supabase = getServiceClient();
     let accountId: string | null = null;
+    // ค่าที่จะใช้เป็น login ถ้าต้องสร้าง account ให้ profile นี้ — ต้องตรงกับที่ 0002 ใช้
+    let login: string | null = null;
 
     if (subjectType === "admin") {
       const { data } = await supabase
         .from("admins")
-        .select("account_id")
+        .select("account_id, username")
         .eq("admin_id", subjectId)
         .maybeSingle();
       accountId = data?.account_id ?? null;
+      login = data?.username ?? null;
     } else if (subjectType === "student") {
       const { data } = await supabase
         .from("students")
-        .select("account_id")
+        .select("account_id, student_id")
         .eq("student_id", subjectId)
         .maybeSingle();
       accountId = data?.account_id ?? null;
+      login = data?.student_id ?? null;
     } else if (subjectType === "teacher") {
       const { data } = await supabase
         .from("teachers")
-        .select("account_id")
+        .select("account_id, desired_username")
         .eq("id", subjectId)
         .maybeSingle();
       accountId = data?.account_id ?? null;
+      login = data?.desired_username ?? null;
     }
 
-    if (!accountId) return false;
+    if (!accountId && login) {
+      accountId = await ensureAccountForProfile(subjectType, subjectId, login);
+    }
+
+    if (!accountId) {
+      // ไม่เงียบอีกต่อไป อาการที่ปลายทางคือ 401 ทุกเส้นโดยไม่มีอะไรบอกว่าทำไม
+      console.warn(
+        `[session] ออกคุกกี้ให้ ${subjectType}:${subjectId} ไม่ได้ เพราะยังไม่มี user_accounts` +
+          " — ทุก route ที่ผ่าน withAuth จะตอบ 401"
+      );
+      return false;
+    }
 
     const { token, expiresAt } = await issueSession({
       accountId,
@@ -200,6 +364,12 @@ export function sessionCookieOptions(expiresAt: Date) {
     sameSite: "lax" as const,
     path: "/",
     expires: expiresAt,
+    // ตั้ง SESSION_COOKIE_DOMAIN=".asia-bot.xyz" เพื่อให้ล็อกอินครั้งเดียว
+    // แล้วใช้ได้ทั้งโดเมนหลักและซับโดเมน Mycer — ไม่ตั้งก็จะเป็นคุกกี้ของ
+    // โฮสต์นั้นโฮสต์เดียวเหมือนเดิม ซึ่งเป็นค่าที่ปลอดภัยกว่าตอนยังไม่มีซับโดเมน
+    ...(process.env.SESSION_COOKIE_DOMAIN
+      ? { domain: process.env.SESSION_COOKIE_DOMAIN }
+      : {}),
   };
 }
 
@@ -470,4 +640,15 @@ export async function resolvePrincipal(req: Request): Promise<Principal | null> 
   const fromCookie = await resolveFromCookie();
   if (fromCookie) return fromCookie;
   return resolveFromLegacyHeader(req);
+}
+
+/**
+ * เวอร์ชันสำหรับ Server Component ที่ไม่มี Request ในมือ
+ *
+ * resolvePrincipal ต้องรับ Request เพราะยังต้องอ่าน header ตัวเก่า (x-admin-id)
+ * แต่หน้า RSC อ่าน header นั้นไม่ได้อยู่แล้ว และไม่ควรอ่านด้วย — header
+ * ตัวเก่าคือช่องทางที่ Phase 14 จะปิด หน้าที่เขียนใหม่จึงเริ่มจากคุกกี้อย่างเดียว
+ */
+export async function getPrincipal(): Promise<Principal | null> {
+  return resolveFromCookie();
 }

@@ -5,6 +5,8 @@ import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import StudentAvatar from "@/components/StudentAvatar";
+import StudentIdentityCard from "@/components/student/StudentIdentityCard";
+import { quickLinkFor } from "@/lib/config";
 import { toast } from "sonner";
 import { getStudentSession } from "@/lib/session";
 
@@ -185,7 +187,7 @@ function FeedbackContent() {
             ].map(s => (
               <div key={s.label} className="rounded-2xl border p-3 sm:p-4 flex items-center gap-3"
                 style={{ background: s.bg, borderColor: s.color + "30" }}>
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
                   style={{ background: s.color + "20" }}>
                   <i className={`fa-solid ${s.icon} text-xs`} style={{ color: s.color }} />
                 </div>
@@ -204,7 +206,7 @@ function FeedbackContent() {
           <div className="lg:col-span-2">
 
             {/* Tabs */}
-            <div data-aos="fade-down" className="flex bg-white border border-slate-100 rounded-2xl shadow-sm p-1 mb-4" suppressHydrationWarning>
+            <div data-aos="fade-down" className="flex bg-white border border-slate-100 rounded-2xl shadow-xs p-1 mb-4" suppressHydrationWarning>
               <button onClick={() => switchTab("comment")}
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all ${tab === "comment" ? "bg-sky-500 text-white shadow" : "text-slate-500 hover:text-sky-500"}`}>
                 <i className="fa-solid fa-comment" /> ความคิดเห็น
@@ -216,7 +218,7 @@ function FeedbackContent() {
             </div>
 
             {/* Form card */}
-            <div data-aos="zoom-in-up" className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4 sm:p-6" suppressHydrationWarning>
+            <div data-aos="zoom-in-up" className="bg-white border border-slate-100 rounded-2xl shadow-xs p-4 sm:p-6" suppressHydrationWarning>
 
               {/* Card header */}
               <div className="text-center mb-5">
@@ -251,7 +253,7 @@ function FeedbackContent() {
               {/* Identity info banner */}
               {identityMode === "anonymous" ? (
                 <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 mb-4 text-xs text-slate-500">
-                  <i className="fa-solid fa-user-secret text-slate-400 flex-shrink-0" />
+                  <i className="fa-solid fa-user-secret text-slate-400 shrink-0" />
                   <span>ส่งในนาม <strong>ไม่ระบุตัวตน</strong> — ไม่บันทึกว่าเป็นใคร จะทิ้งช่องทางติดต่อไว้หรือไม่ก็ได้</span>
                 </div>
               ) : session ? (
@@ -341,7 +343,7 @@ function FeedbackContent() {
                     <textarea value={message} maxLength={500} rows={4}
                       onChange={e => { setMessage(e.target.value); if (e.target.value.trim()) setMsgErr(false); }}
                       placeholder={tab === "comment" ? "แชร์ความคิดเห็นหรือข้อเสนอแนะของคุณ..." : "อธิบายปัญหาที่พบ ขั้นตอนที่ทำ และข้อผิดพลาดที่เกิดขึ้น..."}
-                      className={`w-full text-xs sm:text-sm bg-gray-50 border-2 rounded-xl p-3 transition-colors resize-none focus:outline-none focus:border-[color:var(--primary-color)] ${msgErr ? "border-red-300 bg-red-50" : "border-slate-200"}`} />
+                      className={`w-full text-xs sm:text-sm bg-gray-50 border-2 rounded-xl p-3 transition-colors resize-none focus:outline-hidden focus:border-[color:var(--primary-color)] ${msgErr ? "border-red-300 bg-red-50" : "border-slate-200"}`} />
                     <div className="flex items-center justify-between mt-1">
                       {msgErr && <p className="text-xs text-red-400">กรุณากรอกข้อความ</p>}
                       <p className="text-xs text-slate-400 ml-auto">{message.length}/500</p>
@@ -381,7 +383,7 @@ function FeedbackContent() {
                     className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-3 rounded-xl text-white transition-all disabled:opacity-70"
                     style={{ background: loading ? "#94a3b8" : activeColor, boxShadow: `0 4px 14px ${activeColor}44` }}>
                     {loading
-                      ? <><span className="spinner w-4 h-4 border-2 border-white border-t-transparent" />{' '}กำลังส่ง...</>
+                      ? <><span className="spinner" />{' '}กำลังส่ง...</>
                       : <><i className={`fa-solid ${tab === "comment" ? "fa-paper-plane" : "fa-circle-exclamation"}`} />{tab === "comment" ? "ส่งความคิดเห็น" : "ส่งรายงานปัญหา"}</>
                     }
                   </button>
@@ -397,23 +399,17 @@ function FeedbackContent() {
 
               {/* Session card */}
               {session ? (
-                <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">บัญชีของคุณ</h3>
-                  <div className="flex items-center gap-3">
-                    <StudentAvatar src={session.photo_url} name={`${session.first_name} ${session.last_name}`} size={48} rounded="xl" />
-                    <div className="min-w-0">
-                      <div className="text-sm font-bold text-slate-800 truncate">{session.first_name} {session.last_name}</div>
-                      <div className="text-[10px] text-slate-400">{session.student_id} · {session.program}</div>
-                      <div className="text-[10px] text-slate-400">{session.department}</div>
-                    </div>
-                  </div>
-                  <div className="mt-3 pt-3 border-t border-slate-100 text-[11px] text-slate-500 flex items-center gap-1.5">
-                    <i className="fa-solid fa-id-card text-sky-400" />
-                    เลือก <strong>ระบุตัวตน</strong> เพื่อให้ทีมงานติดต่อกลับ
-                  </div>
-                </div>
+                <StudentIdentityCard
+                  accent={quickLinkFor("/feedback")?.color}
+                  footer={
+                    <span className="flex items-center gap-1.5">
+                      <i className="fa-solid fa-id-card" style={{ color: quickLinkFor("/feedback")?.color }} />
+                      เลือก <strong>ระบุตัวตน</strong> เพื่อให้ทีมงานติดต่อกลับ
+                    </span>
+                  }
+                />
               ) : (
-                <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
+                <div className="bg-white border border-slate-100 rounded-2xl shadow-xs p-4">
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">เข้าสู่ระบบ</h3>
                   <p className="text-xs text-slate-500 mb-3">เข้าสู่ระบบเพื่อส่งความคิดเห็นแบบระบุตัวตน ให้ทีมงานติดต่อกลับได้</p>
                   <a href="/login?next=/feedback%23comment" className="btn-primary text-xs w-full flex items-center justify-center gap-1.5 py-2">
@@ -423,7 +419,7 @@ function FeedbackContent() {
               )}
 
               {/* Tips card */}
-              <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
+              <div className="bg-white border border-slate-100 rounded-2xl shadow-xs p-4">
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">เคล็ดลับการส่ง</h3>
                 <ul className="space-y-2.5">
                   {[
@@ -433,7 +429,7 @@ function FeedbackContent() {
                     { icon: "fa-file",              color: "#059669", text: "ระบุหน้าที่พบปัญหา" },
                   ].map(t => (
                     <li key={t.text} className="flex items-start gap-2 text-xs text-slate-600">
-                      <div className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
+                      <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
                         style={{ background: t.color + "15" }}>
                         <i className={`fa-solid ${t.icon} text-[10px]`} style={{ color: t.color }} />
                       </div>
@@ -445,11 +441,11 @@ function FeedbackContent() {
 
               {/* ของพังไม่ใช่ความคิดเห็น แต่คนมักมาลงที่หน้านี้ก่อนเพราะเป็นช่องทางร้องเรียนที่คุ้นที่สุด
                   มีทางลัดตรงนี้จะได้ไปลงในระบบแจ้งซ่อมที่ผูกกับคลังจริง แทนที่จะจมอยู่ในกล่องความคิดเห็น */}
-              <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
+              <div className="bg-white border border-slate-100 rounded-2xl shadow-xs p-4">
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">ทางลัด</h3>
                 <Link href="/maintenance-request"
                   className="flex items-center gap-2.5 text-[11px] text-slate-500 hover:text-amber-600 transition-colors">
-                  <span className="w-5 h-5 rounded-lg bg-amber-50 flex items-center justify-center flex-shrink-0">
+                  <span className="w-5 h-5 rounded-lg bg-amber-50 flex items-center justify-center shrink-0">
                     <i className="fa-solid fa-screwdriver-wrench text-[9px] text-amber-500" />
                   </span>
                   ของชำรุด แจ้งซ่อม
@@ -457,7 +453,7 @@ function FeedbackContent() {
               </div>
 
               {/* Privacy card */}
-              <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4">
+              <div className="bg-white border border-slate-100 rounded-2xl shadow-xs p-4">
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">ความเป็นส่วนตัว</h3>
                 <div className="space-y-2">
                   {[

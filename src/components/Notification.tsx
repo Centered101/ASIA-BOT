@@ -53,7 +53,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             onClick={() => !n.link && dismiss(n.id)}
             className="slide-up flex items-center gap-2 bg-[color:var(--white-smoker)] border rounded-xl shadow-xl px-3 py-2 max-w-xs select-none cursor-pointer"
           >
-            <div className="flex-shrink-0">{icon(n.type)}</div>
+            <div className="shrink-0">{icon(n.type)}</div>
             <div className="flex-1">
               {n.link ? (
                 <a href={n.link} target="_blank" rel="noopener noreferrer" className="btn-text text-xs text-primary font-normal line-clamp-1">

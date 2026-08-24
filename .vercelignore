@@ -1,27 +1,32 @@
+# หมายเหตุ: ไฟล์นี้ใช้กติกาเดียวกับ .gitignore — ชื่อเปล่า ๆ ที่ไม่มี / นำหน้า
+# จะ match ทุกระดับของ path ไม่ใช่แค่ราก เช่น "supabase" เคยลบ src/lib/supabase/
+# ทิ้งไปด้วยจน build พังที่ Module not found: '@/lib/supabase/client'
+# ของที่ตั้งใจตัดเฉพาะที่รากโปรเจกต์จึงต้องขึ้นต้นด้วย / เสมอ
+
 .env*
 .git
-.github
+/.github
+/.claude
+/.vscode
 .next
 node_modules
 firebase-debug.log
 firebase-debug.*.log
 tsconfig.tsbuildinfo
 .tmp.driveupload
-.tmp-kidsync
-.claude
-.vscode
-ASIA-BOT-main-Demo
-arduino
-docs
-scripts
-supabase
-src/app/Qman/images
-src/app/Qman/sql
-src/app/QQ/images
-src/app/QQ/sql
-README.md
-CLAUDE.md
-AGENTS.md
-apphosting.yaml
-firebase.json
-FullSQL.sql
+/.tmp-kidsync
+/ASIA-BOT-main-Demo
+/arduino
+/docs
+/scripts
+/supabase
+/src/app/Qman/images
+/src/app/Qman/sql
+/src/app/QQ/images
+/src/app/QQ/sql
+/README.md
+/CLAUDE.md
+/AGENTS.md
+/apphosting.yaml
+/firebase.json
+/FullSQL.sql

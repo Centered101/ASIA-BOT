@@ -41,8 +41,12 @@
 - Equipment request / inventory flow
 - Teacher application review flow
 - File upload และ storage
-- AI chat ที่เข้าถึงข้อมูลผู้ใช้
+- AI chat ที่เข้าถึงข้อมูลผู้ใช้ และ log บทสนทนา
 - Admin setup / recovery endpoints that require `ADMIN_SECRET`
+- Signed session cookie และ RBAC (`user_accounts` / `roles` / `permissions`)
+- RFID station endpoints ที่ใช้ `RFID_STATION_SECRET`
+- ศูนย์เอกสารและศูนย์แจ้งเตือนรายบุคคล (การเข้าถึงข้อมูลข้ามบัญชี)
+- การผูก/ยกเลิกบัญชี LINE ของนักเรียน
 
 อยู่นอกขอบเขต:
 

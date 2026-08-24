@@ -60,7 +60,17 @@ ASIA-BOT คือระบบเว็บแอปสำหรับบริ�
 | Teacher Applications | หน้าใบสมัครครูและ admin review queue |
 | Feedback | ความคิดเห็น/รายงานปัญหา พร้อม LINE Flex แจ้งแอดมิน |
 | Data Requests | คำขอแก้ไขข้อมูลนักเรียน รวมคำขอเปลี่ยนชื่อไว้ด้วยกัน |
-| Admin Roles | superadmin, admin, staff พร้อมการจำกัดสิทธิ์แต่ละ tab |
+| **Student 360** (Phase 2) | ประวัติการศึกษา, ผลงาน/รางวัล, ผู้ปกครอง, การเปลี่ยนสถานภาพ และ roster ของแต่ละกลุ่มเรียน |
+| **Student Self-Service** | นักเรียนกรอก/แก้ข้อมูลตัวเองได้ที่ `/my-profile`, ดูกิจกรรมและประวัติที่ `/student` |
+| **Student Card** | ลงทะเบียนบัตรนักเรียนที่ `/student-card` + mini card ในหน้านักเรียน |
+| **CSV Import** | นำเข้ารายชื่อนักเรียนทีละไฟล์ที่ `/admin/import` |
+| **Assets & Maintenance** (Phase 3) | ทะเบียนครุภัณฑ์ ย้าย/จำหน่าย, แจ้งซ่อมที่ `/maintenance-request` พร้อมรูป ประวัติสถานะ และแจ้ง LINE |
+| **Class Attendance** (Phase 4) | เช็กชื่อรายคาบ ครูสั่งงานจากหน้าเช็กชื่อได้ นักเรียนดูของตัวเองที่ `/my-attendance` |
+| **Notification Centre** (Phase 6) | แจ้งเตือนรายบุคคล + กระดิ่งบน header พร้อมตั้งค่าการรับแจ้งเตือนรายคน |
+| **Document Centre** (Phase 6) | คำขอเอกสาร/ใบรับรอง ที่ `/my-documents` และคิวอนุมัติที่ `/admin/documents` |
+| **Chat / Agent Logs** | เก็บบทสนทนา AI ทั้งเว็บและ LINE ดูย้อนหลังที่ `/admin/chat-logs` |
+| **Mycer** | แฟ้มสะสมผลงานบน subdomain แยก (`mycer.<domain>`) — robots/sitemap แยกตาม host |
+| Admin Roles | superadmin, admin, staff พร้อมการจำกัดสิทธิ์แต่ละ tab (RBAC จริงอยู่ในตาราง `roles`/`permissions`) |
 | LINE Broadcast | ส่งข่าวสาร LINE จริง ทั้งข้อความ รูปภาพ Flex ข่าวสาร ด่วน กิจกรรม และ Custom JSON |
 | LINE Flex Test | ทดสอบ Order, Feedback, RFID, Booking, Student Data Change และ Custom JSON |
 | **AI Agent (ASIA-BOT AI)** | ผู้ช่วย AI ส่วนกลาง (Claude Haiku) แบบ tool-calling — ดูข้อมูล + ทำ action (จองห้อง/ส่ง feedback/ยกเลิก/ค้น PDF) พร้อม RBAC, conversation memory, rich card และ Markdown table |
@@ -192,6 +202,25 @@ schema.sql                          # SQL/schema reference
 
 ## Admin Tabs
 
+ตั้งแต่ commit `dd6526e` (*move the admin panel onto real routes*) หน้าใหม่ย้ายมาเป็น **route จริง** แล้ว
+ไม่ได้อยู่ใต้ `?tab=` เดิมทั้งหมด — ของเก่ายังเหลือไว้ที่ `/admin/[tab]` จนกว่าจะย้ายครบ
+
+| Route จริง | ใช้ทำอะไร |
+|---|---|
+| `/admin` | Dashboard |
+| `/admin/students` · `/admin/students/[id]` | จัดการนักเรียน + Student 360 รายคน |
+| `/admin/import` | นำเข้ารายชื่อนักเรียนจาก CSV |
+| `/admin/class_groups` | กลุ่มเรียนและ roster |
+| `/admin/class-attendance` | เช็กชื่อรายคาบ + สั่งงาน |
+| `/admin/assets` · `/admin/assets/[id]` | ทะเบียนครุภัณฑ์ ย้าย/จำหน่าย |
+| `/admin/maintenance` · `/admin/maintenance/[id]` | งานแจ้งซ่อมและประวัติสถานะ |
+| `/admin/documents` | คิวคำขอเอกสาร (Phase 6) |
+| `/admin/shop` · `/admin/shop/orders` | สินค้าและออเดอร์สหกรณ์ |
+| `/admin/chat-logs` | บทสนทนา AI ย้อนหลัง (เว็บ + LINE) |
+| `/admin/[tab]` | tab เดิมที่ยังไม่ได้ย้าย (ตารางด้านล่าง) |
+
+Tab เดิมที่ยังเข้าผ่าน `/admin/[tab]`:
+
 | Tab | Purpose |
 |---|---|
 | `dashboard` | ภาพรวม, สถิตินักเรียน, Chart.js, สถานะรายวัน |
@@ -232,13 +261,25 @@ Admin UX:
 
 ## Role Permissions
 
+ระบบสิทธิ์มี **สองชั้น** ที่อยู่ร่วมกันระหว่างการย้ายของ Phase 1:
+
+**1. Legacy — คอลัมน์ `admins.role`** (ยังใช้เช็กใน API เดิม)
+
 | Role | Summary |
 |---|---|
 | `superadmin` | จัดการทุกระบบ, admin accounts, delete/admin-level operations |
-| `admin` | จัดการข้อมูลหลัก, นักเรียน, ห้อง, ตาราง, RFID, โปรเจกต์ |
-| `staff` | ดูข้อมูลและใช้งานระบบปฏิบัติการบางส่วน เช่น dashboard, students, checkin, bookings, shop, projects, feedback, settings |
+| `admin` | ครูแยกตามฝ่าย — จัดการข้อมูลหลัก, นักเรียน, ห้อง, ตาราง, RFID, โปรเจกต์ |
+| `staff` | **สภานักเรียน (เป็นนักเรียน ไม่ใช่เจ้าหน้าที่)** — ดูข้อมูลและใช้งานบางส่วน เช่น dashboard, students, checkin, bookings, shop, projects, feedback, settings |
 
-ระบบสิทธิ์ของ Admin มีเฉพาะ `superadmin`, `admin`, `staff`
+**2. RBAC จริง — ตาราง `roles` / `permissions` / `role_permissions` / `user_roles`**
+นิยามอยู่ใน [src/lib/rbac/definitions.ts](./src/lib/rbac/definitions.ts) มีบทบาทละเอียดกว่า:
+`guest`, `student`, `parent`, `teacher`, `librarian`, `cooperative_staff`, `school_admin`, `executive`, `it_admin`, `superadmin`
+
+การ map ระหว่างสองชั้น (`ADMIN_ROLE_MAP`): `superadmin` → `SUPER_ADMIN`, `admin`/`staff` → `school_admin`
+`staff` map เป็น `ACADEMIC` ในฝั่ง agent เพราะใกล้เคียงกับสิ่งที่ staff เข้าถึงได้อยู่แล้วมากที่สุด
+
+> ⚠️ `NAV_SECTIONS` ของ admin panel **ยังไม่ gate ตาม role** — ปัจจุบัน `staff` เปิดได้ทุก tab
+> ข้อตกลงชั่วคราวคือ API ที่เป็น mutation ตรวจ `["superadmin","admin"]` ส่วน read ไม่ตรวจ
 
 ---
 
@@ -315,6 +356,47 @@ Content-Type: application/json
 /admin?tab=settings
 ```
 
+### ปลายทางแจ้งเตือน
+
+ปลายทางของแต่ละหมวด (`admin`, `attendance`, `booking`, `order`, `feedback`, `equipment`, `maintenance`, `data_change`, `broadcast`)
+อ่านจากตาราง **`line_notification_channels`** เป็นหลัก ([src/lib/line-targets.ts](./src/lib/line-targets.ts))
+env `LINE_GROUP_*` เป็นแค่ fallback สำหรับตอนที่ยังไม่ได้รัน migration
+
+- ถ้าไม่เจอปลายทางของหมวดนั้น จะตกไปใช้ปลายทางของหมวด `admin`
+- แต่ละหมวดหยิบ **แถวเดียว** เรียงตาม `is_default DESC, created_at ASC` — ถ้าเปิดใช้งานหลายแถวโดยไม่ตั้ง `is_default` แถวที่สร้างก่อนจะชนะ
+- กลุ่มที่บอทถูกเชิญเข้าไปใหม่จะถูกบันทึกอัตโนมัติเป็น `is_active = false` รอ superadmin เปิดใช้ (`recordLineGroupSeen`)
+
+### การผูกบัญชีนักเรียน
+
+การเชื่อม LINE **ทำจากฝั่งแชทเท่านั้น** ไม่มี endpoint สำหรับกรอก `line_user_id` เอง
+เพราะเป็นค่าที่ LINE ออกให้ เจ้าตัวไม่มีทางรู้ และถ้าเปิดให้กรอกได้ ใครที่รู้รหัสนักเรียนคนอื่นก็ดักรับแจ้งเตือนแทนได้
+
+1. นักเรียนแอดเพื่อน LINE OA (ปุ่มในหน้า `/student` มาจาก `NEXT_PUBLIC_LINE_ADD_FRIEND_URL`)
+2. พิมพ์ **รหัสนักเรียน** ส่งเข้าแชท
+3. [webhook](./src/app/api/line/webhook/route.ts) เขียน `line_user_id` ลง `students` แล้วตอบ Flex ยืนยัน
+4. ยกเลิกเองได้ที่หน้านักเรียน → `DELETE /api/student/line-link`
+
+### ตั้งค่า Webhook
+
+**LINE Developers Console** → channel Messaging API → แท็บ Messaging API:
+
+| ตั้งค่า | ค่า |
+|---|---|
+| Webhook URL | `https://<domain>/api/line/webhook` |
+| Use webhook | เปิด |
+
+**LINE Official Account Manager** → ตั้งค่า → การตอบกลับ:
+
+- โหมดตอบกลับ = **แชท**, Webhook = **เปิด**
+- **ปิด** ตอบกลับอัตโนมัติ (Auto-reply) ไม่งั้นข้อความสำเร็จรูปจะแย่งตอบแทน webhook
+- เปิด "อนุญาตให้เชิญเข้ากลุ่ม" ถ้าต้องการแจ้งเตือนเข้ากลุ่ม
+
+ทุก request ถูกตรวจ `x-line-signature` ด้วย `LINE_CHANNEL_SECRET` (`verifyLineSignature` ใน `src/lib/line.ts`)
+ถ้า secret ไม่ตรงกับ channel เดียวกับ `LINE_TOKEN` จะได้ `401 invalid signature` ทุกครั้ง
+LINE ยิงเข้า `localhost` ไม่ได้ — ตอน dev ต้องเปิด tunnel (cloudflared / ngrok)
+
+**ไม่ต้องใช้ Assertion Signing Key** — ระบบใช้ long-lived channel access token (`LINE_TOKEN`) ตรงๆ ไม่ได้ใช้ JWT-based token (v2.1)
+
 ---
 
 ## AI Agent (ASIA-BOT AI)
@@ -360,11 +442,23 @@ ANTHROPIC_API_KEY=sk-ant-...
 # Site
 NEXT_PUBLIC_SITE_NAME=ASIA-BOT
 NEXT_PUBLIC_SITE_URL=https://asia-bot.xyz
+NEXT_PUBLIC_GITHUB_REPO=Centered101/asia-bot   # รูปแบบ owner/repo ไม่ใช่ URL เต็ม
+NEXT_PUBLIC_COPYRIGHT_OWNER=Centered101
+NEXT_PUBLIC_COPYRIGHT_YEARS=2024–2027
+NEXT_PUBLIC_TEAM_GITHUB=user1, user2|บทบาท, user3|บทบาท
+
+# Mycer subdomain (แฟ้มสะสมผลงาน — ดู src/lib/mycer.ts)
+NEXT_PUBLIC_MYCER_NAME=ASIA.Mycer
+NEXT_PUBLIC_MYCER_SUBDOMAIN=mycer
+NEXT_PUBLIC_MYCER_URL=https://mycer.asia-bot.xyz
+NEXT_PUBLIC_MYCER_DESCRIPTION=...
+NEXT_PUBLIC_MYCER_THEME_COLOR=#0EA5E9
 
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+SUPABASE_JWKS_URL=https://xxxx.supabase.co/auth/v1/.well-known/jwks.json
 
 # Admin fallback / auth
 ADMIN_PASSWORD=optional_env_admin_password
@@ -372,19 +466,26 @@ ADMIN_FALLBACK_USERNAME=optional_superadmin_username
 ADMIN_FALLBACK_PASSWORD=optional_superadmin_password
 ADMIN_SECRET=optional_setup_or_recovery_secret
 
+# Session (Phase 1 — signed cookie)
+SESSION_SIGNING_SECRET=64_hex_chars   # บังคับ: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+AUTH_LEGACY_HEADER=1                  # ต้องเป็น 1 ตลอด Phase 1 (ยังรับ x-admin-id เดิม)
+SESSION_COOKIE_DOMAIN=.asia-bot.xyz   # ตั้งเมื่อต้องแชร์ session ข้าม subdomain (mycer)
+
 # LINE
 LINE_TOKEN=your_line_channel_access_token
 LINE_CHANNEL_SECRET=your_line_channel_secret
+NEXT_PUBLIC_LINE_ADD_FRIEND_URL=https://line.me/R/ti/p/%40xxxxxxx
+# กลุ่มปลายทางด้านล่างเป็น legacy fallback เท่านั้น — ปกติอ่านจากตาราง
+# line_notification_channels ดู src/lib/line-targets.ts
 LINE_GROUP_ADMIN=Cxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 LINE_GROUP_ATTEND=Cxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+LINE_GROUP_MAINTENANCE=Cxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 # RFID
 RFID_STATION_SECRET=optional_station_secret
 
 # Stripe
 STRIPE_SECRET_KEY=sk_live_or_test
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_or_test
-STRIPE_WEBHOOK_SECRET=whsec_xxx
 
 # AI Agent (ASIA-BOT AI)
 ANTHROPIC_API_KEY=sk-ant-xxx
@@ -392,49 +493,56 @@ ANTHROPIC_API_KEY=sk-ant-xxx
 # Firebase public config (optional overrides; defaults exist in src/lib/firebase.ts)
 NEXT_PUBLIC_FIREBASE_API_KEY=...
 NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
+NEXT_PUBLIC_FIREBASE_DATABASE_URL=...
 NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
 NEXT_PUBLIC_FIREBASE_APP_ID=...
+NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=...
 ```
 
 หมายเหตุ:
 
 - `NEXT_PUBLIC_SITE_NAME` ใช้เปลี่ยนชื่อแบรนด์ที่แสดงในหน้าเว็บ, metadata, header/footer, chat bubble, admin, student card และ shop receipt
 - `ADMIN_FALLBACK_USERNAME` + `ADMIN_FALLBACK_PASSWORD` เป็นบัญชีสำรองฉุกเฉิน ใช้คู่กับ Supabase login โดยระบบจะลอง Supabase ก่อน แล้วค่อย fallback เมื่อข้อมูลไม่ตรงหรือยังไม่มีบัญชีในฐานข้อมูล
-- หลังแก้ env ของ Next.js ต้อง restart dev server หรือ redeploy ก่อนค่าจะมีผล
+- `SESSION_SIGNING_SECRET` **บังคับ** ตั้งแต่ Phase 1 — ถ้าไม่ตั้ง signed cookie จะออกให้ไม่ได้ ดู [supabase/migrations/RUNBOOK.md](./supabase/migrations/RUNBOOK.md)
+- `NEXT_PUBLIC_LINE_ADD_FRIEND_URL` ถ้าเว้นว่าง ปุ่ม "แอด LINE" ในหน้านักเรียนจะไม่แสดง (ดู `src/lib/config.ts`) ทำให้นักเรียนไม่รู้วิธีผูกบัญชี
+- ตัวแปร `NEXT_PUBLIC_*` **ถูกฝังตอน build** ไม่ใช่อ่านตอน runtime — แก้บน Vercel แล้วต้อง redeploy ใหม่ ค่าถึงจะมีผล
+- ไม่มี `STRIPE_WEBHOOK_SECRET` และ `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` ในโค้ดแล้ว — การชำระเงินใช้ Stripe Checkout redirect ฝั่ง server อย่างเดียว ([shop/orders](./src/app/api/shop/orders/route.ts)) และเช็กสถานะด้วยการ poll `/api/shop/orders/[orderId]/check` แทน webhook
 
 ---
 
 ## Database Tables
 
-ตารางหลักที่ใช้ในระบบ:
+ตารางที่ใช้ในระบบ แยกตามกลุ่ม:
 
-- `students`
-- `admins`
-- `attendance`
-- `attendance_logs`
-- `rooms`
-- `bookings`
-- `products`
-- `orders`
-- `projects`
-- `evaluations`
-- `feedback`
-- `change_requests`
-- `name_change_requests`
-- `class_groups`
-- `class_schedules`
-- `class_schedule_overrides`
-- `teachers`
-- `teacher_applications`
-- `equipment_items`
-- `equipment_requests`
-- `line_notification_categories`
-- `line_notification_channels`
+| กลุ่ม | ตาราง |
+|---|---|
+| Identity / RBAC (Phase 1) | `user_accounts`, `roles`, `permissions`, `role_permissions`, `user_roles`, `auth_sessions`, `audit_logs`, `login_logs`, `admin_logs` |
+| นักเรียน / Student 360 (Phase 2) | `students`, `guardians`, `student_achievements`, `student_education_history`, `student_status_changes`, `student_positions` *(deprecated — 0021)*, `student_cards` |
+| บุคลากร | `admins`, `teachers`, `teacher_applications` |
+| ชั้นเรียน | `class_groups`, `class_schedules`, `class_schedule_overrides`, `class_assignments`, `class_attendance` |
+| เช็กชื่อ / RFID | `attendance`, `attendance_logs`, `entry_logs`, `rfid_cards`, `rfid_devices` |
+| ห้องและการจอง | `rooms`, `bookings`, `room_bookings`, `time_slots` |
+| สหกรณ์ | `products`, `orders`, `pay_logs` |
+| คุรุภัณฑ์ / งานซ่อม (Phase 3) | `equipment_items`, `equipment_requests`, `assets`, `asset_movements`, `maintenance_requests`, `maintenance_photos`, `maintenance_status_history` |
+| โปรเจกต์ / ประเมิน | `projects`, `evaluations` |
+| ความคิดเห็น | `feedback`, `feedbacks` |
+| คำขอแก้ข้อมูล | `change_requests`, `name_change_requests` |
+| AI Agent | `agent_conversations`, `agent_logs` |
+| LINE | `line_notification_categories`, `line_notification_channels` |
+| ศูนย์แจ้งเตือน (Phase 6 — 0022) | `notifications`, `notification_preferences` |
+| ศูนย์เอกสาร (Phase 6 — 0023) | `document_types`, `student_documents`, `document_requests`, `document_request_history` |
+| แอปย่อย (แยกจาก asia-bot) | `qq_*` (`qq_stores`, `qq_menu_items`, `qq_orders`, `qq_order_items`, `qq_store_order_status`), `qman_*` (`qman_users`, `qman_shops`, `qman_bookings`, `qman_categories`) |
 
-ดู schema เพิ่มเติมได้ที่:
+**แหล่งความจริงของ schema คือไฟล์ใน `supabase/migrations/`** ไม่ใช่ `supabase/schema.sql`
+`schema.sql` เป็นแค่ snapshot ที่ regenerate จากฐานข้อมูลจริง — ห้ามแก้มือเพื่อเพิ่มของใหม่ และตอนนี้ยังไม่รวมตารางจาก `0022_notifications.sql` / `0023_documents.sql`
 
 ```txt
-supabase/schema.sql
+supabase/migrations/     ← แหล่งความจริง (ดู README + RUNBOOK ในโฟลเดอร์)
+supabase/schema.sql      ← snapshot โครงสร้าง
+supabase/storage.sql     ← bucket + policies
+supabase/seed.sql        ← ข้อมูลเริ่มต้น
 ```
 
 ---
@@ -1354,15 +1462,26 @@ src/app/api/
 | `/api/teacher-applications` | รับใบสมัครครู |
 | `/api/admin/teacher-applications/*` | ตรวจและอัปเดตสถานะใบสมัครครู |
 | `/api/rooms/*` | ห้องและ booking |
-| `/api/student/*` | ข้อมูลนักเรียน |
+| `/api/student/*` | ข้อมูลนักเรียนของตัวเอง — `profile`, `identity`, `activity`, `class-attendance`, `documents`, `document-requests`, `line-link` |
 | `/api/projects/*` | โปรเจกต์และ evaluation |
+| `/api/maintenance/*` | แจ้งซ่อมและปลายทางแจ้งเตือน (`targets`) |
+| `/api/notifications` | ศูนย์แจ้งเตือนรายบุคคล (Phase 6) |
+| `/api/admin/documents` · `/api/admin/document-requests` | ศูนย์เอกสารฝั่งแอดมิน |
+| `/api/admin/assets/*` · `/api/admin/maintenance/*` | ทะเบียนครุภัณฑ์และงานซ่อม |
+| `/api/admin/class-attendance` · `/api/admin/class-assignments` · `/api/admin/roster` | เช็กชื่อรายคาบ, งานที่สั่ง, roster |
+| `/api/admin/import/students` | นำเข้ารายชื่อจาก CSV |
+| `/api/admin/agent-logs` | log การใช้งาน AI สำหรับหน้า `/admin/chat-logs` |
+| `/api/agent` · `/api/chat` · `/api/chat/history` | AI Agent core และประวัติแชทฝั่งเว็บ |
+| `/api/auth/*` | login/logout/register, Google OAuth, session (`me`), แก้ข้อมูล |
+| `/api/qq/*` · `/api/qman/*` | แอปย่อย QQ และ Qman (แยกจาก asia-bot) |
 
 หลักการ API:
 
 - ฝั่ง client เรียกผ่าน fetch
 - งานที่ต้องใช้สิทธิสูงใช้ `SUPABASE_SERVICE_ROLE_KEY`
-- งาน admin ต้องตรวจ admin session/role
-- งาน LINE แยก Flex builder ไว้ใน `src/lib/line.ts`
+- route ใหม่ห่อด้วย `withAuth()` จาก [src/lib/server/with-auth.ts](./src/lib/server/with-auth.ts) ซึ่งตรวจ permission ตาม RBAC และเขียน `audit_logs` ให้อัตโนมัติ
+- งาน admin เดิมยังตรวจ admin session/role ผ่าน `src/lib/admin-auth.ts`
+- งาน LINE แยก Flex builder ไว้ใน `src/lib/line.ts` และเลือกปลายทางผ่าน `src/lib/line-targets.ts`
 
 ---
 
@@ -1593,11 +1712,18 @@ npm run dev
 | `src/lib/line.ts` | LINE Flex builders |
 | `src/app/api/line/test/route.ts` | API ทดสอบ LINE Flex |
 | `src/app/api/line/broadcast/route.ts` | API ส่งข่าวสาร LINE จริง |
-| `src/lib/admin-auth.ts` | admin auth/session |
+| `src/lib/line-targets.ts` | เลือกกลุ่ม/ปลายทางแจ้งเตือน LINE ตามหมวด |
+| `src/lib/admin-auth.ts` | admin auth/session (legacy) |
+| `src/lib/server/with-auth.ts` | wrapper ตรวจ permission + เขียน audit log ของ route ใหม่ |
+| `src/lib/server/session.ts` | signed session cookie (Phase 1) |
+| `src/lib/rbac/definitions.ts` | นิยาม role / permission ทั้งหมด |
 | `src/lib/session.ts` | student session |
+| `src/lib/agent/core.ts` | AI Agent core (tool-calling loop) |
+| `src/lib/mycer.ts` | ตรรกะ subdomain ของ Mycer |
 | `src/lib/amenities.ts` | รายการสิ่งอำนวยความสะดวก |
 | `arduino/RFID_ESP32/RFID_ESP32.ino` | ESP32 firmware |
-| `supabase/schema.sql` | schema/reference SQL |
+| `supabase/migrations/` | **แหล่งความจริงของ schema** |
+| `supabase/schema.sql` | snapshot โครงสร้าง (regenerate เท่านั้น) |
 | `supabase/storage.sql` | storage bucket/reference policy SQL |
 | `docs/asia-bot-system.drawio` | Draw.io architecture + schema visualizer |
 
@@ -1623,10 +1749,18 @@ npm run dev
 
 | ไฟล์ | รายละเอียด |
 |---|---|
+| [AGENTS.md](./AGENTS.md) | กติกาสำหรับ AI coding agent ที่ทำงานกับ repo นี้ |
+| [SECURITY.md](./SECURITY.md) | นโยบายความปลอดภัยและการรายงานช่องโหว่ |
+| [docs/user-manual.md](./docs/user-manual.md) | คู่มือผู้ใช้ |
 | [docs/report.md](./docs/report.md) | รายงานโครงงานฉบับสมบูรณ์ (วิชาการ) |
+| [docs/privacy-policy.md](./docs/privacy-policy.md) · [docs/terms-of-service.md](./docs/terms-of-service.md) | นโยบายที่ลิงก์จากหน้าเว็บ |
 | [docs/asia-bot-system.drawio](./docs/asia-bot-system.drawio) | System Architecture + ER Diagram (Draw.io) |
-| [supabase/schema.sql](./supabase/schema.sql) | Database schema reference |
+| [supabase/migrations/README.md](./supabase/migrations/README.md) | กติกาการเขียน migration (production-only) |
+| [supabase/migrations/RUNBOOK.md](./supabase/migrations/RUNBOOK.md) | ขั้นตอน deploy migration ทีละไฟล์ |
+| [supabase/schema.sql](./supabase/schema.sql) | Database schema snapshot |
 | [supabase/storage.sql](./supabase/storage.sql) | Supabase Storage bucket/policy reference |
+| [scripts/BACKUP.md](./scripts/BACKUP.md) | ขั้นตอน backup/restore ฐานข้อมูล |
+| [arduino/RFID_ESP32/SETUP.md](./arduino/RFID_ESP32/SETUP.md) | ขั้นตอนติดตั้ง ESP32 |
 | [arduino/RFID_ESP32/RFID_ESP32.ino](./arduino/RFID_ESP32/RFID_ESP32.ino) | ESP32 firmware |
 
 ---

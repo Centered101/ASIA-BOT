@@ -74,6 +74,24 @@ function richDataFromToolResult(toolName: string, result: unknown): AgentRespons
     )
   }
 
+  if (toolName === 'get_document_types' && Array.isArray(data.document_types)) {
+    return choiceCard(
+      data.kind === 'upload' ? 'เอกสารที่ต้องส่ง' : 'เลือกเอกสารที่ต้องการ',
+      data.kind === 'upload'
+        ? 'อัปโหลดไฟล์ทำที่หน้าแฟ้มเอกสาร กดเพื่อถามรายละเอียดของเอกสารนั้น'
+        : 'กดเอกสารที่ต้องการ แล้ว AI จะถามจำนวนชุดและวิธีรับต่อ',
+      'เลือกเอกสาร: ',
+      data.document_types.map((type: any) => ({
+        label: String(type.label ?? type.key ?? 'เอกสาร'),
+        value: String(type.label ?? type.key ?? ''),
+        description: [
+          Number(type.fee ?? 0) > 0 ? `฿${Number(type.fee).toLocaleString('th-TH')}/ชุด` : 'ไม่มีค่าธรรมเนียม',
+          type.student_can_request === false ? 'ต้องให้ฝ่ายทะเบียนออกให้' : null,
+        ].filter(Boolean).join(' · '),
+      })),
+    )
+  }
+
   if (toolName === 'get_equipment_items' && Array.isArray(data.equipment_items)) {
     return choiceCard(
       'เลือกคุรุภัณฑ์',

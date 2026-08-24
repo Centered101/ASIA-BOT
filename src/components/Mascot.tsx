@@ -18,18 +18,18 @@ export type MascotMood =
   | "contact";
 
 const MASCOT_SRC: Record<MascotMood, string> = {
-  hello:    "/bot/สหวสดีครับ.png",
-  thinking: "/bot/คิดออกแล้ว.png",
-  working:  "/bot/จัดการให้ครับ.png",
-  confused: "/bot/ไม่เข้าใจ.png",
-  help:     "/bot/ให้ผมช่วยนะครับ.png",
-  success:  "/bot/เย้สำเร็จแล้ว.png",
-  congrats: "/bot/ยินดีด้วย.png",
-  cool:     "/bot/เท้มากครับ.png",
-  shocked:  "/bot/ตะลึ่ง.png",
-  sleeping: "/bot/นอน.png",
-  happy:    "/bot/ใจพู.png",
-  contact:  "/bot/ติดต่อให้ครับ.png",
+  hello:    "/bot/hello.png",
+  thinking: "/bot/thinking.png",
+  working:  "/bot/working.png",
+  confused: "/bot/confused.png",
+  help:     "/bot/help.png",
+  success:  "/bot/success.png",
+  congrats: "/bot/congrats.png",
+  cool:     "/bot/cool.png",
+  shocked:  "/bot/shocked.png",
+  sleeping: "/bot/sleeping.png",
+  happy:    "/bot/happy.png",
+  contact:  "/bot/contact.png",
 };
 
 /** Just the mascot image. `float` adds a gentle idle bob. */

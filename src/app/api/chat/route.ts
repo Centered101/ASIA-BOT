@@ -76,6 +76,9 @@ export async function POST(req: NextRequest) {
     ...(result.toolsUsed.includes('request_equipment') ? [{ type: 'equipment:requests-changed' }] : []),
     ...(result.toolsUsed.includes('create_booking') || result.toolsUsed.includes('cancel_booking') ? [{ type: 'booking:requests-changed' }] : []),
     ...(result.toolsUsed.includes('submit_feedback') ? [{ type: 'feedback:submitted' }] : []),
+    ...(result.toolsUsed.includes('request_document') ? [{ type: 'document:requests-changed' }] : []),
+    ...(result.toolsUsed.includes('create_maintenance_request') ? [{ type: 'maintenance:requests-changed' }] : []),
+    ...(result.toolsUsed.includes('mark_notifications_read') ? [{ type: 'notification:changed' }] : []),
   ]
   return NextResponse.json({ text: cleanText, navButtons, card: result.richData ?? null, events })
 }

@@ -9,6 +9,9 @@ import { scheduleTools } from "./schedule";
 import { feedbackTools } from "./feedback";
 import { equipmentTools } from "./equipment";
 import { dashboardTools } from "./dashboard";
+import { documentTools } from "./documents";
+import { notificationTools } from "./notifications";
+import { maintenanceTools } from "./maintenance";
 import type { UserRole } from "../types";
 
 /**
@@ -30,6 +33,9 @@ const DECLARED = [
   ...scheduleTools,
   ...feedbackTools,
   ...equipmentTools,
+  ...documentTools,
+  ...notificationTools,
+  ...maintenanceTools,
   ...dashboardTools,
 ];
 
@@ -133,5 +139,39 @@ describe("attendance tools", () => {
     // would be denied. Granting it would be a button that always fails.
     const names = getToolsForRole("parent").map((t) => t.name);
     for (const name of NAMES) expect(names).not.toContain(name);
+  });
+});
+
+describe("document, notification and maintenance tools", () => {
+  // เพิ่มตอนต่อบอทเข้ากับศูนย์เอกสาร (0023) ศูนย์แจ้งเตือน (0022) และงานซ่อม
+  it("let a student handle their own documents, inbox and repairs", () => {
+    const names = getToolsForRole("student").map((t) => t.name);
+    for (const name of [
+      "get_document_types",
+      "request_document",
+      "get_my_document_requests",
+      "get_my_documents",
+      "get_my_notifications",
+      "create_maintenance_request",
+      "get_my_maintenance_requests",
+    ]) {
+      expect(names, `student cannot ${name}`).toContain(name);
+    }
+  });
+
+  it("keeps school-wide queues away from students", () => {
+    const names = getToolsForRole("student").map((t) => t.name);
+    expect(names).not.toContain("get_pending_document_requests");
+    expect(names).not.toContain("get_open_maintenance_requests");
+  });
+
+  it("gives the registrar and buildings queues to school admins", () => {
+    const names = getToolsForRole("school_admin").map((t) => t.name);
+    expect(names).toContain("get_pending_document_requests");
+    expect(names).toContain("get_open_maintenance_requests");
+  });
+
+  it("leaves the inbox closed to guests", () => {
+    expect(getToolsForRole("guest").map((t) => t.name)).not.toContain("get_my_notifications");
   });
 });

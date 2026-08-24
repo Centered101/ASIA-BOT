@@ -34,17 +34,23 @@ function isChatHiddenPath(pathname: string) {
   return CHAT_HIDDEN_PATH_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
+// ปุ่มลัดต้องตรงกับ tool ที่บอทมีจริง ไม่งั้นกดแล้วได้คำตอบว่าทำให้ไม่ได้
+// ("ประเมินโปรเจค" เคยอยู่ตรงนี้ทั้งที่ไม่มี tool รองรับ จึงถูกถอดออก)
 const STUDENT_QUICK_REPLIES = [
   "ตารางเรียนวันนี้",
   "จองห้องเรียน",
   "เบิกคุรุภัณฑ์",
+  "ขอใบรับรอง/Transcript",
+  "เอกสารที่ยังขาด",
+  "แจ้งซ่อม",
+  "แจ้งเตือนของฉัน",
   "ขอดูข้อมูลของฉัน",
-  "ประเมินโปรเจค",
-  "แจ้งปัญหา/ข้อเสนอแนะ",
 ];
 const ADMIN_QUICK_REPLIES   = [
   "สถิตินักเรียนวันนี้",
   "จองรออนุมัติ",
+  "คำขอเอกสารที่รอดำเนินการ",
+  "งานซ่อมที่ยังค้าง",
   "ข้อเสนอแนะ",
   "ออเดอร์ล่าสุด",
   "คำขอคุรุภัณฑ์",
@@ -54,13 +60,13 @@ const BTN = 52;
 const GAP = 8;
 
 const BOT = {
-  default:   "/bot/bot.png",
-  hello:     "/bot/สหวสดีครับ.png",
-  thinking:  "/bot/คิดออกแล้ว.png",
-  done:      "/bot/จัดการให้ครับ.png",
-  error:     "/bot/ไม่เข้าใจ.png",
-  helper:    "/bot/ให้ผมช่วยนะครับ.png",
-  celebrate: "/bot/เย้สำเร็จแล้ว.png",
+  default:   "/bot/mascot.png",
+  hello:     "/bot/hello.png",
+  thinking:  "/bot/thinking.png",
+  done:      "/bot/working.png",
+  error:     "/bot/confused.png",
+  helper:    "/bot/help.png",
+  celebrate: "/bot/success.png",
 } as const;
 
 const LOC_META: Record<string, { icon: string; label: string; color: string; bg: string }> = {
@@ -315,6 +321,9 @@ export default function ChatBubble() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLTextAreaElement>(null);
   const abortRef  = useRef<AbortController | null>(null);
+  // โหลดประวัติครั้งเดียวต่อการเปิดหน้า ไม่งั้นทุกครั้งที่กดเปิดหน้าต่างจะดึงซ้ำ
+  // แล้วข้อความที่เพิ่งคุยไปจะโดนทับด้วยของเก่าที่เซิร์ฟเวอร์ยังไม่ได้บันทึก
+  const historyRef = useRef(false);
   const drag      = useRef({ startX: 0, startY: 0, startR: 16, startB: 16, moved: false });
 
   const minBubbleBottom = useCallback(() => {
@@ -410,6 +419,39 @@ export default function ChatBubble() {
   useEffect(() => {
     if (isChatHiddenPath(pathname) || loggedIn !== true) setOpen(false);
   }, [loggedIn, pathname]);
+
+  // ── โหลดประวัติแชตกลับมา ───────────────────────────────────────────────────
+  // ความจำอยู่ที่ agent_conversations ฝั่งเซิร์ฟเวอร์อยู่แล้ว (12 ข้อความล่าสุด)
+  // ก่อนหน้านี้หน้าจอไม่เคยอ่านมันเลย รีเฟรชทีเดียวแชตว่าง ทั้งที่บอทยังคุยต่อ
+  // จากเรื่องเดิมได้ ผู้ใช้จึงเจอบอทตอบอ้างอิงสิ่งที่ตัวเองมองไม่เห็นแล้ว
+  useEffect(() => {
+    if (!open || loggedIn !== true || !ctx || historyRef.current) return;
+    historyRef.current = true;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/chat/history", {
+          // แอดมินยังยืนยันตัวตนด้วย header ตัวเก่า ส่วนนักเรียนใช้คุกกี้
+          headers: ctx.isAdmin && ctx.adminId ? { "x-admin-id": ctx.adminId } : undefined,
+        });
+        if (!res.ok) return;
+        const json = await res.json() as {
+          status?: string;
+          data?: { messages?: { role: "user" | "assistant"; content: string; navButtons?: NavButton[] }[] };
+        };
+        const stored = json.data?.messages ?? [];
+        if (stored.length === 0) return;
+
+        // ทับเฉพาะตอนที่ยังไม่มีใครพิมพ์อะไรระหว่างรอ ไม่งั้นข้อความสด ๆ หาย
+        setMessages(prev => prev.length > 0 ? prev : stored.map((m, i) => ({
+          role: m.role,
+          content: m.content,
+          id: `h-${i}`,
+          navButtons: m.navButtons?.length ? m.navButtons : undefined,
+        })));
+      } catch { /* ประวัติโหลดไม่ได้ก็ยังคุยต่อได้ ไม่ต้องรบกวนผู้ใช้ */ }
+    })();
+  }, [open, loggedIn, ctx]);
 
   // ── Drag ───────────────────────────────────────────────────────────────────
   const onPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
@@ -507,7 +549,19 @@ export default function ChatBubble() {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(input); }
   };
 
-  const clearChat = () => { abortRef.current?.abort(); setMessages([]); setStreaming(false); };
+  // ล้างทั้งหน้าจอและความจำฝั่งเซิร์ฟเวอร์ — เดิมล้างแค่ state ผู้ใช้จึงกดล้างแล้ว
+  // บอทยังจำเรื่องเดิมได้อยู่ ซึ่งตรงข้ามกับที่ปุ่มนี้บอกว่าทำอะไร
+  // (agent_logs ไม่ถูกแตะ เป็นบันทึกการใช้งานของระบบ ไม่ใช่ความจำของบอท)
+  const clearChat = () => {
+    abortRef.current?.abort();
+    setMessages([]);
+    setStreaming(false);
+    historyRef.current = true;
+    void fetch("/api/chat/history", {
+      method: "DELETE",
+      headers: ctx?.isAdmin && ctx.adminId ? { "x-admin-id": ctx.adminId } : undefined,
+    }).catch(() => { /* ล้างฝั่งเซิร์ฟเวอร์ไม่สำเร็จก็ไม่ควรค้างหน้าจอไว้ */ });
+  };
 
   // เช็ก host ด้วย ไม่ใช่แค่ path เพราะบนซับโดเมน Mycer เบราว์เซอร์เห็น URL
   // เป็น /portfolio (middleware เติม /mycer ให้ฝั่งเซิร์ฟเวอร์) prefix ในลิสต์

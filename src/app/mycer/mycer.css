@@ -154,3 +154,93 @@
 .h-13 {
   height: 3.25rem;
 }
+
+/* ═══ ชุดสไตล์โปสเตอร์ของ asia.mycer ══════════════════════════════════
+ *
+ * ถอดมาจากโปสเตอร์ "ด้านความรู้ (Know)" — พื้นม่วงอ่อน, การ์ดขาวขอบม่วง,
+ * ไทล์ไอคอนไล่สีม่วง-น้ำเงิน, หัวข้อนำด้วยเลขลำดับ และคำคมครอบด้วยอัญประกาศ
+ *
+ * แยกจากชุด --brand-* ข้างบนโดยตั้งใจ: --brand-gradient คือสีรุ้งของโลโก้ ASIA
+ * ซึ่งใช้กับ "ตัวแบรนด์" เท่านั้น ส่วนพื้นผิวทั้งแผ่นของโปสเตอร์เป็นม่วง-น้ำเงิน
+ * ถ้าเอารุ้งไปทาไทล์ไอคอนทุกใบ หน้าจะกลายเป็นสีเลอะและโลโก้จะไม่เด่นอีกต่อไป
+ *
+ * ค่าตัวแปรอยู่ในขอบเขต .mycer-scope เหมือนธีมส่วนอื่น utility ข้างล่างจึงใช้ได้
+ * เฉพาะใต้ขอบเขตนี้ (นอกขอบเขตตัวแปรจะไม่มีค่า) เหมือนกับ .brand-gradient เดิม
+ */
+.mycer-scope {
+  --poster-violet: #6d3ff2;
+  --poster-blue: #3b6cf6;
+  /* สีตัวอักษรหัวข้อ — เข้มกว่า --foreground เพราะบนพื้นม่วงอ่อนต้องหนักแน่นพอ */
+  --poster-ink: #2b1a66;
+  --poster-surface: #ffffff;
+  --poster-tint: #f3f0ff;
+  --poster-line: #e3dcfb;
+  --poster-gradient: linear-gradient(135deg, var(--poster-violet) 0%, var(--poster-blue) 100%);
+}
+
+/* พื้นหลังของหน้าแบบโปสเตอร์ — ม่วงอ่อนกับดวงเรืองสองดวงมุมบน */
+.poster-page {
+  background-color: var(--poster-tint);
+  background-image:
+    radial-gradient(60rem 32rem at 12% -8%, rgba(109, 63, 242, 0.16), transparent 70%),
+    radial-gradient(48rem 28rem at 96% 4%, rgba(59, 108, 246, 0.14), transparent 70%);
+  background-repeat: no-repeat;
+}
+
+/* แผงเนื้อหาหนึ่งกล่อง — การ์ดขาวขอบม่วงอ่อน เงาฟุ้งอ่อน ๆ */
+.poster-panel {
+  background-color: var(--poster-surface);
+  border: 1px solid var(--poster-line);
+  border-radius: var(--radius-2xl);
+  box-shadow: 0 18px 40px -28px rgba(43, 26, 102, 0.45);
+}
+
+/* แผงย่อยที่ซ้อนอยู่ในแผงใหญ่ — ใช้พื้นม่วงอ่อนแทนขาว จะได้แยกชั้นออกจากกัน */
+.poster-panel-tint {
+  background-color: var(--poster-tint);
+  border: 1px solid var(--poster-line);
+  border-radius: var(--radius-xl);
+}
+
+/* ไทล์ไอคอนแบบทึบ — ไล่สีม่วงน้ำเงิน ไอคอนสีขาว ใช้กับหัวหมวด */
+.poster-tile {
+  background-image: var(--poster-gradient);
+  color: #fff;
+  box-shadow: 0 10px 22px -14px rgba(109, 63, 242, 0.9);
+}
+
+/* ไทล์ไอคอนแบบอ่อน — พื้นม่วงจาง ไอคอนสีม่วง ใช้กับรายการย่อยที่มีหลายบรรทัด
+   ติดกัน ถ้าใช้แบบทึบทุกบรรทัดจะแย่งสายตากันเองจนอ่านหัวข้อไม่ทัน */
+.poster-tile-soft {
+  background-color: var(--poster-tint);
+  color: var(--poster-violet);
+}
+
+/* ตัวอักษรไล่สีม่วง-น้ำเงิน — คู่กับ .brand-text ที่เป็นรุ้งของโลโก้ */
+.poster-text {
+  background-image: var(--poster-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* คำคม — อัญประกาศคู่ตัวใหญ่ประกบหน้าหลังเหมือนในโปสเตอร์
+   วางเป็น ::before/::after เพื่อไม่ให้เครื่องหมายถูกอ่านออกเสียงซ้ำโดยโปรแกรม
+   อ่านหน้าจอ และเพื่อให้ตัดบรรทัดไปพร้อมข้อความจริง */
+.poster-quote::before,
+.poster-quote::after {
+  color: var(--poster-violet);
+  font-size: 1.35em;
+  line-height: 0;
+  vertical-align: -0.25em;
+}
+
+.poster-quote::before {
+  content: "“";
+  margin-inline-end: 0.15em;
+}
+
+.poster-quote::after {
+  content: "”";
+  margin-inline-start: 0.15em;
+}

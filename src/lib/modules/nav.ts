@@ -139,6 +139,10 @@ export const NAV_SECTIONS: NavSection[] = [
     title: "ระบบ",
     items: [
       { id: "admins",   label: "ผู้ดูแลระบบ", icon: "fa-user-shield" },
+      // ประวัติการคุยกับผู้ช่วย AI (0024) — ตาราง agent_logs มีมานานแล้ว
+      // แต่เพิ่งมีหน้าให้เปิดดู
+      { id: "chat_logs", label: "ประวัติคุยกับ AI", icon: "fa-comments", href: "/admin/chat-logs",
+        keywords: ["บอท", "แชต", "chatbot", "ai", "log", "ประวัติการคุย", "ถามบอท"] },
       { id: "settings", label: "ตั้งค่า",     icon: "fa-gear" },
     ],
   },

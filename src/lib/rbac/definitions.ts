@@ -117,6 +117,9 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     "feedback.view_all", "feedback.manage",
     "project.view", "project.manage",
     "notifications.send", "iot.manage",
+    // ประวัติการคุยกับผู้ช่วย AI — เป็นบทสนทนาส่วนตัวของนักเรียน จึงให้เฉพาะ
+    // ADMIN (กับ SUPER_ADMIN ที่ถือ '*') ไม่แจกตามฝ่ายเหมือน dashboard.view
+    "agent.view_logs",
   ],
 
   EXECUTIVE: [
@@ -290,6 +293,13 @@ export const LEGACY_AGENT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "schedule.view",
     "feedback.create",
     "student.view_own",
+    // ผู้ช่วย AI ทำงานเอกสารและแจ้งซ่อมได้แล้ว สิทธิ์ชุดเดียวกับที่ STUDENT
+    // มีอยู่ใน ROLE_PERMISSIONS อยู่แล้ว (0023 / 0016) — ไม่ได้ขยายของใหม่
+    // ให้นักเรียน แค่ทำให้ทางแชตกับทางหน้าเว็บทำได้เท่ากัน
+    "document.view_own",
+    "document.request",
+    "maintenance.create",
+    "maintenance.view_own",
   ],
   parent: ["school.info", "attendance.view_children", "student.view_children", "schedule.view"],
   teacher: [
@@ -304,6 +314,9 @@ export const LEGACY_AGENT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "equipment.view_items",
     "equipment.view_own_requests",
     "equipment.create_request",
+    // ครูแจ้งซ่อมได้เหมือนทุกคนในโรงเรียน (CAN_REPORT_MAINTENANCE)
+    "maintenance.create",
+    "maintenance.view_own",
   ],
   librarian: ["school.info", "student.view_all", "library.manage"],
   cooperative_staff: [
@@ -333,6 +346,12 @@ export const LEGACY_AGENT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "dashboard.view",
     "notifications.send",
     "shop.view_all_orders",
+    // ฝ่ายทะเบียนและฝ่ายอาคารถาม AI แทนการเปิดหน้า /admin ได้ ตรงกับสิทธิ์
+    // ที่ ADMIN ถืออยู่แล้วใน ROLE_PERMISSIONS
+    "document.view_all",
+    "maintenance.create",
+    "maintenance.view_own",
+    "maintenance.view_all",
   ],
   executive: [
     "school.info",
@@ -342,6 +361,8 @@ export const LEGACY_AGENT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "feedback.view_all",
     "booking.view_all",
     "schedule.view",
+    // ผู้บริหารดูงานซ่อมได้ ใช้ประกอบการอนุมัติงบ แต่ไม่ได้แก้ไข
+    "maintenance.view_all",
   ],
   it_admin: [
     "school.info",

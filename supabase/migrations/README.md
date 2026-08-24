@@ -32,3 +32,39 @@ Supabase Dashboard → SQL Editor → วางเนื้อไฟล์ที
 | `0006_student_core.sql` | คอลัมน์ Student 360 บน `students` |
 | `0007_deprecate_dead_tables.sql` | COMMENT ตารางที่ไม่มีโค้ดใช้แล้ว (ไม่ DROP) |
 | `0008_realtime_trim.sql` | เอา `admins` ออกจาก realtime publication (มันกระจาย password_hash) |
+| `0009_backfill_user_roles.sql` | Data-only — ให้ role กับ account ที่มีอยู่แล้ว |
+| `0010_link_dual_profile.sql` | Data-only — ผูก profile นักเรียนของคนที่มีสองบทบาทเข้ากับ account เดียว |
+
+## Phase 2 — Student 360
+
+| ไฟล์ | ทำอะไร |
+|---|---|
+| `0011_guardians.sql` | ผู้ปกครองและผู้ติดต่อฉุกเฉิน |
+| `0012_student_history.sql` | ประวัติการศึกษาเดิม และประวัติการเปลี่ยนสถานะ |
+| `0013_student_achievements.sql` | ผลงาน รางวัล การแข่งขัน และตำแหน่งในโรงเรียน |
+
+## Phase 3 — ครุภัณฑ์และงานซ่อม
+
+| ไฟล์ | ทำอะไร |
+|---|---|
+| `0014_assets.sql` | ทะเบียนครุภัณฑ์รายชิ้น และประวัติการย้าย |
+| `0015_maintenance.sql` | ระบบแจ้งซ่อมอาคารสถานที่ เครื่องมือ อุปกรณ์ |
+| `0016_maintenance_permissions.sql` | สิทธิ์ของโมดูลแจ้งซ่อมและครุภัณฑ์ |
+| `0017_maintenance_affected_quantity.sql` | เพิ่ม `affected_quantity` ให้ `maintenance_requests` |
+
+## Phase 4 — เช็กชื่อรายคาบ
+
+| ไฟล์ | ทำอะไร |
+|---|---|
+| `0018_class_attendance.sql` | เช็กชื่อรายวิชา และงานที่สั่งในคาบ |
+| `0019_admin_division.sql` | เพิ่ม `division` (ฝ่าย) ให้ `admins` |
+| `0020_student_self_service.sql` | ให้นักเรียนกรอกข้อมูลของตัวเองได้ |
+| `0021_deprecate_student_positions.sql` | COMMENT ตารางที่เลิกใช้เพิ่ม (ไม่ลบอะไร) |
+
+## Phase 6 — ศูนย์แจ้งเตือนและศูนย์เอกสาร
+
+| ไฟล์ | ทำอะไร |
+|---|---|
+| `0022_notifications.sql` | `notifications`, `notification_preferences` |
+| `0023_documents.sql` | `document_types`, `student_documents`, `document_requests`, `document_request_history` |
+| `0024_agent_log_permissions.sql` | สิทธิ์ดูประวัติการคุยกับผู้ช่วย AI |

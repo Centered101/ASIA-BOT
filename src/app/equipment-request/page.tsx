@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import Header from "@/components/Header";
+import StudentIdentityCard from "@/components/student/StudentIdentityCard";
+import { quickLinkFor } from "@/lib/config";
 import Footer from "@/components/Footer";
 import { toast } from "sonner";
 import { getStudentSession, type StudentSession } from "@/lib/session";
@@ -352,29 +354,18 @@ export default function EquipmentRequestPage() {
         <div className="flex flex-col lg:flex-row gap-6">
           {/* ── LEFT sidebar ── */}
           <div className="w-full lg:w-80 shrink-0 space-y-4">
-            {/* Profile card */}
-            <div data-aos="fade-right" data-aos-delay="200"
-              className="rounded-2xl p-4 text-white relative overflow-hidden bg-gradient-to-br from-emerald-500 to-emerald-400"
-              style={{ boxShadow: "0 12px 32px rgba(5,150,105,.3)" }}>
-              <div className="absolute -top-8 -right-8 w-28 h-28 rounded-full bg-white/10 pointer-events-none" />
-              <div className="flex items-center gap-3 relative">
-                <div className="w-12 h-12 rounded-2xl border-2 border-white/40 shrink-0 overflow-hidden bg-white/20 flex items-center justify-center">
-                  {student.photo_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={student.photo_url} alt={student.first_name}
-                      className="w-full h-full object-cover"
-                      onError={e => { e.currentTarget.style.display = "none"; const fb = e.currentTarget.nextElementSibling as HTMLElement | null; if (fb) fb.style.display = "flex"; }} />
-                  ) : null}
-                  <span className={`text-sm font-bold ${student.photo_url ? "hidden" : "flex"} items-center justify-center w-full h-full`}>
-                    {((student.first_name?.[0] || "?") + (student.last_name?.[0] || "?")).toUpperCase()}
+            {/* บัญชีของคุณ — การ์ดกลางตัวเดียวกับหน้าอื่น (ดู StudentIdentityCard)
+                สาขาที่เคยเป็นบรรทัดเดียวในการ์ดนี้ อยู่ในชุดข้อมูลกลางแล้ว */}
+            <div data-aos="fade-right" data-aos-delay="200">
+              <StudentIdentityCard
+                accent={quickLinkFor("/equipment-request")?.color}
+                footer={
+                  <span className="flex items-start gap-1.5">
+                    <i className="fa-solid fa-id-card mt-0.5 shrink-0" style={{ color: quickLinkFor("/equipment-request")?.color }} />
+                    <span className="min-w-0 leading-relaxed">เบิกในนาม <strong>บัญชีนี้</strong> — เจ้าหน้าที่ติดต่อกลับตามเบอร์ในโปรไฟล์</span>
                   </span>
-                </div>
-                <div className="min-w-0">
-                  <div className="text-sm font-bold leading-tight truncate">{student.first_name} {student.last_name}</div>
-                  {student.nickname && <div className="text-[11px] opacity-70 truncate">&quot;{student.nickname}&quot;</div>}
-                  <div className="text-[11px] opacity-60 mt-0.5 truncate">{student.department || "ยังไม่ระบุสาขา"}</div>
-                </div>
-              </div>
+                }
+              />
             </div>
 
             {/* History button */}

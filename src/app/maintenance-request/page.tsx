@@ -534,9 +534,9 @@ export default function MaintenanceRequestPage() {
               <StudentIdentityCard
                 accent={quickLinkFor("/maintenance-request")?.color}
                 footer={
-                  <span className="flex items-center gap-1.5">
-                    <i className="fa-solid fa-id-card" style={{ color: quickLinkFor("/maintenance-request")?.color }} />
-                    แจ้งในนาม <strong>บัญชีนี้</strong> — ช่างจะติดต่อกลับตามเบอร์ด้านบน
+                  <span className="flex items-start gap-1.5">
+                    <i className="fa-solid fa-id-card mt-0.5 shrink-0" style={{ color: quickLinkFor("/maintenance-request")?.color }} />
+                    <span className="min-w-0 leading-relaxed">แจ้งในนาม <strong>บัญชีนี้</strong> — ช่างจะติดต่อกลับตามเบอร์ในโปรไฟล์</span>
                   </span>
                 }
               />
@@ -663,7 +663,7 @@ export default function MaintenanceRequestPage() {
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-400">
                       <span>{m.category}</span>
                       <span>{MAINTENANCE_URGENCY_TH[m.urgency]}</span>
-                      {m.location_note && <span>📍 {m.location_note}</span>}
+                      {m.location_note && <span><i className="fa-solid fa-location-dot mr-1" />{m.location_note}</span>}
                       {m.assigned_to && <span>ช่าง {m.assigned_to}</span>}
                       <span className="ml-auto">
                         {new Date(m.created_at).toLocaleDateString("th-TH", {

@@ -11,7 +11,8 @@ import { getStudentSession } from "@/lib/session";
  * เบิกครุภัณฑ์โชว์สาขา แจ้งซ่อมโชว์เบอร์ ส่วนหน้าแรกโชว์แค่ทักทาย — คนใช้จึงเห็น
  * ข้อมูลไม่เท่ากันทั้งที่เป็นบัญชีเดียวกัน และไม่มีหน้าไหนบอก "ห้อง" เลยสักหน้า
  *
- * ที่นี่กำหนดไว้ชุดเดียว: ชื่อ · ห้อง · ปีที่เข้า · สาขา · ข้อมูลติดต่อ
+ * ที่นี่กำหนดไว้ชุดเดียว: ชื่อ · ห้อง · ปีที่เข้า · สาขา (ไม่โชว์เบอร์/อีเมล
+ * เพราะการ์ดนี้ขึ้นในหน้าสาธารณะ คนข้าง ๆ เห็นจอได้)
  * ส่วนที่ต่างกันจริงของแต่ละหน้า (ยอดซื้อ ปุ่ม ตัวเลือกระบุตัวตน) ส่งเข้ามาทาง
  * `footer` แทนการวาดการ์ดใหม่ทั้งใบ
  *
@@ -109,22 +110,6 @@ export default function StudentIdentityCard({
           <p className="text-[11px] text-slate-500 leading-relaxed mt-0.5">
             {facts.join(" · ")}
           </p>
-          {/* ช่องทางติดต่อ — อยู่บรรทัดเดียวกันเพราะเป็นคำถามเดียวกัน ("ติดต่อยังไง")
-              อีเมลตัดท้ายเมื่อยาวเกิน ไม่ปล่อยให้ดันการ์ดกว้างจนพัง */}
-          {(me.phone || me.google_email) && (
-            <p className="text-[11px] text-slate-400 mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
-              {me.phone && (
-                <span className="whitespace-nowrap">
-                  <i className="fa-solid fa-phone text-[9px] mr-1" />{me.phone}
-                </span>
-              )}
-              {me.google_email && (
-                <span className="truncate max-w-full" title={me.google_email}>
-                  <i className="fa-brands fa-google text-[9px] mr-1" />{me.google_email}
-                </span>
-              )}
-            </p>
-          )}
         </div>
       </div>
 

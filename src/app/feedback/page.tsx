@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -19,6 +19,28 @@ const MAX_IMAGES = 3;
 const MAX_SIZE_MB = 5;
 
 type ImagePreview = { file: File; url: string };
+
+/** สถานะเดียวกับที่หน้าแอดมินใช้ตัดสินใจ (feedback.status ใน schema) */
+const FEEDBACK_STATUS_TH: Record<string, string> = {
+  pending:     "รอดำเนินการ",
+  in_progress: "กำลังดำเนินการ",
+  resolved:    "แก้ไขแล้ว",
+  rejected:    "ปฏิเสธ",
+};
+/** ลำดับที่เรื่องเดินจริง — rejected ไม่อยู่ในนี้เพราะมันคือการหลุดออกจากลำดับ */
+const FEEDBACK_FLOW = ["pending", "in_progress", "resolved"] as const;
+const FEEDBACK_OPEN = ["pending", "in_progress"];
+
+type MyFeedback = {
+  id: string;
+  type: Tab;
+  category: string | null;
+  message: string;
+  status: string;
+  admin_note: string | null;
+  image_urls: string[] | null;
+  created_at: string;
+};
 type FeedbackStats = { total: number; pending: number; in_progress: number; resolved: number };
 
 function FeedbackContent() {
@@ -38,7 +60,28 @@ function FeedbackContent() {
   const [catErr,       setCatErr]       = useState(false);
   const [msgErr,       setMsgErr]       = useState(false);
   const [fbStats,      setFbStats]      = useState<FeedbackStats | null>(null);
+  const [mine,         setMine]         = useState<MyFeedback[]>([]);
+  const [historyOpen,  setHistoryOpen]  = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  /* เรื่องที่ตัวเองแจ้ง — มีเฉพาะที่ส่งแบบระบุตัวตน เพราะโหมดไม่ระบุตัวตน
+     ไม่เขียน student_id ลงแถว จึงไม่มีทางรู้ว่าใครเป็นคนส่ง */
+  const loadMine = useCallback(async () => {
+    try {
+      const res  = await fetch("/api/feedback");
+      if (!res.ok) return;           // ยังไม่ล็อกอินก็แค่ไม่มีการ์ด ไม่ต้องเด้ง error
+      const json = await res.json();
+      if (json.status === "success") setMine(json.data ?? []);
+    } catch { /* ประวัติเป็นของเสริม ล้มเหลวแล้วหน้าฟอร์มต้องยังส่งได้ */ }
+  }, []);
+
+  useEffect(() => { if (session) void loadMine(); }, [session, loadMine]);
+
+  const myStats = {
+    total: mine.length,
+    open:  mine.filter((m) => FEEDBACK_OPEN.includes(m.status)).length,
+    done:  mine.filter((m) => m.status === "resolved").length,
+  };
 
   // โหมดระบุตัวตนดึงจากบัญชีล้วน ไม่มีช่องให้พิมพ์ เพราะพิมพ์เองแล้วเช็กไม่ได้ว่าจริงไหม
   // ส่วนโหมดไม่ระบุตัวตนไม่มีบัญชีให้ดึง จึงต้องมีช่องให้พิมพ์เอง เผื่อคนที่อยาก
@@ -142,6 +185,7 @@ function FeedbackContent() {
         setSuccess(true);
         toast.success(tab === "comment" ? "ส่งความคิดเห็นสำเร็จ!" : "รายงานปัญหาสำเร็จ!");
         setFbStats(prev => prev ? { ...prev, total: prev.total + 1, pending: prev.pending + 1 } : prev);
+        if (identityMode === "identified" && session) void loadMine();
       } else {
         toast.error(data.message || "เกิดข้อผิดพลาด");
       }
@@ -402,9 +446,9 @@ function FeedbackContent() {
                 <StudentIdentityCard
                   accent={quickLinkFor("/feedback")?.color}
                   footer={
-                    <span className="flex items-center gap-1.5">
-                      <i className="fa-solid fa-id-card" style={{ color: quickLinkFor("/feedback")?.color }} />
-                      เลือก <strong>ระบุตัวตน</strong> เพื่อให้ทีมงานติดต่อกลับ
+                    <span className="flex items-start gap-1.5">
+                      <i className="fa-solid fa-id-card mt-0.5 shrink-0" style={{ color: quickLinkFor("/feedback")?.color }} />
+                      <span className="min-w-0 leading-relaxed">เลือก <strong>ระบุตัวตน</strong> เพื่อให้ทีมงานติดต่อกลับ</span>
                     </span>
                   }
                 />
@@ -416,6 +460,38 @@ function FeedbackContent() {
                     <i className="fa-solid fa-right-to-bracket" /> เข้าสู่ระบบ
                   </a>
                 </div>
+              )}
+
+              {/* เรื่องที่ฉันแจ้ง — โครงเดียวกับการ์ด "งานที่ฉันแจ้ง" ของหน้าแจ้งซ่อม
+                  ขึ้นเฉพาะตอนมีของจริง ไม่งั้นจะเป็นการ์ดว่างกินที่เปล่า ๆ */}
+              {mine.length > 0 && (
+                <button onClick={() => setHistoryOpen(true)}
+                  className="w-full text-left bg-white border border-slate-100 rounded-2xl shadow-xs p-4 hover:shadow-md hover:border-sky-200 transition-all">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">เรื่องที่ฉันแจ้ง</h3>
+                    <span className="text-[10px] font-bold text-sky-500">ดูทั้งหมด →</span>
+                  </div>
+                  <div className="space-y-2">
+                    {mine.slice(0, 3).map(m => (
+                      <div key={m.id} className="flex items-start gap-2">
+                        <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
+                          m.status === "rejected" ? "bg-slate-300"
+                          : FEEDBACK_OPEN.includes(m.status) ? "bg-amber-400" : "bg-emerald-400"
+                        }`} />
+                        <div className="min-w-0">
+                          <div className="text-[11px] font-bold text-slate-600 truncate">
+                            {m.category || (m.type === "comment" ? "ความคิดเห็น" : "รายงานปัญหา")}
+                          </div>
+                          <div className="text-[10px] text-slate-400">{FEEDBACK_STATUS_TH[m.status] ?? m.status}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-slate-100 text-[11px] text-slate-500 flex items-center gap-1.5">
+                    <i className="fa-solid fa-comment-dots text-sky-400" />
+                    ส่งไป {myStats.total} · รอตอบ {myStats.open} · จบแล้ว {myStats.done}
+                  </div>
+                </button>
               )}
 
               {/* Tips card */}
@@ -474,6 +550,94 @@ function FeedbackContent() {
 
         </div>
       </main>
+
+      {/* ประวัติเต็ม — drawer แบบเดียวกับหน้าแจ้งซ่อม เห็นข้อความที่ส่งไป
+          ขั้นตอนที่เรื่องเดินไปถึง และคำตอบของทีมงานถ้ามี */}
+      {historyOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs"
+            onClick={() => setHistoryOpen(false)} />
+          <div className="relative w-full sm:max-w-2xl max-h-[85vh] bg-white rounded-t-3xl sm:rounded-3xl shadow-xl flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
+              <div>
+                <div className="font-bold text-slate-800">ประวัติเรื่องที่แจ้ง</div>
+                <div className="text-[11px] text-slate-400">
+                  ทั้งหมด {myStats.total} · รอตอบ {myStats.open} · จบแล้ว {myStats.done}
+                </div>
+              </div>
+              <button onClick={() => setHistoryOpen(false)}
+                className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors">
+                <i className="fa-solid fa-xmark text-sm" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto px-5 py-4 space-y-3">
+              {mine.map(m => {
+                const rejected = m.status === "rejected";
+                const done     = m.status === "resolved";
+                const stepIdx  = FEEDBACK_FLOW.indexOf(m.status as typeof FEEDBACK_FLOW[number]);
+                return (
+                  <div key={m.id} className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div className="min-w-0">
+                        <div className="text-sm font-bold text-slate-800 truncate">
+                          {m.category || (m.type === "comment" ? "ความคิดเห็น" : "รายงานปัญหา")}
+                        </div>
+                        <div className="text-[11px] text-slate-400">
+                          {m.type === "comment" ? "ความคิดเห็น" : "รายงานปัญหา"}
+                        </div>
+                      </div>
+                      <span className={`text-[10px] font-bold rounded-full px-2.5 py-1 shrink-0 ${
+                        rejected ? "bg-slate-100 text-slate-500"
+                        : done ? "bg-emerald-50 text-emerald-600"
+                        : "bg-amber-50 text-amber-600"
+                      }`}>
+                        {FEEDBACK_STATUS_TH[m.status] ?? m.status}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-slate-500 mb-3 leading-relaxed whitespace-pre-wrap">{m.message}</p>
+
+                    {/* เรื่องที่ถูกปฏิเสธไม่แสดงแถบ เพราะมันไม่ได้เดินตามลำดับจนจบ */}
+                    {!rejected && (
+                      <div className="flex gap-1 mb-3">
+                        {FEEDBACK_FLOW.map((step, i) => (
+                          <div key={step} title={FEEDBACK_STATUS_TH[step]}
+                            className={`h-1.5 flex-1 rounded-full ${
+                              i <= stepIdx ? (done ? "bg-emerald-400" : "bg-amber-400") : "bg-slate-200"
+                            }`} />
+                        ))}
+                      </div>
+                    )}
+
+                    {/* คำตอบของทีมงาน — เหตุผลหลักที่คนกลับมาเปิดประวัติ */}
+                    {m.admin_note && (
+                      <div className="rounded-xl bg-white border border-slate-100 px-3 py-2 mb-3">
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+                          <i className="fa-solid fa-reply mr-1" />ทีมงานตอบกลับ
+                        </div>
+                        <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{m.admin_note}</p>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-400">
+                      {m.image_urls?.length ? (
+                        <span><i className="fa-solid fa-image mr-1" />{m.image_urls.length} รูป</span>
+                      ) : null}
+                      <span className="ml-auto">
+                        {new Date(m.created_at).toLocaleDateString("th-TH", {
+                          day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Bangkok",
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       <Footer />
     </>
   );

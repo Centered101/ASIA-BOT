@@ -9,6 +9,9 @@ import { scheduleTools, executeScheduleTool } from './schedule'
 import { feedbackTools, executeFeedbackTool } from './feedback'
 import { dashboardTools, executeDashboardTool } from './dashboard'
 import { equipmentTools, executeEquipmentTool } from './equipment'
+import { documentTools, executeDocumentTool } from './documents'
+import { notificationTools, executeNotificationTool } from './notifications'
+import { maintenanceTools, executeMaintenanceTool } from './maintenance'
 
 // Full tool registry — every tool the agent can call
 export const ALL_TOOLS = [
@@ -19,6 +22,9 @@ export const ALL_TOOLS = [
   ...scheduleTools,
   ...feedbackTools,
   ...equipmentTools,
+  ...documentTools,
+  ...notificationTools,
+  ...maintenanceTools,
   ...dashboardTools,
 ]
 
@@ -45,6 +51,14 @@ const TOOL_ALLOW: Record<UserRole, string[]> = {
     'get_schedule_today',
     'get_schedule_week',
     'submit_feedback',
+    'get_document_types',
+    'request_document',
+    'get_my_document_requests',
+    'get_my_documents',
+    'get_my_notifications',
+    'mark_notifications_read',
+    'create_maintenance_request',
+    'get_my_maintenance_requests',
     'get_school_info',
   ],
   parent: [
@@ -71,6 +85,10 @@ const TOOL_ALLOW: Record<UserRole, string[]> = {
     'get_schedule_week',
     'get_school_info',
     'submit_feedback',
+    'get_my_notifications',
+    'mark_notifications_read',
+    'create_maintenance_request',
+    'get_my_maintenance_requests',
   ],
   librarian: [
     'get_student_profile',
@@ -107,6 +125,14 @@ const TOOL_ALLOW: Record<UserRole, string[]> = {
     'submit_feedback',
     'get_pending_feedback',
     'get_school_stats',
+    'get_document_types',
+    'get_my_document_requests',
+    'get_pending_document_requests',
+    'get_my_notifications',
+    'mark_notifications_read',
+    'create_maintenance_request',
+    'get_my_maintenance_requests',
+    'get_open_maintenance_requests',
     'get_school_info',
   ],
   executive: [
@@ -116,12 +142,15 @@ const TOOL_ALLOW: Record<UserRole, string[]> = {
     'get_schedule_today',
     'get_school_info',
     'get_pending_feedback',
+    'get_open_maintenance_requests',
+    'get_my_notifications',
   ],
   it_admin: [
     'get_school_stats',
     'get_student_profile',
     'search_students',
     'get_school_info',
+    'get_my_notifications',
   ],
   superadmin: ALL_TOOLS.map(t => t.name),
 }
@@ -156,6 +185,16 @@ const TOOL_MODULES: Record<string, string> = {
   get_schedule_week: 'schedule',
   submit_feedback: 'feedback',
   get_pending_feedback: 'feedback',
+  get_document_types: 'documents',
+  request_document: 'documents',
+  get_my_document_requests: 'documents',
+  get_my_documents: 'documents',
+  get_pending_document_requests: 'documents',
+  get_my_notifications: 'notifications',
+  mark_notifications_read: 'notifications',
+  create_maintenance_request: 'maintenance',
+  get_my_maintenance_requests: 'maintenance',
+  get_open_maintenance_requests: 'maintenance',
   get_school_stats: 'dashboard',
   get_school_info: 'dashboard',
 }
@@ -176,6 +215,9 @@ export async function executeToolCall(
     case 'equipment':  return executeEquipmentTool(toolName, input, ctx, supabase)
     case 'schedule':   return executeScheduleTool(toolName, input, ctx, supabase)
     case 'feedback':   return executeFeedbackTool(toolName, input, ctx, supabase)
+    case 'documents':    return executeDocumentTool(toolName, input, ctx, supabase)
+    case 'notifications': return executeNotificationTool(toolName, input, ctx, supabase)
+    case 'maintenance':  return executeMaintenanceTool(toolName, input, ctx, supabase)
     case 'dashboard':  return executeDashboardTool(toolName, input, ctx, supabase)
     default:           return { error: `Unknown tool: ${toolName}` }
   }

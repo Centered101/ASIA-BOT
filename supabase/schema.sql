@@ -919,3 +919,97 @@ CREATE TABLE public.class_assignments (
   CONSTRAINT class_assignments_pkey PRIMARY KEY (id),
   CONSTRAINT class_assignments_schedule_fkey FOREIGN KEY (class_schedule_id) REFERENCES public.class_schedules(id)
 );
+CREATE TABLE public.notifications (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  account_id uuid NOT NULL,
+  category_key text NOT NULL DEFAULT 'admin'::text,
+  title text NOT NULL,
+  body text,
+  link text,
+  entity_type text,
+  entity_id text,
+  priority text NOT NULL DEFAULT 'normal'::text CHECK (priority = ANY (ARRAY['low'::text, 'normal'::text, 'high'::text])),
+  read_at timestamp with time zone,
+  created_by text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT notifications_pkey PRIMARY KEY (id),
+  CONSTRAINT notifications_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.user_accounts(id),
+  CONSTRAINT notifications_category_key_fkey FOREIGN KEY (category_key) REFERENCES public.line_notification_categories(key)
+);
+CREATE TABLE public.notification_preferences (
+  account_id uuid NOT NULL,
+  category_key text NOT NULL,
+  in_app boolean NOT NULL DEFAULT true,
+  line boolean NOT NULL DEFAULT true,
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT notification_preferences_pkey PRIMARY KEY (account_id, category_key),
+  CONSTRAINT notification_preferences_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.user_accounts(id),
+  CONSTRAINT notification_preferences_category_key_fkey FOREIGN KEY (category_key) REFERENCES public.line_notification_categories(key)
+);
+CREATE TABLE public.document_types (
+  key text NOT NULL,
+  label text NOT NULL,
+  kind text NOT NULL CHECK (kind = ANY (ARRAY['upload'::text, 'issue'::text])),
+  description text,
+  is_required boolean NOT NULL DEFAULT false,
+  student_can_request boolean NOT NULL DEFAULT true,
+  fee numeric NOT NULL DEFAULT 0,
+  sort_order integer NOT NULL DEFAULT 0,
+  active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT document_types_pkey PRIMARY KEY (key)
+);
+CREATE TABLE public.student_documents (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  student_id text NOT NULL,
+  document_type text NOT NULL,
+  file_url text NOT NULL,
+  file_name text,
+  note text,
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'reviewing'::text, 'approved'::text, 'rejected'::text, 'revision_required'::text])),
+  review_note text,
+  reviewed_by text,
+  reviewed_at timestamp with time zone,
+  source text NOT NULL DEFAULT 'student'::text CHECK (source = ANY (ARRAY['student'::text, 'staff'::text])),
+  uploaded_by text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT student_documents_pkey PRIMARY KEY (id),
+  CONSTRAINT student_documents_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(student_id),
+  CONSTRAINT student_documents_document_type_fkey FOREIGN KEY (document_type) REFERENCES public.document_types(key)
+);
+CREATE TABLE public.document_requests (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  request_code text NOT NULL UNIQUE,
+  student_id text NOT NULL,
+  document_type text NOT NULL,
+  copies integer NOT NULL DEFAULT 1 CHECK (copies > 0),
+  purpose text,
+  delivery_mode text NOT NULL DEFAULT 'pickup'::text CHECK (delivery_mode = ANY (ARRAY['pickup'::text, 'delivery'::text])),
+  delivery_note text,
+  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'reviewing'::text, 'approved'::text, 'processing'::text, 'ready'::text, 'completed'::text, 'rejected'::text])),
+  fee numeric NOT NULL DEFAULT 0,
+  paid_at timestamp with time zone,
+  issued_file_url text,
+  verify_token text UNIQUE,
+  admin_note text,
+  reviewed_by text,
+  reviewed_at timestamp with time zone,
+  completed_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT document_requests_pkey PRIMARY KEY (id),
+  CONSTRAINT document_requests_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(student_id),
+  CONSTRAINT document_requests_document_type_fkey FOREIGN KEY (document_type) REFERENCES public.document_types(key)
+);
+CREATE TABLE public.document_request_history (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  request_id uuid NOT NULL,
+  from_status text,
+  to_status text NOT NULL,
+  note text,
+  changed_by text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT document_request_history_pkey PRIMARY KEY (id),
+  CONSTRAINT document_request_history_request_id_fkey FOREIGN KEY (request_id) REFERENCES public.document_requests(id)
+);

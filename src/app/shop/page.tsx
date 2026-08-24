@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Header from "@/components/Header";
+import Link from "next/link";
+import StudentIdentityCard from "@/components/student/StudentIdentityCard";
+import { quickLinkFor } from "@/lib/config";
 import Footer from "@/components/Footer";
 import LoginGate from "@/components/LoginGate";
 import { toast } from "sonner";
@@ -865,30 +868,18 @@ export default function ShopPage() {
         <div className="flex flex-col lg:flex-row gap-6">
           {/* ── LEFT sidebar ── */}
           <div className="w-full lg:w-80 shrink-0 space-y-4">
-            {/* Profile card */}
-            <div data-aos="fade-right" data-aos-delay="200"
-              className={`rounded-2xl p-4 text-white relative overflow-hidden ${student.program === "ปวส" ? "bg-gradient-to-br from-red-500 to-red-400" : "bg-gradient-to-br from-sky-500 to-sky-400"}`}
-              style={{ boxShadow: student.program === "ปวส" ? "0 12px 32px rgba(239,68,68,.3)" : "0 12px 32px rgba(14,165,233,.3)" }}>
-              <div className="absolute -top-8 -right-8 w-28 h-28 rounded-full bg-white/10 pointer-events-none" />
-              <div className="flex items-center gap-3 relative">
-                {/* Avatar */}
-                <div className="w-12 h-12 rounded-2xl border-2 border-white/40 shrink-0 overflow-hidden bg-white/20 flex items-center justify-center">
-                  {safeImageSrc(student.photo_url) ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={safeImageSrc(student.photo_url) ?? ""} alt={student.first_name}
-                      className="w-full h-full object-cover"
-                      onError={e => { e.currentTarget.style.display = "none"; (e.currentTarget.nextElementSibling as HTMLElement | null)?.style && ((e.currentTarget.nextElementSibling as HTMLElement).style.display = "flex"); }} />
-                  ) : null}
-                  <span className={`text-sm font-bold ${safeImageSrc(student.photo_url) ? "hidden" : "flex"} items-center justify-center w-full h-full`}>
-                    {((student.first_name?.[0] || "?") + (student.last_name?.[0] || "?")).toUpperCase()}
+            {/* บัญชีของคุณ — การ์ดกลางตัวเดียวกับหน้าอื่น ส่วนที่เป็นของสหกรณ์จริง ๆ
+                (ยอดซื้อวันนี้) ส่งเข้าทาง footer ดูเหตุผลใน StudentIdentityCard */}
+            <div data-aos="fade-right" data-aos-delay="200">
+              <StudentIdentityCard
+                accent={quickLinkFor("/shop")?.color}
+                footer={
+                  <span className="flex items-center justify-between gap-2">
+                    <span><i className="fa-solid fa-basket-shopping mr-1.5" />ยอดซื้อวันนี้</span>
+                    <strong className="text-slate-700">{fmt(todaySpend)}</strong>
                   </span>
-                </div>
-                <div className="min-w-0">
-                  <div className="text-sm font-bold leading-tight truncate">{student.first_name} {student.last_name}</div>
-                  {student.nickname && <div className="text-[11px] opacity-70 truncate">&quot;{student.nickname}&quot;</div>}
-                  <div className="text-[11px] opacity-60 mt-0.5">ยอดซื้อวันนี้ {fmt(todaySpend)}</div>
-                </div>
-              </div>
+                }
+              />
             </div>
 
             {/* Cart button */}
@@ -928,6 +919,23 @@ export default function ShopPage() {
                   </span>
                 )}
               </button>
+            </div>
+
+            {/* ทางไปแจ้งซ่อม — การ์ดเดียวกับหน้าเบิกคุรุภัณฑ์
+                ของที่ซื้อจากสหกรณ์หรือของในโรงเรียนพัง คนก็มาที่หน้านี้ก่อนเหมือนกัน
+                มีทางออกตรงนี้จะได้ไม่ต้องไปหาเมนูเอง */}
+            <div data-aos="fade-right" data-aos-delay="285" className="hidden lg:block">
+              <Link href="/maintenance-request"
+                className="w-full flex items-center gap-3 px-4 py-3 bg-white/80 backdrop-blur-xs rounded-2xl border border-slate-100 shadow-xs hover:shadow-md hover:border-amber-200 transition-all text-left">
+                <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
+                  <i className="fa-solid fa-screwdriver-wrench text-amber-500 text-sm" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-bold text-slate-700">ของชำรุด แจ้งซ่อม</div>
+                  <div className="text-xs text-slate-400">ของที่ซื้อไปหรือของในโรงเรียนเสีย</div>
+                </div>
+                <i className="fa-solid fa-chevron-right text-slate-300 text-xs shrink-0" />
+              </Link>
             </div>
 
             {/* Category list (desktop) */}

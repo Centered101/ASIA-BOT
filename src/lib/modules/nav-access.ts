@@ -49,6 +49,9 @@ const TAB_ACCESS: Record<string, AdminRole[]> = {
   admins: ["superadmin", "admin", "staff"],
   line_broadcast: ["superadmin", "admin", "staff"],
   settings: ["superadmin", "admin", "staff"],
+  // บทสนทนาส่วนตัวของนักเรียน — API ขอ permission "agent.view_logs" ซึ่งมีแค่
+  // ADMIN กับ SUPER_ADMIN (0024) เมนูจึงต้องไม่โชว์ให้ staff กดแล้วได้ 403
+  chat_logs: ["superadmin", "admin"],
 };
 
 /** tab id → ฝ่ายเจ้าของ สร้างจาก NAV_SECTIONS จะได้ไม่หลุดจากกันเวลาแก้เมนู */

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type CSSProperties } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { QUICK_LINKS, SITE_NAME, type QuickLink } from "@/lib/config";
+import { QUICK_LINKS, SITE_NAME, SESSION_TIME_KEY, SESSION_TTL, type QuickLink } from "@/lib/config";
 
 /**
  * จำนวนปุ่มนำทางที่โชว์นอกเมนู "เพิ่มเติม" ตามความกว้างจอ — [lg, xl]
@@ -36,13 +36,59 @@ function moreHide(i: number) {
 import { getStudentSession, clearStudentSession, type StudentSession } from "@/lib/session";
 import StudentAvatar from "@/components/StudentAvatar";
 
+/**
+ * ปุ่มบริการฝั่งขวา — เดิมฮาร์ดโค้ดสีชมพูของสหกรณ์ไว้ พอต้องสลับเป็นเบิกคุรุภัณฑ์
+ * ตอนอยู่หน้าสหกรณ์ ปุ่มก็ต้องเปลี่ยนสีตามลิงก์ จึงอ่านสีจากตาราง QUICK_LINKS
+ * ผ่านตัวแปร --cta แทน คลาสสีจะได้ไม่ต้องรู้จักบริการทีละอัน
+ */
+function ServiceCta({ link, className = "" }: { link: QuickLink; className?: string }) {
+  return (
+    <Link href={link.path ?? "#"}
+      style={{ "--cta": link.color } as CSSProperties}
+      className={`flex items-center gap-1.5 h-[38px] px-3 rounded-xl text-sm font-bold border-2 transition-all whitespace-nowrap
+        border-[color-mix(in_srgb,var(--cta)_35%,white)] text-[var(--cta)]
+        hover:bg-[color-mix(in_srgb,var(--cta)_10%,white)] ${className}`}>
+      {link.icon && <i className={`${link.icon} text-xs`} />}
+      <span>{link.tag ?? link.name}</span>
+    </Link>
+  );
+}
+
 export default function Header({ subtitle = "หน้าแรก" }: { subtitle?: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [session, setSession] = useState<StudentSession | null>(null);
+  const [countdown, setCountdown] = useState("");
+  const [loginTime, setLoginTime] = useState("");
 
   useEffect(() => { setSession(getStudentSession()); }, [pathname]);
+
+  /**
+   * อายุ session ที่เหลือ + เวลาที่เข้าระบบ — เดิมอยู่ในแถบใต้ Header ของหน้า /student
+   * หน้าเดียว ทั้งที่เป็นข้อมูลของ session ไม่ใช่ของหน้านั้น ย้ายมาไว้ข้างปุ่มออกจากระบบ
+   * จึงเห็นเท่ากันทุกหน้าและอยู่ติดกับปุ่มที่ใช้จัดการมันจริง ๆ
+   *
+   * เดินนาฬิกาทุกนาทีพอ เพราะหน่วยที่โชว์เล็กสุดคือนาที
+   */
+  useEffect(() => {
+    if (!session) { setLoginTime(""); return; }
+    const time = (() => { try { return localStorage.getItem(SESSION_TIME_KEY) ?? ""; } catch { return ""; } })();
+    setLoginTime(time);
+    if (!time) { setCountdown(""); return; }
+
+    function tick() {
+      const rem = new Date(time).getTime() + SESSION_TTL - Date.now();
+      if (rem <= 0) { setCountdown("หมดอายุ"); return; }
+      const d = Math.floor(rem / 86_400_000);
+      const h = Math.floor((rem % 86_400_000) / 3_600_000);
+      const m = Math.floor((rem % 3_600_000) / 60_000);
+      setCountdown(d > 0 ? `${d}ว ${h}ชม` : `${h}ชม ${m}น`);
+    }
+    tick();
+    const id = setInterval(tick, 60_000);
+    return () => clearInterval(id);
+  }, [session]);
 
   function handleLogout() {
     clearStudentSession();
@@ -50,6 +96,11 @@ export default function Header({ subtitle = "หน้าแรก" }: { subtitl
     setMenuOpen(false);
     router.push("/login");
   }
+
+  const expired = countdown === "หมดอายุ";
+  const loginHHMM = loginTime
+    ? `${new Date(loginTime).getHours().toString().padStart(2, "0")}:${new Date(loginTime).getMinutes().toString().padStart(2, "0")}`
+    : "";
 
   const curr = pathname.replace(/\/$/, "");
   const isActive = (l: QuickLink) => !!l.path && curr === l.path.replace(/\/$/, "");
@@ -64,18 +115,22 @@ export default function Header({ subtitle = "หน้าแรก" }: { subtitl
   // และมาก่อนใน QUICK_LINKS ปุ่ม "เข้าสู่ระบบ" จึงเคยลิงก์ไปหน้าการเข้าเรียนแทน
   const ctaStudent = visible.find(l => l.path === "/student");
   const ctaShop    = visible.find(l => l.role === "shop");
+  // ตอนอยู่หน้าสหกรณ์เอง ลิงก์สหกรณ์ถูกตัดออกจาก visible ปุ่มฝั่งขวาจึงว่างไปหนึ่งช่อง
+  // ยกเบิกคุรุภัณฑ์ขึ้นมาแทน เพราะเป็นบริการคู่กันและเป็นที่ที่คนมักไปต่อ
+  const equipmentLink = visible.find(l => l.path === "/equipment-request");
+  const ctaService    = ctaShop ?? equipmentLink;
 
   // ปักหมุด /feedback ไว้ท้ายสามปุ่มแรกเสมอ แต่ตอนอยู่หน้า /feedback เองลิงก์นั้น
   // หายไป จึงหยิบลิงก์ทั่วไปมาเพิ่มอีกหนึ่งช่อง สามปุ่มแรกจะได้เท่ากันทุกหน้า
   const baseMainLinks = visible
-    .filter(l => !l.role && !l.external && l !== feedbackLink && l !== registerLink)
+    .filter(l => !l.role && !l.external && l !== feedbackLink && l !== registerLink && l !== ctaService)
     .slice(0, feedbackLink ? 2 : 3);
   const tier1 = feedbackLink ? [...baseMainLinks, feedbackLink] : baseMainLinks;
 
   // ที่เหลือเอาไว้เติมช่องที่ xl เรียงตามลำดับใน QUICK_LINKS ต่อจากสามปุ่มแรก
   // สามปุ่มแรกจึงไม่ขยับ ไม่ว่าจะมีลิงก์ใหม่เพิ่มเข้ามาในตารางกี่อัน
   const spare = MAX_NAV - tier1.length;
-  const rest = visible.filter(l => !tier1.includes(l) && l !== ctaStudent && l !== ctaShop);
+  const rest = visible.filter(l => !tier1.includes(l) && l !== ctaStudent && l !== ctaService);
   const mainLinks = [...tier1, ...rest.slice(0, spare)];
   const moreLinks = rest.slice(Math.max(0, spare));
 
@@ -163,38 +218,48 @@ export default function Header({ subtitle = "หน้าแรก" }: { subtitl
             <div className="hidden lg:flex items-center gap-2 shrink-0">
               {session ? (
                 <>
-                  {ctaShop && (
-                    <Link href={ctaShop.path ?? "#"}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-bold border-2 border-pink-200 text-pink-500 hover:bg-pink-50 transition-all whitespace-nowrap">
-                      {ctaShop.icon && <i className={`${ctaShop.icon} text-xs`} />}
-                      <span>สหกรณ์</span>
-                    </Link>
-                  )}
+                  {ctaService && <ServiceCta link={ctaService} />}
                   <Link href="/student"
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-[rgba(132,212,250,0.45)] bg-[rgba(132,212,250,0.12)] hover:bg-[rgba(132,212,250,0.2)] transition">
+                    className="flex items-center gap-2 h-[38px] px-3 rounded-xl border border-[rgba(132,212,250,0.45)] bg-[rgba(132,212,250,0.12)] hover:bg-[rgba(132,212,250,0.2)] transition">
                     <StudentAvatar src={session.photo_url} name={`${session.first_name} ${session.last_name}`} size={24} />
                     <span className="text-sm font-bold text-[var(--primary-dark)] max-w-[100px] truncate">
                       {session.nickname || session.first_name}
                     </span>
                   </Link>
+                  {/* ปุ่มออกจากระบบเหลือแค่ไอคอน — ข้อความยาว ๆ กินที่แถบไปเปล่า ๆ ทั้งที่
+                      ไอคอนประตูออกเป็นสัญลักษณ์ที่คนอ่านออกอยู่แล้ว ที่ว่างที่ได้คืนมา
+                      เอาไปบอกเรื่องที่ไม่มีที่ไหนบอก: เข้าระบบมาตอนกี่โมง และเหลืออีกเท่าไร */}
                   <button onClick={handleLogout}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium text-slate-500 hover:bg-red-50 hover:text-red-500 border border-slate-200 hover:border-red-200 transition whitespace-nowrap">
+                    aria-label="ออกจากระบบ"
+                    title="ออกจากระบบ"
+                    className="group/logout flex items-center gap-2 h-[38px] px-2.5 rounded-xl text-slate-500 hover:bg-red-50 hover:text-red-500 border border-slate-200 hover:border-red-200 transition whitespace-nowrap">
+                    {(countdown || loginHHMM) && (
+                      <>
+                        <span className="hidden xl:inline-flex items-center gap-1.5 text-[11px] font-semibold">
+                          {countdown && (
+                            <span className={`inline-flex items-center gap-1 ${
+                              expired ? "text-red-500" : "text-emerald-600 group-hover/logout:text-red-400"
+                            }`}>
+                              <i className="fa-regular fa-clock text-[10px]" />
+                              {countdown}
+                            </span>
+                          )}
+                          {loginHHMM && (
+                            <span className="font-normal text-slate-400">เข้า {loginHHMM} น.</span>
+                          )}
+                        </span>
+                        <span className="hidden xl:block w-px h-3.5 bg-slate-200 group-hover/logout:bg-red-200" />
+                      </>
+                    )}
                     <i className="fa-solid fa-arrow-right-from-bracket text-xs" />
-                    <span className="hidden xl:inline">ออกจากระบบ</span>
                   </button>
                 </>
               ) : (
                 <>
-                  {ctaShop && (
-                    <Link href={ctaShop.path ?? "#"}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold border-2 border-pink-200 text-pink-500 hover:bg-pink-50 transition-all whitespace-nowrap">
-                      {ctaShop.icon && <i className={`${ctaShop.icon} text-xs`} />}
-                      <span>สหกรณ์</span>
-                    </Link>
-                  )}
+                  {ctaService && <ServiceCta link={ctaService} />}
                   {ctaStudent && (
                     <Link href={ctaStudent.path ?? "#"}
-                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-bold text-white transition-all hover:brightness-110 shadow-md shadow-sky-200 whitespace-nowrap"
+                      className="flex items-center gap-1.5 h-[38px] px-3.5 rounded-xl text-sm font-bold text-white transition-all hover:brightness-110 shadow-md shadow-sky-200 whitespace-nowrap"
                       style={{ background: "linear-gradient(135deg,var(--primary-color),var(--primary-dark))" }}>
                       {ctaStudent.icon && <i className={`${ctaStudent.icon} text-xs`} />}
                       <span>เข้าสู่ระบบ</span>
@@ -242,6 +307,13 @@ export default function Header({ subtitle = "หน้าแรก" }: { subtitl
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-bold text-[var(--primary-dark)] truncate">{session.first_name} {session.last_name}</div>
                 <div className="text-[10px] text-slate-500">{session.program} · {session.department}</div>
+                {countdown && (
+                  <div className={`text-[10px] mt-0.5 ${expired ? "text-red-500" : "text-emerald-600"}`}>
+                    <i className="fa-regular fa-clock text-[9px] mr-1" />
+                    {expired ? "หมดอายุ" : `เหลือ ${countdown}`}
+                    {loginHHMM && <span className="text-slate-400"> · เข้าเมื่อ {loginHHMM} น.</span>}
+                  </div>
+                )}
               </div>
               <button onClick={handleLogout} className="text-red-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition">
                 <i className="fa-solid fa-arrow-right-from-bracket text-xs" />

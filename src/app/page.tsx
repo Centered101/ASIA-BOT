@@ -8,9 +8,9 @@ import Footer from "@/components/Footer";
 import TeamSection from "@/components/TeamSection";
 import QuickLinksList from "@/components/QuickLinksList";
 import ProjectsGrid from "@/components/ProjectsGrid";
-import StudentIdentityCard from "@/components/student/StudentIdentityCard";
+import StudentCardMini from "@/components/student/StudentCardMini";
 import { getStudentSession } from "@/lib/session";
-import { QUICK_LINKS, SITE_NAME, quickLinkFor } from "@/lib/config";
+import { QUICK_LINKS, SITE_NAME, type QuickLink } from "@/lib/config";
 
 type Stats = {
   students: number;
@@ -33,11 +33,124 @@ type StatTile = {
   subLabel?: string;
 };
 
+/**
+ * หกช่องบริการในหน้าแรก — เลือกจาก QUICK_LINKS ด้วย path ไม่ใช่ก๊อปข้อมูลมาไว้ในหน้า
+ *
+ * เรียงตามลำดับที่คนใช้จริงบ่อยสุดก่อน แล้วปิดท้ายด้วยของที่เพิ่งมี (แฟ้มสะสมผลงาน)
+ * ถ้าวันหน้ามีบริการใหม่ เพิ่ม path ลงตารางนี้ที่เดียว รายละเอียดตามมาเองจาก config
+ */
+const FEATURE_PATHS = [
+  "/class-track-room",
+  "/equipment-request",
+  "/maintenance-request",
+  "/shop",
+  "/feedback",
+] as const;
+
+const featureLinks = [
+  ...FEATURE_PATHS
+    .map(p => QUICK_LINKS.find(l => l.path === p))
+    .filter((l): l is NonNullable<typeof l> => Boolean(l)),
+  // Mycer อยู่คนละซับโดเมน จึงไม่มี path ให้จับ ต้องหาด้วย url
+  ...QUICK_LINKS.filter(l => l.url && l.tag === "แฟ้มสะสมผลงาน"),
+];
+
+/**
+ * การ์ดลิงก์บริการหนึ่งใบ — แถวลัด "ของฉัน" กับกริดบริการเคยเขียนการ์ดของตัวเองคนละชุด
+ * (7px vs 9px ไอคอน, text-[11px] vs text-sm, มี/ไม่มีแถบไฮไลต์ตอน hover) ทั้งที่วาง
+ * ต่อกันในกล่องเดียวกัน มองแล้วเหมือนของคนละระบบมากองรวมกัน
+ */
+function LinkCard({ link }: { link: QuickLink }) {
+  const href = link.url ?? link.path ?? "#";
+  return (
+    <Link href={href}
+      target={link.external ? "_blank" : undefined}
+      rel={link.external ? "noopener noreferrer" : undefined}
+      className="group relative flex items-center gap-3 overflow-hidden rounded-xl border border-slate-100 bg-white p-3 text-left transition-all hover:-translate-y-0.5 hover:border-slate-200 hover:shadow-xs">
+      <span className="absolute inset-y-3 left-0 w-1 rounded-r-full bg-[var(--primary-color)] opacity-0 transition-opacity group-hover:opacity-100" />
+      <div className="w-9 h-9 rounded-xl border border-slate-100 bg-white flex items-center justify-center shrink-0 shadow-xs">
+        <i className={`${link.icon} text-sm`} style={{ color: link.color }} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-bold text-slate-700 group-hover:text-slate-900 truncate">{link.tag ?? link.name}</div>
+        <div className="text-[10px] text-slate-400 truncate">{link.desc}</div>
+      </div>
+      <i className={`fa-solid ${link.external ? "fa-arrow-up-right-from-square" : "fa-chevron-right"} text-[10px] text-slate-300 group-hover:text-slate-400`} />
+    </Link>
+  );
+}
+
+/**
+ * ชื่อเว็บ คำอธิบาย และปุ่มหลักสองปุ่ม
+ *
+ * แยกออกมาเพราะที่อยู่ของมันเปลี่ยนตามสถานะ: ล็อกอินแล้วไปอยู่คอลัมน์ขวาของบัตร
+ * ยังไม่ล็อกอินก็กางเต็มความกว้าง — เขียนซ้ำสองที่แล้ววันหลังแก้ไม่ครบแน่
+ */
+function HeroIntro({ session }: { session: ReturnType<typeof getStudentSession> }) {
+  return (
+    <>
+      {/* ไอคอนหัวข้างชื่อเว็บใช้มาสคอตตัวเต็มทุกขนาดจอ ไม่ใช่ favicon แล้ว */}
+      <div className="mb-2 flex items-center justify-center gap-2 sm:justify-start">
+        <Image
+          src="/mascot/mascot.png"
+          alt=""
+          width={675}
+          height={675}
+          aria-hidden="true"
+          className="h-auto w-14 shrink-0 select-none object-contain drop-shadow-md"
+        />
+        <h1 className="text-3xl sm:text-4xl font-extrabold leading-tight">{SITE_NAME}</h1>
+      </div>
+      <p className="text-sm sm:text-base text-slate-600 mb-5 leading-relaxed">
+        แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร — ติดตามห้องเรียน, จองห้องประชุม,
+        เบิกคุรุภัณฑ์, แจ้งซ่อม, สหกรณ์โรงเรียน, แฟ้มสะสมผลงาน และแสดงความคิดเห็น ในที่เดียว
+      </p>
+
+      <div className="flex flex-col sm:flex-row gap-2">
+        {session ? (
+          <>
+            <Link href="/student" className="btn-primary flex items-center justify-center gap-2">
+              <i className="fa-solid fa-id-card" /> บัตรนักเรียนของฉัน
+            </Link>
+            <Link href="/shop" className="btn-outline flex items-center justify-center gap-2">
+              <i className="fa-solid fa-store" /> สหกรณ์โรงเรียน
+            </Link>
+          </>
+        ) : (
+          <>
+            <Link href="/login" className="btn-primary flex items-center justify-center gap-2">
+              <i className="fa-solid fa-id-card" /> เข้าสู่ระบบนักเรียน
+            </Link>
+            <Link href="/register" className="btn-outline flex items-center justify-center gap-2">
+              <i className="fa-solid fa-user-plus" /> ลงทะเบียนใหม่
+            </Link>
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
 export default function HomePage() {
   const [session, setSession] = useState<ReturnType<typeof getStudentSession>>(null);
   const [stats, setStats] = useState<Stats | null>(null);
 
   useEffect(() => { setSession(getStudentSession()); }, []);
+
+  /**
+   * กันปุ่มซ้ำในกล่องเดียวกัน — "บัตรนักเรียน" มีเป็นปุ่มหลักอยู่แล้ว ส่วนแฟ้มสะสมผลงาน
+   * กับสหกรณ์เคยโผล่ทั้งในแถวลัดของฉันและในกริดบริการ กลายเป็นสามปุ่มไปที่เดียวกัน
+   *
+   * ตัดจากอันที่อยู่ล่างกว่า: ของที่โชว์ข้างบนแล้วจะไม่ซ้ำลงมาในกริด
+   * ส่วนคนที่ยังไม่ล็อกอินไม่มีทั้งปุ่มหลักและแถวลัด กริดจึงโชว์ครบทุกบริการ
+   */
+  const myLinks = session
+    ? QUICK_LINKS.filter(l => l.group === "ของฉัน" && l.path !== "/student")
+    : [];
+  const shown = new Set(
+    session ? ["/student", "/shop", ...myLinks.map(l => l.url ?? l.path ?? "")] : [],
+  );
+  const features = featureLinks.filter(f => !shown.has(f.url ?? f.path ?? ""));
 
   useEffect(() => {
     fetch("/api/stats")
@@ -129,75 +242,60 @@ export default function HomePage() {
                   เดียวกับหน้าแจ้งซ่อมและหน้าความคิดเห็นแล้ว — ได้ห้องกับปีที่เข้า
                   ที่แถบเดิมไม่เคยบอก และคอลัมน์ซ้ายสูงขึ้นจนใกล้เคียงแถบลิงก์ด่วน
                   ทางขวา ซึ่งเดิมสูงกว่ากันเกือบเท่าตัว */}
-              {session && (
+              {session ? (
                 <div className="mb-5">
-                  <StudentIdentityCard
-                    accent={quickLinkFor("/student")?.color}
-                    title={`สวัสดี, ${session.nickname || session.first_name}! 👋`}
-                    footer={
-                      <Link href="/student"
-                        className="flex items-center gap-1.5 font-bold text-[var(--primary-dark)] hover:underline">
-                        <i className="fa-solid fa-id-card" />
-                        เปิดบัตรนักเรียนดิจิทัล
-                        <i className="fa-solid fa-arrow-right text-[9px]" />
-                      </Link>
-                    }
-                  />
+                  <div className="mb-2.5 text-sm font-bold text-[var(--primary-dark)]">
+                    สวัสดี, {session.nickname || session.first_name}! 👋
+                  </div>
+
+                  {/* ตอนล็อกอินอยู่ ชื่อเว็บกับคำอธิบายย้ายมาอยู่ข้าง ๆ บัตร ไม่ใช่ไหลลงไป
+                      ใต้บัตรเหมือนเดิม — ที่ข้างบัตรเคยว่างยาวลงมาถึงท้ายบัตร ส่วนคนที่ยัง
+                      ไม่ล็อกอินไม่มีบัตร ก้อนเดียวกันนี้จึงกางเต็มความกว้างแทน */}
+                  <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-start sm:gap-6">
+                    <div className="w-full shrink-0 sm:w-[240px]">
+                      <StudentCardMini href="/student" className="w-full" />
+                    </div>
+
+                    <div className="w-full min-w-0 flex-1 text-center sm:text-left">
+                      <HeroIntro session={session} />
+                      {/* ข้อมูลบนบัตรกับวิธีใช้บัตร — ใต้บัตรมีที่แค่ 240px ชิปสามอันเลย
+                          ตกบรรทัดกันคนละแถวและข้อความหักกลางคำ ต่อท้ายคอลัมน์ขวาแทน
+                          ซึ่งกว้างพอให้อยู่แถวเดียว */}
+                      <div className="mt-5 flex flex-wrap justify-center gap-1.5 sm:justify-start">
+                        {[
+                          { icon: "fa-hashtag", val: session.student_id },
+                          { icon: "fa-building-columns", val: session.department },
+                          { icon: "fa-calendar-days", val: session.entry_year ? `เข้าปี ${session.entry_year}` : null },
+                        ].filter(c => c.val).map(c => (
+                          <span key={c.icon}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-slate-100 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-500">
+                            <i className={`fa-solid ${c.icon} text-[9px] text-slate-300`} />
+                            {c.val}
+                          </span>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
+                        ให้เจ้าหน้าที่สแกน QR บนบัตรได้เลย · กดที่บัตรเพื่อดูใบเต็มและด้านหลัง
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* ปุ่มลัดกลุ่ม "ของฉัน" — ชื่อ ไอคอน สี มาจาก QUICK_LINKS ชุดเดียวกับเมนู
+                      ไม่ต้องมาไล่แก้หน้าแรกทุกครั้งที่เพิ่มของใหม่ */}
+                  <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                    {myLinks.map(l => <LinkCard key={l.name} link={l} />)}
+                  </div>
                 </div>
+              ) : (
+                <HeroIntro session={session} />
               )}
 
-              <div className="flex items-center gap-2 mb-2">
-                <Image src="/favicon.png" alt="logo" width={32} height={32} className="w-8 h-8" priority />
-                <h1 className="text-3xl sm:text-4xl font-extrabold leading-tight">{SITE_NAME}</h1>
-              </div>
-              <p className="text-sm sm:text-base text-slate-600 mb-5 leading-relaxed">
-                แพลตฟอร์มบริหารจัดการระบบนักเรียนครบวงจร — ติดตามห้องเรียน,
-                จองห้องประชุม, เบิกคุรุภัณฑ์, สหกรณ์โรงเรียน และแสดงความคิดเห็น ในที่เดียว
-              </p>
-
-              <div className="flex flex-col sm:flex-row gap-2 mb-6">
-                {session ? (
-                  <>
-                    <Link href="/student" className="btn-primary flex items-center justify-center gap-2">
-                      <i className="fa-solid fa-id-card" /> บัตรนักเรียนของฉัน
-                    </Link>
-                    <Link href="/shop" className="btn-outline flex items-center justify-center gap-2">
-                      <i className="fa-solid fa-store" /> สหกรณ์โรงเรียน
-                    </Link>
-                  </>
-                ) : (
-                  <>
-                    <Link href="/login" className="btn-primary flex items-center justify-center gap-2">
-                      <i className="fa-solid fa-id-card" /> เข้าสู่ระบบนักเรียน
-                    </Link>
-                    <Link href="/register" className="btn-outline flex items-center justify-center gap-2">
-                      <i className="fa-solid fa-user-plus" /> ลงทะเบียนใหม่
-                    </Link>
-                  </>
-                )}
-              </div>
-
-              {/* Feature cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {[
-                  { href: "/class-track-room",      icon: "fa-chalkboard-user", color: "var(--primary-dark)", label: "สถานะห้องเรียน", desc: "ดูห้องว่างและจองห้อง" },
-                  { href: "/class-track-room?view=booking", icon: "fa-calendar-check",  color: "#F59E0B",              label: "จองห้องประชุม",     desc: "ระบบจองห้องออนไลน์" },
-                  { href: "/equipment-request",     icon: "fa-toolbox",         color: "#059669",              label: "เบิกคุรุภัณฑ์",       desc: "ยื่นคำขอยืมอุปกรณ์" },
-                  { href: "/feedback",              icon: "fa-comment-dots",    color: "#14B8A6",              label: "ความคิดเห็น",        desc: "ส่งข้อเสนอแนะและรายงาน" },
-                ].map(f => (
-                  <Link key={f.href} href={f.href}
-                    className="group relative flex items-center gap-3 overflow-hidden rounded-xl border border-slate-100 bg-white p-3 transition-all hover:-translate-y-0.5 hover:border-slate-200 hover:shadow-xs">
-                    <span className="absolute inset-y-3 left-0 w-1 rounded-r-full bg-[var(--primary-color)] opacity-0 transition-opacity group-hover:opacity-100" />
-                    <div className="w-9 h-9 rounded-xl border border-slate-100 bg-white flex items-center justify-center shrink-0 shadow-xs">
-                      <i className={`fa-solid ${f.icon} text-sm`} style={{ color: f.color }} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold text-slate-700 group-hover:text-slate-900">{f.label}</div>
-                      <div className="text-[10px] text-slate-400">{f.desc}</div>
-                    </div>
-                    <i className="fa-solid fa-chevron-right text-[10px] text-slate-300 group-hover:text-slate-400" />
-                  </Link>
-                ))}
+              {/* Feature cards — อ่านจาก QUICK_LINKS ที่เดียวกับแถบลิงก์ด่วนและป้ายฟีเจอร์
+                  ข้างล่าง เดิมสี่ช่องนี้พิมพ์ชื่อ/สี/คำอธิบายไว้เองในหน้านี้ พอเพิ่มบริการ
+                  ใหม่ (แจ้งซ่อม, แฟ้มสะสมผลงาน) เข้าเมนู หน้าแรกจึงยังโชว์ชุดเดิมอยู่
+                  และสีบางช่องเพี้ยนไปคนละสีกับหน้าจริงของบริการนั้น */}
+              <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {features.map(f => <LinkCard key={f.name} link={f} />)}
               </div>
             </div>
           </div>

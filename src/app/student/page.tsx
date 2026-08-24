@@ -18,6 +18,8 @@ import { safeImageSrc } from "@/lib/image-url";
 import { Chart, registerables } from "chart.js";
 import { Bar, Doughnut } from "react-chartjs-2";
 import { birthDateBounds, calcGrade } from "@/lib/student-grade";
+import StudentCardMini from "@/components/student/StudentCardMini";
+import { CARD_QR_OPTIONS } from "@/lib/student-card";
 import { GENDER_LABELS, checkBirthDate, checkNationalId } from "@/lib/student-validate";
 
 Chart.register(...registerables);
@@ -56,8 +58,15 @@ const CROP_SIZE = 280;
 export default function StudentPage() {
   const router = useRouter();
   const [student, setStudent] = useState<Student | null>(null);
-  const [loginTime, setLoginTime] = useState("");
   const [flipped, setFlipped] = useState(false);
+  /**
+   * บัตรที่กำลังแสดง — "asia" คือบัตรดิจิทัลของระบบ (พลิกดูหลังได้)
+   * ส่วน "school" คืออาร์ตเวิร์กบัตรจริงของวิทยาลัยที่วางข้อมูลทับ
+   *
+   * ตั้งต้นที่ asia เพราะเป็นใบที่มีข้อมูลครบกว่า (สถานะบัตร ยศ ด้านหลัง)
+   * ส่วนใบของวิทยาลัยมีไว้ให้เทียบกับบัตรจริงในมือ
+   */
+  const [cardStyle, setCardStyle] = useState<"asia" | "school">("asia");
   const [qrUrl, setQrUrl] = useState("");
   const [modalEdit, setModalEdit] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -70,7 +79,6 @@ export default function StudentPage() {
   const [googleLinking, setGoogleLinking] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const deptRef = useRef<HTMLDivElement>(null);
-  const [sessionCountdown, setSessionCountdown] = useState("");
   const studentPhotoSrc = safeImageSrc(student?.photo_url);
 
   const [cropOpen, setCropOpen] = useState(false);
@@ -91,22 +99,6 @@ export default function StudentPage() {
   useEffect(() => {
     setPortalReady(true);
   }, []);
-
-  useEffect(() => {
-    if (!loginTime) return;
-    function tick() {
-      const exp = new Date(loginTime).getTime() + SESSION_TTL;
-      const rem = exp - Date.now();
-      if (rem <= 0) { setSessionCountdown("หมดอายุ"); return; }
-      const d = Math.floor(rem / 86_400_000);
-      const h = Math.floor((rem % 86_400_000) / 3_600_000);
-      const m = Math.floor((rem % 3_600_000) / 60_000);
-      setSessionCountdown(d > 0 ? `${d}ว ${h}ชม` : `${h}ชม ${m}น`);
-    }
-    tick();
-    const id = setInterval(tick, 60_000);
-    return () => clearInterval(id);
-  }, [loginTime]);
 
   async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -317,7 +309,6 @@ export default function StudentPage() {
         localStorage.setItem(SESSION_KEY, JSON.stringify(json.data));
         localStorage.setItem(SESSION_TIME_KEY, now);
         setStudent(json.data);
-        setLoginTime(now);
         return true;
       } catch {
         return false;
@@ -335,7 +326,6 @@ export default function StudentPage() {
       }
       const cached = JSON.parse(raw);
       setStudent(cached);
-      setLoginTime(time);
 
       // Background sync: fetch fresh data from server without blocking the UI
       fetch(`/api/auth/me?student_id=${encodeURIComponent(cached.student_id)}`)
@@ -387,12 +377,8 @@ export default function StudentPage() {
 
   useEffect(() => {
     if (!student) return;
-    QRCode.toDataURL(String(student.student_id), {
-      width: 180,
-      margin: 2,
-      errorCorrectionLevel: "H",
-      color: { dark: "#0EA5E9", light: "#FFFFFF" },
-    }).then(setQrUrl);
+    // ตัวเลือกอยู่ใน lib/student-card.ts ที่เดียว บัตรใบย่อบนหน้าแรกใช้ชุดเดียวกัน
+    QRCode.toDataURL(String(student.student_id), CARD_QR_OPTIONS).then(setQrUrl);
   }, [student]);
 
   function doLogout() {
@@ -584,7 +570,6 @@ export default function StudentPage() {
 
   if (!student) return null;
 
-  const isPvs = student.program === "ปวส";
   const grade = calcGrade(student.program, student.entry_year);
   const initials = ((student.first_name[0] ?? "?") + (student.last_name[0] ?? "?")).toUpperCase();
   const isGraduated = grade.includes("จบการศึกษา");
@@ -599,16 +584,12 @@ export default function StudentPage() {
   };
   const adminRoleStyle = adminRole ? (ADMIN_ROLE_COLOR[adminRole] ?? ADMIN_ROLE_COLOR.staff) : null;
   const isGoogleLinked = Boolean(student.google_email || student.google_id);
-  const loginHHMM = loginTime
-    ? `${new Date(loginTime).getHours().toString().padStart(2, "0")}:${new Date(loginTime).getMinutes().toString().padStart(2, "0")}`
-    : "";
 
-  const cardGrad = isPvs
-    ? "linear-gradient(135deg,#EF4444 0%,#F87171 55%,#FF7070 100%)"
-    : "linear-gradient(135deg,#0EA5E9 0%,#38BDF8 55%,#84D4FA 100%)";
-  const cardShadow = isPvs
-    ? "0 24px 60px rgba(239,68,68,0.42)"
-    : "0 24px 60px rgba(14,165,233,0.38)";
+  // สีเดียวทุกระดับชั้น — เดิม ปวส เป็นแดง ปวช เป็นฟ้า ซึ่งทำให้บัตรของคนละชั้น
+  // ดูเหมือนคนละระบบ ทั้งที่เป็นบัตรใบเดียวกันของโรงเรียนเดียวกัน ระดับชั้นมีป้าย
+  // บอกอยู่บนบัตรแล้ว ไม่ต้องใช้สีทั้งใบมาบอกซ้ำ
+  const cardGrad = "linear-gradient(135deg,#0EA5E9 0%,#38BDF8 55%,#84D4FA 100%)";
+  const cardShadow = "0 24px 60px rgba(14,165,233,0.38)";
   const activityItems = activityStats?.activity ?? [
     { label: "ซื้อสหกรณ์", value: 0 },
     { label: "จองห้อง", value: 0 },
@@ -680,56 +661,52 @@ export default function StudentPage() {
       <div className="bg-blob" style={{ width: 420, height: 420, background: "var(--primary-dark)", bottom: -110, left: -130 }} />
       <Header subtitle="ระบบนักเรียน" />
 
-      <div className="session-banner">
-        {/* Colored accent bar */}
-        <div className="shrink-0 self-stretch w-[3px] rounded-full" style={{ background: isPvs ? "#EF4444" : "#0EA5E9" }} />
-
-        {/* Avatar */}
-        <div className="w-9 h-9 rounded-xl overflow-hidden shrink-0 flex items-center justify-center font-bold text-white text-sm shadow-xs"
-          style={{ background: isPvs ? "linear-gradient(135deg,#EF4444,#F87171)" : "linear-gradient(135deg,#0EA5E9,#38BDF8)" }}>
-          {studentPhotoSrc
-            // eslint-disable-next-line @next/next/no-img-element
-            ? <img src={studentPhotoSrc} alt="" className="w-full h-full object-cover" />
-            : initials}
-        </div>
-
-        {/* Name + program */}
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-bold text-slate-800 truncate leading-tight">
-            {student.nickname ? `${student.first_name} (${student.nickname})` : student.first_name}
-          </div>
-          <div className="text-[10px] text-slate-400 truncate leading-tight mt-0.5">
-            {student.program} · {student.department}
-          </div>
-        </div>
-
-        {/* Session info */}
-        <div className="flex items-center gap-2 shrink-0">
-          {sessionCountdown && (
-            <span className={`session-badge ${sessionCountdown === "หมดอายุ" ? "red" : "green"}`}>
-              <i className="fa-regular fa-clock" style={{ fontSize: 9 }} />
-              {sessionCountdown === "หมดอายุ" ? "หมดอายุ" : sessionCountdown}
-            </span>
-          )}
-          {loginHHMM && (
-            <span className="text-[10px] text-slate-400 hidden sm:block">{loginHHMM}</span>
-          )}
-        </div>
-      </div>
-
       <main className="min-h-screen max-w-6xl mx-auto px-3 sm:px-6 py-8 pb-16 relative z-10">
         <div className="flex flex-col md:flex-row gap-6 lg:gap-8 items-start">
 
           {/* ── LEFT: Flip Card ── */}
-          <div className="w-full md:basis-[400px] lg:basis-[420px] shrink-0">
-            <p data-aos="fade-up" className="text-xs font-bold tracking-widest text-slate-500 uppercase flex items-center gap-1.5 mb-3">
-              <i className="fa-solid fa-id-card text-primary-dark" /> บัตรประจำตัวนักเรียน
-            </p>
+          {/* แคบลงกว่าเดิมเพราะบัตรเป็นแนวตั้งแล้ว ถ้าคงความกว้าง 420px ไว้
+              ความสูงจะพุ่งไปเกิน 660px สูงกว่าการ์ดข้อมูลข้าง ๆ เกือบเท่าตัว */}
+          <div className="w-full md:basis-[320px] lg:basis-[340px] shrink-0">
+            <div data-aos="fade-up" className="flex items-center justify-between gap-2 mb-3">
+              <p className="text-xs font-bold tracking-widest text-slate-500 uppercase flex items-center gap-1.5">
+                <i className="fa-solid fa-id-card text-primary-dark" /> บัตรประจำตัวนักเรียน
+              </p>
 
-            {/* 3-D flip wrapper — credit-card ratio 85.6 × 53.98 */}
+              {/* ปุ่มสลับแบบ segmented — ปุ่มเดียวสองสถานะอ่านยากว่ากำลังดูใบไหนอยู่
+                  แบบนี้เห็นทั้งสองตัวเลือกพร้อมกันและรู้ทันทีว่าอันไหนถูกเลือก */}
+              <div className="flex items-center gap-0.5 p-0.5 rounded-xl bg-slate-100 border border-slate-200 shrink-0">
+                {([
+                  { key: "asia" as const, icon: "fa-microchip", label: SITE_NAME },
+                  { key: "school" as const, icon: "fa-building-columns", label: "โรงเรียน" },
+                ]).map(opt => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setCardStyle(opt.key)}
+                    aria-pressed={cardStyle === opt.key}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all whitespace-nowrap ${
+                      cardStyle === opt.key
+                        ? "bg-white text-slate-800 shadow-xs"
+                        : "text-slate-400 hover:text-slate-600"
+                    }`}
+                  >
+                    <i className={`fa-solid ${opt.icon} text-[10px]`} />
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {cardStyle === "asia" ? (
+            <>
+            {/* 3-D flip wrapper — ขนาดบัตรจริงของวิทยาลัย 55 × 85.5 มม.
+                ไม่ใช่ CR80 มาตรฐาน (53.98 × 85.6) ที่ใช้อยู่ก่อน — ต่างกันไม่มากแต่พอ
+                สลับไปดูบัตรของวิทยาลัยแล้วกล่องจะขยับ เพราะอาร์ตเวิร์กมีสัดส่วนของมันเอง
+                ตอนนี้ทั้งสองใบทรงเดียวกัน กดสลับแล้วเลย์เอาต์นิ่ง ไม่กระตุก */}
             <div data-aos="fade-up" data-aos-delay="200"
               className="card-flip-container w-full cursor-pointer select-none"
-              style={{ aspectRatio: "85.6 / 53.98" }}
+              style={{ aspectRatio: "55 / 85.5" }}
               onClick={() => setFlipped(f => !f)}>
 
               <div className={`card-flip-inner w-full h-full ${flipped ? "flipped" : ""}`}>
@@ -950,18 +927,69 @@ export default function StudentPage() {
               <i className={`fa-solid fa-rotate${flipped ? "-left" : ""} text-primary`} />
               แตะบัตรเพื่อดู{flipped ? "ด้านหน้า" : "รายละเอียดด้านหลัง"}
             </p>
+            </>
+            ) : (
+            <>
+              {/* บัตรของวิทยาลัย — อาร์ตเวิร์กจริงใน public/Id-card ที่วางข้อมูลทับ
+                  ส่ง data เข้าไปตรง ๆ เพราะหน้านี้โหลดแถวจริงจากฐานข้อมูลไว้แล้ว
+                  สดกว่า session ใน localStorage ที่บัตรอ่านเองตอนอยู่หน้าแรก
+                  และไม่ส่ง href เพราะกดแล้วจะพากลับมาหน้านี้ซึ่งยืนอยู่แล้ว */}
+              {/* เลื่อนเข้ามาจากทางซ้าย (AOS ตั้งชื่อทิศตามทางที่วิ่งไป fade-right
+                  จึงคือ "โผล่จากซ้าย") ให้ต่างจากคอลัมน์ข้อมูลทางขวาที่ยัง fade-up */}
+              <div data-aos="fade-right" data-aos-delay="200">
+                <StudentCardMini
+                  className="w-full"
+                  data={{
+                    student_id: student.student_id,
+                    first_name: student.first_name,
+                    last_name: student.last_name,
+                    department: student.department,
+                    photo_url: studentPhotoSrc,
+                    created_at: student.created_at,
+                    program: student.program,
+                    entry_year: student.entry_year,
+                  }}
+                />
+              </div>
+              <p className="flex items-center justify-center gap-1.5 mt-2.5 text-[11px] text-slate-400">
+                <i className="fa-solid fa-rotate text-primary" />
+                แตะบัตรเพื่อดูด้านหลัง · สแกน QR ได้เหมือนบัตรจริง
+              </p>
+            </>
+            )}
           </div>
 
           {/* ── RIGHT: Info panel ── */}
-          <div data-aos="fade-up" data-aos-delay="400" className="flex-1 w-full">
-            <p className="text-xs font-bold tracking-widest text-slate-500 uppercase flex items-center gap-1.5 mb-3">
+          <div className="flex-1 w-full">
+            <p data-aos="fade-up" data-aos-delay="300" className="text-xs font-bold tracking-widest text-slate-500 uppercase flex items-center gap-1.5 mb-3">
               <i className="fa-solid fa-circle-info text-primary-dark" /> ข้อมูลนักเรียน
             </p>
 
-            <div className="bg-[color:var(--gray-soft)] border rounded-2xl p-3.5 mb-4">
+            {/* ตัวเลขสรุปสามช่อง — เดิมซ่อนอยู่กลางการ์ด "ประวัติล่าสุด" ท้ายหน้า ทั้งที่เป็น
+                คำตอบของคำถามที่คนเปิดหน้านี้มาถามก่อนเพื่อน ยกขึ้นมาไว้หัวคอลัมน์ขวา
+                ให้อ่านได้พร้อมบัตร และเติมที่ว่างข้างบัตรซึ่งเดิมโล่งยาวลงมา
+
+                งานซ่อมนับเฉพาะที่ยังค้าง ต่างจากอีกสองช่องที่เป็นยอดสะสม */}
+            <div data-aos="fade-up" data-aos-delay="400" className="grid grid-cols-3 gap-2 mb-4">
+              {[
+                { label: "ออเดอร์สำเร็จ", value: activityStats?.summary.paidOrders ?? 0, icon: "fa-receipt", color: "#0EA5E9" },
+                { label: "จำนวนที่เบิก", value: activityStats?.summary.borrowedQuantity ?? 0, icon: "fa-boxes-stacked", color: "#EF4444" },
+                { label: "ซ่อมค้างอยู่", value: activityStats?.summary.openRepairs ?? 0, icon: "fa-screwdriver-wrench", color: "#8B5CF6" },
+              ].map(item => (
+                <div key={item.label} className="rounded-2xl bg-white/80 border border-slate-100 px-3 py-2.5">
+                  <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold">
+                    <i className={`fa-solid ${item.icon}`} style={{ color: item.color }} />
+                    <span className="truncate">{item.label}</span>
+                  </div>
+                  <div className="mt-1 text-xl font-black text-slate-800">{item.value}</div>
+                </div>
+              ))}
+            </div>
+
+            <div data-aos="fade-up" data-aos-delay="450" className="bg-[color:var(--gray-soft)] border rounded-2xl p-3.5 mb-4">
               {[
                 { icon: "fa-hashtag",        label: "รหัสนักเรียน", val: student.student_id,                         cls: "" },
-                { icon: "fa-graduation-cap", label: "ระดับชั้น",    val: grade,                                       cls: isPvs ? "text-red-500" : "text-sky-500" },
+                { icon: "fa-graduation-cap", label: "ระดับชั้น",    val: grade,                                       cls: "text-sky-500" },
                 { icon: "fa-calendar-days",  label: "ปีที่เข้าเรียน", val: `พ.ศ. ${student.entry_year ?? "—"}`,      cls: "" },
                 { icon: "fa-building-columns", label: "สาขาวิชา",  val: student.department ?? "—",                   cls: "" },
                 { icon: "fa-phone",          label: "เบอร์โทร",     val: student.student_phone ?? "—",               cls: "" },
@@ -998,12 +1026,46 @@ export default function StudentPage() {
               </div>
             </div>
 
+            <div data-aos="fade-up" data-aos-delay="500" className={`rounded-2xl border px-3.5 py-3 mb-4 flex items-start gap-3 ${isGoogleLinked ? "bg-sky-50 border-sky-100" : "bg-slate-50 border-slate-200"}`}>
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isGoogleLinked ? "bg-white text-[#4285F4]" : "bg-white text-slate-300"}`}>
+                <i className="fa-brands fa-google" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-bold text-slate-700">
+                  {isGoogleLinked ? "บัญชีนี้ผูก Google แล้ว" : "ยังไม่ได้ผูก Google"}
+                </div>
+                <div className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                  {isGoogleLinked
+                    ? "ครั้งต่อไปสามารถกดเข้าสู่ระบบด้วย Google ได้ทันที"
+                    : "กดเชื่อม Google แล้วระบบจะผูกบัญชีนี้กับรหัสนักเรียนของคุณ"}
+                </div>
+                {!isGoogleLinked && (
+                  <button
+                    type="button"
+                    onClick={connectGoogle}
+                    disabled={googleLinking}
+                    className="mt-2 inline-flex items-center gap-2 rounded-xl bg-white border border-sky-100 px-3 py-2 text-[11px] font-bold text-sky-600 shadow-xs hover:bg-sky-50 disabled:opacity-60 transition"
+                  >
+                    {googleLinking
+                      ? <><span className="spinner inline-block" /> กำลังเชื่อม...</>
+                      : <><i className="fa-brands fa-google text-[#4285F4]" /> เชื่อม Google</>}
+                  </button>
+                )}
+              </div>
+            </div>
+
           </div>
         </div>
 
-        <div className="mt-6">
+        <div className="mt-8">
+            {/* บล็อกสถิติเพิ่งเสียตัวเลขสรุปไปให้คอลัมน์ขวา จึงต้องมีหัวข้อของตัวเอง
+                ไม่งั้นกราฟสองใบจะลอยต่อจากบัตรโดยไม่มีอะไรบอกว่าเป็นคนละเรื่องกัน */}
+            <p data-aos="fade-up" className="text-xs font-bold tracking-widest text-slate-500 uppercase flex items-center gap-1.5 mb-3">
+              <i className="fa-solid fa-chart-simple text-primary-dark" /> ภาพรวมการใช้งาน
+            </p>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-              <div className="rounded-2xl border border-sky-100 bg-white/80 p-3.5">
+              <div data-aos="fade-up" data-aos-delay="100" className="rounded-2xl border border-sky-100 bg-white/80 p-3.5">
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                     <i className="fa-solid fa-chart-column text-primary-dark" /> กิจกรรมของฉัน
@@ -1034,7 +1096,7 @@ export default function StudentPage() {
                 )}
               </div>
 
-              <div className="rounded-2xl border border-slate-100 bg-white/80 p-3.5">
+              <div data-aos="fade-up" data-aos-delay="200" className="rounded-2xl border border-slate-100 bg-white/80 p-3.5">
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                     <i className="fa-solid fa-chart-pie text-primary-dark" /> สถานะคำขอของฉัน
@@ -1069,7 +1131,7 @@ export default function StudentPage() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-100 bg-white/80 p-3.5 mb-4">
+            <div data-aos="fade-up" data-aos-delay="300" className="rounded-2xl border border-slate-100 bg-white/80 p-3.5 mb-4">
               <div className="flex items-center justify-between gap-3 mb-3">
                 <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                   <i className="fa-solid fa-clock-rotate-left text-primary-dark" /> ประวัติล่าสุด
@@ -1077,23 +1139,6 @@ export default function StudentPage() {
                 <span className="text-[11px] font-bold text-slate-400">
                   ฿{baht.format(activityStats?.summary.totalSpent ?? 0)} จากสหกรณ์
                 </span>
-              </div>
-              {/* 3 ช่องแทน 2 — งานซ่อมที่ยังไม่ปิดคือสิ่งที่นักเรียนต้องติดตาม
-                  ต่างจากอีกสองช่องที่เป็นยอดสะสม จึงนับเฉพาะที่ยังค้าง */}
-              <div className="grid grid-cols-3 gap-2 mb-3">
-                {[
-                  { label: "ออเดอร์สำเร็จ", value: activityStats?.summary.paidOrders ?? 0, icon: "fa-receipt", color: "#0EA5E9" },
-                  { label: "จำนวนที่เบิก", value: activityStats?.summary.borrowedQuantity ?? 0, icon: "fa-boxes-stacked", color: "#EF4444" },
-                  { label: "ซ่อมค้างอยู่", value: activityStats?.summary.openRepairs ?? 0, icon: "fa-screwdriver-wrench", color: "#8B5CF6" },
-                ].map(item => (
-                  <div key={item.label} className="rounded-xl bg-slate-50 border border-slate-100 px-3 py-2">
-                    <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold">
-                      <i className={`fa-solid ${item.icon}`} style={{ color: item.color }} />
-                      <span className="truncate">{item.label}</span>
-                    </div>
-                    <div className="mt-1 text-lg font-black text-slate-800">{item.value}</div>
-                  </div>
-                ))}
               </div>
               <div className="space-y-2">
                 {activityStats?.recent.length ? activityStats.recent.map(item => (
@@ -1113,34 +1158,6 @@ export default function StudentPage() {
                   <div className="rounded-xl bg-slate-50 border border-dashed border-slate-200 px-3 py-4 text-center text-[11px] text-slate-400">
                     ยังไม่มีประวัติล่าสุด
                   </div>
-                )}
-              </div>
-            </div>
-
-            <div className={`rounded-2xl border px-3.5 py-3 mb-4 flex items-start gap-3 ${isGoogleLinked ? "bg-sky-50 border-sky-100" : "bg-slate-50 border-slate-200"}`}>
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isGoogleLinked ? "bg-white text-[#4285F4]" : "bg-white text-slate-300"}`}>
-                <i className="fa-brands fa-google" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-xs font-bold text-slate-700">
-                  {isGoogleLinked ? "บัญชีนี้ผูก Google แล้ว" : "ยังไม่ได้ผูก Google"}
-                </div>
-                <div className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
-                  {isGoogleLinked
-                    ? "ครั้งต่อไปสามารถกดเข้าสู่ระบบด้วย Google ได้ทันที"
-                    : "กดเชื่อม Google แล้วระบบจะผูกบัญชีนี้กับรหัสนักเรียนของคุณ"}
-                </div>
-                {!isGoogleLinked && (
-                  <button
-                    type="button"
-                    onClick={connectGoogle}
-                    disabled={googleLinking}
-                    className="mt-2 inline-flex items-center gap-2 rounded-xl bg-white border border-sky-100 px-3 py-2 text-[11px] font-bold text-sky-600 shadow-xs hover:bg-sky-50 disabled:opacity-60 transition"
-                  >
-                    {googleLinking
-                      ? <><span className="spinner inline-block" /> กำลังเชื่อม...</>
-                      : <><i className="fa-brands fa-google text-[#4285F4]" /> เชื่อม Google</>}
-                  </button>
                 )}
               </div>
             </div>

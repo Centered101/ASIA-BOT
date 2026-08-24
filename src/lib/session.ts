@@ -14,6 +14,8 @@ export type StudentSession = {
   google_email?: string | null;
   // เก็บเป็น male/female/other ตามคอลัมน์ใน DB ไม่ใช่ข้อความไทย
   gender?: string | null;
+  // วันที่แถวนี้ถูกสร้าง = วันที่ออกบัตรให้ ใช้พิมพ์ลงหลังบัตร
+  created_at?: string | null;
 };
 
 export function getStudentSession(): StudentSession | null {

@@ -71,6 +71,8 @@ export default function StudentPage() {
   const [modalEdit, setModalEdit] = useState(false);
   const [saving, setSaving] = useState(false);
   const [unlinkingLine, setUnlinkingLine] = useState(false);
+  const [linkCode, setLinkCode] = useState<{ code: string; expiresAt: number } | null>(null);
+  const [issuingCode, setIssuingCode] = useState(false);
   const [requesting, setRequesting] = useState(false);
   const [adminRole, setAdminRole] = useState<string | null>(null);
   const [activityStats, setActivityStats] = useState<StudentActivityStats | null>(null);
@@ -439,6 +441,30 @@ export default function StudentPage() {
    * อ่านนักเรียนจาก session ก้อนนั้น ถ้าไม่แก้ตาม ป้ายจะยังขึ้นว่า "เชื่อมแล้ว"
    * จนกว่าจะล็อกอินใหม่
    */
+  /**
+   * ขอรหัสเชื่อมบัญชี LINE
+   *
+   * รหัสนี้มาแทนการพิมพ์ "รหัสนักเรียน" เข้าแชท ซึ่งของเดิมใครรู้รหัสนักเรียน
+   * ของคนอื่นก็ผูก LINE ตัวเองแทนเขาได้ รหัสที่ออกจากที่นี่ต้องล็อกอินก่อนถึงจะได้
+   * ใช้ครั้งเดียว และหมดอายุใน 10 นาที
+   */
+  async function issueLinkCode() {
+    setIssuingCode(true);
+    try {
+      const res = await fetch("/api/student/line-link/code", { method: "POST" });
+      const json = await res.json();
+      if (json.status === "success") {
+        setLinkCode({ code: json.code, expiresAt: new Date(json.expires_at).getTime() });
+      } else {
+        toast.error(json.message ?? "ขอรหัสไม่สำเร็จ");
+      }
+    } catch {
+      toast.error("เชื่อมต่อไม่ได้ ลองใหม่อีกครั้ง");
+    } finally {
+      setIssuingCode(false);
+    }
+  }
+
   async function unlinkLine() {
     if (!student) return;
     if (!confirm("ยกเลิกการเชื่อม LINE? จะไม่ได้รับแจ้งเตือนทาง LINE อีก")) return;
@@ -704,7 +730,9 @@ export default function StudentPage() {
                 ไม่ใช่ CR80 มาตรฐาน (53.98 × 85.6) ที่ใช้อยู่ก่อน — ต่างกันไม่มากแต่พอ
                 สลับไปดูบัตรของวิทยาลัยแล้วกล่องจะขยับ เพราะอาร์ตเวิร์กมีสัดส่วนของมันเอง
                 ตอนนี้ทั้งสองใบทรงเดียวกัน กดสลับแล้วเลย์เอาต์นิ่ง ไม่กระตุก */}
-            <div data-aos="fade-up" data-aos-delay="200"
+            {/* ไม่ใส่ AOS กับตัวบัตร — บัตรเป็นของชิ้นแรกที่คนเปิดหน้านี้มาดู
+                ให้ขึ้นมาพร้อมหน้าเลย ไม่ต้องรอเฟด */}
+            <div
               className="card-flip-container w-full cursor-pointer select-none"
               style={{ aspectRatio: "55 / 85.5" }}
               onClick={() => setFlipped(f => !f)}>
@@ -717,109 +745,119 @@ export default function StudentPage() {
                   <div className="absolute -top-[30%] -right-[10%] w-[55%] h-[120%] rounded-full bg-white/10 pointer-events-none" />
                   <div className="absolute -bottom-[55%] -left-[8%] w-[50%] h-[100%] rounded-full bg-white/[0.06] pointer-events-none" />
 
+                  {/* เนื้อหาหน้าบัตร — จัดเป็นแกนกลางแนวตั้งแบบบัตรประจำตัวจริง
+                      ของเดิมใช้ justify-between บนบัตรทรงสูง (55 × 85.5) ที่มีของแค่
+                      สามก้อน ครึ่งบนจึงว่างยาว ส่วนล่างอัดกันแน่นและเทไปทางซ้ายหมด
+                      รอบนี้ให้รูปเป็นพระเอกตรงกลางบน ข้อความไล่ลงมาเป็นแกนเดียวกัน
+                      แล้วปิดท้ายด้วย QR กลางบัตร น้ำหนักซ้าย-ขวาจึงเท่ากันทั้งใบ */}
                   <div
-                    className="absolute inset-0 flex flex-col justify-between"
-                    style={{ padding: "4%", paddingBottom: "clamp(26px,6.4vw,36px)" }}>
-                    {/* Top: brand + logo */}
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="text-white/80 font-extrabold uppercase tracking-[3px]" style={{ fontSize: "clamp(6px,1.8vw,9px)" }}>
-                          {SITE_NAME}
-                        </div>
-                        <div className="text-white/65 font-semibold mt-0.5" style={{ fontSize: "clamp(5px,1.5vw,8px)" }}>
-                          บัตรประจำตัวนักเรียน
-                        </div>
+                    className="absolute inset-0 flex flex-col items-center text-center"
+                    style={{ padding: "5%", paddingBottom: "clamp(22px,5.4vw,30px)", gap: "clamp(4px,1.2vw,8px)" }}>
+                    {/* หัวบัตร: ชื่อโรงเรียนชิดซ้าย โลโก้ลอยชิดขวาแบบ absolute
+                        เพื่อไม่ให้มันดึงบล็อกชื่อเบี้ยวออกจากแกนกลางของบัตร */}
+                    <div className="relative w-full shrink-0 text-left">
+                      <div className="text-white/85 font-extrabold uppercase tracking-[3px] leading-none" style={{ fontSize: "clamp(6px,1.8vw,9px)" }}>
+                        {SITE_NAME}
                       </div>
-                      <div className="rounded-lg flex items-center justify-center bg-white/20 border border-white/35 shrink-0"
-                        style={{ width: "clamp(22px,6vw,34px)", height: "clamp(22px,6vw,34px)" }}>
+                      <div className="text-white/60 font-semibold mt-[3px] leading-none" style={{ fontSize: "clamp(5px,1.5vw,8px)" }}>
+                        บัตรประจำตัวนักเรียน
+                      </div>
+                      <div className="absolute top-0 right-0 rounded-lg flex items-center justify-center bg-white/20 border border-white/35"
+                        style={{ width: "clamp(18px,5vw,28px)", height: "clamp(18px,5vw,28px)" }}>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src="/favicon.png" className="w-3/4 h-3/4 object-contain" alt="logo" />
                       </div>
                     </div>
 
-                    {/* Middle: initials + name + id */}
-                    <div className="flex items-center gap-[3%]">
-                      <div className="shrink-0 rounded-[10px] overflow-hidden flex items-center justify-center font-bold text-white shrink-0"
-                        style={{
-                          width: "clamp(30px,9vw,48px)", height: "clamp(30px,9vw,48px)",
-                          fontSize: "clamp(10px,2.8vw,16px)",
-                          background: "rgba(255,255,255,0.22)",
-                          border: "2px solid rgba(255,255,255,0.5)",
-                        }}>
-                        {studentPhotoSrc
-                          // eslint-disable-next-line @next/next/no-img-element
-                          ? <img src={studentPhotoSrc} alt={initials} className="w-full h-full object-cover" />
-                          : initials}
+                    {/* เส้นคั่นใต้หัวบัตร — บอกขอบเขตของ "ส่วนหัว" ให้ตาเห็นว่าที่เหลือ
+                        ทั้งใบเป็นบล็อกเดียวกัน ไม่ใช่ของสามก้อนที่ลอยห่างกัน */}
+                    <div className="w-full bg-white/20 shrink-0" style={{ height: 1 }} />
+
+                    {/* รูปนักเรียน — สัดส่วน 3:4 เหมือนรูปติดบัตรจริง กินที่ครึ่งบนที่เคย
+                        ว่างเปล่า จึงเป็นตัวถ่วงน้ำหนักให้บัตรทั้งใบ */}
+                    <div className="shrink-0 rounded-[12px] overflow-hidden flex items-center justify-center font-bold text-white"
+                      style={{
+                        width: "44%", aspectRatio: "3 / 4",
+                        fontSize: "clamp(14px,4.5vw,26px)",
+                        background: "rgba(255,255,255,0.22)",
+                        border: "2px solid rgba(255,255,255,0.5)",
+                        boxShadow: "0 6px 16px rgba(0,0,0,0.18)",
+                      }}>
+                      {studentPhotoSrc
+                        // eslint-disable-next-line @next/next/no-img-element
+                        ? <img src={studentPhotoSrc} alt={initials} className="w-full h-full object-cover" />
+                        : initials}
+                    </div>
+
+                    {/* ชื่อ + ชื่อเล่น + รหัส */}
+                    <div className="w-full min-w-0 shrink-0">
+                      <div className="text-white font-bold leading-tight truncate" style={{ fontSize: "clamp(9px,2.6vw,14px)" }}>
+                        {student.first_name} {student.last_name}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-white font-bold leading-tight truncate"
-                          style={{ fontSize: "clamp(9px,2.6vw,14px)" }}>
-                          {student.first_name} {student.last_name}
+                      {student.nickname && (
+                        <div className="text-white/70 leading-tight" style={{ fontSize: "clamp(6px,1.6vw,9px)" }}>
+                          &quot;{student.nickname}&quot;
                         </div>
-                        {student.nickname && (
-                          <div className="text-white/70" style={{ fontSize: "clamp(6px,1.6vw,9px)" }}>
-                            &quot;{student.nickname}&quot;
-                          </div>
-                        )}
-                        <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                          <div className="font-mono text-white/85 font-bold tracking-widest"
-                            style={{ fontSize: "clamp(7px,1.9vw,11px)" }}>
-                            {student.student_id}
-                          </div>
-                          {adminRole && adminRoleStyle && (
-                            <span className="inline-flex items-center gap-[2px] font-bold rounded-full px-[4px] py-[1px]"
-                              style={{ fontSize: "clamp(4px,1.1vw,7px)", background: adminRoleStyle.bg, color: adminRoleStyle.text, border: `1px solid ${adminRoleStyle.border}` }}>
-                              <i className="fa-solid fa-shield-halved" style={{ fontSize: "0.85em" }} />
-                              {ADMIN_ROLE_LABEL[adminRole] ?? adminRole}
-                            </span>
-                          )}
-                        </div>
+                      )}
+                      <div className="font-mono text-white/85 font-bold tracking-widest mt-[2px] leading-none"
+                        style={{ fontSize: "clamp(7px,1.9vw,11px)" }}>
+                        {student.student_id}
                       </div>
                     </div>
 
-                    {/* Bottom: grade/dept/status + QR */}
-                    <div className="flex items-end justify-between gap-2 min-h-0">
-                      <div className="min-w-0 pr-2" style={{ maxWidth: "calc(100% - clamp(54px,14vw,74px))" }}>
-                        <div className="inline-flex items-center gap-1 px-[5px] py-[2px] rounded-full text-white font-semibold"
-                          style={{ fontSize: "clamp(6px,1.6vw,8px)", background: "rgba(255,255,255,0.22)", border: "1px solid rgba(255,255,255,0.4)" }}>
-                          <i className="fa-solid fa-graduation-cap" style={{ fontSize: "0.7em" }} />
-                          {grade}
-                        </div>
-                        <div className="text-white/70 mt-0.5 truncate" style={{ fontSize: "clamp(5px,1.5vw,8px)" }}>
-                          {student.department ?? "ไม่ระบุสาขา"}
-                        </div>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          <div className={`rounded-full shrink-0 ${isGraduated ? "bg-amber-400" : isPending ? "bg-slate-400" : "bg-green-400"}`}
-                            style={{ width: "clamp(4px,1.2vw,6px)", height: "clamp(4px,1.2vw,6px)" }} />
-                          <span className="text-white/75 truncate" style={{ fontSize: "clamp(5px,1.4vw,7px)" }}>
-                            {isGraduated ? "จบการศึกษา" : isPending ? "รอเข้าเรียน" : "กำลังศึกษา"}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* QR Code */}
-                      <div className="flex flex-col items-center gap-0.5 shrink-0">
-                        <div className="relative bg-white rounded-sm shadow-lg"
-                          style={{ padding: "clamp(2px,0.6vw,4px)" }}>
-                          {qrUrl
-                            ? <img src={qrUrl} alt="QR" style={{ display: "block", width: "clamp(40px,11vw,56px)", height: "clamp(40px,11vw,56px)" }} />
-                            : <div style={{ width: "clamp(40px,11vw,56px)", height: "clamp(40px,11vw,56px)" }} />
-                          }
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src="/favicon.png" alt="logo"
-                            className="absolute top-1/2 left-1/2 block -translate-x-1/2 -translate-y-1/2 object-contain"
-                            style={{ width: "clamp(12px,3.2vw,18px)", height: "clamp(12px,3.2vw,18px)" }} />
-                        </div>
-                        <span className="text-white/55 font-bold uppercase tracking-wider" style={{ fontSize: "clamp(4px,1.1vw,6px)" }}>
-                          QR Code
+                    {/* ป้ายสถานะทั้งหมดรวมเป็นแถวเดียวกลางบัตร — เดิมกระจายอยู่คนละมุม
+                        (ยศอยู่ข้างรหัส ระดับชั้นอยู่ซ้ายล่าง สถานะเรียนอยู่ใต้สาขา) */}
+                    <div className="w-full flex flex-wrap items-center justify-center shrink-0" style={{ gap: "clamp(2px,0.8vw,4px)" }}>
+                      <span className="inline-flex items-center gap-1 px-[5px] py-[2px] rounded-full text-white font-semibold"
+                        style={{ fontSize: "clamp(6px,1.6vw,8px)", background: "rgba(255,255,255,0.22)", border: "1px solid rgba(255,255,255,0.4)" }}>
+                        <i className="fa-solid fa-graduation-cap" style={{ fontSize: "0.7em" }} />
+                        {grade}
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-[5px] py-[2px] rounded-full font-semibold"
+                        style={{ fontSize: "clamp(6px,1.6vw,8px)", background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.25)", color: "rgba(255,255,255,0.85)" }}>
+                        <div className={`rounded-full shrink-0 ${isGraduated ? "bg-amber-400" : isPending ? "bg-slate-400" : "bg-green-400"}`}
+                          style={{ width: "clamp(4px,1.2vw,6px)", height: "clamp(4px,1.2vw,6px)" }} />
+                        {isGraduated ? "จบการศึกษา" : isPending ? "รอเข้าเรียน" : "กำลังศึกษา"}
+                      </span>
+                      {adminRole && adminRoleStyle && (
+                        <span className="inline-flex items-center gap-[2px] font-bold rounded-full px-[5px] py-[2px]"
+                          style={{ fontSize: "clamp(5px,1.4vw,7px)", background: adminRoleStyle.bg, color: adminRoleStyle.text, border: `1px solid ${adminRoleStyle.border}` }}>
+                          <i className="fa-solid fa-shield-halved" style={{ fontSize: "0.85em" }} />
+                          {ADMIN_ROLE_LABEL[adminRole] ?? adminRole}
                         </span>
+                      )}
+                    </div>
+
+                    {/* สาขาวิชาเป็นบรรทัดเต็มความกว้าง ชื่อสาขายาว ๆ จึงไม่ไปเบียด QR
+                        เหมือนตอนที่สองอย่างนี้ยืนอยู่คนละฝั่งของบรรทัดเดียวกัน */}
+                    <div className="w-full text-white/70 truncate shrink-0" style={{ fontSize: "clamp(5px,1.5vw,8px)" }}>
+                      {student.department ?? "ไม่ระบุสาขา"}
+                    </div>
+
+                    {/* QR — mt-auto ดันลงไปกินที่ว่างที่เหลือทั้งหมด ไม่ว่าข้างบนจะมี
+                        ชื่อเล่น/ยศครบหรือไม่ ระยะห่างก็ยุบ-ยืดเองใบเดียวจบ */}
+                    <div className="mt-auto flex flex-col items-center shrink-0" style={{ gap: "clamp(2px,0.6vw,3px)" }}>
+                      <div className="relative bg-white rounded-md shadow-lg" style={{ padding: "clamp(2px,0.7vw,4px)" }}>
+                        {qrUrl
+                          ? <img src={qrUrl} alt="QR" style={{ display: "block", width: "clamp(40px,11vw,58px)", height: "clamp(40px,11vw,58px)" }} />
+                          : <div style={{ width: "clamp(40px,11vw,58px)", height: "clamp(40px,11vw,58px)" }} />
+                        }
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src="/favicon.png" alt="logo"
+                          className="absolute top-1/2 left-1/2 block -translate-x-1/2 -translate-y-1/2 object-contain"
+                          style={{ width: "clamp(12px,3.2vw,18px)", height: "clamp(12px,3.2vw,18px)" }} />
                       </div>
+                      <span className="text-white/55 font-bold uppercase tracking-wider leading-none" style={{ fontSize: "clamp(4px,1.1vw,6px)" }}>
+                        สแกนเพื่อยืนยันตัวตน
+                      </span>
                     </div>
                   </div>
 
                   {/* Magnetic strip */}
-                  <div className="absolute bottom-0 left-0 right-0 bg-black/25 flex items-center px-[4%]"
-                    style={{ height: "clamp(16px,4.3vw,24px)", fontFamily: "monospace", fontSize: "clamp(5px,1.2vw,7px)", letterSpacing: 1, color: "rgba(255,255,255,0.6)" }}>
+                  {/* แถบท้ายบัตร — จัดกึ่งกลางให้ตรงแกนเดียวกับของข้างบน และสูงเท่า
+                      แถบของหลังบัตร กดสลับหน้าแล้วขอบล่างจึงไม่ขยับ */}
+                  <div className="absolute bottom-0 left-0 right-0 bg-black/25 flex items-center justify-center px-[4%]"
+                    style={{ height: "clamp(14px,4vw,22px)", fontFamily: "monospace", fontSize: "clamp(5px,1.2vw,7px)", letterSpacing: 1, color: "rgba(255,255,255,0.6)" }}>
                     {student.uid ?? student.student_id}
                   </div>
                 </div>
@@ -934,23 +972,21 @@ export default function StudentPage() {
                   ส่ง data เข้าไปตรง ๆ เพราะหน้านี้โหลดแถวจริงจากฐานข้อมูลไว้แล้ว
                   สดกว่า session ใน localStorage ที่บัตรอ่านเองตอนอยู่หน้าแรก
                   และไม่ส่ง href เพราะกดแล้วจะพากลับมาหน้านี้ซึ่งยืนอยู่แล้ว */}
-              {/* เลื่อนเข้ามาจากทางซ้าย (AOS ตั้งชื่อทิศตามทางที่วิ่งไป fade-right
-                  จึงคือ "โผล่จากซ้าย") ให้ต่างจากคอลัมน์ข้อมูลทางขวาที่ยัง fade-up */}
-              <div data-aos="fade-right" data-aos-delay="200">
-                <StudentCardMini
-                  className="w-full"
-                  data={{
-                    student_id: student.student_id,
-                    first_name: student.first_name,
-                    last_name: student.last_name,
-                    department: student.department,
-                    photo_url: studentPhotoSrc,
-                    created_at: student.created_at,
-                    program: student.program,
-                    entry_year: student.entry_year,
-                  }}
-                />
-              </div>
+              {/* ไม่ใส่ AOS เหมือนบัตร asia-bot — ขึ้นมาพร้อมหน้าเลยทั้งสองแบบ
+                  กดสลับแบบบัตรแล้วจะได้ไม่มีใบไหนเฟดใหม่ให้สะดุดตา */}
+              <StudentCardMini
+                className="w-full"
+                data={{
+                  student_id: student.student_id,
+                  first_name: student.first_name,
+                  last_name: student.last_name,
+                  department: student.department,
+                  photo_url: studentPhotoSrc,
+                  created_at: student.created_at,
+                  program: student.program,
+                  entry_year: student.entry_year,
+                }}
+              />
               <p className="flex items-center justify-center gap-1.5 mt-2.5 text-[11px] text-slate-400">
                 <i className="fa-solid fa-rotate text-primary" />
                 แตะบัตรเพื่อดูด้านหลัง · สแกน QR ได้เหมือนบัตรจริง
@@ -1352,17 +1388,42 @@ export default function StudentPage() {
                   <>
                     <p className="text-[11px] text-slate-500 leading-relaxed mb-2.5">
                       เชื่อมแล้วจะได้รับแจ้งเตือนเรื่องของตัวเองทาง LINE — แอดเพื่อน LINE
-                      ของโรงเรียน แล้วพิมพ์รหัสนักเรียน{" "}
-                      <strong className="font-mono text-slate-700">{student.student_id}</strong>{" "}
-                      ส่งไปในแชท ระบบจะผูกให้เอง
+                      ของโรงเรียน กดขอรหัสด้านล่าง แล้วพิมพ์รหัส 6 หลักส่งไปในแชท
                     </p>
-                    {LINE_ADD_FRIEND_URL && (
-                      <a href={LINE_ADD_FRIEND_URL} target="_blank" rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-[11px] font-bold text-white px-3 py-1.5 rounded-lg"
-                        style={{ background: "#06C755" }}>
-                        <i className="fa-brands fa-line" /> แอด LINE โรงเรียน
-                      </a>
-                    )}
+
+                    {linkCode ? (
+                      <div className="rounded-xl border border-green-200 bg-green-50 px-3 py-2.5 mb-2.5">
+                        <div className="text-[10px] font-semibold text-green-700 mb-1">
+                          พิมพ์รหัสนี้ส่งเข้าแชท LINE ภายใน 10 นาที
+                        </div>
+                        <div className="font-mono text-2xl font-extrabold tracking-[0.35em] text-green-800">
+                          {linkCode.code}
+                        </div>
+                        <div className="text-[10px] text-green-600 mt-1">
+                          ใช้ได้ครั้งเดียว · หมดอายุ{" "}
+                          {new Date(linkCode.expiresAt).toLocaleTimeString("th-TH", {
+                            hour: "2-digit", minute: "2-digit",
+                          })}{" "}
+                          น.
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button type="button" onClick={() => void issueLinkCode()} disabled={issuingCode}
+                        className="inline-flex items-center gap-1.5 text-[11px] font-bold text-white px-3 py-1.5 rounded-lg disabled:opacity-50"
+                        style={{ background: "#0EA5E9" }}>
+                        <i className="fa-solid fa-key" />{" "}
+                        {issuingCode ? "กำลังขอรหัส..." : linkCode ? "ขอรหัสใหม่" : "ขอรหัสเชื่อมบัญชี"}
+                      </button>
+                      {LINE_ADD_FRIEND_URL && (
+                        <a href={LINE_ADD_FRIEND_URL} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-[11px] font-bold text-white px-3 py-1.5 rounded-lg"
+                          style={{ background: "#06C755" }}>
+                          <i className="fa-brands fa-line" /> แอด LINE โรงเรียน
+                        </a>
+                      )}
+                    </div>
                   </>
                 )}
               </div>

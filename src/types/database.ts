@@ -991,6 +991,34 @@ export type Database = {
         };
         Relationships: [];
       };
+      line_link_codes: {
+        Row: {
+          id: string;
+          student_id: string;
+          code: string;
+          expires_at: string;
+          used_at: string | null;
+          used_by_line_user_id: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          student_id: string;
+          code: string;
+          expires_at: string;
+          used_at?: string | null;
+          used_by_line_user_id?: string | null;
+          created_at?: string | null;
+        };
+        Update: {
+          student_id?: string;
+          code?: string;
+          expires_at?: string;
+          used_at?: string | null;
+          used_by_line_user_id?: string | null;
+        };
+        Relationships: [];
+      };
       line_notification_channels: {
         Row: {
           id: string;

@@ -73,6 +73,7 @@ export default function StudentPage() {
   const [unlinkingLine, setUnlinkingLine] = useState(false);
   const [linkCode, setLinkCode] = useState<{ code: string; expiresAt: number } | null>(null);
   const [issuingCode, setIssuingCode] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
   const [requesting, setRequesting] = useState(false);
   const [adminRole, setAdminRole] = useState<string | null>(null);
   const [activityStats, setActivityStats] = useState<StudentActivityStats | null>(null);
@@ -455,6 +456,7 @@ export default function StudentPage() {
       const json = await res.json();
       if (json.status === "success") {
         setLinkCode({ code: json.code, expiresAt: new Date(json.expires_at).getTime() });
+        setCodeCopied(false);
       } else {
         toast.error(json.message ?? "ขอรหัสไม่สำเร็จ");
       }
@@ -462,6 +464,35 @@ export default function StudentPage() {
       toast.error("เชื่อมต่อไม่ได้ ลองใหม่อีกครั้ง");
     } finally {
       setIssuingCode(false);
+    }
+  }
+
+  /**
+   * คัดลอกรหัสเชื่อมบัญชี
+   *
+   * มี fallback เป็น execCommand เพราะ navigator.clipboard ใช้ได้เฉพาะบน https
+   * (หรือ localhost) นักเรียนที่เปิดผ่าน http บนเครือข่ายโรงเรียนจะกดแล้วเงียบ
+   * ถ้าไม่มีทางสำรอง
+   */
+  async function copyLinkCode() {
+    if (!linkCode) return;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(linkCode.code);
+      } else {
+        const el = document.createElement("textarea");
+        el.value = linkCode.code;
+        el.style.position = "fixed";
+        el.style.opacity = "0";
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand("copy");
+        document.body.removeChild(el);
+      }
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2000);
+    } catch {
+      toast.error("คัดลอกไม่ได้ กดค้างที่ตัวเลขเพื่อคัดลอกเองได้");
     }
   }
 
@@ -1094,8 +1125,11 @@ export default function StudentPage() {
                 วางไว้ตรงนี้เพราะทั้งสองเรื่องคือ "บัญชีที่ผูกไว้" เหมือนกัน และเป็น
                 จุดที่คนเปิดหน้ามาเห็นก่อน ของเดิมปุ่มขอรหัสอยู่ในฟอร์มแก้ไขข้อมูล
                 ซึ่งต้องกดเข้าไปอีกชั้น กว่าจะเจอก็ไม่รู้แล้วว่าต้องทำอะไร */}
-            <div data-aos="fade-up" data-aos-delay="550" className={`rounded-2xl border px-3.5 py-3 mb-4 flex items-start gap-3 ${student.line_user_id ? "bg-green-50 border-green-100" : "bg-slate-50 border-slate-200"}`}>
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-white ${student.line_user_id ? "text-[#06C755]" : "text-slate-300"}`}>
+            {/* น้ำหนักสีต้องเท่าการ์ด Google ด้านบน — ของเดิมการ์ดนี้เป็นเทาตอนยังไม่ผูก
+                วางคู่กันแล้วดูเหมือนถูกปิดใช้งาน ทั้งที่เป็นการ์ดที่ต้องกดมากกว่าอีกใบ
+                จึงให้ทั้งสองใบมีพื้นสีแบรนด์ของตัวเองเสมอ ต่างกันแค่ฟ้า/เขียว */}
+            <div data-aos="fade-up" data-aos-delay="550" className="rounded-2xl border border-green-100 bg-green-50 px-3.5 py-3 mb-4 flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-white text-[#06C755]">
                 <i className="fa-brands fa-line" />
               </div>
               <div className="min-w-0 flex-1">
@@ -1124,10 +1158,25 @@ export default function StudentPage() {
                     {linkCode ? (
                       <div className="mt-2 rounded-xl border border-green-200 bg-white px-3 py-2">
                         <div className="text-[10px] font-semibold text-green-700">
-                          หรือพิมพ์รหัสนี้ส่งเข้าแชทแทนก็ได้
+                          หรือส่งรหัสนี้เข้าแชทแทนก็ได้
                         </div>
-                        <div className="font-mono text-2xl font-extrabold tracking-[0.3em] text-green-700 mt-0.5">
-                          {linkCode.code}
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="font-mono text-2xl font-extrabold tracking-[0.3em] text-green-700 select-all">
+                            {linkCode.code}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => void copyLinkCode()}
+                            aria-label="คัดลอกรหัสเชื่อมบัญชี"
+                            className={`ml-auto inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition active:scale-[0.97] ${
+                              codeCopied
+                                ? "border-green-200 bg-green-50 text-green-600"
+                                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                            }`}
+                          >
+                            <i className={`fa-solid ${codeCopied ? "fa-check" : "fa-copy"} text-[10px]`} />
+                            {codeCopied ? "คัดลอกแล้ว" : "คัดลอก"}
+                          </button>
                         </div>
                         <div className="text-[10px] text-slate-400">
                           ใช้ได้ครั้งเดียว · หมดอายุ{" "}

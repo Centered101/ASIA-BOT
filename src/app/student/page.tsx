@@ -71,6 +71,7 @@ export default function StudentPage() {
   const [modalEdit, setModalEdit] = useState(false);
   const [saving, setSaving] = useState(false);
   const [unlinkingLine, setUnlinkingLine] = useState(false);
+  const [unlinkingGoogle, setUnlinkingGoogle] = useState(false);
   const [linkCode, setLinkCode] = useState<{ code: string; expiresAt: number } | null>(null);
   const [issuingCode, setIssuingCode] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
@@ -493,6 +494,38 @@ export default function StudentPage() {
       setTimeout(() => setCodeCopied(false), 2000);
     } catch {
       toast.error("คัดลอกไม่ได้ กดค้างที่ตัวเลขเพื่อคัดลอกเองได้");
+    }
+  }
+
+  /**
+   * ยกเลิกการเชื่อม Google
+   *
+   * เตือนต่างจาก LINE เพราะผลต่างกัน — LINE ปลดแล้วแค่ไม่ได้รับแจ้งเตือน
+   * แต่ Google เป็นทางเข้าระบบ ปลดแล้วต้องกลับไปใช้รหัสนักเรียน + เบอร์โทร
+   * ฝั่ง API กันอีกชั้นไม่ให้ปลดถ้ายังไม่มีเบอร์โทรในระบบ
+   */
+  async function unlinkGoogle() {
+    if (!student) return;
+    if (!confirm("ยกเลิกการเชื่อม Google? ครั้งต่อไปต้องเข้าระบบด้วยรหัสนักเรียนและเบอร์โทรแทน")) return;
+    setUnlinkingGoogle(true);
+    try {
+      const res = await fetch("/api/student/google-link", { method: "DELETE" });
+      const json = await res.json();
+      if (json.status === "success") {
+        setStudent((prev) => {
+          if (!prev) return prev;
+          const next = { ...prev, google_email: null, google_id: null };
+          try { localStorage.setItem(SESSION_KEY, JSON.stringify(next)); } catch { /* โหมดส่วนตัวเขียนไม่ได้ */ }
+          return next;
+        });
+        toast.success(json.message);
+      } else {
+        toast.error(json.message ?? "ยกเลิกไม่สำเร็จ");
+      }
+    } catch {
+      toast.error("เชื่อมต่อไม่ได้ ลองใหม่อีกครั้ง");
+    } finally {
+      setUnlinkingGoogle(false);
     }
   }
 
@@ -1113,6 +1146,13 @@ export default function StudentPage() {
                     ? "ครั้งต่อไปสามารถกดเข้าสู่ระบบด้วย Google ได้ทันที"
                     : "กดเชื่อม Google แล้วระบบจะผูกบัญชีนี้กับรหัสนักเรียนของคุณ"}
                 </div>
+                {isGoogleLinked && (
+                  <button type="button" onClick={() => void unlinkGoogle()} disabled={unlinkingGoogle}
+                    className="mt-2 text-[11px] font-semibold text-red-500 hover:underline disabled:opacity-50">
+                    {unlinkingGoogle ? "กำลังยกเลิก..." : "ยกเลิกการเชื่อม Google"}
+                  </button>
+                )}
+
                 {!isGoogleLinked && (
                   <button
                     type="button"
@@ -1322,6 +1362,9 @@ export default function StudentPage() {
 
         </div>
 
+        {/* แฟ้มข้อมูล — ย้ายมาจากหน้า /my-profile ที่แยกอยู่ ดูเหตุผลใน StudentRecords */}
+        <StudentRecords />
+
         {/* ── Student services ── */}
         <div className="mt-10">
           <div data-aos="fade-up" className="flex items-end justify-between gap-3 mb-4">
@@ -1385,9 +1428,6 @@ export default function StudentPage() {
             ))}
           </div>
         </div>
-
-        {/* แฟ้มข้อมูล — ย้ายมาจากหน้า /my-profile ที่แยกอยู่ ดูเหตุผลใน StudentRecords */}
-        <StudentRecords />
 
       </main>
 

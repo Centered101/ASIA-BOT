@@ -126,6 +126,16 @@ export default function StudentRecords() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * spec ของฟอร์มที่กำลังเปิด — ต้องจำตัวล่าสุดไว้ต่ออีกชั้น
+   *
+   * overlay อยู่ตลอดเพื่อให้ .modal-sheet มีจังหวะสไลด์ลงตอนปิด ถ้าอ่าน spec
+   * จาก openForm ตรง ๆ พอปิดปุ๊บ openForm เป็น null เนื้อในจะหายทันทีแล้วเหลือ
+   * กล่องขาวเปล่า ๆ ค่อย ๆ ไถลลง — ดูเหมือนข้อมูลหายทั้งที่แค่ปิดฟอร์ม
+   */
+  const [lastKind, setLastKind] = useState<Kind | null>(null);
+  const activeSpec = SECTIONS.find((s) => s.kind === (openForm ?? lastKind)) ?? null;
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -142,8 +152,29 @@ export default function StudentRecords() {
 
   useEffect(() => { void load(); }, [load]);
 
+  /**
+   * พฤติกรรมที่ sheet ต้องมี — ล็อกไม่ให้พื้นหลังเลื่อน และปิดด้วย Escape
+   *
+   * ของเดิมไม่ได้ล็อก พอเลื่อนในฟอร์มจนสุดแล้วนิ้วยังลากต่อ หน้าเบื้องหลังจะไหล
+   * ตามไปด้วย (scroll chaining) กลับมาแล้วตำแหน่งเดิมหาย
+   */
+  useEffect(() => {
+    if (!openForm) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && !saving) setOpenForm(null);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [openForm, saving]);
+
   function openAdd(kind: Kind) {
     setOpenForm(kind);
+    setLastKind(kind);
     setEditing(null);
     setForm({});
     setError(null);
@@ -151,6 +182,7 @@ export default function StudentRecords() {
 
   function openEdit(kind: Kind, row: Row) {
     setOpenForm(kind);
+    setLastKind(kind);
     setEditing(row);
     // ตัดคีย์ระบบออก ไม่งั้นจะถูกส่งกลับไปให้ zod ปฏิเสธ
     const { id, student_id, created_at, updated_at, source, recorded_by, ...rest } = row;
@@ -190,7 +222,10 @@ export default function StudentRecords() {
         await load();
       }
     } catch {
-      setError("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้");
+      // แยกจาก "บันทึกไม่สำเร็จ" ที่มาจากเซิร์ฟเวอร์ตอบกลับมา — เคสนี้คือคำขอ
+      // ไปไม่ถึงเลย (เน็ตหลุด หรือเซิร์ฟเวอร์ล่มระหว่างทาง) ข้อมูลที่กรอกยังอยู่
+      // ครบในฟอร์ม บอกให้กดบันทึกซ้ำได้เลยจะได้ไม่ต้องกรอกใหม่ทั้งชุด
+      setError("ส่งข้อมูลไม่ถึงเซิร์ฟเวอร์ ตรวจอินเทอร์เน็ตแล้วกดบันทึกอีกครั้ง (ข้อมูลที่กรอกไว้ยังอยู่)");
     } finally {
       setSaving(false);
     }
@@ -353,75 +388,92 @@ export default function StudentRecords() {
             </section>
           </div>
         )}
-      {/* ฟอร์มเพิ่ม/แก้ไข */}
-      {openForm && (() => {
-        const spec = SECTIONS.find((s) => s.kind === openForm)!;
-        return (
-          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
-            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs"
-              onClick={() => setOpenForm(null)} />
-            <div className="relative w-full sm:max-w-lg max-h-[88vh] bg-white rounded-t-3xl sm:rounded-3xl shadow-xl flex flex-col">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
-                <div className="font-bold text-slate-800">
-                  {editing ? "แก้ไข" : "เพิ่ม"}{spec.title}
-                </div>
-                <button onClick={() => setOpenForm(null)}
-                  className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors">
-                  <i className="fa-solid fa-xmark text-sm" />
-                </button>
-              </div>
+      {/* ฟอร์มเพิ่ม/แก้ไข — ใช้ .modal-overlay/.modal-sheet ชุดเดียวกับ modal อื่น
+          ในแอป ของเดิมเขียน sheet เองด้วย Tailwind ทำให้เป็นกล่องเด้งขึ้นมาเฉย ๆ
+          ไม่มีจังหวะสไลด์ขึ้นและมุมโค้งคนละค่ากับที่อื่น เปิดสลับกันแล้วรู้สึกว่า
+          เป็นคนละแอป ตรงนี้จึงยืมของกลางมาใช้แทนการจูนเองให้ใกล้เคียง
 
-              <div className="overflow-y-auto flex-1 px-5 py-4 space-y-3">
-                {spec.fields.map((f) => (
-                  <div key={f.key}>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">
-                      {f.label}{f.required && <span className="text-red-400"> *</span>}
-                    </label>
-                    {f.type === "checkbox" ? (
-                      <label className="flex items-center gap-2 text-sm text-slate-600">
-                        <input type="checkbox" className="asia-check text-xs" checked={form[f.key] === true}
-                          onChange={(e) => setForm((p) => ({ ...p, [f.key]: e.target.checked }))} />
-                        ใช่
-                      </label>
-                    ) : f.type === "select" ? (
-                      <select value={String(form[f.key] ?? "")}
-                        onChange={(e) => setForm((p) => ({ ...p, [f.key]: e.target.value }))}
-                        className="form-input w-full">
-                        <option value="">— ไม่ระบุ —</option>
-                        {f.options?.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                      </select>
-                    ) : f.type === "textarea" ? (
-                      <textarea value={String(form[f.key] ?? "")} rows={3}
-                        onChange={(e) => setForm((p) => ({ ...p, [f.key]: e.target.value }))}
-                        className="form-input w-full" />
-                    ) : (
-                      <input
-                        type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
-                        step={f.type === "number" ? "0.01" : undefined}
-                        value={String(form[f.key] ?? "")}
-                        placeholder={f.placeholder}
-                        onChange={(e) => setForm((p) => ({ ...p, [f.key]: e.target.value }))}
-                        className="form-input w-full" />
-                    )}
-                  </div>
-                ))}
-                {error && <p className="text-sm text-red-500">{error}</p>}
-              </div>
+          overlay ต้องอยู่ตลอดไม่ผูกกับ openForm เพราะ transform ของ .modal-sheet
+          ต้องมีของเดิมให้เปลี่ยนจาก ถ้า mount พร้อม .open มันจะโผล่มาเลยไม่มีสไลด์ */}
+      <div className={`modal-overlay ${openForm ? "open" : ""}`}
+        onClick={(e) => { if (e.target === e.currentTarget && !saving) setOpenForm(null); }}
+        role="dialog" aria-modal={openForm ? true : undefined}
+        aria-label={activeSpec ? `${editing ? "แก้ไข" : "เพิ่ม"}${activeSpec.title}` : undefined}>
+        <div className="modal-sheet">
+          <div className="w-10 h-1 bg-slate-200 rounded-sm mx-auto mt-3" />
 
-              <div className="flex gap-2 px-5 py-4 border-t border-slate-100 shrink-0">
-                <button onClick={() => setOpenForm(null)}
-                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600">
-                  ยกเลิก
-                </button>
-                <button onClick={save} disabled={saving}
-                  className="flex-1 btn-primary py-2.5 text-sm disabled:opacity-60">
-                  {saving ? "กำลังบันทึก…" : "บันทึก"}
-                </button>
-              </div>
+          <div className="flex items-center gap-2.5 px-5 py-4 border-b border-slate-100 sticky top-0 bg-white z-10">
+            <div className="w-9 h-9 rounded-[10px] flex items-center justify-center text-sm shrink-0"
+              style={{ background: "#EFF6FF", color: "#2563EB" }}>
+              <i className={`fa-solid ${activeSpec?.icon ?? "fa-plus"}`} />
             </div>
+            <div className="min-w-0">
+              <div className="font-semibold text-[15px] text-slate-800 truncate">
+                {editing ? "แก้ไข" : "เพิ่ม"}{activeSpec?.title}
+              </div>
+              <div className="text-[11px] text-slate-400 mt-px">ข้อมูลนี้คุณกรอกและแก้ไขเองได้</div>
+            </div>
+            <button onClick={() => !saving && setOpenForm(null)} aria-label="ปิด"
+              className="ml-auto text-slate-400 text-lg px-1 hover:text-slate-600 transition-colors">
+              <i className="fa-solid fa-xmark" />
+            </button>
           </div>
-        );
-      })()}
+
+          <div className="px-5 py-4 space-y-3">
+            {activeSpec && (
+              <>
+              {activeSpec.fields.map((f: Field) => (
+                <div key={f.key}>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">
+                    {f.label}{f.required && <span className="text-red-400"> *</span>}
+                  </label>
+                  {f.type === "checkbox" ? (
+                    <label className="flex items-center gap-2 text-sm text-slate-600">
+                      <input type="checkbox" className="asia-check text-xs" checked={form[f.key] === true}
+                        onChange={(e) => setForm((p) => ({ ...p, [f.key]: e.target.checked }))} />
+                      ใช่
+                    </label>
+                  ) : f.type === "select" ? (
+                    <select value={String(form[f.key] ?? "")}
+                      onChange={(e) => setForm((p) => ({ ...p, [f.key]: e.target.value }))}
+                      className="form-input w-full">
+                      <option value="">— ไม่ระบุ —</option>
+                      {f.options?.map((o: { value: string; label: string }) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  ) : f.type === "textarea" ? (
+                    <textarea value={String(form[f.key] ?? "")} rows={3}
+                      onChange={(e) => setForm((p) => ({ ...p, [f.key]: e.target.value }))}
+                      className="form-input w-full" />
+                  ) : (
+                    <input
+                      type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
+                      step={f.type === "number" ? "0.01" : undefined}
+                      value={String(form[f.key] ?? "")}
+                      placeholder={f.placeholder}
+                      onChange={(e) => setForm((p) => ({ ...p, [f.key]: e.target.value }))}
+                      className="form-input w-full" />
+                  )}
+                </div>
+              ))}
+                {error && <p className="text-sm text-red-500">{error}</p>}
+              </>
+            )}
+          </div>
+
+          {/* ปุ่มติดขอบล่างของ sheet เสมอ ฟอร์มผู้ปกครองยาวเกินจอเตี้ย ๆ อยู่แล้ว
+              ถ้าปุ่มไหลไปตามเนื้อหา ต้องเลื่อนจนสุดก่อนถึงจะกดบันทึกได้ */}
+          <div className="flex gap-2 px-5 py-4 border-t border-slate-100 sticky bottom-0 bg-white">
+            <button onClick={() => setOpenForm(null)} disabled={saving}
+              className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 disabled:opacity-60">
+              ยกเลิก
+            </button>
+            <button onClick={save} disabled={saving}
+              className="flex-1 btn-primary py-2.5 text-sm disabled:opacity-60">
+              {saving ? "กำลังบันทึก…" : "บันทึก"}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

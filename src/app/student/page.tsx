@@ -1090,6 +1090,73 @@ export default function StudentPage() {
               </div>
             </div>
 
+            {/* ── การ์ด LINE คู่กับการ์ด Google ──
+                วางไว้ตรงนี้เพราะทั้งสองเรื่องคือ "บัญชีที่ผูกไว้" เหมือนกัน และเป็น
+                จุดที่คนเปิดหน้ามาเห็นก่อน ของเดิมปุ่มขอรหัสอยู่ในฟอร์มแก้ไขข้อมูล
+                ซึ่งต้องกดเข้าไปอีกชั้น กว่าจะเจอก็ไม่รู้แล้วว่าต้องทำอะไร */}
+            <div data-aos="fade-up" data-aos-delay="550" className={`rounded-2xl border px-3.5 py-3 mb-4 flex items-start gap-3 ${student.line_user_id ? "bg-green-50 border-green-100" : "bg-slate-50 border-slate-200"}`}>
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-white ${student.line_user_id ? "text-[#06C755]" : "text-slate-300"}`}>
+                <i className="fa-brands fa-line" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-bold text-slate-700">
+                  {student.line_user_id ? "บัญชีนี้ผูก LINE แล้ว" : "ยังไม่ได้ผูก LINE"}
+                </div>
+                <div className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                  {student.line_user_id
+                    ? "เรื่องของคุณจะแจ้งเตือนเข้า LINE เช่น ผลอนุมัติคำขอ สถานะงานซ่อม และเอกสาร"
+                    : "ผูกแล้วจะได้รับแจ้งเตือนเรื่องของตัวเองทาง LINE และถามข้อมูลของตัวเองกับบอทได้"}
+                </div>
+
+                {student.line_user_id ? (
+                  <button type="button" onClick={() => void unlinkLine()} disabled={unlinkingLine}
+                    className="mt-2 text-[11px] font-semibold text-red-500 hover:underline disabled:opacity-50">
+                    {unlinkingLine ? "กำลังยกเลิก..." : "ยกเลิกการเชื่อม LINE"}
+                  </button>
+                ) : (
+                  <>
+                    <div className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+                      แอดเพื่อน LINE ของโรงเรียน แล้วพิมพ์รหัสนักเรียน{" "}
+                      <strong className="font-mono text-slate-700">{student.student_id}</strong>{" "}
+                      ส่งในแชท จากนั้นยืนยันด้วยเบอร์โทรที่แจ้งไว้กับโรงเรียน
+                    </div>
+
+                    {linkCode ? (
+                      <div className="mt-2 rounded-xl border border-green-200 bg-white px-3 py-2">
+                        <div className="text-[10px] font-semibold text-green-700">
+                          หรือพิมพ์รหัสนี้ส่งเข้าแชทแทนก็ได้
+                        </div>
+                        <div className="font-mono text-2xl font-extrabold tracking-[0.3em] text-green-700 mt-0.5">
+                          {linkCode.code}
+                        </div>
+                        <div className="text-[10px] text-slate-400">
+                          ใช้ได้ครั้งเดียว · หมดอายุ{" "}
+                          {new Date(linkCode.expiresAt).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}{" "}
+                          น.
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {LINE_ADD_FRIEND_URL && (
+                        <a href={LINE_ADD_FRIEND_URL} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-bold text-white shadow-xs transition active:scale-[0.97]"
+                          style={{ background: "#06C755" }}>
+                          <i className="fa-brands fa-line" /> แอด LINE โรงเรียน
+                        </a>
+                      )}
+                      <button type="button" onClick={() => void issueLinkCode()} disabled={issuingCode}
+                        className="inline-flex items-center gap-2 rounded-xl bg-white border border-slate-200 px-3 py-2 text-[11px] font-bold text-slate-600 shadow-xs hover:bg-slate-50 disabled:opacity-60 transition">
+                        {issuingCode
+                          ? <><span className="spinner inline-block" /> กำลังขอรหัส...</>
+                          : <><i className="fa-solid fa-key text-[10px]" /> {linkCode ? "ขอรหัสใหม่" : "จำเบอร์ไม่ได้ ขอรหัสแทน"}</>}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
           </div>
         </div>
 
@@ -1357,76 +1424,9 @@ export default function StudentPage() {
                   : <><i className="fa-solid fa-floppy-disk text-sm" />&nbsp;บันทึกการเปลี่ยนแปลง</>}
               </button>
 
-              {/* ── เชื่อม LINE ──
-                  แยกออกจากฟอร์มด้านบนเพราะไม่ได้บันทึกพร้อมกัน และ "เชื่อม" ทำที่นี่ไม่ได้
-                  — line_user_id เป็นรหัสที่ LINE ออกให้ เจ้าตัวไม่รู้ค่าตัวเอง ต้องให้
-                  webhook ผูกให้ตอนทักเข้า OA (ดู /api/student/line-link) เว็บทำได้แค่
-                  บอกสถานะ พาไปแอด และปลดการเชื่อมเมื่ออยากเปลี่ยนบัญชี */}
-              <div className="mt-4 rounded-2xl border border-slate-200 p-3.5">
-                <div className="flex items-center gap-2 mb-2">
-                  <i className="fa-brands fa-line text-[#06C755]" />
-                  <span className="text-xs font-bold text-slate-700">แจ้งเตือนทาง LINE</span>
-                  <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    student.line_user_id
-                      ? "text-green-700 bg-green-50 border border-green-200"
-                      : "text-slate-500 bg-slate-100 border border-slate-200"}`}>
-                    {student.line_user_id ? "เชื่อมแล้ว" : "ยังไม่เชื่อม"}
-                  </span>
-                </div>
-
-                {student.line_user_id ? (
-                  <>
-                    <p className="text-[11px] text-slate-400 leading-relaxed mb-2.5">
-                      ระบบจะส่งเรื่องของคุณเข้า LINE เช่น ผลอนุมัติคำขอ และการแจ้งเตือนการเข้าเรียน
-                    </p>
-                    <button type="button" onClick={() => void unlinkLine()} disabled={unlinkingLine}
-                      className="text-[11px] font-semibold text-red-500 hover:underline disabled:opacity-50">
-                      {unlinkingLine ? "กำลังยกเลิก..." : "ยกเลิกการเชื่อม LINE"}
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-[11px] text-slate-500 leading-relaxed mb-2.5">
-                      เชื่อมแล้วจะได้รับแจ้งเตือนเรื่องของตัวเองทาง LINE — แอดเพื่อน LINE
-                      ของโรงเรียน กดขอรหัสด้านล่าง แล้วพิมพ์รหัส 6 หลักส่งไปในแชท
-                    </p>
-
-                    {linkCode ? (
-                      <div className="rounded-xl border border-green-200 bg-green-50 px-3 py-2.5 mb-2.5">
-                        <div className="text-[10px] font-semibold text-green-700 mb-1">
-                          พิมพ์รหัสนี้ส่งเข้าแชท LINE ภายใน 10 นาที
-                        </div>
-                        <div className="font-mono text-2xl font-extrabold tracking-[0.35em] text-green-800">
-                          {linkCode.code}
-                        </div>
-                        <div className="text-[10px] text-green-600 mt-1">
-                          ใช้ได้ครั้งเดียว · หมดอายุ{" "}
-                          {new Date(linkCode.expiresAt).toLocaleTimeString("th-TH", {
-                            hour: "2-digit", minute: "2-digit",
-                          })}{" "}
-                          น.
-                        </div>
-                      </div>
-                    ) : null}
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button type="button" onClick={() => void issueLinkCode()} disabled={issuingCode}
-                        className="inline-flex items-center gap-1.5 text-[11px] font-bold text-white px-3 py-1.5 rounded-lg disabled:opacity-50"
-                        style={{ background: "#0EA5E9" }}>
-                        <i className="fa-solid fa-key" />{" "}
-                        {issuingCode ? "กำลังขอรหัส..." : linkCode ? "ขอรหัสใหม่" : "ขอรหัสเชื่อมบัญชี"}
-                      </button>
-                      {LINE_ADD_FRIEND_URL && (
-                        <a href={LINE_ADD_FRIEND_URL} target="_blank" rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-[11px] font-bold text-white px-3 py-1.5 rounded-lg"
-                          style={{ background: "#06C755" }}>
-                          <i className="fa-brands fa-line" /> แอด LINE โรงเรียน
-                        </a>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
+              {/* สถานะและปุ่มเชื่อม LINE ย้ายไปอยู่การ์ดคู่กับ Google ด้านบนแล้ว
+                  เพราะเป็นเรื่อง "บัญชีที่ผูกไว้" เหมือนกัน และอยู่ในจุดที่เห็นก่อน
+                  ไม่ต้องกดเข้าฟอร์มแก้ไขข้อมูลถึงจะเจอ */}
             </div>
 
             {/* ── Section 2: Admin-required ── */}

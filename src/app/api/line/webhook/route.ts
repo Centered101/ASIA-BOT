@@ -6,6 +6,7 @@ import { isLineNotificationGroup, recordLineGroupSeen } from '@/lib/line-targets
 import { runAgent } from '@/lib/agent/core'
 import { buildLineRequest } from '@/lib/agent/channels/line'
 import { parseNavTags, toAbsoluteUrl } from '@/lib/agent/nav'
+import { attemptLink, type LinkOutcome } from '@/lib/line-linking'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -112,100 +113,108 @@ async function handleTextMessage(
     return
   }
 
-  // ── Account linking: unlinked user sent a one-time link code ─────────────
-  //
-  // เดิมตรงนี้รับ "รหัสนักเรียน" แล้วผูกให้เลย ซึ่งไม่ได้ยืนยันอะไรเลย —
-  // รหัสนักเรียนพิมพ์อยู่บนบัตรและใช้เป็น username ตอนล็อกอิน ใครรู้รหัสของคนอื่น
-  // ก็ผูก LINE ตัวเองเข้ากับนักเรียนคนนั้น รับแจ้งเตือนส่วนตัวและถาม AI แทนเขาได้
-  // (เกิดขึ้นจริงระหว่างทดสอบ: บัญชีเดียวย้ายจากนักเรียนคนหนึ่งไปอีกคนได้ในคลิกเดียว)
-  //
-  // ตอนนี้รับเฉพาะรหัส 6 หลักที่ /api/student/line-link/code ออกให้หลังล็อกอินเว็บ
-  // สำเร็จแล้วเท่านั้น ใช้ได้ครั้งเดียวและหมดอายุใน 10 นาที
-  const code = text.trim()
-  const nowIso = new Date().toISOString()
+  // ── Account linking ──────────────────────────────────────────────────────
+  // ตรรกะทั้งหมดอยู่ใน src/lib/line-linking.ts ที่นี่ทำแค่แปลงผลลัพธ์เป็นข้อความ
+  const outcome = await attemptLink(supabase as any, userId, text)
+  await replyLineMessage(replyToken, [buildLinkReply(outcome)])
+}
 
-  // limit(1) แทน maybeSingle() เพราะถ้ามีรหัสซ้ำกันสองใบที่ยังไม่หมดอายุ
-  // (โอกาสน้อยมากแต่เป็นไปได้ รหัสมี 6 หลัก) maybeSingle จะโยน error ออกมา
-  // แล้วไปโผล่เป็นข้อความ "ระบบไม่พร้อม" ซึ่งชี้ต้นเหตุผิด
-  const { data: codeRows, error: codeError } = await (supabase as any)
-    .from('line_link_codes')
-    .select('id, student_id')
-    .eq('code', code)
-    .is('used_at', null)
-    .gt('expires_at', nowIso)
-    .order('created_at', { ascending: false })
-    .limit(1)
-
-  const linkCode = codeRows?.[0] ?? null
-
-  // ตารางยังไม่ถูก migrate — ต้อง fail closed ห้ามตกกลับไปผูกด้วยรหัสนักเรียน
-  // เพราะนั่นคือช่องโหว่ที่กำลังปิดอยู่พอดี
-  if (codeError) {
-    await replyLineMessage(replyToken, [{
-      type: 'text',
-      text: '⚠️ ระบบเชื่อมบัญชียังไม่พร้อมใช้งาน กรุณาแจ้งผู้ดูแลระบบ',
-    }])
-    return
-  }
-
-  const student = linkCode
-    ? (await (supabase as any)
-        .from('students')
-        .select('student_id, first_name, last_name, line_user_id')
-        .eq('student_id', linkCode.student_id)
-        .maybeSingle()).data
-    : null
-
-  // กันแย่งบัญชีที่ผูกไปแล้ว เจ้าตัวต้องกดยกเลิกจากหน้าเว็บก่อนเท่านั้น
-  if (student?.line_user_id && student.line_user_id !== userId) {
-    await replyLineMessage(replyToken, [{
-      type: 'text',
-      text: '⛔ รหัสนักเรียนนี้เชื่อมกับบัญชี LINE อื่นอยู่แล้ว\nถ้าเป็นบัญชีของคุณเอง ให้เข้าเว็บแล้วกด "ยกเลิกการเชื่อม LINE" ก่อน แล้วขอรหัสใหม่',
-    }])
-    return
-  }
-
-  if (student) {
-    await (supabase as any)
-      .from('students')
-      .update({ line_user_id: userId })
-      .eq('student_id', student.student_id)
-
-    // ปิดรหัสทันทีหลังใช้ เพื่อไม่ให้ใช้ซ้ำได้แม้ยังไม่หมดอายุ
-    await (supabase as any)
-      .from('line_link_codes')
-      .update({ used_at: nowIso, used_by_line_user_id: userId })
-      .eq('id', linkCode.id)
-
-    await replyLineMessage(replyToken, [{
-      type: 'flex',
-      altText: `เชื่อมต่อบัญชีสำเร็จ! สวัสดี ${student.first_name}`,
-      contents: {
-        type: 'bubble',
-        header: {
-          type: 'box', layout: 'vertical',
-          backgroundColor: '#0EA5E9', paddingAll: '16px',
-          contents: [{ type: 'text', text: '✅ เชื่อมต่อบัญชีสำเร็จ!', weight: 'bold', size: 'lg', color: '#FFFFFF' }],
+/** แปลงผลการเชื่อมบัญชีเป็นข้อความตอบกลับ แยกออกมาเพื่อให้ตัว router อ่านง่าย */
+function buildLinkReply(outcome: LinkOutcome): Record<string, unknown> {
+  switch (outcome.kind) {
+    case 'linked':
+      return {
+        type: 'flex',
+        altText: `เชื่อมต่อบัญชีสำเร็จ! สวัสดี ${outcome.firstName}`,
+        contents: {
+          type: 'bubble',
+          header: {
+            type: 'box', layout: 'vertical',
+            backgroundColor: '#0EA5E9', paddingAll: '16px',
+            contents: [{ type: 'text', text: '✅ เชื่อมต่อบัญชีสำเร็จ!', weight: 'bold', size: 'lg', color: '#FFFFFF' }],
+          },
+          body: {
+            type: 'box', layout: 'vertical', paddingAll: '16px', spacing: 'md',
+            contents: [
+              { type: 'text', text: `สวัสดี ${outcome.firstName} ${outcome.lastName} 👋`, weight: 'bold', size: 'md', color: '#1E293B', wrap: true },
+              { type: 'text', text: 'ต่อไปนี้เรื่องของคุณจะแจ้งเตือนมาที่แชทนี้ เช่น ผลอนุมัติคำขอ สถานะงานซ่อม และเอกสาร', size: 'sm', color: '#64748B', wrap: true },
+              { type: 'text', text: 'ลองพิมพ์ถามได้เลย เช่น "พรุ่งนี้เรียนอะไร" หรือ "ขอดูข้อมูลของฉัน" 🤖', size: 'sm', color: '#64748B', wrap: true },
+            ],
+          },
         },
-        body: {
-          type: 'box', layout: 'vertical', paddingAll: '16px', spacing: 'md',
-          contents: [
-            { type: 'text', text: `สวัสดี ${student.first_name} ${student.last_name} 👋`, weight: 'bold', size: 'md', color: '#1E293B', wrap: true },
-            { type: 'text', text: 'บัญชี LINE นี้เชื่อมกับรหัสนักเรียนของคุณแล้ว\nพิมพ์อะไรก็ได้เลย ASIA-BOT พร้อมช่วยคุณ 🤖', size: 'sm', color: '#64748B', wrap: true },
-          ],
-        },
-      },
-    }])
-  } else {
-    await replyLineMessage(replyToken, [{
-      type: 'text',
-      text:
-        '🔗 ยังไม่ได้เชื่อมบัญชี\n\n' +
-        'วิธีเชื่อม:\n' +
-        '1. เข้าเว็บแล้วล็อกอินด้วยบัญชีของตัวเอง\n' +
-        '2. ที่การ์ด "แจ้งเตือนทาง LINE" กดขอรหัสเชื่อมบัญชี\n' +
-        '3. พิมพ์รหัส 6 หลักที่ได้ ส่งมาในแชทนี้ภายใน 10 นาที\n\n' +
-        'หมายเหตุ: ใช้รหัสนักเรียนเชื่อมไม่ได้แล้ว เพื่อไม่ให้คนอื่นเอารหัสของคุณไปเชื่อมแทน',
-    }])
+      }
+
+    case 'ask_phone':
+      return {
+        type: 'text',
+        text:
+          `📋 พบรหัสนักเรียน ${outcome.studentId} แล้ว\n\n` +
+          'เหลืออีกขั้นเดียว — ยืนยันว่าเป็นเจ้าของจริง\n' +
+          'พิมพ์เบอร์โทรที่แจ้งไว้กับโรงเรียน ส่งมาในแชทนี้ได้เลย\n' +
+          `(ใบ้ให้: ${outcome.phoneHint})\n\n` +
+          'ที่ต้องถามเพิ่มเพราะรหัสนักเรียนอยู่บนบัตร ใครเห็นก็จำได้ ถ้าไม่ยืนยันอะไรเลย คนอื่นจะเอารหัสของคุณไปเชื่อมแทนได้',
+      }
+
+    case 'wrong_phone':
+      return {
+        type: 'text',
+        text:
+          `❌ เบอร์ไม่ตรงกับที่โรงเรียนมีอยู่ (ลองได้อีก ${outcome.remaining} ครั้ง)\n\n` +
+          'พิมพ์เฉพาะตัวเลขก็พอ เช่น 0812345678\n' +
+          'ถ้าเปลี่ยนเบอร์แล้วยังไม่ได้แจ้งโรงเรียน ให้ใช้วิธีขอรหัส 6 หลักจากเว็บแทน',
+      }
+
+    case 'blocked':
+      return {
+        type: 'text',
+        text:
+          `🔒 กรอกเบอร์ผิดหลายครั้งเกินไป กรุณารออีก ${outcome.minutes} นาที\n\n` +
+          'ถ้าจำเบอร์ที่แจ้งไว้ไม่ได้ ใช้วิธีขอรหัส 6 หลักจากเว็บแทนได้เลย ไม่ต้องรอ',
+      }
+
+    case 'already_linked_elsewhere':
+      return {
+        type: 'text',
+        text:
+          '⛔ รหัสนักเรียนนี้เชื่อมกับบัญชี LINE อื่นอยู่แล้ว\n\n' +
+          'ถ้าเป็นของคุณเองแต่เปลี่ยนบัญชี LINE ใหม่ ให้เข้าเว็บด้วยบัญชีของคุณ กด "ยกเลิกการเชื่อม LINE" ก่อน แล้วค่อยกลับมาเชื่อมใหม่ที่นี่\n' +
+          'ถ้าไม่ได้เป็นคนเชื่อมเอง แจ้งครูหรือผู้ดูแลระบบทันที',
+      }
+
+    case 'no_phone_on_file':
+      return {
+        type: 'text',
+        text:
+          `⚠️ รหัส ${outcome.studentId} ยังไม่มีเบอร์โทรในระบบ จึงยืนยันทางแชทไม่ได้\n\n` +
+          'ให้เข้าเว็บ ล็อกอิน แล้วกด "ขอรหัสเชื่อมบัญชี" ที่การ์ดแจ้งเตือนทาง LINE จากนั้นเอารหัส 6 หลักมาพิมพ์ที่นี่',
+      }
+
+    case 'unknown_student':
+      return {
+        type: 'text',
+        text:
+          '🔍 ไม่พบรหัสนักเรียนนี้ในระบบ\n\n' +
+          'ลองตรวจตัวเลขอีกครั้ง ถ้าเพิ่งเข้าใหม่แล้วยังไม่มีข้อมูล ให้แจ้งครูที่ปรึกษาก่อน',
+      }
+
+    case 'not_ready':
+      return {
+        type: 'text',
+        text: '⚠️ ระบบเชื่อมบัญชียังไม่พร้อมใช้งาน กรุณาแจ้งผู้ดูแลระบบ',
+      }
+
+    default:
+      return {
+        type: 'text',
+        text:
+          '👋 สวัสดีครับ บัญชี LINE นี้ยังไม่ได้เชื่อมกับข้อมูลนักเรียน\n\n' +
+          'เชื่อมแล้วจะได้รับแจ้งเตือนเรื่องของตัวเอง เช่น ผลอนุมัติคำขอและสถานะเอกสาร และถามข้อมูลของตัวเองกับบอทได้\n\n' +
+          '━━━ วิธีเชื่อม เลือกอย่างใดอย่างหนึ่ง ━━━\n\n' +
+          '① พิมพ์รหัสนักเรียนของคุณส่งมาในแชทนี้\n' +
+          '   จากนั้นบอทจะถามเบอร์โทรที่แจ้งไว้กับโรงเรียน เพื่อยืนยันว่าเป็นเจ้าของจริง\n\n' +
+          '② ถ้าจำเบอร์ที่แจ้งไว้ไม่ได้\n' +
+          '   เข้าเว็บ ล็อกอิน แล้วไปที่การ์ด "แจ้งเตือนทาง LINE" กดขอรหัสเชื่อมบัญชี\n' +
+          '   แล้วพิมพ์รหัส 6 หลักที่ได้ ส่งมาที่นี่ภายใน 10 นาที',
+      }
   }
 }

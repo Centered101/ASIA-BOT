@@ -991,6 +991,34 @@ export type Database = {
         };
         Relationships: [];
       };
+      line_link_attempts: {
+        Row: {
+          line_user_id: string;
+          student_id: string;
+          failed_count: number;
+          expires_at: string;
+          blocked_until: string | null;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          line_user_id: string;
+          student_id: string;
+          failed_count?: number;
+          expires_at: string;
+          blocked_until?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          student_id?: string;
+          failed_count?: number;
+          expires_at?: string;
+          blocked_until?: string | null;
+          updated_at?: string | null;
+        };
+        Relationships: [];
+      };
       line_link_codes: {
         Row: {
           id: string;

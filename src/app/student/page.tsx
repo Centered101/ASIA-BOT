@@ -1093,8 +1093,15 @@ export default function StudentPage() {
               </div>
             </div>
 
-            <div data-aos="fade-up" data-aos-delay="500" className={`rounded-2xl border px-3.5 py-3 mb-4 flex items-start gap-3 ${isGoogleLinked ? "bg-sky-50 border-sky-100" : "bg-slate-50 border-slate-200"}`}>
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isGoogleLinked ? "bg-white text-[#4285F4]" : "bg-white text-slate-300"}`}>
+            {/* ── บัญชีที่ผูกไว้: Google กับ LINE ──
+                วางเป็นสองคอลัมน์และใช้พื้นสีเดียวกันทั้งคู่ ของเดิมแต่ละใบเปลี่ยนสี
+                ตามสถานะ (ฟ้าเมื่อผูกแล้ว เทาเมื่อยัง) พอสองใบสถานะไม่ตรงกันเลยดู
+                เหมือนคนละระดับความสำคัญ ทั้งที่เป็นเรื่องเดียวกัน สถานะจึงไปบอกด้วย
+                สีไอคอนกับข้อความแทน ไม่ใช่ด้วยพื้นการ์ด */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+
+            <div data-aos="fade-up" data-aos-delay="500" className="h-full rounded-2xl border border-slate-200 bg-white/80 px-3.5 py-3 flex items-start gap-3">
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border border-slate-100 bg-white ${isGoogleLinked ? "text-[#4285F4]" : "text-slate-300"}`}>
                 <i className="fa-brands fa-google" />
               </div>
               <div className="min-w-0 flex-1">
@@ -1125,11 +1132,8 @@ export default function StudentPage() {
                 วางไว้ตรงนี้เพราะทั้งสองเรื่องคือ "บัญชีที่ผูกไว้" เหมือนกัน และเป็น
                 จุดที่คนเปิดหน้ามาเห็นก่อน ของเดิมปุ่มขอรหัสอยู่ในฟอร์มแก้ไขข้อมูล
                 ซึ่งต้องกดเข้าไปอีกชั้น กว่าจะเจอก็ไม่รู้แล้วว่าต้องทำอะไร */}
-            {/* น้ำหนักสีต้องเท่าการ์ด Google ด้านบน — ของเดิมการ์ดนี้เป็นเทาตอนยังไม่ผูก
-                วางคู่กันแล้วดูเหมือนถูกปิดใช้งาน ทั้งที่เป็นการ์ดที่ต้องกดมากกว่าอีกใบ
-                จึงให้ทั้งสองใบมีพื้นสีแบรนด์ของตัวเองเสมอ ต่างกันแค่ฟ้า/เขียว */}
-            <div data-aos="fade-up" data-aos-delay="550" className="rounded-2xl border border-green-100 bg-green-50 px-3.5 py-3 mb-4 flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-white text-[#06C755]">
+            <div data-aos="fade-up" data-aos-delay="550" className="h-full rounded-2xl border border-slate-200 bg-white/80 px-3.5 py-3 flex items-start gap-3">
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border border-slate-100 bg-white ${student.line_user_id ? "text-[#06C755]" : "text-slate-300"}`}>
                 <i className="fa-brands fa-line" />
               </div>
               <div className="min-w-0 flex-1">
@@ -1204,6 +1208,8 @@ export default function StudentPage() {
                   </>
                 )}
               </div>
+            </div>
+
             </div>
 
           </div>

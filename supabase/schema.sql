@@ -1013,3 +1013,13 @@ CREATE TABLE public.document_request_history (
   CONSTRAINT document_request_history_pkey PRIMARY KEY (id),
   CONSTRAINT document_request_history_request_id_fkey FOREIGN KEY (request_id) REFERENCES public.document_requests(id)
 );
+CREATE TABLE public.line_link_codes (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  student_id text NOT NULL,
+  code text NOT NULL,
+  expires_at timestamp with time zone NOT NULL,
+  used_at timestamp with time zone,
+  used_by_line_user_id text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT line_link_codes_pkey PRIMARY KEY (id)
+);

@@ -34,7 +34,7 @@ type Product = {
   emoji: string;
 };
 type CartMap = Record<string, number>;
-type OrderItem = { id: string; name: string; price: number; qty: number; unit: string; color?: string };
+type OrderItem = { id: string; name: string; price: number; qty: number; unit: string; color?: string; imageUrl?: string | null };
 type LogEntry = {
   orderId: string;
   ts: string;
@@ -86,7 +86,7 @@ const CAT_EMOJI: Record<string, string> = {
   "เครื่องเขียน": "📝", "ของใช้": "🧰", "อาหาร/เครื่องดื่ม": "🍱", "อื่นๆ": "📦",
 };
 const CAT_ICONS: Record<string, string> = {
-  "ทั้งหมด": "fa-solid fa-grid-2",
+  "ทั้งหมด": "fa-solid fa-table-cells-large",
   "เครื่องเขียน": "fa-solid fa-pen-nib",
   "ของใช้": "fa-solid fa-toolbox",
   "อาหาร/เครื่องดื่ม": "fa-solid fa-mug-hot",
@@ -281,7 +281,7 @@ export default function ShopPage() {
   const fetchOrders = useCallback(async () => {
     if (!student) return;
     try {
-      const res = await fetch(`/api/shop/orders?student_id=${encodeURIComponent(student.student_id)}`);
+      const res = await fetch("/api/shop/orders");
       if (!res.ok) return;
       const r = await res.json() as { status: string; data?: LogEntry[] };
       if (r.status === "success" && Array.isArray(r.data)) {
@@ -1627,9 +1627,10 @@ export default function ShopPage() {
       </div>
 
       {/* ════ MODAL: DELIVERY ════ */}
-      <div className={`fixed inset-0 z-[1000] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 transition-all duration-300 ${deliveryOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+      <div className={`fixed inset-0 z-[1000] bg-black/50 backdrop-blur-xs flex items-end justify-center transition-all duration-300 ${deliveryOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
         onClick={e => { if (e.target === e.currentTarget) setDeliveryOpen(false); }}>
-        <div className={`bg-white rounded-2xl w-full max-w-sm p-6 transition-all duration-300 ${deliveryOpen ? "scale-100" : "scale-90"}`}>
+        <div className={`bg-white rounded-t-3xl w-full max-w-lg max-h-[92dvh] p-6 pt-0 overflow-y-auto transition-transform duration-300 ${deliveryOpen ? "translate-y-0" : "translate-y-full"}`}>
+          <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mt-3 mb-3 shrink-0" />
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2">
               <div className="w-9 h-9 rounded-xl bg-sky-50 flex items-center justify-center text-sky-500 shrink-0">
@@ -1654,7 +1655,7 @@ export default function ShopPage() {
                   else { setDeliveryLoc(""); setSelectedLoc(""); setCustomLoc(""); }
                 }} className={`py-3 rounded-2xl text-sm font-bold border-2 transition flex flex-col items-center gap-1
                   ${on ? "border-sky-400 bg-sky-50 text-sky-600" : "border-slate-200 bg-slate-50 text-slate-400"}`}>
-                  <i className={`fa-solid ${mode === "pickup" ? "fa-store" : "fa-person-carry-box"} text-xl`} />
+                  <i className={`fa-solid ${mode === "pickup" ? "fa-store" : "fa-box"} text-xl`} />
                   <span>{mode === "pickup" ? "มารับเอง" : "ให้ อวท. ส่ง"}</span>
                   <span className="text-xs font-normal opacity-70">{mode === "pickup" ? "ที่สหกรณ์" : "เลือกสถานที่"}</span>
                 </button>
@@ -1717,10 +1718,10 @@ export default function ShopPage() {
       </div>
 
       {/* ════ MODAL: PAYMENT ════ */}
-      <div className={`fixed inset-0 z-[1000] bg-black/50 backdrop-blur-xs flex items-end sm:items-center justify-center sm:p-4 transition-all duration-300 ${payOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+      <div className={`fixed inset-0 z-[1000] bg-black/50 backdrop-blur-xs flex items-end justify-center transition-all duration-300 ${payOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
         onClick={e => { if (e.target === e.currentTarget && payStatus === "expired") setPayOpen(false); }}>
-        <div className={`bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md max-h-[92dvh] flex flex-col overflow-hidden shadow-2xl transition-all duration-300 ${payOpen ? "translate-y-0 sm:scale-100" : "translate-y-full sm:translate-y-0 sm:scale-90"}`}>
-          <div className="sm:hidden w-10 h-1 bg-slate-200 rounded-full mx-auto mt-3 shrink-0" />
+        <div className={`bg-white rounded-t-3xl w-full max-w-lg max-h-[92dvh] flex flex-col overflow-hidden shadow-2xl transition-transform duration-300 ${payOpen ? "translate-y-0" : "translate-y-full"}`}>
+          <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mt-3 shrink-0" />
 
           <div className="px-5 pt-4 pb-3 border-b border-slate-100 shrink-0">
             <div className="flex items-center justify-between gap-3">
@@ -1830,9 +1831,10 @@ export default function ShopPage() {
       </div>
 
       {/* ════ MODAL: SLIP ════ */}
-      <div className={`fixed inset-0 z-[1000] bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 transition-all duration-300 ${slipOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+      <div className={`fixed inset-0 z-[1000] bg-black/50 backdrop-blur-xs flex items-end justify-center transition-all duration-300 ${slipOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
         onClick={e => { if (e.target === e.currentTarget) setSlipOpen(false); }}>
-        <div className={`bg-white rounded-3xl w-full max-w-md max-h-[92dvh] p-5 sm:p-6 flex flex-col transition-all duration-300 ${slipOpen ? "scale-100" : "scale-90"}`}>
+        <div className={`bg-white rounded-t-3xl w-full max-w-lg max-h-[92dvh] p-5 flex flex-col transition-transform duration-300 ${slipOpen ? "translate-y-0" : "translate-y-full"}`}>
+          <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mt-1 mb-3 shrink-0" />
           <div className="flex items-center justify-between mb-4 shrink-0">
             <div className="flex items-center gap-2">
               <div className="w-11 h-11 rounded-2xl bg-green-50 flex items-center justify-center shrink-0 p-1.5">
@@ -1950,6 +1952,18 @@ export default function ShopPage() {
                   </div>
 
                   <div className="mt-3 rounded-2xl bg-slate-50 px-3 py-2">
+                    {l.items.some(i => i.imageUrl) && (
+                      <div className="flex gap-1.5 mb-2 pt-1">
+                        {l.items.slice(0, 4).map((item, j) => (
+                          item.imageUrl
+                            ? <img key={j} src={item.imageUrl} alt={item.name} className="w-10 h-10 rounded-xl object-cover shrink-0" />
+                            : <div key={j} className="w-10 h-10 rounded-xl bg-sky-50 flex items-center justify-center shrink-0"><i className="fa-solid fa-box text-slate-300 text-xs" /></div>
+                        ))}
+                        {l.items.length > 4 && (
+                          <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-400">+{l.items.length - 4}</div>
+                        )}
+                      </div>
+                    )}
                     <div className="flex items-center justify-between gap-2 mb-1">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Items</span>
                       <span className="text-[10px] font-bold text-slate-400">{l.items.reduce((s, i) => s + i.qty, 0)} ชิ้น</span>

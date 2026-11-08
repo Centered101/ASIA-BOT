@@ -4,11 +4,12 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import Header from "@/components/Header";
 import StudentIdentityCard from "@/components/student/StudentIdentityCard";
-import { quickLinkFor } from "@/lib/config";
+import { quickLinkFor, DEPARTMENTS } from "@/lib/config";
 import Footer from "@/components/Footer";
 import { toast } from "sonner";
 import { getStudentSession, type StudentSession } from "@/lib/session";
 import LoginGate from "@/components/LoginGate";
+import { useHolidays } from "@/lib/use-holidays";
 
 type EquipmentItem = {
   id: string;
@@ -19,10 +20,14 @@ type EquipmentItem = {
   available_quantity: number;
   image_url: string | null;
   description: string | null;
+  /** ชนิดเดียวกันที่ลงทะเบียนหลายแถว — รวมเป็นการ์ดเดียว ตอนส่งคำขอกระจายตามแถวเหล่านี้ */
+  members?: Array<{ id: string; available: number }>;
 };
 
 const GENERAL_DEPT = "ทั่วไป";
 const MAX_BORROW_QUANTITY = 6;
+/** จำนวนชิ้นรวมทุกรายการสูงสุดต่อ 1 คำขอ */
+const MAX_TOTAL_PIECES = 6;
 type CartMap = Record<string, number>;
 
 type RequestStatus = "pending" | "approved" | "picked_up" | "rejected" | "cancelled" | "returned";
@@ -41,10 +46,10 @@ type HistoryEntry = {
   status: RequestStatus;
   admin_note: string | null;
   created_at: string;
-  equipment_items?: { name: string; unit: string; category: string } | null;
+  equipment_items?: { name: string; unit: string; category: string; image_url?: string | null } | null;
 };
 
-const CAT_ICONS: Record<string, string> = { "ทั้งหมด": "fa-solid fa-grid-2" };
+const CAT_ICONS: Record<string, string> = { "ทั้งหมด": "fa-solid fa-table-cells-large" };
 function catIcon(cat: string) { return CAT_ICONS[cat] || "fa-solid fa-toolbox"; }
 
 const HISTORY_STATUS: Record<RequestStatus, string> = {
@@ -58,6 +63,15 @@ const HISTORY_STYLE: Record<RequestStatus, { bg: string; text: string }> = {
   rejected:  { bg: "bg-red-50", text: "text-red-500" },
   cancelled: { bg: "bg-slate-100", text: "text-slate-500" },
   returned:  { bg: "bg-sky-50", text: "text-sky-600" },
+};
+const HISTORY_ICON: Record<RequestStatus, string> = {
+  pending: "fa-hourglass-half", approved: "fa-check", picked_up: "fa-box-open",
+  rejected: "fa-xmark", cancelled: "fa-ban", returned: "fa-rotate-left",
+};
+const HISTORY_BORDER: Record<RequestStatus, string> = {
+  pending: "border-l-4 border-l-amber-400", approved: "border-l-4 border-l-emerald-400",
+  picked_up: "border-l-4 border-l-sky-400", rejected: "border-l-4 border-l-red-400",
+  cancelled: "border-l-4 border-l-slate-300", returned: "border-l-4 border-l-sky-400",
 };
 function formatDateTH(d: string) {
   return new Date(d).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
@@ -81,6 +95,9 @@ export default function EquipmentRequestPage() {
   const [cartOpen, setCartOpen]     = useState(false);
   const [requesterPhone, setRequesterPhone] = useState("");
   const [borrowDate, setBorrowDate] = useState("");
+  // วันรับ (และวันคืน = วันเดียวกัน) ต้องเป็นวันทำการ — เสาร์-อาทิตย์/ปฏิทินวันหยุดที่แอดมินตั้งเบิกไม่ได้
+  const holidays = useHolidays();
+  const closedReason = holidays.reasonFor(borrowDate);
   const [dueDate, setDueDate]       = useState("");
   const [purpose, setPurpose]       = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -97,6 +114,7 @@ export default function EquipmentRequestPage() {
   const [history, setHistory]       = useState<HistoryEntry[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyTab, setHistoryTab] = useState<"active" | "done">("active");
 
   const [successCode, setSuccessCode] = useState<string | null>(null);
 
@@ -128,7 +146,7 @@ export default function EquipmentRequestPage() {
   const fetchHistory = useCallback(() => {
     if (!student) return;
     setHistoryLoading(true);
-    fetch(`/api/equipment/requests?student_id=${encodeURIComponent(student.student_id)}`)
+    fetch("/api/equipment/requests")
       .then(r => r.json())
       .then(j => { if (j.status === "success") setHistory(j.data ?? []); })
       .finally(() => setHistoryLoading(false));
@@ -162,6 +180,11 @@ export default function EquipmentRequestPage() {
   }, [items, currentCat, deptFilter, searchQ, sortIdx]);
 
   const studentDept = student?.department || null;
+  // สาขา → คณะ (กลุ่มใน DEPARTMENTS) ไว้แยกหัวข้อตามคณะ; สาขาที่ไม่อยู่ในรายการ = ไม่มีคณะ
+  const facultyOf = useCallback((dept: string) => {
+    const idx = DEPARTMENTS.findIndex(g => (g.items as readonly string[]).includes(dept));
+    return idx >= 0 ? { idx, ...DEPARTMENTS[idx] } : null;
+  }, []);
   const groupedFiltered = useMemo(() => {
     const groups = new Map<string, EquipmentItem[]>();
     for (const it of filtered) {
@@ -174,10 +197,13 @@ export default function EquipmentRequestPage() {
       if (b === studentDept) return 1;
       if (a === GENERAL_DEPT) return -1;
       if (b === GENERAL_DEPT) return 1;
+      // รวมสาขาคณะเดียวกันไว้ติดกัน เรียงตามลำดับคณะใน config แล้วตามชื่อสาขา
+      const fa = facultyOf(a)?.idx ?? 99, fb = facultyOf(b)?.idx ?? 99;
+      if (fa !== fb) return fa - fb;
       return a.localeCompare(b, "th");
     });
-    return keys.map(dept => ({ dept, items: groups.get(dept)! }));
-  }, [filtered, studentDept]);
+    return keys.map(dept => ({ dept, items: groups.get(dept)!, faculty: dept === GENERAL_DEPT ? null : facultyOf(dept) }));
+  }, [filtered, studentDept, facultyOf]);
 
   const cartCount = Object.values(cart).reduce((sum, qty) => sum + qty, 0);
   const cartEntries = Object.entries(cart)
@@ -187,6 +213,10 @@ export default function EquipmentRequestPage() {
   function addToCart(item: EquipmentItem) {
     if (item.available_quantity <= 0) return;
     const current = cart[item.id] || 0;
+    if (cartCount >= MAX_TOTAL_PIECES) {
+      toast.error(`เบิกรวมกันได้ไม่เกิน ${MAX_TOTAL_PIECES} ชิ้นต่อคำขอ ส่งคำขอนี้ก่อนแล้วค่อยขอเพิ่ม`);
+      return;
+    }
     if (current >= item.available_quantity || current >= MAX_BORROW_QUANTITY) {
       toast.error("จำนวนในตะกร้าเกินคงเหลือหรือเกินกำหนด");
       return;
@@ -206,6 +236,7 @@ export default function EquipmentRequestPage() {
         return copy;
       }
       if (item && (next > item.available_quantity || next > MAX_BORROW_QUANTITY)) return prev;
+      if (delta > 0 && Object.values(prev).reduce((n, q) => n + q, 0) >= MAX_TOTAL_PIECES) { toast.error(`เบิกรวมกันได้ไม่เกิน ${MAX_TOTAL_PIECES} ชิ้นต่อคำขอ`); return prev; }
       return { ...prev, [id]: next };
     });
   }
@@ -225,6 +256,7 @@ export default function EquipmentRequestPage() {
     const nextErrs: Record<string, boolean> = {};
     if (cartEntries.some(({ item, qty }) => qty <= 0 || qty > item.available_quantity || qty > MAX_BORROW_QUANTITY)) nextErrs.quantity = true;
     if (!borrowDate) nextErrs.borrowDate = true;
+    if (closedReason) { toast.error(`วันที่เลือกเป็นวันหยุด (${closedReason}) กรุณาเลือกวันทำการ`); return; }
 
     setErrs(nextErrs);
     if (Object.keys(nextErrs).length > 0) {
@@ -244,7 +276,18 @@ export default function EquipmentRequestPage() {
         body: JSON.stringify({
           student_id: student.student_id,
           requester_phone: requesterPhone,
-          items: cartEntries.map(({ item, qty }) => ({ equipment_item_id: item.id, quantity: qty })),
+          items: cartEntries.flatMap(({ item, qty }) => {
+            if (!item.members?.length) return [{ equipment_item_id: item.id, quantity: qty }];
+            // กระจายจำนวนที่ขอไปตามแถวจริง เริ่มจากแถวที่เหลือมากสุด
+            let left = qty;
+            const out: Array<{ equipment_item_id: string; quantity: number }> = [];
+            for (const m of item.members) {
+              if (left <= 0) break;
+              const take = Math.min(left, m.available);
+              if (take > 0) { out.push({ equipment_item_id: m.id, quantity: take }); left -= take; }
+            }
+            return out;
+          }),
           purpose, borrow_date: borrowDate, due_date: borrowDate,
           delivery_mode: deliveryMode, delivery_loc: deliveryLoc, time_slot: timeSlot,
         }),
@@ -451,7 +494,7 @@ export default function EquipmentRequestPage() {
                       <button key={d} onClick={() => setDeptFilter(d)}
                         className={`flex items-center gap-2.5 px-4 py-2.5 w-full text-left text-sm transition border-b border-slate-50 last:border-0
                           ${on ? "bg-emerald-50 text-emerald-600 font-bold" : "text-slate-600 font-medium hover:bg-slate-50 hover:text-emerald-600"}`}>
-                        <i className={`fa-solid ${d === "ทั้งหมด" ? "fa-grid-2" : d === GENERAL_DEPT ? "fa-earth-asia" : "fa-building-columns"} text-xs w-4 text-center ${on ? "text-emerald-500" : "text-slate-300"}`} />
+                        <i className={`fa-solid ${d === "ทั้งหมด" ? "fa-table-cells-large" : d === GENERAL_DEPT ? "fa-earth-asia" : "fa-building-columns"} text-xs w-4 text-center ${on ? "text-emerald-500" : "text-slate-300"}`} />
                         <span className="flex-1 truncate">{d}</span>
                         <span className={`text-xs tabular-nums ${on ? "text-emerald-400" : "text-slate-300"}`}>{cnt}</span>
                       </button>
@@ -594,8 +637,15 @@ export default function EquipmentRequestPage() {
 
             {!loading && !loadErr && filtered.length > 0 && viewMode === "grid" && (
                 <div className="space-y-6">
-                  {groupedFiltered.map(({ dept, items: deptItems }) => (
+                  {groupedFiltered.map(({ dept, items: deptItems, faculty }, gi) => (
                     <div key={dept}>
+                      {/* หัวข้อคณะ: แสดงเมื่อคณะเปลี่ยนจากสาขาก่อนหน้า (สาขาของตัวเองที่ถูกยกขึ้นบนสุดก็มีหัวข้อคณะของมัน) */}
+                      {faculty && faculty.label !== groupedFiltered[gi - 1]?.faculty?.label && (
+                        <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-xl" style={{ background: faculty.bg }}>
+                          <i className={`${faculty.icon} text-sm`} style={{ color: faculty.color }} />
+                          <span className="text-sm font-extrabold" style={{ color: faculty.color }}>คณะ{faculty.label}</span>
+                        </div>
+                      )}
                       <div className="flex items-center gap-2 mb-3">
                         <i className={`fa-solid ${dept === GENERAL_DEPT ? "fa-earth-asia" : "fa-building-columns"} text-xs ${dept === GENERAL_DEPT ? "text-sky-400" : "text-violet-400"}`} />
                         <span className="text-xs font-bold uppercase tracking-widest text-slate-500">
@@ -839,6 +889,12 @@ export default function EquipmentRequestPage() {
                       onChange={e => { setBorrowDate(e.target.value); setErrs(p => ({ ...p, borrowDate: false })); }}
                       className={`form-input text-xs sm:text-sm ${errs.borrowDate ? "error" : ""}`} />
                   </div>
+                  {closedReason && (
+                    <p className="mt-2 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
+                      <i className="fa-solid fa-calendar-xmark" />
+                      เบิกไม่ได้ในวันนี้ ({closedReason}) กรุณาเลือกวันทำการ
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -863,7 +919,7 @@ export default function EquipmentRequestPage() {
                         else { setDeliveryLoc(""); setSelectedLoc(""); setCustomLoc(""); }
                       }} className={`py-3 rounded-2xl text-sm font-bold border-2 transition flex flex-col items-center gap-1
                         ${on ? "border-emerald-400 bg-emerald-50 text-emerald-600" : "border-slate-200 bg-slate-50 text-slate-400"}`}>
-                        <i className={`fa-solid ${mode === "pickup" ? "fa-id-card" : "fa-person-carry-box"} text-xl`} />
+                        <i className={`fa-solid ${mode === "pickup" ? "fa-id-card" : "fa-box"} text-xl`} />
                         <span>{mode === "pickup" ? "มารับเอง" : "ให้เจ้าหน้าที่ส่ง"}</span>
                         <span className="text-xs font-normal opacity-70">{mode === "pickup" ? "ที่ห้องคุรุภัณฑ์" : "เลือกสถานที่"}</span>
                       </button>
@@ -921,7 +977,7 @@ export default function EquipmentRequestPage() {
                 )}
               </div>
 
-              <button onClick={handleSubmit} disabled={submitting || noDept || !deliveryReady} className="btn-primary w-full text-sm">
+              <button onClick={handleSubmit} disabled={submitting || noDept || !deliveryReady || !!closedReason} className="btn-primary w-full text-sm">
                 {submitting ? <i className="asia-spinner mr-1.5" /> : <i className="fa-solid fa-paper-plane mr-1.5" />}
                 ส่งคำขอเบิก
               </button>
@@ -940,45 +996,88 @@ export default function EquipmentRequestPage() {
             </div>
             <div>
               <div className="font-bold text-slate-800">ประวัติการเบิกคุรุภัณฑ์</div>
-              <div className="text-xs text-slate-400">รายการที่คุณเคยยื่นคำขอ</div>
+              <div className="text-xs text-slate-400">ย้อนหลัง 30 วัน · {history.length} รายการ</div>
             </div>
             <button onClick={() => setHistoryOpen(false)} className="ml-auto text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition">
               <i className="fa-solid fa-xmark" />
             </button>
           </div>
-          <div className="overflow-y-auto flex-1 px-5 py-4">
+
+          <div className="flex gap-2 px-4 sm:px-5 pt-3 shrink-0">
+            {([
+              { key: "active" as const, label: "กำลังดำเนินการ", count: history.filter(h => ["pending","approved","picked_up"].includes(h.status)).length },
+              { key: "done" as const, label: "เสร็จสิ้น/ยกเลิก", count: history.filter(h => ["rejected","cancelled","returned"].includes(h.status)).length },
+            ]).map(tab => (
+              <button key={tab.key} onClick={() => setHistoryTab(tab.key)}
+                className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border-2 transition
+                  ${historyTab === tab.key ? "border-emerald-400 bg-emerald-50 text-emerald-600" : "border-slate-200 text-slate-400 hover:border-emerald-200"}`}>
+                {tab.label}
+                <span className={`text-[10px] rounded-full px-1.5 py-0.5 ${historyTab === tab.key ? "bg-emerald-100" : "bg-slate-100"}`}>{tab.count}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="overflow-y-auto flex-1 px-4 sm:px-5 py-4 space-y-3 pb-8">
             {historyLoading ? (
               <div className="text-center py-12">
                 <i className="asia-spinner text-2xl text-emerald-400" />
               </div>
-            ) : history.length === 0 ? (
-              <div className="text-center py-12">
-                <i className="fa-solid fa-toolbox text-5xl mb-3 block text-slate-300" />
-                <div className="text-slate-400 text-sm">ยังไม่มีประวัติการเบิกคุรุภัณฑ์</div>
-              </div>
-            ) : (
-              history.map(h => {
+            ) : (() => {
+              const isDone = (s: RequestStatus) => ["rejected","cancelled","returned"].includes(s);
+              const visible = history.filter(h => isDone(h.status) === (historyTab === "done"));
+              if (visible.length === 0) return (
+                <div className="text-center py-12">
+                  <i className={`fa-solid ${historyTab === "done" ? "fa-box-archive" : "fa-clipboard-list"} text-5xl mb-3 block text-slate-300`} />
+                  <div className="text-slate-400 text-sm">
+                    {historyTab === "done" ? "ไม่มีรายการเสร็จสิ้นหรือยกเลิก" : "ยังไม่มีคำขอที่กำลังดำเนินการ"}
+                  </div>
+                </div>
+              );
+              return visible.map(h => {
                 const style = HISTORY_STYLE[h.status];
+                const icon = HISTORY_ICON[h.status];
+                const borderCls = HISTORY_BORDER[h.status];
+                const ts = new Date(h.created_at);
+                const dStr = ts.toLocaleDateString("th-TH", { month: "short", day: "numeric" });
+                const tStr = ts.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
                 return (
-                  <div key={h.id} className="py-3 border-b border-slate-50 last:border-0">
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <div className="min-w-0">
-                        <div className="text-sm font-bold text-slate-700 truncate">{h.equipment_items?.name ?? "คุรุภัณฑ์"}</div>
-                        <div className="text-xs text-slate-400">{h.quantity} {h.equipment_items?.unit ?? ""} · {h.request_code}</div>
+                  <div key={h.id} className={`bg-white rounded-3xl p-3.5 shadow-xs border border-slate-100 ${borderCls}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-sm font-extrabold text-slate-800 truncate">{h.request_code}</span>
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full shrink-0 ${style.bg} ${style.text}`}>
+                            <i className={`fa-solid ${icon} text-[9px]`} /> {HISTORY_STATUS[h.status]}
+                          </span>
+                        </div>
+                        <div className="mt-1 text-[11px] text-slate-400">
+                          <i className="fa-regular fa-clock mr-1 text-[10px]" />{dStr} · {tStr}
+                        </div>
                       </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${style.bg} ${style.text}`}>
-                        {HISTORY_STATUS[h.status]}
-                      </span>
                     </div>
-                    <div className="text-xs text-slate-500 mt-1.5 space-y-0.5">
-                      <div>วันที่ต้องใช้ {formatDateTH(h.borrow_date)}</div>
-                      <div>{h.delivery_mode === "delivery" ? `ส่งที่ ${h.delivery_loc ?? "-"}` : "มารับเอง"}{h.time_slot ? ` · ${h.time_slot}` : ""}</div>
-                      {h.admin_note && <div className="text-slate-400">หมายเหตุ: {h.admin_note}</div>}
+                    <div className="mt-3 rounded-2xl bg-slate-50 px-3 py-2">
+                      <div className="flex items-start gap-2.5">
+                        {h.equipment_items?.image_url
+                          ? <img src={h.equipment_items.image_url} alt={h.equipment_items.name} className="w-10 h-10 rounded-xl object-cover shrink-0 mt-0.5" />
+                          : <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0 mt-0.5"><i className="fa-solid fa-toolbox text-emerald-200 text-sm" /></div>}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between mb-0.5">
+                            <span className="text-[11px] font-bold text-slate-600 truncate">{h.equipment_items?.name ?? "คุรุภัณฑ์"}</span>
+                            <span className="text-[10px] font-bold text-slate-400 shrink-0 ml-2">{h.quantity} {h.equipment_items?.unit ?? "ชิ้น"}</span>
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            {h.delivery_mode === "delivery" ? `ส่งที่ ${h.delivery_loc ?? "-"}` : "มารับเอง"}{h.time_slot ? ` · ${h.time_slot}` : ""} · ต้องใช้ {formatDateTH(h.borrow_date)}
+                          </div>
+                        </div>
+                      </div>
                     </div>
+                    {h.admin_note && (
+                      <div className="mt-2 text-[11px] text-slate-400 px-1">หมายเหตุ: {h.admin_note}</div>
+                    )}
                   </div>
                 );
-              })
-            )}
+              });
+            })()}
           </div>
         </div>
       </div>

@@ -1,9 +1,13 @@
+import { holidayReason } from "@/lib/server/holidays";
 import { NextRequest, NextResponse } from "next/server";
 import { equipmentUnderRepair, effectiveAvailable } from "@/lib/server/maintenance-stock";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { buildEquipmentRequestFlexMessage, sendLineFlexMessage } from "@/lib/line";
 import { getLineNotificationTarget } from "@/lib/line-targets";
+import { withAuth } from "@/lib/server/with-auth";
+import { resolveOwnStudentId } from "@/lib/server/student-identity";
+
 
 const supabase = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -11,6 +15,8 @@ const supabase = createClient<Database>(
 );
 
 const MAX_BORROW_QUANTITY = 6;
+/** จำนวนชิ้นรวมทุกรายการสูงสุดต่อ 1 คำขอ */
+const MAX_TOTAL_PIECES = 6;
 const HISTORY_RETENTION_DAYS = 30;
 const HISTORY_MAX_ITEMS = 99;
 const HISTORY_CLEANUP_STATUSES = ["returned", "rejected", "cancelled"];
@@ -48,10 +54,10 @@ async function cleanupStudentEquipmentHistory(studentId: string) {
   }
 }
 
-export async function POST(req: NextRequest) {
+async function createEquipmentRequest(req: NextRequest, ownStudentId: string) {
   try {
     const body = await req.json();
-    const { equipment_item_id, student_id, requester_phone, quantity, purpose, borrow_date, due_date, delivery_mode, delivery_loc, time_slot } = body;
+    const { equipment_item_id, requester_phone, quantity, purpose, borrow_date, due_date, delivery_mode, delivery_loc, time_slot } = body;
     const requestItems = Array.isArray(body.items)
       ? body.items.map((item: { equipment_item_id?: string; quantity?: number }) => ({
           equipment_item_id: item.equipment_item_id,
@@ -59,12 +65,24 @@ export async function POST(req: NextRequest) {
         }))
       : [{ equipment_item_id, quantity: Number(quantity) }];
 
+    // รหัสผู้ขอมาจาก session เท่านั้น ไม่เชื่อค่าที่หน้าเว็บส่งมา
+    const student_id = ownStudentId;
     const dueDateFinal = due_date || borrow_date;
+    // วันรับและวันคืนต้องเป็นวันทำการ — วันหยุดไม่มีเจ้าหน้าที่ส่งมอบ/รับคืน (ตรวจที่เซิร์ฟเวอร์ ไม่พึ่งแค่หน้าเว็บ)
+    for (const [label, d] of [["วันรับ", borrow_date], ["วันคืน", dueDateFinal]] as const) {
+      const closed = d ? await holidayReason(String(d)) : null;
+      if (closed) {
+        return NextResponse.json({ status: "error", code: "holiday", message: `${label}ตรงกับวันหยุด (${closed}) กรุณาเลือกวันทำการ` }, { status: 400 });
+      }
+    }
     if (!student_id?.trim() || !borrow_date || requestItems.length === 0 || requestItems.some((item: { equipment_item_id?: string; quantity: number }) => !item.equipment_item_id || !item.quantity)) {
       return NextResponse.json({ status: "error", message: "กรุณาเข้าสู่ระบบและกรอกข้อมูลให้ครบ" }, { status: 400 });
     }
     if (requestItems.some((item: { quantity: number }) => item.quantity <= 0)) {
       return NextResponse.json({ status: "error", message: "จำนวนต้องมากกว่า 0" }, { status: 400 });
+    }
+    if (requestItems.reduce((n: number, item: { quantity: number }) => n + item.quantity, 0) > MAX_TOTAL_PIECES) {
+      return NextResponse.json({ status: "error", message: `เบิกรวมกันได้ไม่เกิน ${MAX_TOTAL_PIECES} ชิ้นต่อคำขอ` }, { status: 400 });
     }
     if (requestItems.some((item: { quantity: number }) => item.quantity > MAX_BORROW_QUANTITY)) {
       return NextResponse.json({ status: "error", message: `เบิกได้ไม่เกิน ${MAX_BORROW_QUANTITY} ชิ้นต่อคำขอ` }, { status: 400 });
@@ -177,18 +195,14 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET(req: NextRequest) {
-  const studentId = req.nextUrl.searchParams.get("student_id")?.trim();
-  if (!studentId) {
-    return NextResponse.json({ status: "error", message: "ไม่พบรหัสนักเรียน" }, { status: 400 });
-  }
+async function listEquipmentRequests(studentId: string) {
 
   await cleanupStudentEquipmentHistory(studentId);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("equipment_requests")
-    .select("id, request_code, quantity, purpose, borrow_date, due_date, returned_at, delivery_mode, delivery_loc, time_slot, picked_up_at, status, admin_note, created_at, equipment_items(name, unit, category)")
+    .select("id, request_code, quantity, purpose, borrow_date, due_date, returned_at, delivery_mode, delivery_loc, time_slot, picked_up_at, status, admin_note, created_at, equipment_items(name, unit, category, image_url)")
     .eq("student_id", studentId)
     .order("created_at", { ascending: false })
     .limit(HISTORY_MAX_ITEMS);
@@ -196,3 +210,27 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ status: "error", message: error.message }, { status: 500 });
   return NextResponse.json({ status: "success", data: data ?? [] });
 }
+
+/** ขอยืมในนามของนักเรียนที่ล็อกอินอยู่เท่านั้น — ขอแทนคนอื่นไม่ได้อีกแล้ว */
+export const POST = withAuth(
+  async (req, { principal }) => {
+    const studentId = await resolveOwnStudentId(principal);
+    if (!studentId) {
+      return NextResponse.json({ status: "error", message: "บัญชีนี้ไม่ได้ผูกกับนักเรียน" }, { status: 403 });
+    }
+    return createEquipmentRequest(req as NextRequest, studentId);
+  },
+  { permission: "equipment.create_request" }
+);
+
+/** ประวัติคำขอยืมของตัวเอง — รหัสมาจาก session (เดิมรับ ?student_id= ใครรู้รหัสก็ดูได้) */
+export const GET = withAuth(
+  async (_req, { principal }) => {
+    const studentId = await resolveOwnStudentId(principal);
+    if (!studentId) {
+      return NextResponse.json({ status: "error", message: "บัญชีนี้ไม่ได้ผูกกับนักเรียน" }, { status: 403 });
+    }
+    return listEquipmentRequests(studentId);
+  },
+  { permission: "equipment.view_own_requests" }
+);

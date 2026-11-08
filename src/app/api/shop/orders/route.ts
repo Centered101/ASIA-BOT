@@ -4,6 +4,10 @@ import Stripe from "stripe";
 import type { Database } from "@/types/database";
 import { sendLineFlexMessage, buildOrderFlexMessage } from "@/lib/line";
 import { getLineNotificationTarget } from "@/lib/line-targets";
+import { withAuth } from "@/lib/server/with-auth";
+import { resolveOwnStudentId } from "@/lib/server/student-identity";
+import { getServiceClient } from "@/lib/server/supabase-server";
+
 
 const HISTORY_RETENTION_DAYS = 30;
 const HISTORY_MAX_ITEMS = 99;
@@ -38,11 +42,8 @@ async function cleanupStudentOrderHistory(sb: ReturnType<typeof createClient<Dat
   await sb.from("orders").delete().in("order_id", orderIds);
 }
 
-export async function GET(req: NextRequest) {
+async function listOrders(student_id: string) {
   try {
-    const student_id = req.nextUrl.searchParams.get("student_id");
-    if (!student_id)
-      return NextResponse.json({ status: "error", message: "ไม่มี student_id" }, { status: 400 });
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -69,7 +70,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ status: "success", data: [] });
     }
 
-    const logs = (data ?? []).map(o => ({
+    const rawLogs = (data ?? []).map(o => ({
       orderId:   o.order_id,
       ts:        o.created_at ?? new Date().toISOString(),
       status:    o.status as "pending" | "paid" | "failed" | "cancelled" | "expired",
@@ -77,6 +78,20 @@ export async function GET(req: NextRequest) {
       total:     Number(o.total),
       student:   o.student_name,
       studentId: o.student_id,
+    }));
+
+    // ดึงรูปสินค้าจาก products แบบ batch เพื่อแสดงในประวัติ
+    const allProductIds = [...new Set(rawLogs.flatMap(l => l.items.map((i: { id: string }) => i.id)))];
+    const { data: productRows } = allProductIds.length
+      ? await sb.from("products").select("id, images").in("id", allProductIds)
+      : { data: [] };
+    const imageOf = new Map(
+      ((productRows ?? []) as { id: string; images: string[] | null }[]).map(p => [p.id, p.images?.[0] ?? null])
+    );
+
+    const logs = rawLogs.map(l => ({
+      ...l,
+      items: l.items.map((i: { id: string }) => ({ ...i, imageUrl: imageOf.get(i.id) ?? null })),
     }));
 
     return NextResponse.json({ status: "success", data: logs });
@@ -89,7 +104,7 @@ export async function GET(req: NextRequest) {
 type OrderItem = { id: string; name: string; price: number; qty: number; unit: string; color?: string };
 type ColorStock = Record<string, number>;
 
-export async function POST(req: NextRequest) {
+async function createOrder(req: NextRequest, ownStudentId: string, ownStudentName: string) {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -117,7 +132,10 @@ export async function POST(req: NextRequest) {
       source?: "ai" | "cart";
     };
 
-    const { student_id, student_name, items, delivery_mode, delivery_loc, delivery_slot, source } = body;
+    const { items, delivery_mode, delivery_loc, delivery_slot, source } = body;
+    // รหัสและชื่อผู้สั่งมาจาก session เท่านั้น ไม่เชื่อค่าที่หน้าเว็บส่งมา
+    const student_id = ownStudentId;
+    const student_name = ownStudentName;
     if (!student_id || !items?.length) {
       return NextResponse.json({ status: "error", message: "ข้อมูลไม่ครบ" });
     }
@@ -306,3 +324,42 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ status: "error", message: msg });
   }
 }
+
+/**
+ * ประวัติออเดอร์ของนักเรียนที่ล็อกอินอยู่ — รหัสมาจาก session
+ * เดิมรับ ?student_id= ใครรู้รหัสก็เห็นประวัติซื้อของคนอื่นได้ (และยังลบประวัติเก่าให้ด้วย)
+ */
+/** เบราว์เซอร์เดียวมี session เดียว — ล็อกอินหลังบ้านทีหลังจะทับบัญชีนักเรียน (หน้าเว็บยังโชว์ชื่อนักเรียนจากข้อมูลที่จำไว้) */
+const NOT_STUDENT_MSG = "บัญชีที่ล็อกอินอยู่ไม่มีแฟ้มนักเรียนผูกอยู่ — ออกจากระบบแล้วเข้าด้วยบัญชีนักเรียนอีกครั้ง (ถ้ายังไม่ได้ผล แจ้งแอดมินให้เช็กการผูกบัญชี)";
+
+export const GET = withAuth(
+  async (_req, { principal }) => {
+    const studentId = await resolveOwnStudentId(principal);
+    if (!studentId) {
+      console.warn("[SHOP_ORDERS_GET] ไม่พบแฟ้มนักเรียนของบัญชี subjectType=" + principal.subjectType);
+      return NextResponse.json({ status: "error", message: NOT_STUDENT_MSG }, { status: 403 });
+    }
+    return listOrders(studentId);
+  },
+  // allowOwnStudent: ครู/แอดมิน/สภานักเรียนที่ผูกกับแฟ้มนักเรียนก็ซื้อของตัวเองได้ (handler ผูกกับ resolveOwnStudentId อยู่แล้ว)
+  { permission: "shop.view_own_orders", allowOwnStudent: true }
+);
+
+/** สั่งซื้อในนามของนักเรียนที่ล็อกอินอยู่เท่านั้น — สั่งแทนคนอื่นไม่ได้อีกแล้ว */
+export const POST = withAuth(
+  async (req, { principal }) => {
+    const studentId = await resolveOwnStudentId(principal);
+    if (!studentId) {
+      console.warn("[SHOP_ORDERS_POST] ไม่พบแฟ้มนักเรียนของบัญชี subjectType=" + principal.subjectType);
+      return NextResponse.json({ status: "error", message: NOT_STUDENT_MSG }, { status: 403 });
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: me } = await (getServiceClient().from("students") as any)
+      .select("first_name, last_name")
+      .eq("student_id", studentId)
+      .maybeSingle();
+    const name = `${me?.first_name ?? ""} ${me?.last_name ?? ""}`.trim() || studentId;
+    return createOrder(req as NextRequest, studentId, name);
+  },
+  { permission: "shop.create_order", allowOwnStudent: true }
+);

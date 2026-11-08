@@ -9,7 +9,7 @@ const supabase = createClient<Database>(
 );
 
 export async function GET(req: NextRequest) {
-  if (!await checkAdminAuth(req)) return NextResponse.json({ status: "error" }, { status: 401 });
+  { const session = await checkAdminAuth(req); if (!session) return NextResponse.json({ status: "error" }, { status: 401 }); }
   const { searchParams } = new URL(req.url);
   const projectId = searchParams.get("project_id");
 

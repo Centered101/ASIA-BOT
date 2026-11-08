@@ -3295,7 +3295,7 @@ function EquipmentItemsTab({ adminId, role }: { adminId: string; role: string })
           {groupedDisplayed.map(i => {
             const itemImageSrc = safeImageSrc(i.image_url);
             return (
-            <div key={i.members.map(m => m.id).join("+")} className={`rounded-2xl overflow-hidden transition-all ${viewMode === "list" ? "flex items-stretch" : ""} ${!i.active && !i.deleted_at ? "opacity-50" : ""} ${i.deleted_at ? "opacity-40" : ""}`}
+            <div key={i.members.map(m => m.id).join("+")} className={`rounded-2xl overflow-hidden transition-all ${viewMode === "list" ? "flex items-stretch" : "flex flex-col"} ${!i.active && !i.deleted_at ? "opacity-50" : ""} ${i.deleted_at ? "opacity-40" : ""}`}
               style={{ background: "#1c1c1c", border: `1px solid ${i.deleted_at ? "#ff7070" : "#3e3e3e"}` }}>
               <div className={`relative overflow-hidden shrink-0 ${viewMode === "list" ? "h-24 w-24 sm:h-28 sm:w-28" : "aspect-square w-full"}`} style={{ background: "#21a47c" }}>
                 {itemImageSrc ? (
@@ -3324,7 +3324,7 @@ function EquipmentItemsTab({ adminId, role }: { adminId: string; role: string })
                   </span>
                 </div>
               </div>
-              <div className={`${viewMode === "list" ? "p-2.5 min-w-0 flex-1" : "p-3"}`}>
+              <div className={`${viewMode === "list" ? "p-2.5 min-w-0 flex-1" : "p-3 flex flex-col flex-1"}`}>
                 <div className="font-bold text-white text-sm leading-tight mb-1">{i.name}</div>
                 {i.members.length > 1 ? (() => {
                   // หลายแถวรวมกัน: โชว์เลขครุภัณฑ์เป็นชิป (ย่อไว้ 4 อัน) กดชิปเพื่อแก้เฉพาะแถวนั้น
@@ -3387,7 +3387,7 @@ function EquipmentItemsTab({ adminId, role }: { adminId: string; role: string })
                   </div>
                 ) : null}
                 {canEdit && (
-                  <div className="grid grid-cols-3 gap-1.5">
+                  <div className="grid grid-cols-3 gap-1.5 mt-auto">
                     {i.deleted_at ? (
                       <button onClick={() => restoreItem(i)}
                         className={`col-span-3 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1 ${viewMode === "list" ? "py-1" : "py-1.5"}`}

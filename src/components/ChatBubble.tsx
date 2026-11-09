@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { toast } from "sonner";
-import ChatHistoryList, { CHAT_RESUME_EVENT, type HistoryMessage } from "@/components/ChatHistoryList";
+import ChatHistoryList, { CHAT_RESUME_EVENT, type HistoryMessage, type Turn } from "@/components/ChatHistoryList";
 import Markdown from "./Markdown";
 import { SITE_NAME } from "@/lib/config";
 import { isMycerHost } from "@/lib/mycer";
@@ -22,7 +22,7 @@ function onAdminSite(): boolean {
 
 type NavButton = { path: string; label: string };
 type RichCard = { type: string; payload: Record<string, unknown> };
-type ChoiceOption = { label: string; value: string; description?: string };
+type ChoiceOption = { label: string; value: string; description?: string; apiValue?: string };
 type ChatEvent = string | { type: string; payload?: unknown };
 type PaymentInfo = { orderId: string; qrUrl: string; total: number; expireAt: number };
 type Message = { role: "user" | "assistant"; content: string; id: string; /** QR ชำระเงินที่สร้างในแชต */ payment?: PaymentInfo; /** ข้อความจริงที่ส่งให้บอท (ถ้าต่างจากที่โชว์ เช่นมาจากเมนูฟังก์ชัน) */ apiContent?: string; navButtons?: NavButton[]; card?: RichCard; /** ลิงก์รูปที่แนบมากับข้อความนี้ (ส่งให้บอทเฉพาะตอนเรียก API ไม่โชว์เป็นข้อความ) */ attach?: string[] };
@@ -195,7 +195,7 @@ function StudentInfoBar({ ctx, accent }: { ctx: UserContext; accent: string }) {
   );
 }
 
-function ChoiceCard({ card, accent, isDark, onSelect }: { card: RichCard; accent: string; isDark: boolean; onSelect: (value: string) => void }) {
+function ChoiceCard({ card, accent, isDark, onSelect }: { card: RichCard; accent: string; isDark: boolean; onSelect: (value: string, apiValue?: string) => void }) {
   // ตัวเลือกที่กดแล้ว — ไฮไลต์ให้เห็นทันทีและล็อกปุ่มทั้งหมด กันกดซ้ำ/กดอีกข้อหลังตอบไปแล้ว
   const [picked, setPicked] = useState<string | null>(null);
   if (card.type !== "choice") return null;
@@ -230,7 +230,7 @@ function ChoiceCard({ card, accent, isDark, onSelect }: { card: RichCard; accent
             type="button"
             disabled={locked}
             aria-pressed={isPicked}
-            onClick={() => { if (locked) return; setPicked(key); onSelect(`${inputPrefix}${option.value}`); }}
+            onClick={() => { if (locked) return; setPicked(key); onSelect(`${inputPrefix}${option.value}`, option.apiValue !== undefined ? `${inputPrefix}${option.apiValue}` : undefined); }}
             style={{
               width: "100%",
               textAlign: "left",
@@ -261,6 +261,234 @@ function ChoiceCard({ card, accent, isDark, onSelect }: { card: RichCard; accent
           );
         })}
       </div>
+    </div>
+  );
+}
+
+type ShopProduct = { id: string; name: string; price: number; stock: number | null; unit: string; category: string | null; image_url: string | null; color_stock?: Record<string, number> | null };
+
+/** แปลงชื่อสีทั่วไป (ไทย/อังกฤษ/hex) เป็น CSS color สำหรับแสดง swatch */
+function colorToCss(color: string): string {
+  const map: Record<string, string> = {
+    ดำ: "#1a1a1a", เทา: "#808080", เทาอ่อน: "#d1d5db", ขาว: "#f5f5f5", ขาวนวล: "#fafaf5",
+    แดง: "#ef4444", ส้ม: "#f97316", เหลือง: "#eab308", เขียว: "#22c55e", เขียวเข้ม: "#166534",
+    น้ำเงิน: "#3b82f6", ฟ้า: "#38bdf8", ม่วง: "#a855f7", ชมพู: "#ec4899", น้ำตาล: "#a16207",
+    black: "#1a1a1a", gray: "#808080", grey: "#808080", white: "#f5f5f5",
+    red: "#ef4444", orange: "#f97316", yellow: "#eab308", green: "#22c55e",
+    blue: "#3b82f6", purple: "#a855f7", pink: "#ec4899", brown: "#a16207",
+  };
+  return map[color.toLowerCase()] ?? (color.startsWith("#") || color.startsWith("rgb") ? color : "#94A3B8");
+}
+
+function ShopProductCard({ card, accent, isDark, onSelect }: { card: RichCard; accent: string; isDark: boolean; onSelect: (value: string, apiValue?: string) => void }) {
+  // key = productKey, value = สีที่เลือก (empty = ไม่มีสี / กำลังเลือกสี)
+  const [selections, setSelections] = useState<Map<string, string>>(new Map());
+  const [confirmed, setConfirmed] = useState(false);
+  if (card.type !== "shop_products") return null;
+  const products = ((card.payload.products as ShopProduct[] | undefined) ?? []).slice(0, 12);
+  if (!products.length) return null;
+
+  function toggleProduct(p: ShopProduct) {
+    if (confirmed) return;
+    const key = p.id || p.name;
+    setSelections(prev => {
+      const next = new Map(prev);
+      if (next.has(key)) { next.delete(key); } else { next.set(key, ""); }
+      return next;
+    });
+  }
+
+  function pickColor(p: ShopProduct, color: string) {
+    if (confirmed) return;
+    const key = p.id || p.name;
+    setSelections(prev => {
+      const next = new Map(prev);
+      next.set(key, prev.get(key) === color ? "" : color); // toggle same color → clear
+      return next;
+    });
+  }
+
+  // ยืนยันได้เมื่อ: มีอย่างน้อย 1 รายการ AND สินค้าที่มีสีต้องเลือกสีแล้ว
+  const canConfirm = selections.size > 0 && [...selections.entries()].every(([key, color]) => {
+    const p = products.find(x => (x.id || x.name) === key);
+    const hasColors = p?.color_stock && Object.keys(p.color_stock).length > 0;
+    return !hasColors || color !== "";
+  });
+
+  function confirm() {
+    if (!canConfirm || confirmed) return;
+    setConfirmed(true);
+    const items: Array<{ p: ShopProduct; color: string }> = [];
+    for (const [key, color] of selections) {
+      const p = products.find(x => (x.id || x.name) === key);
+      if (p) items.push({ p, color });
+    }
+    const displayText = `เลือกสินค้า: ${items.map(({ p, color }) => `${p.name}${color ? ` (${color})` : ""}`).join(", ")}`;
+    const apiText = `เลือกสินค้า: ${items.map(({ p, color }) => {
+      const parts = [p.id ? `product_id:${p.id}` : null, color ? `color:${color}` : null].filter(Boolean).join(", ");
+      return `${p.name}${parts ? ` (${parts})` : ""}`;
+    }).join(", ")}`;
+    onSelect(displayText, apiText);
+  }
+
+  return (
+    <div style={{
+      background: isDark ? "#181818" : "#F8FAFC",
+      border: `1px solid ${accent}45`,
+      borderRadius: 14,
+      padding: 10,
+      display: "flex",
+      flexDirection: "column",
+      gap: 8,
+    }}>
+      <div style={{ fontSize: 12, fontWeight: 800, color: isDark ? "#ededed" : "#0F172A" }}>
+        <i className="fa-solid fa-store" style={{ color: accent, marginRight: 6 }} />สินค้าในสหกรณ์
+      </div>
+      <div style={{ fontSize: 11, color: isDark ? "#9e9e9e" : "#64748B" }}>
+        {confirmed ? "ส่งรายการแล้ว" : "เลือกได้หลายรายการ แล้วกดยืนยัน"}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {products.map(p => {
+          const key = p.id || p.name;
+          const isSelected = selections.has(key);
+          const selectedColor = selections.get(key) ?? "";
+          const colorEntries = p.color_stock ? Object.entries(p.color_stock) : [];
+          const hasColors = colorEntries.length > 0;
+          const needsColor = hasColors && selectedColor === "";
+          return (
+            <div key={key}>
+              <button
+                type="button"
+                disabled={confirmed}
+                aria-pressed={isSelected}
+                onClick={() => toggleProduct(p)}
+                style={{
+                  width: "100%",
+                  textAlign: "left",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  background: isSelected ? (needsColor ? `${accent}0d` : `${accent}1f`) : isDark ? "#0c0c0c" : "#fff",
+                  border: isSelected ? `1.5px solid ${needsColor ? accent + "80" : accent}` : `1px solid ${accent}30`,
+                  borderRadius: isSelected && hasColors ? "10px 10px 0 0" : 10,
+                  padding: "8px 10px",
+                  cursor: confirmed ? "default" : "pointer",
+                  opacity: confirmed && !isSelected ? 0.4 : 1,
+                  transition: "background .15s, opacity .15s, border-color .15s",
+                  fontFamily: "'Kanit', sans-serif",
+                  color: isDark ? "#ededed" : "#0F172A",
+                }}
+              >
+                {/* รูปสินค้า */}
+                <div style={{ width: 44, height: 44, borderRadius: 8, overflow: "hidden", flexShrink: 0, background: isDark ? "#1f1f1f" : "#F1F5F9", border: `1px solid ${accent}20`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {p.image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.image_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    <i className="fa-solid fa-box" style={{ fontSize: 16, color: isDark ? "#555" : "#CBD5E1" }} />
+                  )}
+                </div>
+                {/* ชื่อ + ราคา */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</div>
+                  <div style={{ marginTop: 2, display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: accent }}>฿{Number(p.price).toLocaleString("th-TH")}</span>
+                    {!hasColors && p.stock != null && (
+                      <span style={{ fontSize: 10, color: isDark ? "#666" : "#94A3B8" }}>เหลือ {p.stock} {p.unit}</span>
+                    )}
+                    {/* แสดง swatch สีเล็กที่เลือกแล้ว */}
+                    {isSelected && selectedColor && (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10, color: isDark ? "#aaa" : "#64748B" }}>
+                        <span style={{ width: 10, height: 10, borderRadius: "50%", background: colorToCss(selectedColor), border: "1px solid rgba(0,0,0,0.15)", flexShrink: 0 }} />
+                        {selectedColor}
+                      </span>
+                    )}
+                  </div>
+                  {p.category && <div style={{ fontSize: 10, color: isDark ? "#555" : "#CBD5E1", marginTop: 1 }}>{p.category}</div>}
+                </div>
+                {/* checkbox indicator */}
+                <span style={{
+                  width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                  border: `2px solid ${isSelected && !needsColor ? accent : isDark ? "#555" : "#CBD5E1"}`,
+                  background: isSelected && !needsColor ? accent : "transparent",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  transition: "background .15s, border-color .15s",
+                }}>
+                  {isSelected && !needsColor && <i className="fa-solid fa-check" style={{ fontSize: 8, color: "#fff" }} />}
+                </span>
+              </button>
+              {/* แถว color picker — โชว์เมื่อสินค้าถูกเลือกและมีตัวเลือกสี */}
+              {isSelected && hasColors && (
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+                  background: isDark ? "#0c0c0c" : "#fff",
+                  border: `1.5px solid ${needsColor ? accent + "80" : accent}`,
+                  borderTop: "none",
+                  borderRadius: "0 0 10px 10px",
+                  padding: "8px 10px",
+                }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: isDark ? "#aaa" : "#64748B", whiteSpace: "nowrap" }}>
+                    {needsColor ? "เลือกสี:" : "สี:"}
+                  </span>
+                  {colorEntries.map(([colorName, stock]) => {
+                    const isPickedColor = selectedColor === colorName;
+                    return (
+                      <button
+                        key={colorName}
+                        type="button"
+                        disabled={confirmed || stock === 0}
+                        title={`${colorName} (เหลือ ${stock} ${p.unit})`}
+                        onClick={e => { e.stopPropagation(); pickColor(p, colorName); }}
+                        style={{
+                          width: 24, height: 24, borderRadius: "50%", cursor: stock === 0 || confirmed ? "not-allowed" : "pointer",
+                          background: colorToCss(colorName),
+                          border: isPickedColor ? `3px solid ${accent}` : "2px solid rgba(0,0,0,0.15)",
+                          outline: isPickedColor ? `2px solid ${accent}50` : "none",
+                          outlineOffset: 1,
+                          opacity: stock === 0 ? 0.35 : 1,
+                          position: "relative",
+                          flexShrink: 0,
+                          transition: "border .12s, outline .12s",
+                        }}
+                      />
+                    );
+                  })}
+                  <span style={{ fontSize: 10, color: isDark ? "#666" : "#94A3B8", marginLeft: "auto" }}>
+                    {selectedColor
+                      ? `${selectedColor} เหลือ ${colorEntries.find(([c]) => c === selectedColor)?.[1] ?? 0} ${p.unit}`
+                      : "แตะสีที่ต้องการ"}
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {/* ปุ่มยืนยัน */}
+      {!confirmed && (
+        <button
+          type="button"
+          disabled={!canConfirm}
+          onClick={confirm}
+          style={{
+            width: "100%",
+            padding: "9px 12px",
+            borderRadius: 10,
+            border: "none",
+            background: canConfirm ? accent : (isDark ? "#2a2a2a" : "#E2E8F0"),
+            color: canConfirm ? "#fff" : (isDark ? "#555" : "#94A3B8"),
+            fontWeight: 700,
+            fontSize: 13,
+            cursor: canConfirm ? "pointer" : "not-allowed",
+            fontFamily: "'Kanit', sans-serif",
+            transition: "background .15s, color .15s",
+          }}
+        >
+          {selections.size > 0
+            ? canConfirm ? `ยืนยัน ${selections.size} รายการ` : "เลือกสีก่อนยืนยัน"
+            : "เลือกสินค้าก่อน"}
+        </button>
+      )}
     </div>
   );
 }
@@ -457,6 +685,9 @@ export default function ChatBubble() {
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null); // null = loading
   const [pos, setPos]           = useState<Pos>({ r: 16, b: 16 });
   const [dragging, setDragging] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  // cache ประวัติแชต — โหลดครั้งเดียวตอน login ไม่ต้อง re-fetch ทุกครั้งที่เปิด/ปิดแผงประวัติ
+  const [historyCache, setHistoryCache] = useState<{ turns: Turn[]; more: boolean } | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLTextAreaElement>(null);
@@ -554,7 +785,7 @@ export default function ChatBubble() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "auto" }); }, [messages]);
   useEffect(() => { if (open && loggedIn) setTimeout(() => inputRef.current?.focus(), 150); }, [open, loggedIn]);
   useEffect(() => {
     if (isChatHiddenPath(pathname) || loggedIn !== true) setOpen(false);
@@ -592,6 +823,19 @@ export default function ChatBubble() {
       } catch { /* ประวัติโหลดไม่ได้ก็ยังคุยต่อได้ ไม่ต้องรบกวนผู้ใช้ */ }
     })();
   }, [open, loggedIn, ctx]);
+
+  // ── Pre-fetch ประวัติแชตทันทีที่ login — ไม่ต้องรอเปิดแผง ────────────────────
+  useEffect(() => {
+    if (loggedIn !== true || ctx?.isAdmin || historyCache !== null) return;
+    void (async () => {
+      try {
+        const res = await fetch("/api/chat/history?all=1&limit=20");
+        const json = await res.json().catch(() => null) as { data?: { turns?: Turn[]; more?: boolean } } | null;
+        if (json?.data) setHistoryCache({ turns: json.data.turns ?? [], more: !!json.data.more });
+      } catch { /* silent */ }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loggedIn, ctx?.isAdmin]);
 
   // ── คุยต่อจากบทสนทนาเก่า ────────────────────────────────────────────────────
   // หน้า /student (หรือแผงประวัติในกล่องนี้) ตั้งความจำบอทฝั่งเซิร์ฟเวอร์ไว้แล้ว ที่นี่แค่เปิดกล่องและโชว์ข้อความชุดนั้น
@@ -646,7 +890,7 @@ export default function ChatBubble() {
   };
 
   // ── อัปโหลดรูปแนบ (ใช้เส้นเดียวกับหน้าส่งความเห็น: /api/feedback/upload, ไม่เกิน 5 MB ต่อรูป) ──
-  const uploadImages = useCallback(async (files: FileList | null) => {
+  const uploadImages = useCallback(async (files: FileList | File[] | null) => {
     if (!files || files.length === 0) return;
     const room = MAX_ATTACH - attachments.length;
     const picked = Array.from(files).slice(0, Math.max(room, 0));
@@ -659,7 +903,7 @@ export default function ChatBubble() {
         if (f.size > 5 * 1024 * 1024) { toast.error(`${f.name} ใหญ่เกิน 5 MB`); continue; }
         const fd = new FormData();
         fd.append("file", f);
-        const res = await fetch("/api/feedback/upload", { method: "POST", body: fd });
+        const res = await fetch("/api/chat/upload", { method: "POST", body: fd });
         const json = await res.json().catch(() => null) as { status?: string; url?: string; message?: string } | null;
         if (json?.status === "success" && json.url) urls.push(json.url);
         else toast.error(json?.message ?? "อัปโหลดรูปไม่สำเร็จ");
@@ -673,12 +917,25 @@ export default function ChatBubble() {
   // ── Send ───────────────────────────────────────────────────────────────────
   // บอทสั่งสินค้าสหกรณ์ให้แล้ว → สร้างออเดอร์ + QR PromptPay ในแชตเลย (เดิมรอให้หน้า /shop เปิดอยู่ถึงจะมี QR)
   // ออเดอร์ผูกกับบัญชีที่เซิร์ฟเวอร์ จ่ายจากเครื่องไหนก็ได้ที่ล็อกอินบัญชีเดียวกัน (หน้าสหกรณ์ → ประวัติ → ชำระเงิน)
-  const startChatCheckout = useCallback(async (payload: unknown) => {
+  // targetId = assistantId ของ message บอทที่เรียก place_order
+  // ถ้ามี → แนบ payment card เข้า message นั้นเลย (ไม่ต้อง scroll หา message ใหม่)
+  const startChatCheckout = useCallback(async (payload: unknown, targetId?: string) => {
     const p = payload as { items?: unknown[]; delivery_mode?: string; delivery_loc?: string; delivery_slot?: string } | undefined;
     if (!p?.items?.length) return;
-    const id = `pay-${Date.now()}`;
-    setMessages(prev => [...prev, { role: "assistant", id, content: "กำลังสร้าง QR ชำระเงิน..." }]);
-    const fail = (content: string) => setMessages(prev => prev.map(m => m.id === id ? { ...m, content } : m));
+
+    // ถ้าไม่มี targetId ให้สร้าง message ใหม่เหมือนเดิม (เรียกจากช่องทางอื่น)
+    const id = targetId ?? `pay-${Date.now()}`;
+    if (!targetId) {
+      setMessages(prev => [...prev, { role: "assistant", id, content: "กำลังสร้าง QR ชำระเงิน..." }]);
+    }
+    const fail = (content: string) => {
+      if (targetId) {
+        // ต่อท้าย message บอทเดิมด้วยข้อความ error
+        setMessages(prev => prev.map(m => m.id === id ? { ...m, content: m.content + `\n\n⚠️ ${content}` } : m));
+      } else {
+        setMessages(prev => prev.map(m => m.id === id ? { ...m, content } : m));
+      }
+    };
     try {
       const res = await fetch("/api/shop/orders", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -696,8 +953,8 @@ export default function ChatBubble() {
         return;
       }
       const payment = { orderId: r.order_id, qrUrl: r.qr_url, total: Number(r.total ?? 0), expireAt: Date.now() + 15 * 60 * 1000 };
-      setMessages(prev => prev.map(m => m.id === id ? { ...m, content: "สแกน QR ด้วยแอปธนาคารเพื่อชำระเงินได้เลยครับ", payment } : m));
-      // ถ้าเปิดหน้าสหกรณ์ไว้อีกแท็บ ให้รีเฟรชรายการออเดอร์
+      // แนบ payment card เข้า message เดิม (ไม่เปลี่ยน content)
+      setMessages(prev => prev.map(m => m.id === id ? { ...m, payment } : m));
       window.dispatchEvent(new CustomEvent("shop:orders-changed"));
     } catch {
       fail("เชื่อมต่อระบบชำระเงินไม่ได้ ลองใหม่อีกครั้ง");
@@ -769,9 +1026,10 @@ export default function ChatBubble() {
       events.forEach(event => {
         const eventName = typeof event === "string" ? event : event.type;
         if (!eventName) return;
-        // อยู่หน้าสหกรณ์: หน้านั้นรับเหตุการณ์นี้เปิด QR เองอยู่แล้ว (ห้ามสร้างซ้ำสองออเดอร์) ที่อื่น: แสดง QR ในแชต
-        if (eventName === "shop:checkout-required" && !window.location.pathname.startsWith("/shop")) {
-          void startChatCheckout(typeof event === "string" ? undefined : event.payload);
+        // โชว์ QR ชำระเงินในแชตเสมอ ไม่ว่าจะอยู่หน้าไหน
+        // ส่ง assistantId เพื่อให้แนบ payment card เข้า message บอทที่มีอยู่แล้ว ไม่ต้องเพิ่ม message ใหม่
+        if (eventName === "shop:checkout-required") {
+          void startChatCheckout(typeof event === "string" ? undefined : event.payload, assistantId);
           return;
         }
         window.dispatchEvent(new CustomEvent(eventName, { detail: typeof event === "string" ? undefined : event.payload }));
@@ -786,15 +1044,33 @@ export default function ChatBubble() {
     } finally {
       setStreaming(false);
     }
-  }, [ctx, loggedIn, messages, streaming, startChatCheckout]);
+  }, [ctx, loggedIn, messages, streaming, uploading, attachments, startChatCheckout]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(input); }
   };
 
+  // วางรูปจาก clipboard ลงช่องพิมพ์ → อัปโหลดอัตโนมัติ
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const imageFiles = Array.from(e.clipboardData.items)
+      .filter(item => item.kind === "file" && item.type.startsWith("image/"))
+      .map(item => item.getAsFile())
+      .filter((f): f is File => f !== null);
+    if (imageFiles.length === 0) return;
+    e.preventDefault();
+    void uploadImages(imageFiles);
+  };
+
   // ล้างทั้งหน้าจอและความจำฝั่งเซิร์ฟเวอร์ — เดิมล้างแค่ state ผู้ใช้จึงกดล้างแล้ว
   // บอทยังจำเรื่องเดิมได้อยู่ ซึ่งตรงข้ามกับที่ปุ่มนี้บอกว่าทำอะไร
   // (agent_logs ไม่ถูกแตะ เป็นบันทึกการใช้งานของระบบ ไม่ใช่ความจำของบอท)
+  const copyMessage = (msg: Message) => {
+    void navigator.clipboard.writeText(msg.content).then(() => {
+      setCopiedId(msg.id);
+      setTimeout(() => setCopiedId(null), 2000);
+    });
+  };
+
   const clearChat = () => {
     abortRef.current?.abort();
     setMessages([]);
@@ -905,8 +1181,8 @@ export default function ChatBubble() {
               </button>
             )}
             {loggedIn && messages.length > 0 && (
-              <button onClick={clearChat} style={{ background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 8, color: "#fff", padding: "4px 8px", cursor: "pointer", fontSize: 11, fontFamily: "'Kanit', sans-serif" }}>
-                ล้าง
+              <button onClick={clearChat} title="เริ่มแชตใหม่" aria-label="เริ่มแชตใหม่" style={{ background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 8, color: "#fff", padding: "4px 8px", cursor: "pointer", fontSize: 12 }}>
+                <i className="fa-solid fa-plus" />
               </button>
             )}
             <button onClick={() => setOpen(false)} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: "2px 6px" }}>
@@ -916,17 +1192,42 @@ export default function ChatBubble() {
 
           {/* ── เมนูฟังก์ชัน (ซ้อนทับ) ─────────────────────────────────────── */}
           {showMenu && loggedIn && !ctx.isAdmin && (
-            <div style={{ position: "absolute", top: 57, left: 0, right: 0, bottom: 0, background: T.panelBg, overflowY: "auto", padding: "14px", zIndex: 2 }}>
-              <div style={{ color: T.mutedText, fontSize: 12, marginBottom: 10 }}>เลือกสิ่งที่อยากทำ — ฉันจะพาทำทีละขั้นจนยืนยันเสร็จ</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                {FUNCTION_MENU.map(f => (
-                  <button key={f.title} onClick={() => { setShowMenu(false); void sendMessage(f.label, f.flow); }}
-                    style={{ textAlign: "left", background: `${accent}12`, border: `1px solid ${accent}40`, borderRadius: 14, padding: "10px 12px", cursor: "pointer", fontFamily: "'Kanit', sans-serif", display: "flex", flexDirection: "column", gap: 4 }}>
-                    <i className={`fa-solid ${f.icon}`} style={{ color: accent, fontSize: 16 }} />
-                    <span style={{ color: T.botText, fontSize: 13, fontWeight: 700, lineHeight: 1.2 }}>{f.title}</span>
-                    <span style={{ color: T.mutedText, fontSize: 11, lineHeight: 1.3 }}>{f.hint}</span>
-                  </button>
-                ))}
+            <div style={{ position: "absolute", top: 57, left: 0, right: 0, bottom: 0, background: T.panelBg, display: "flex", flexDirection: "column", zIndex: 2 }}>
+              {/* หัว menu panel + ปุ่มกลับ */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderBottom: T.headerBorder, flexShrink: 0 }}>
+                <button onClick={() => setShowMenu(false)}
+                  style={{ background: "none", border: "none", color: accent, cursor: "pointer", fontSize: 13, fontWeight: 700, fontFamily: "'Kanit', sans-serif", padding: 0, display: "flex", alignItems: "center", gap: 5 }}>
+                  <i className="fa-solid fa-arrow-left" style={{ fontSize: 11 }} /> กลับ
+                </button>
+                <span style={{ color: T.mutedText, fontSize: 11, flex: 1, textAlign: "center" }}>เมนูฟังก์ชัน</span>
+                <span style={{ width: 40 }} />
+              </div>
+              {/* ถ้ากำลังคุยอยู่ แสดงปุ่มกลับสู่ session ปัจจุบัน */}
+              {messages.length > 0 && (
+                <button onClick={() => setShowMenu(false)}
+                  style={{ margin: "10px 12px 2px", display: "flex", alignItems: "center", gap: 8, background: `${accent}18`, border: `1px solid ${accent}40`, borderRadius: 10, padding: "7px 10px", cursor: "pointer", fontFamily: "'Kanit', sans-serif", textAlign: "left" }}>
+                  <i className="fa-solid fa-comment-dots" style={{ color: accent, fontSize: 13, flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ color: T.botText, fontWeight: 700, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {chatTitle ?? "การสนทนาปัจจุบัน"}
+                    </div>
+                    <div style={{ color: T.mutedText, fontSize: 10.5 }}>กำลังคุยอยู่ · {messages.length} ข้อความ</div>
+                  </div>
+                  <i className="fa-solid fa-arrow-right" style={{ color: accent, fontSize: 11, flexShrink: 0 }} />
+                </button>
+              )}
+              <div style={{ flex: 1, overflowY: "auto", padding: "10px 14px 14px" }}>
+                <div style={{ color: T.mutedText, fontSize: 12, marginBottom: 10 }}>เลือกสิ่งที่อยากทำ — ฉันจะพาทำทีละขั้นจนยืนยันเสร็จ</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  {FUNCTION_MENU.map(f => (
+                    <button key={f.title} onClick={() => { setShowMenu(false); void sendMessage(f.label, f.flow); }}
+                      style={{ textAlign: "left", background: `${accent}12`, border: `1px solid ${accent}40`, borderRadius: 14, padding: "10px 12px", cursor: "pointer", fontFamily: "'Kanit', sans-serif", display: "flex", flexDirection: "column", gap: 4 }}>
+                      <i className={`fa-solid ${f.icon}`} style={{ color: accent, fontSize: 16 }} />
+                      <span style={{ color: T.botText, fontSize: 13, fontWeight: 700, lineHeight: 1.2 }}>{f.title}</span>
+                      <span style={{ color: T.mutedText, fontSize: 11, lineHeight: 1.3 }}>{f.hint}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           )}
@@ -958,7 +1259,10 @@ export default function ChatBubble() {
                 </button>
               )}
               <div style={{ flex: 1, overflowY: "auto", padding: "8px 12px" }}>
-                <ChatHistoryList dark={ctx.isAdmin} adminId={ctx.isAdmin ? ctx.adminId : undefined} onResumed={() => setShowHistory(false)} />
+                <ChatHistoryList dark={ctx.isAdmin} adminId={ctx.isAdmin ? ctx.adminId : undefined} onResumed={() => setShowHistory(false)}
+                  initialTurns={!ctx.isAdmin ? (historyCache?.turns ?? undefined) : undefined}
+                  initialMore={historyCache?.more}
+                  onTurnsChange={(t, m) => setHistoryCache({ turns: t, more: m })} />
               </div>
             </div>
           )}
@@ -1019,6 +1323,21 @@ export default function ChatBubble() {
                         </button>
                       ))}
                     </div>
+                    {/* ประวัติสนทนาล่าสุด — โหลดพร้อมหน้าแรก ซ่อนเองเมื่อไม่มีประวัติ */}
+                    {loggedIn && !ctx.isAdmin && (
+                      <div style={{ width: "100%", marginTop: 16, textAlign: "left" }}>
+                        <div style={{ color: T.mutedText, fontSize: 10.5, fontWeight: 700, marginBottom: 6, paddingLeft: 2, letterSpacing: 0.3 }}>
+                          สนทนาล่าสุด
+                        </div>
+                        <ChatHistoryList
+                          hideWhenEmpty
+                          onResumed={() => { /* ปิดด้วย setMessages — ChatHistoryList dispatch CHAT_RESUME_EVENT แล้ว */ }}
+                          initialTurns={historyCache?.turns ?? undefined}
+                          initialMore={historyCache?.more}
+                          onTurnsChange={(t, m) => setHistoryCache({ turns: t, more: m })}
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
                 {messages.map(msg => (
@@ -1051,6 +1370,13 @@ export default function ChatBubble() {
                                 </span>
                               : "")}
                       </div>
+                      {msg.role === "assistant" && msg.content && !streaming && (
+                        <button type="button" onClick={() => copyMessage(msg)} title="คัดลอกข้อความ"
+                          style={{ alignSelf: "flex-start", background: "none", border: "none", color: T.mutedText, cursor: "pointer", fontSize: 11, padding: "0 2px", display: "flex", alignItems: "center", gap: 3, fontFamily: "'Kanit', sans-serif" }}>
+                          <i className={`fa-${copiedId === msg.id ? "solid fa-check" : "regular fa-copy"}`} style={{ color: copiedId === msg.id ? "#22c55e" : T.mutedText }} />
+                          <span style={{ fontSize: 10 }}>{copiedId === msg.id ? "คัดลอกแล้ว" : ""}</span>
+                        </button>
+                      )}
                       {msg.role === "assistant" && msg.payment && (
                         <PaymentCard payment={msg.payment} accent={accent} isDark={ctx.isAdmin} />
                       )}
@@ -1083,6 +1409,8 @@ export default function ChatBubble() {
                       {msg.role === "assistant" && msg.card && (
                         msg.card.type === "choice"
                           ? <ChoiceCard card={msg.card} accent={accent} isDark={ctx.isAdmin} onSelect={sendMessage} />
+                          : msg.card.type === "shop_products"
+                          ? <ShopProductCard card={msg.card} accent={accent} isDark={ctx.isAdmin} onSelect={sendMessage} />
                           : <AttendanceCard card={msg.card} accent={accent} ctx={ctx} />
                       )}
                     </div>
@@ -1117,6 +1445,7 @@ export default function ChatBubble() {
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
+                  onPaste={handlePaste}
                   placeholder="พิมพ์คำถาม… (Enter ส่ง)"
                   rows={1}
                   style={{ flex: 1, border: `1px solid ${T.inputBorder}`, borderRadius: 10, padding: "8px 12px", fontSize: 13, fontFamily: "'Kanit', sans-serif", resize: "none", outline: "none", maxHeight: 80, lineHeight: 1.5, background: T.inputBg, color: T.inputText }}

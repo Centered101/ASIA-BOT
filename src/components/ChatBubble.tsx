@@ -24,7 +24,8 @@ type NavButton = { path: string; label: string };
 type RichCard = { type: string; payload: Record<string, unknown> };
 type ChoiceOption = { label: string; value: string; description?: string };
 type ChatEvent = string | { type: string; payload?: unknown };
-type Message = { role: "user" | "assistant"; content: string; id: string; /** ข้อความจริงที่ส่งให้บอท (ถ้าต่างจากที่โชว์ เช่นมาจากเมนูฟังก์ชัน) */ apiContent?: string; navButtons?: NavButton[]; card?: RichCard; /** ลิงก์รูปที่แนบมากับข้อความนี้ (ส่งให้บอทเฉพาะตอนเรียก API ไม่โชว์เป็นข้อความ) */ attach?: string[] };
+type PaymentInfo = { orderId: string; qrUrl: string; total: number; expireAt: number };
+type Message = { role: "user" | "assistant"; content: string; id: string; /** QR ชำระเงินที่สร้างในแชต */ payment?: PaymentInfo; /** ข้อความจริงที่ส่งให้บอท (ถ้าต่างจากที่โชว์ เช่นมาจากเมนูฟังก์ชัน) */ apiContent?: string; navButtons?: NavButton[]; card?: RichCard; /** ลิงก์รูปที่แนบมากับข้อความนี้ (ส่งให้บอทเฉพาะตอนเรียก API ไม่โชว์เป็นข้อความ) */ attach?: string[] };
 type Pos = { r: number; b: number };
 /** รูปแนบต่อข้อความ — ตรงกับที่ฟอร์มส่งความเห็นรับ (feedback.image_urls) */
 const MAX_ATTACH = 3;
@@ -362,6 +363,80 @@ function AttendanceCard({ card, accent, ctx }: { card: RichCard; accent: string;
   return null;
 }
 
+/** การ์ดชำระเงิน PromptPay ในแชต — โชว์ QR นับเวลาถอยหลัง และเช็กสถานะกับเซิร์ฟเวอร์ทุก 3 วินาที (จ่ายจากเครื่องอื่นก็อัปเดตที่นี่) */
+function PaymentCard({ payment, accent, isDark }: { payment: PaymentInfo; accent: string; isDark: boolean }) {
+  const [status, setStatus] = useState<"waiting" | "paid" | "expired" | "cancelled">("waiting");
+  const [remaining, setRemaining] = useState(Math.max(0, payment.expireAt - Date.now()));
+
+  useEffect(() => {
+    if (status !== "waiting") return;
+    const tick = setInterval(() => {
+      const rem = payment.expireAt - Date.now();
+      if (rem <= 0) {
+        setRemaining(0);
+        setStatus("expired");
+        // หมดเวลา → ยกเลิกออเดอร์คืนสต็อก เหมือนหน้าสหกรณ์
+        fetch(`/api/shop/orders/${payment.orderId}/cancel`, { method: "POST" }).catch(() => {});
+      } else setRemaining(rem);
+    }, 1000);
+    const poll = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/shop/orders/${payment.orderId}/check`);
+        if (!res.ok) return;
+        const r = await res.json() as { status?: string; payment_status?: string };
+        if (r.status !== "success") return;
+        if (r.payment_status === "paid") { setStatus("paid"); window.dispatchEvent(new CustomEvent("shop:orders-changed")); }
+        else if (r.payment_status === "cancelled" || r.payment_status === "failed") setStatus("cancelled");
+      } catch { /* รอบหน้าลองใหม่ */ }
+    }, 3000);
+    return () => { clearInterval(tick); clearInterval(poll); };
+  }, [status, payment.expireAt, payment.orderId]);
+
+  const mm = String(Math.floor(remaining / 60000)).padStart(2, "0");
+  const ss = String(Math.floor((remaining % 60000) / 1000)).padStart(2, "0");
+  const box: React.CSSProperties = {
+    background: isDark ? "#181818" : "#fff", border: `1px solid ${accent}45`, borderRadius: 14, padding: 12,
+    display: "flex", flexDirection: "column", alignItems: "center", gap: 8, width: "100%",
+  };
+  const muted = isDark ? "#9e9e9e" : "#64748B";
+
+  if (status === "paid") {
+    return (
+      <div style={box}>
+        <div style={{ fontSize: 28 }}>✅</div>
+        <div style={{ fontWeight: 800, fontSize: 14, color: isDark ? "#ededed" : "#0F172A" }}>ชำระเงินสำเร็จ ฿{payment.total.toFixed(2)}</div>
+        <div style={{ fontSize: 11, color: muted, textAlign: "center" }}>รับของได้ที่สหกรณ์ ดูใบเสร็จที่หน้าสหกรณ์ → ประวัติ</div>
+      </div>
+    );
+  }
+  if (status !== "waiting") {
+    return (
+      <div style={box}>
+        <div style={{ fontWeight: 800, fontSize: 13, color: "#ef4444" }}>
+          {status === "expired" ? "QR หมดเวลาแล้ว" : "ออเดอร์ถูกยกเลิก"}
+        </div>
+        <div style={{ fontSize: 11, color: muted, textAlign: "center" }}>บอกบอทว่าสั่งใหม่ได้เลย เพื่อสร้าง QR ใหม่</div>
+      </div>
+    );
+  }
+  return (
+    <div style={box}>
+      <div style={{ fontWeight: 800, fontSize: 13, color: isDark ? "#ededed" : "#0F172A" }}>
+        <i className="fa-solid fa-qrcode" style={{ color: accent, marginRight: 6 }} />ชำระเงิน PromptPay
+      </div>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={payment.qrUrl} alt="QR PromptPay" width={176} height={176} style={{ borderRadius: 12, background: "#fff", objectFit: "contain" }} />
+      <div style={{ fontWeight: 800, fontSize: 18, color: accent }}>฿{payment.total.toFixed(2)}</div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: remaining < 5 * 60000 ? "#ef4444" : muted }}>
+        <i className="fa-regular fa-clock" style={{ marginRight: 4 }} />หมดเวลาใน {mm}:{ss}
+      </div>
+      <div style={{ fontSize: 10.5, color: muted, textAlign: "center", lineHeight: 1.5 }}>
+        ชำระที่เครื่องนี้ หรือเปิดมือถือเข้าสู่ระบบด้วยบัญชีเดียวกัน → หน้าสหกรณ์ → ประวัติ → ชำระเงิน<br />สถานะอัปเดตให้ทุกเครื่องอัตโนมัติ
+      </div>
+    </div>
+  );
+}
+
 export default function ChatBubble() {
   const pathname = usePathname();
   const [open, setOpen]         = useState(false);
@@ -596,6 +671,39 @@ export default function ChatBubble() {
   }, [attachments.length]);
 
   // ── Send ───────────────────────────────────────────────────────────────────
+  // บอทสั่งสินค้าสหกรณ์ให้แล้ว → สร้างออเดอร์ + QR PromptPay ในแชตเลย (เดิมรอให้หน้า /shop เปิดอยู่ถึงจะมี QR)
+  // ออเดอร์ผูกกับบัญชีที่เซิร์ฟเวอร์ จ่ายจากเครื่องไหนก็ได้ที่ล็อกอินบัญชีเดียวกัน (หน้าสหกรณ์ → ประวัติ → ชำระเงิน)
+  const startChatCheckout = useCallback(async (payload: unknown) => {
+    const p = payload as { items?: unknown[]; delivery_mode?: string; delivery_loc?: string; delivery_slot?: string } | undefined;
+    if (!p?.items?.length) return;
+    const id = `pay-${Date.now()}`;
+    setMessages(prev => [...prev, { role: "assistant", id, content: "กำลังสร้าง QR ชำระเงิน..." }]);
+    const fail = (content: string) => setMessages(prev => prev.map(m => m.id === id ? { ...m, content } : m));
+    try {
+      const res = await fetch("/api/shop/orders", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: p.items,
+          delivery_mode: p.delivery_mode === "delivery" ? "delivery" : "pickup",
+          delivery_loc: p.delivery_loc || "สหกรณ์",
+          delivery_slot: p.delivery_slot || "รับเองที่สหกรณ์",
+          source: "ai",
+        }),
+      });
+      const r = await res.json().catch(() => null) as { status?: string; message?: string; order_id?: string; qr_url?: string; total?: number } | null;
+      if (!r || r.status !== "success" || !r.order_id || !r.qr_url) {
+        fail(r?.message ? `สร้าง QR ไม่สำเร็จ: ${r.message}` : "สร้าง QR ไม่สำเร็จ ลองใหม่อีกครั้ง หรือไปสั่งที่หน้าสหกรณ์");
+        return;
+      }
+      const payment = { orderId: r.order_id, qrUrl: r.qr_url, total: Number(r.total ?? 0), expireAt: Date.now() + 15 * 60 * 1000 };
+      setMessages(prev => prev.map(m => m.id === id ? { ...m, content: "สแกน QR ด้วยแอปธนาคารเพื่อชำระเงินได้เลยครับ", payment } : m));
+      // ถ้าเปิดหน้าสหกรณ์ไว้อีกแท็บ ให้รีเฟรชรายการออเดอร์
+      window.dispatchEvent(new CustomEvent("shop:orders-changed"));
+    } catch {
+      fail("เชื่อมต่อระบบชำระเงินไม่ได้ ลองใหม่อีกครั้ง");
+    }
+  }, []);
+
   const sendMessage = useCallback(async (text: string, apiText?: string) => {
     const trimmed = text.trim() || (attachments.length ? "แนบรูปประกอบ" : "");
     if (!trimmed || streaming || uploading || !ctx || !loggedIn) return;
@@ -661,6 +769,11 @@ export default function ChatBubble() {
       events.forEach(event => {
         const eventName = typeof event === "string" ? event : event.type;
         if (!eventName) return;
+        // อยู่หน้าสหกรณ์: หน้านั้นรับเหตุการณ์นี้เปิด QR เองอยู่แล้ว (ห้ามสร้างซ้ำสองออเดอร์) ที่อื่น: แสดง QR ในแชต
+        if (eventName === "shop:checkout-required" && !window.location.pathname.startsWith("/shop")) {
+          void startChatCheckout(typeof event === "string" ? undefined : event.payload);
+          return;
+        }
         window.dispatchEvent(new CustomEvent(eventName, { detail: typeof event === "string" ? undefined : event.payload }));
       });
     } catch (err: unknown) {
@@ -673,7 +786,7 @@ export default function ChatBubble() {
     } finally {
       setStreaming(false);
     }
-  }, [ctx, loggedIn, messages, streaming]);
+  }, [ctx, loggedIn, messages, streaming, startChatCheckout]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(input); }
@@ -820,8 +933,33 @@ export default function ChatBubble() {
 
           {/* ── ประวัติย้อนหลัง (ซ้อนทับเนื้อหาแชต ใต้หัวกล่อง) ─────────────── */}
           {showHistory && loggedIn && (
-            <div style={{ position: "absolute", top: 57, left: 0, right: 0, bottom: 0, background: T.panelBg, overflowY: "auto", padding: "12px 14px", zIndex: 2 }}>
-              <ChatHistoryList dark={ctx.isAdmin} adminId={ctx.isAdmin ? ctx.adminId : undefined} onResumed={() => setShowHistory(false)} />
+            <div style={{ position: "absolute", top: 57, left: 0, right: 0, bottom: 0, background: T.panelBg, display: "flex", flexDirection: "column", zIndex: 2 }}>
+              {/* หัว history panel + ปุ่มกลับ */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderBottom: T.headerBorder, flexShrink: 0 }}>
+                <button onClick={() => setShowHistory(false)}
+                  style={{ background: "none", border: "none", color: accent, cursor: "pointer", fontSize: 13, fontWeight: 700, fontFamily: "'Kanit', sans-serif", padding: 0, display: "flex", alignItems: "center", gap: 5 }}>
+                  <i className="fa-solid fa-arrow-left" style={{ fontSize: 11 }} /> กลับ
+                </button>
+                <span style={{ color: T.mutedText, fontSize: 11, flex: 1, textAlign: "center" }}>ประวัติการสนทนา</span>
+                <span style={{ width: 40 }} />
+              </div>
+              {/* ถ้ากำลังคุยอยู่ แสดงปุ่มกลับสู่ session ปัจจุบัน */}
+              {messages.length > 0 && (
+                <button onClick={() => setShowHistory(false)}
+                  style={{ margin: "10px 12px 2px", display: "flex", alignItems: "center", gap: 8, background: `${accent}18`, border: `1px solid ${accent}40`, borderRadius: 10, padding: "7px 10px", cursor: "pointer", fontFamily: "'Kanit', sans-serif", textAlign: "left" }}>
+                  <i className="fa-solid fa-comment-dots" style={{ color: accent, fontSize: 13, flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ color: T.botText, fontWeight: 700, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {chatTitle ?? "การสนทนาปัจจุบัน"}
+                    </div>
+                    <div style={{ color: T.mutedText, fontSize: 10.5 }}>กำลังคุยอยู่ · {messages.length} ข้อความ</div>
+                  </div>
+                  <i className="fa-solid fa-arrow-right" style={{ color: accent, fontSize: 11, flexShrink: 0 }} />
+                </button>
+              )}
+              <div style={{ flex: 1, overflowY: "auto", padding: "8px 12px" }}>
+                <ChatHistoryList dark={ctx.isAdmin} adminId={ctx.isAdmin ? ctx.adminId : undefined} onResumed={() => setShowHistory(false)} />
+              </div>
             </div>
           )}
 
@@ -913,6 +1051,9 @@ export default function ChatBubble() {
                                 </span>
                               : "")}
                       </div>
+                      {msg.role === "assistant" && msg.payment && (
+                        <PaymentCard payment={msg.payment} accent={accent} isDark={ctx.isAdmin} />
+                      )}
                       {msg.role === "assistant" && msg.navButtons && msg.navButtons.length > 0 && (
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                           {msg.navButtons.map(btn => (

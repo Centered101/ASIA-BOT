@@ -1,19 +1,33 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { SESSION_TTL, SESSION_KEY, SESSION_TIME_KEY } from "@/lib/config";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import { toast } from "sonner";
+import ChatHistoryList, { CHAT_RESUME_EVENT, type HistoryMessage } from "@/components/ChatHistoryList";
 import Markdown from "./Markdown";
 import { SITE_NAME } from "@/lib/config";
 import { isMycerHost } from "@/lib/mycer";
+import { isAdminHost } from "@/lib/admin-host";
+
+/**
+ * กำลังอยู่ในหลังบ้านหรือไม่ — ทั้งโดเมนหลัก (/admin/...) และซับโดเมน admin.<domain>
+ * ที่ pathname ถูก rewrite ซ่อนไว้ข้างหลังจนเหลือแค่ "/finance"
+ */
+function onAdminSite(): boolean {
+  return window.location.pathname.startsWith("/admin") || isAdminHost(window.location.host);
+}
 
 type NavButton = { path: string; label: string };
 type RichCard = { type: string; payload: Record<string, unknown> };
 type ChoiceOption = { label: string; value: string; description?: string };
 type ChatEvent = string | { type: string; payload?: unknown };
-type Message = { role: "user" | "assistant"; content: string; id: string; navButtons?: NavButton[]; card?: RichCard };
+type Message = { role: "user" | "assistant"; content: string; id: string; /** ข้อความจริงที่ส่งให้บอท (ถ้าต่างจากที่โชว์ เช่นมาจากเมนูฟังก์ชัน) */ apiContent?: string; navButtons?: NavButton[]; card?: RichCard; /** ลิงก์รูปที่แนบมากับข้อความนี้ (ส่งให้บอทเฉพาะตอนเรียก API ไม่โชว์เป็นข้อความ) */ attach?: string[] };
 type Pos = { r: number; b: number };
+/** รูปแนบต่อข้อความ — ตรงกับที่ฟอร์มส่งความเห็นรับ (feedback.image_urls) */
+const MAX_ATTACH = 3;
 
 type UserContext = {
   isAdmin: boolean;
@@ -25,13 +39,25 @@ type UserContext = {
   userDepartment?: string;
 };
 
-const STUDENT_SESSION_KEY  = "asia_lb_session";
-const STUDENT_TIME_KEY     = "asia_lb_session_time";
-const STUDENT_SESSION_TTL  = 7 * 24 * 60 * 60 * 1000;
-const CHAT_HIDDEN_PATH_PREFIXES = ["/login", "/register", "/project", "/QQ", "/Qman", "/mycer"];
+// ใช้คีย์กลางเดียวกับที่เว็บบันทึกตอนล็อกอิน (lib/config) — เดิมอ่านคีย์เก่า asia_lb_session ซึ่งไม่มีแล้ว ปุ่มแชทเลยซ่อนตัวทั้งที่ล็อกอินอยู่
+const STUDENT_SESSION_KEY  = SESSION_KEY;
+const STUDENT_TIME_KEY     = SESSION_TIME_KEY;
+// ใช้ค่ากลางเดียวกับเว็บ ไม่งั้นแชทจะคิดว่าหมดอายุก่อนหน้าอื่นทั้งที่ยังล็อกอินอยู่
+const STUDENT_SESSION_TTL  = SESSION_TTL;
+/**
+ * หน้าที่โชว์ปุ่มแชท (allow-list) — เดิมโชว์ทุกหน้าเว้นไม่กี่หน้า แล้วบังเนื้อหา/ซ้อนกับปุ่มอื่นจนรก
+ * เฉพาะหน้าที่แชทช่วยงานได้จริง: หน้านักเรียนกับบริการที่บอททำแทนได้ และหลังบ้านทุกหน้า
+ * (หลังบ้านเช็กด้วย onAdminSite เพราะซับโดเมน admin มี pathname ถูก rewrite)
+ */
+const CHAT_ALLOWED_PATH_PREFIXES = [
+  "/", // หน้าหลัก (ตรงตัวเท่านั้น — "/" ไม่ใช่คำนำหน้าของหน้าอื่น เพราะเทียบแบบ `${prefix}/`)
+  "/student", "/shop", "/equipment-request", "/maintenance-request", "/my-attendance", "/feedback", "/campus-map",
+  "/class-track-room", "/news", "/projects",
+];
 
 function isChatHiddenPath(pathname: string) {
-  return CHAT_HIDDEN_PATH_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`));
+  if (typeof window !== "undefined" && onAdminSite()) return false;
+  return !CHAT_ALLOWED_PATH_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
 // ปุ่มลัดต้องตรงกับ tool ที่บอทมีจริง ไม่งั้นกดแล้วได้คำตอบว่าทำให้ไม่ได้
@@ -45,6 +71,21 @@ const STUDENT_QUICK_REPLIES = [
   "แจ้งซ่อม",
   "แจ้งเตือนของฉัน",
   "ขอดูข้อมูลของฉัน",
+];
+/**
+ * เมนูฟังก์ชันของนักเรียน — กดแล้วบอทพาทำทีละขั้นตั้งแต่เริ่มถึงยืนยันธุรกรรม
+ * label = ข้อความที่โชว์ในแชต, flow = ข้อความที่ส่งให้บอท (ขึ้นต้น [เมนู:...] ให้บอทรู้ว่าเลือกจากเมนู ดู context.ts)
+ * ฟังก์ชันที่มี tool รองรับจริงเท่านั้น (เหมือนปุ่มลัดด้านบน)
+ */
+const FUNCTION_MENU: { icon: string; title: string; hint: string; label: string; flow: string }[] = [
+  { icon: "fa-calendar-days", title: "ตารางเรียน", hint: "ดูห้องเรียนวันนี้", label: "ตารางเรียนวันนี้", flow: "[เมนู:ตารางเรียน] ขอดูตารางเรียนวันนี้" },
+  { icon: "fa-calendar-check", title: "จองห้อง", hint: "ห้องประชุม/ห้องเรียน", label: "จองห้อง", flow: "[เมนู:จองห้อง] ฉันต้องการจองห้อง" },
+  { icon: "fa-toolbox", title: "เบิกคุรุภัณฑ์", hint: "เลือกและส่งคำขอ", label: "เบิกคุรุภัณฑ์", flow: "[เมนู:เบิกคุรุภัณฑ์] ฉันต้องการเบิกคุรุภัณฑ์" },
+  { icon: "fa-store", title: "สหกรณ์", hint: "ซื้อสินค้าในโรงเรียน", label: "ซื้อของที่สหกรณ์", flow: "[เมนู:สหกรณ์] ฉันต้องการซื้อของที่สหกรณ์" },
+  { icon: "fa-screwdriver-wrench", title: "แจ้งซ่อม", hint: "แจ้งของชำรุด", label: "แจ้งซ่อม", flow: "[เมนู:แจ้งซ่อม] ฉันต้องการแจ้งซ่อม" },
+  { icon: "fa-file-lines", title: "ขอเอกสาร", hint: "ใบรับรอง/Transcript", label: "ขอเอกสาร", flow: "[เมนู:ขอเอกสาร] ฉันต้องการขอเอกสาร" },
+  { icon: "fa-user-check", title: "การเข้าเรียน", hint: "ขาด สาย งานค้าง", label: "ดูการเข้าเรียนของฉัน", flow: "[เมนู:การเข้าเรียน] ขอดูการเข้าเรียนของฉัน" },
+  { icon: "fa-comment-dots", title: "ความคิดเห็น", hint: "แจ้งปัญหา/ข้อเสนอแนะ (แนบรูปได้)", label: "ส่งความคิดเห็น/แจ้งปัญหา", flow: "[เมนู:ความคิดเห็น] ฉันต้องการส่งความคิดเห็นหรือแจ้งปัญหา" },
 ];
 const ADMIN_QUICK_REPLIES   = [
   "สถิตินักเรียนวันนี้",
@@ -154,6 +195,8 @@ function StudentInfoBar({ ctx, accent }: { ctx: UserContext; accent: string }) {
 }
 
 function ChoiceCard({ card, accent, isDark, onSelect }: { card: RichCard; accent: string; isDark: boolean; onSelect: (value: string) => void }) {
+  // ตัวเลือกที่กดแล้ว — ไฮไลต์ให้เห็นทันทีและล็อกปุ่มทั้งหมด กันกดซ้ำ/กดอีกข้อหลังตอบไปแล้ว
+  const [picked, setPicked] = useState<string | null>(null);
   if (card.type !== "choice") return null;
   const title = String(card.payload.title ?? "เลือกตัวเลือก");
   const helper = String(card.payload.helper ?? "");
@@ -176,33 +219,46 @@ function ChoiceCard({ card, accent, isDark, onSelect }: { card: RichCard; accent
       </div>
       {helper && <div style={{ fontSize: 11, color: isDark ? "#9e9e9e" : "#64748B", lineHeight: 1.5 }}>{helper}</div>}
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {options.map(option => (
+        {options.map(option => {
+          const key = `${option.label}-${option.value}`;
+          const isPicked = picked === key;
+          const locked = picked !== null;
+          return (
           <button
-            key={`${option.label}-${option.value}`}
+            key={key}
             type="button"
-            onClick={() => onSelect(`${inputPrefix}${option.value}`)}
+            disabled={locked}
+            aria-pressed={isPicked}
+            onClick={() => { if (locked) return; setPicked(key); onSelect(`${inputPrefix}${option.value}`); }}
             style={{
               width: "100%",
               textAlign: "left",
               display: "flex",
               gap: 8,
               alignItems: "flex-start",
-              background: isDark ? "#0c0c0c" : "#fff",
-              border: `1px solid ${accent}35`,
+              background: isPicked ? `${accent}1f` : isDark ? "#0c0c0c" : "#fff",
+              border: isPicked ? `1.5px solid ${accent}` : `1px solid ${accent}35`,
               borderRadius: 10,
               padding: "8px 10px",
-              cursor: "pointer",
+              cursor: locked ? "default" : "pointer",
+              opacity: locked && !isPicked ? 0.45 : 1,
+              transition: "background .15s, opacity .15s, border-color .15s",
               fontFamily: "'Kanit', sans-serif",
               color: isDark ? "#ededed" : "#0F172A",
             }}
           >
-            <span style={{ width: 15, height: 15, borderRadius: "50%", border: `2px solid ${accent}`, marginTop: 2, flexShrink: 0 }} />
+            <span style={{
+              width: 15, height: 15, borderRadius: "50%", border: `2px solid ${accent}`, marginTop: 2, flexShrink: 0,
+              background: isPicked ? accent : "transparent",
+              boxShadow: isPicked ? `inset 0 0 0 2.5px ${isDark ? "#0c0c0c" : "#fff"}` : "none",
+            }} />
             <span style={{ minWidth: 0 }}>
               <span style={{ display: "block", fontSize: 12, fontWeight: 700, lineHeight: 1.35 }}>{option.label}</span>
               {option.description && <span style={{ display: "block", fontSize: 10, color: isDark ? "#9e9e9e" : "#64748B", marginTop: 2, lineHeight: 1.35 }}>{option.description}</span>}
             </span>
           </button>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -312,6 +368,14 @@ export default function ChatBubble() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput]       = useState("");
   const [streaming, setStreaming] = useState(false);
+  // รูปที่อัปโหลดแล้วรอส่งไปกับข้อความถัดไป (ใช้กับส่งความเห็น/รายงานปัญหา)
+  const [attachments, setAttachments] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  // แผงประวัติแชตย้อนหลัง (ซ้อนทับเนื้อหาแชต) — เปิดจากปุ่มนาฬิกาที่หัวกล่อง
+  const [showHistory, setShowHistory] = useState(false);
+  // เมนูฟังก์ชัน (นักเรียน) — โชว์ตอนแชตว่าง และเปิดซ้อนได้จากปุ่มที่หัวกล่อง
+  const [showMenu, setShowMenu] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [ctx, setCtx]           = useState<UserContext | null>(null);
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null); // null = loading
@@ -327,13 +391,13 @@ export default function ChatBubble() {
   const drag      = useRef({ startX: 0, startY: 0, startR: 16, startB: 16, moved: false });
 
   const minBubbleBottom = useCallback(() => {
-    const isAdmin = window.location.pathname.startsWith("/admin");
+    const isAdmin = onAdminSite();
     return isAdmin && window.innerWidth < 640 ? 88 : GAP;
   }, []);
 
   // ── Read session (student/admin) from storage ──────────────────────────────
   const readSession = useCallback(() => {
-    const isAdmin = window.location.pathname.startsWith("/admin");
+    const isAdmin = onAdminSite();
     let loggedIn = false;
     let userName = "";
     let studentId: string | undefined;
@@ -388,7 +452,7 @@ export default function ChatBubble() {
           r: Math.max(GAP, Math.min(window.innerWidth  - BTN - GAP, p.r)),
           b: Math.max(minB, Math.min(window.innerHeight - BTN - GAP, p.b)),
         });
-      } else if (window.location.pathname.startsWith("/admin") && window.innerWidth < 640) {
+      } else if (onAdminSite() && window.innerWidth < 640) {
         setPos({ r: 16, b: 88 });
       }
     } catch { /* silent */ }
@@ -453,6 +517,24 @@ export default function ChatBubble() {
     })();
   }, [open, loggedIn, ctx]);
 
+  // ── คุยต่อจากบทสนทนาเก่า ────────────────────────────────────────────────────
+  // หน้า /student (หรือแผงประวัติในกล่องนี้) ตั้งความจำบอทฝั่งเซิร์ฟเวอร์ไว้แล้ว ที่นี่แค่เปิดกล่องและโชว์ข้อความชุดนั้น
+  useEffect(() => {
+    const onResume = (e: Event) => {
+      const list = (e as CustomEvent<{ messages?: HistoryMessage[] }>).detail?.messages ?? [];
+      if (list.length === 0) return;
+      historyRef.current = true; // กันตัวโหลดความจำล่าสุดมาทับ
+      setMessages(list.map((m, i) => ({
+        role: m.role, content: m.content, id: `r-${Date.now()}-${i}`,
+        navButtons: m.navButtons?.length ? m.navButtons : undefined,
+      })));
+      setShowHistory(false);
+      setOpen(true);
+    };
+    window.addEventListener(CHAT_RESUME_EVENT, onResume);
+    return () => window.removeEventListener(CHAT_RESUME_EVENT, onResume);
+  }, []);
+
   // ── Drag ───────────────────────────────────────────────────────────────────
   const onPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
     drag.current = { startX: e.clientX, startY: e.clientY, startR: pos.r, startB: pos.b, moved: false };
@@ -481,15 +563,42 @@ export default function ChatBubble() {
     }
   };
 
-  // ── Send ───────────────────────────────────────────────────────────────────
-  const sendMessage = useCallback(async (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed || streaming || !ctx || !loggedIn) return;
+  // ── อัปโหลดรูปแนบ (ใช้เส้นเดียวกับหน้าส่งความเห็น: /api/feedback/upload, ไม่เกิน 5 MB ต่อรูป) ──
+  const uploadImages = useCallback(async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const room = MAX_ATTACH - attachments.length;
+    const picked = Array.from(files).slice(0, Math.max(room, 0));
+    if (picked.length === 0) return;
+    setUploading(true);
+    try {
+      const urls: string[] = [];
+      for (const f of picked) {
+        if (!f.type.startsWith("image/")) continue;
+        if (f.size > 5 * 1024 * 1024) { toast.error(`${f.name} ใหญ่เกิน 5 MB`); continue; }
+        const fd = new FormData();
+        fd.append("file", f);
+        const res = await fetch("/api/feedback/upload", { method: "POST", body: fd });
+        const json = await res.json().catch(() => null) as { status?: string; url?: string; message?: string } | null;
+        if (json?.status === "success" && json.url) urls.push(json.url);
+        else toast.error(json?.message ?? "อัปโหลดรูปไม่สำเร็จ");
+      }
+      if (urls.length) setAttachments(a => [...a, ...urls].slice(0, MAX_ATTACH));
+    } finally {
+      setUploading(false);
+    }
+  }, [attachments.length]);
 
-    const userMsg: Message = { role: "user", content: trimmed, id: `u-${Date.now()}` };
+  // ── Send ───────────────────────────────────────────────────────────────────
+  const sendMessage = useCallback(async (text: string, apiText?: string) => {
+    const trimmed = text.trim() || (attachments.length ? "แนบรูปประกอบ" : "");
+    if (!trimmed || streaming || uploading || !ctx || !loggedIn) return;
+
+    const sentAttach = attachments;
+    const userMsg: Message = { role: "user", content: sentAttach.length ? `${trimmed}\n📎 แนบรูป ${sentAttach.length} รูป` : trimmed, id: `u-${Date.now()}`, attach: sentAttach.length ? sentAttach : undefined, apiContent: apiText };
     const assistantId      = `a-${Date.now()}`;
     setMessages(prev => [...prev, userMsg, { role: "assistant", content: "", id: assistantId }]);
     setInput("");
+    setAttachments([]);
     setStreaming(true);
     setHasError(false);
     abortRef.current = new AbortController();
@@ -500,7 +609,8 @@ export default function ChatBubble() {
         headers: { "Content-Type": "application/json" },
         signal: abortRef.current.signal,
         body: JSON.stringify({
-          messages: [...messages, userMsg].map(m => ({ role: m.role, content: m.content })),
+          // รูปแนบส่งเป็นลิงก์ท้ายข้อความ ให้บอทเอาไปใส่ตอนส่งความเห็น/รายงาน
+          messages: [...messages, userMsg].map(m => ({ role: m.role, content: m.attach?.length ? `${m.apiContent ?? m.content}\n[รูปแนบ: ${m.attach.join(" ")}]` : (m.apiContent ?? m.content) })),
           isAdmin:    ctx.isAdmin,
           studentId:  ctx.studentId,
           adminId:    ctx.adminId,
@@ -648,15 +758,51 @@ export default function ChatBubble() {
                 {streaming ? "กำลังพิมพ์…" : ctx.isAdmin ? "Admin Assistant" : loggedIn ? `สวัสดี ${ctx.userName}` : "ผู้ช่วย AI"}
               </div>
             </div>
+            {loggedIn && !ctx.isAdmin && (
+              <button onClick={() => { setShowMenu(v => !v); setShowHistory(false); }} title="เมนูฟังก์ชัน" aria-label="เมนูฟังก์ชัน"
+                style={{ background: showMenu ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.2)", border: "none", borderRadius: 8, color: "#fff", padding: "4px 8px", cursor: "pointer", fontSize: 12 }}>
+                <i className="fa-solid fa-table-cells-large" />
+              </button>
+            )}
+            {loggedIn && (
+              <button onClick={() => { setShowHistory(v => !v); setShowMenu(false); }} title="ประวัติแชตย้อนหลัง" aria-label="ประวัติแชตย้อนหลัง"
+                style={{ background: showHistory ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.2)", border: "none", borderRadius: 8, color: "#fff", padding: "4px 8px", cursor: "pointer", fontSize: 12 }}>
+                <i className="fa-solid fa-clock-rotate-left" />
+              </button>
+            )}
             {loggedIn && messages.length > 0 && (
               <button onClick={clearChat} style={{ background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 8, color: "#fff", padding: "4px 8px", cursor: "pointer", fontSize: 11, fontFamily: "'Kanit', sans-serif" }}>
                 ล้าง
               </button>
             )}
             <button onClick={() => setOpen(false)} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: "2px 6px" }}>
-              ✕
+              <i className="fa-solid fa-xmark" />
             </button>
           </div>
+
+          {/* ── เมนูฟังก์ชัน (ซ้อนทับ) ─────────────────────────────────────── */}
+          {showMenu && loggedIn && !ctx.isAdmin && (
+            <div style={{ position: "absolute", top: 57, left: 0, right: 0, bottom: 0, background: T.panelBg, overflowY: "auto", padding: "14px", zIndex: 2 }}>
+              <div style={{ color: T.mutedText, fontSize: 12, marginBottom: 10 }}>เลือกสิ่งที่อยากทำ — ฉันจะพาทำทีละขั้นจนยืนยันเสร็จ</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {FUNCTION_MENU.map(f => (
+                  <button key={f.title} onClick={() => { setShowMenu(false); void sendMessage(f.label, f.flow); }}
+                    style={{ textAlign: "left", background: `${accent}12`, border: `1px solid ${accent}40`, borderRadius: 14, padding: "10px 12px", cursor: "pointer", fontFamily: "'Kanit', sans-serif", display: "flex", flexDirection: "column", gap: 4 }}>
+                    <i className={`fa-solid ${f.icon}`} style={{ color: accent, fontSize: 16 }} />
+                    <span style={{ color: T.botText, fontSize: 13, fontWeight: 700, lineHeight: 1.2 }}>{f.title}</span>
+                    <span style={{ color: T.mutedText, fontSize: 11, lineHeight: 1.3 }}>{f.hint}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── ประวัติย้อนหลัง (ซ้อนทับเนื้อหาแชต ใต้หัวกล่อง) ─────────────── */}
+          {showHistory && loggedIn && (
+            <div style={{ position: "absolute", top: 57, left: 0, right: 0, bottom: 0, background: T.panelBg, overflowY: "auto", padding: "12px 14px", zIndex: 2 }}>
+              <ChatHistoryList dark={ctx.isAdmin} adminId={ctx.isAdmin ? ctx.adminId : undefined} onResumed={() => setShowHistory(false)} />
+            </div>
+          )}
 
           {/* ── Not logged in ─────────────────────────────────────────── */}
           {!loggedIn ? (
@@ -694,7 +840,19 @@ export default function ChatBubble() {
                       สวัสดี{ctx.userName ? ` ${ctx.userName}` : ""}!<br />
                       ถามอะไรก็ได้เลยครับ ฉันรู้ข้อมูลของคุณ
                     </div>
-                    <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, width: "100%", padding: "0 8px" }}>
+                    {!ctx.isAdmin && (
+                      <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, width: "100%", padding: "0 4px" }}>
+                        {FUNCTION_MENU.map(f => (
+                          <button key={f.title} onClick={() => sendMessage(f.label, f.flow)}
+                            style={{ textAlign: "left", background: `${accent}12`, border: `1px solid ${accent}40`, borderRadius: 14, padding: "10px 12px", cursor: "pointer", fontFamily: "'Kanit', sans-serif", display: "flex", flexDirection: "column", gap: 3 }}>
+                            <i className={`fa-solid ${f.icon}`} style={{ color: accent, fontSize: 15 }} />
+                            <span style={{ color: T.botText, fontSize: 13, fontWeight: 700, lineHeight: 1.2 }}>{f.title}</span>
+                            <span style={{ color: T.mutedText, fontSize: 11, lineHeight: 1.3 }}>{f.hint}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ marginTop: 16, display: ctx.isAdmin ? "grid" : "none", gridTemplateColumns: "1fr 1fr", gap: 6, width: "100%", padding: "0 8px" }}>
                       {quickReplies.map(q => (
                         <button key={q} onClick={() => sendMessage(q)}
                           style={{ background: `${accent}15`, border: `1px solid ${accent}40`, borderRadius: 20, padding: "7px 10px", fontSize: 12, color: accent, cursor: "pointer", fontFamily: "'Kanit', sans-serif", textAlign: "center", lineHeight: 1.4 }}>
@@ -772,7 +930,26 @@ export default function ChatBubble() {
               </div>
 
               {/* ── Input ─────────────────────────────────────────────── */}
-              <div style={{ padding: "10px 12px", borderTop: T.dividerBorder, display: "flex", gap: 8, alignItems: "flex-end", flexShrink: 0, background: T.headerBg }}>
+              {(attachments.length > 0 || uploading) && (
+                <div style={{ padding: "8px 12px 0", display: "flex", gap: 6, flexWrap: "wrap", background: T.headerBg, borderTop: T.dividerBorder }}>
+                  {attachments.map((u, i) => (
+                    <div key={u} style={{ position: "relative", width: 44, height: 44 }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={u} alt={`รูปแนบ ${i + 1}`} style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 8, border: `1px solid ${T.inputBorder}` }} />
+                      <button type="button" aria-label="เอารูปออก" onClick={() => setAttachments(a => a.filter(x => x !== u))}
+                        style={{ position: "absolute", top: -5, right: -5, width: 16, height: 16, borderRadius: 8, border: "none", background: "#ef4444", color: "#fff", fontSize: 10, lineHeight: "16px", cursor: "pointer", padding: 0 }}>×</button>
+                    </div>
+                  ))}
+                  {uploading && <span style={{ fontSize: 11, color: T.inputText, alignSelf: "center", opacity: 0.7 }}>กำลังอัปโหลด…</span>}
+                </div>
+              )}
+              <div style={{ padding: "10px 12px", borderTop: attachments.length > 0 || uploading ? "none" : T.dividerBorder, display: "flex", gap: 8, alignItems: "flex-end", flexShrink: 0, background: T.headerBg }}>
+                <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={e => { void uploadImages(e.target.files); e.target.value = ""; }} />
+                <button type="button" title="แนบรูป (ใช้กับส่งความเห็น/รายงานปัญหา)" aria-label="แนบรูป"
+                  onClick={() => fileRef.current?.click()} disabled={uploading || attachments.length >= MAX_ATTACH || streaming}
+                  style={{ background: "transparent", border: `1px solid ${T.inputBorder}`, borderRadius: 10, width: 36, height: 36, cursor: uploading || attachments.length >= MAX_ATTACH ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, opacity: uploading || attachments.length >= MAX_ATTACH ? 0.5 : 1 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={ctx.isAdmin ? "#ededed" : "#fff"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></svg>
+                </button>
                 <textarea
                   ref={inputRef}
                   value={input}
@@ -784,10 +961,10 @@ export default function ChatBubble() {
                 />
                 <button
                   onClick={() => sendMessage(input)}
-                  disabled={!input.trim() || streaming}
+                  disabled={(!input.trim() && attachments.length === 0) || streaming || uploading}
                   style={{
                     background: ctx.isAdmin
-                      ? (!input.trim() || streaming ? "#3e3e3e" : accent)
+                      ? ((!input.trim() && attachments.length === 0) || streaming ? "#3e3e3e" : accent)
                       : "#fff",
                     border: ctx.isAdmin ? "none" : `1px solid ${!input.trim() || streaming ? "#BAE6FD" : "#fff"}`,
                     borderRadius: 10,
@@ -832,7 +1009,7 @@ export default function ChatBubble() {
         }}
       >
         {open && !dragging
-          ? <span style={{ color: accent, fontSize: 20, lineHeight: 1, fontWeight: 700, pointerEvents: "none" }}>✕</span>
+          ? <span style={{ color: accent, fontSize: 20, lineHeight: 1, fontWeight: 700, pointerEvents: "none" }}><i className="fa-solid fa-xmark" /></span>
           : <Image src={btnAvatar} alt={SITE_NAME} width={36} height={36} draggable={false} priority style={{ width: 36, height: 36, objectFit: "cover", borderRadius: "50%", pointerEvents: "none" }} />
         }
       </button>

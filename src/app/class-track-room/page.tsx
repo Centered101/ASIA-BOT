@@ -8,6 +8,7 @@ import LoginGate from "@/components/LoginGate";
 import { MascotState } from "@/components/Mascot";
 import { getAmenityInfo } from "@/lib/amenities";
 import { getStudentSession, type StudentSession } from "@/lib/session";
+import { useHolidays } from "@/lib/use-holidays";
 
 type Room = {
   id: string;
@@ -162,6 +163,9 @@ function ClassTrackRoomPageContent() {
 
   // Booking form
   const [date, setDate] = useState(todayStr());
+  // วันหยุด (เสาร์-อาทิตย์ + ปฏิทินที่แอดมินตั้ง) จองห้องไม่ได้
+  const holidays = useHolidays();
+  const closedReason = holidays.reasonFor(date);
   const [slotId, setSlotId] = useState<number | null>(null);
   const [studentId, setStudentId] = useState("");
   const [studentName, setStudentName] = useState("");
@@ -291,7 +295,9 @@ function ClassTrackRoomPageContent() {
     setFriendLoading(true);
     setFriendError("");
     try {
-      const res = await fetch(`/api/auth/me?student_id=${encodeURIComponent(id)}`);
+      // ค้นเพื่อนต้องล็อกอินก่อน และได้เฉพาะชื่อ/สาขา/รูป ไม่มีเบอร์หรือ
+      // เลขประจำตัวประชาชนติดมาเหมือนเส้นเดิม (/api/auth/me)
+      const res = await fetch(`/api/student/lookup?student_id=${encodeURIComponent(id)}`);
       const json = await res.json();
       if (json.status !== "success" || !json.data) {
         setFriendError(json.message ?? "ไม่พบนักเรียน");
@@ -326,7 +332,7 @@ function ClassTrackRoomPageContent() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!slotId) return;
+    if (!slotId || closedReason) return;
     setSubmitting(true);
     setSubmitResult(null);
     const friendParticipants = participants.filter(p => p.student_id !== studentId);
@@ -624,10 +630,10 @@ function ClassTrackRoomPageContent() {
 
       {/* Booking Modal */}
       {showModal && selectedRoom && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-end justify-center">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-xs" onClick={closeModal} />
-          <div className="relative w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[96dvh] sm:max-h-[92vh] overflow-y-auto animate-slideUp">
-            <div className="sticky top-0 bg-white border-b border-slate-100 px-4 sm:px-6 py-4 rounded-t-3xl sm:rounded-t-2xl z-10">
+          <div className="relative w-full max-w-lg bg-white rounded-t-3xl shadow-2xl max-h-[96dvh] overflow-y-auto animate-slideUp">
+            <div className="sticky top-0 bg-white border-b border-slate-100 px-4 sm:px-6 py-4 rounded-t-3xl z-10">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="font-bold text-slate-800 text-lg">จองห้อง</h2>
@@ -676,6 +682,12 @@ function ClassTrackRoomPageContent() {
                         onChange={(e) => setDate(e.target.value)}
                         className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-sky-300 text-slate-800 bg-white"
                       />
+                      {closedReason && (
+                        <p className="mt-2 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
+                          <i className="fa-solid fa-calendar-xmark" />
+                          จองไม่ได้ในวันนี้ ({closedReason}) กรุณาเลือกวันทำการ
+                        </p>
+                      )}
                     </div>
 
                     {/* Student ID */}
@@ -772,11 +784,10 @@ function ClassTrackRoomPageContent() {
                         </label>
                         <input
                           type="tel"
-                          placeholder="0xx-xxx-xxxx"
+                          readOnly
                           value={studentPhone}
-                          onChange={(e) => setStudentPhone(e.target.value)}
-                          maxLength={20}
-                          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-sky-300 text-slate-800 placeholder-slate-300"
+                          placeholder="ไม่มีเบอร์ในบัญชี"
+                          className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 placeholder-slate-300"
                         />
                       </div>
 
@@ -822,7 +833,7 @@ function ClassTrackRoomPageContent() {
 
                     <button
                       type="submit"
-                      disabled={submitting || !slotId || bookedSlotIds.has(slotId)}
+                      disabled={submitting || !slotId || bookedSlotIds.has(slotId) || !!closedReason}
                       className="btn-primary w-full py-3 rounded-xl font-semibold text-base mt-2"
                     >
                       {submitting ? (

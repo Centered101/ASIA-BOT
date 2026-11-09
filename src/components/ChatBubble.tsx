@@ -377,6 +377,7 @@ export default function ChatBubble() {
   // เมนูฟังก์ชัน (นักเรียน) — โชว์ตอนแชตว่าง และเปิดซ้อนได้จากปุ่มที่หัวกล่อง
   const [showMenu, setShowMenu] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [chatTitle, setChatTitle] = useState<string | null>(null);
   const [ctx, setCtx]           = useState<UserContext | null>(null);
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null); // null = loading
   const [pos, setPos]           = useState<Pos>({ r: 16, b: 16 });
@@ -528,6 +529,12 @@ export default function ChatBubble() {
         role: m.role, content: m.content, id: `r-${Date.now()}-${i}`,
         navButtons: m.navButtons?.length ? m.navButtons : undefined,
       })));
+      // ตั้งหัวข้อจากข้อความแรกของผู้ใช้ในบทสนทนาที่กลับมาคุยต่อ
+      const firstUser = list.find(m => m.role === "user");
+      if (firstUser) {
+        const clean = firstUser.content.replace(/\n/g, " ").replace(/📎.*$/, "").trim();
+        setChatTitle(clean.length > 22 ? `${clean.slice(0, 20)}…` : clean || null);
+      }
       setShowHistory(false);
       setOpen(true);
     };
@@ -592,6 +599,19 @@ export default function ChatBubble() {
   const sendMessage = useCallback(async (text: string, apiText?: string) => {
     const trimmed = text.trim() || (attachments.length ? "แนบรูปประกอบ" : "");
     if (!trimmed || streaming || uploading || !ctx || !loggedIn) return;
+
+    // สร้างหัวข้อการสนทนาจากข้อความแรกที่ผู้ใช้ส่ง
+    if (messages.length === 0) {
+      const src = apiText ?? trimmed;
+      const menuMatch = src.match(/^\[เมนู:([^\]]+)\]/);
+      if (menuMatch) {
+        const item = FUNCTION_MENU.find(f => f.flow.includes(`[เมนู:${menuMatch[1]}]`));
+        setChatTitle(item ? item.title : menuMatch[1]);
+      } else {
+        const clean = trimmed.replace(/\n/g, " ").trim();
+        setChatTitle(clean.length > 22 ? `${clean.slice(0, 20)}…` : clean);
+      }
+    }
 
     const sentAttach = attachments;
     const userMsg: Message = { role: "user", content: sentAttach.length ? `${trimmed}\n📎 แนบรูป ${sentAttach.length} รูป` : trimmed, id: `u-${Date.now()}`, attach: sentAttach.length ? sentAttach : undefined, apiContent: apiText };
@@ -665,6 +685,7 @@ export default function ChatBubble() {
   const clearChat = () => {
     abortRef.current?.abort();
     setMessages([]);
+    setChatTitle(null);
     setStreaming(false);
     historyRef.current = true;
     void fetch("/api/chat/history", {
@@ -754,8 +775,8 @@ export default function ChatBubble() {
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ color: "#fff", fontWeight: 700, fontSize: 14, lineHeight: 1.2 }}>{SITE_NAME} AI</div>
-              <div style={{ color: T.subtitleColor, fontSize: 11 }}>
-                {streaming ? "กำลังพิมพ์…" : ctx.isAdmin ? "Admin Assistant" : loggedIn ? `สวัสดี ${ctx.userName}` : "ผู้ช่วย AI"}
+              <div style={{ color: T.subtitleColor, fontSize: 11, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {streaming ? "กำลังพิมพ์…" : chatTitle ? chatTitle : ctx.isAdmin ? "Admin Assistant" : loggedIn ? `สวัสดี ${ctx.userName}` : "ผู้ช่วย AI"}
               </div>
             </div>
             {loggedIn && !ctx.isAdmin && (
